@@ -2,7 +2,19 @@ using System.Text.Json;
 using Backend.Services;
 using OpenAI.Chat;
 
-var builder = WebApplication.CreateBuilder(args);
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    // Disable file watchers in production (causes segfault on Render/Docker)
+    ContentRootPath = AppContext.BaseDirectory
+});
+
+// Disable config reload — Render doesn't support file watchers
+builder.Configuration.Sources.Clear();
+builder.Configuration
+    .AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
+    .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: false)
+    .AddEnvironmentVariables();
 
 // --- Services ---
 
