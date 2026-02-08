@@ -79,7 +79,7 @@ public class FullEvaluationResult
     public List<ValueDriver> ValueDrivers { get; set; } = [];
     public string ValuationReasoning { get; set; } = string.Empty;
 
-    // ── Deterministic engine fields (NEW) ──
+    // ── Deterministic engine fields ──
     public string ConfidenceLevel { get; set; } = "";
     public double RegionalBenchmarkPerM2 { get; set; }
     public double MarketAverageAsking { get; set; }
@@ -92,7 +92,23 @@ public class FullEvaluationResult
     public string RegionName { get; set; } = "";
     public string? Note { get; set; }
 
-    // ── V3 Confidence Scoring ──
+    // ── V4 Robust Estimator fields ──
+    public double StdDevPerM2 { get; set; }
+    public double CoefficientOfVariation { get; set; }
+    public string OutlierMethod { get; set; } = "";
+    public List<string> OutlierLog { get; set; } = [];
+    public double TotalAdjustmentPercent { get; set; }
+    public string RealizationGapReasoning { get; set; } = "";
+    public List<Backend.Services.UsedComparable> UsedComparables { get; set; } = [];
+    public List<Backend.Services.ValuationAdjustment> Adjustments { get; set; } = [];
+    public List<string> Pipeline { get; set; } = [];
+
+    // ── V4 Math Confidence (replaces V3 market-only confidence) ──
+    public int MathConfidenceScore { get; set; }
+    public string MathConfidenceLevel { get; set; } = "";
+    public string MathConfidenceExplanation { get; set; } = "";
+
+    // ── V3 Confidence Scoring (market research) ──
     public int ConfidenceScore { get; set; }
     public string ConfidenceExplanation { get; set; } = "";
     public string ConfidenceColor { get; set; } = "";

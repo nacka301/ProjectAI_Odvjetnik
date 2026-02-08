@@ -139,8 +139,8 @@ public class EvaluateController : ControllerBase
                 ValueDrivers = aiResult.ValueDrivers,
                 ValuationReasoning = aiResult.ValuationReasoning,
 
-                // Engine fields (V3: use market research confidence)
-                ConfidenceLevel = marketData.Confidence.Level,
+                // Engine core fields
+                ConfidenceLevel = engineResult.ConfidenceLevel,
                 RegionalBenchmarkPerM2 = engineResult.RegionalBenchmarkPerM2,
                 MarketAverageAsking = engineResult.MarketAverageAsking,
                 CalculatedPricePerM2 = engineResult.CalculatedPricePerM2,
@@ -152,7 +152,23 @@ public class EvaluateController : ControllerBase
                 RegionName = engineResult.RegionName,
                 Note = string.IsNullOrEmpty(marketData.Note) ? null : marketData.Note,
 
-                // V3 Confidence Scoring
+                // V4 Robust Estimator fields
+                StdDevPerM2 = engineResult.StdDevPerM2,
+                CoefficientOfVariation = engineResult.CoefficientOfVariation,
+                OutlierMethod = engineResult.OutlierMethod,
+                OutlierLog = engineResult.OutlierLog,
+                TotalAdjustmentPercent = engineResult.TotalAdjustmentPercent,
+                RealizationGapReasoning = engineResult.RealizationGapReasoning,
+                UsedComparables = engineResult.UsedComparables,
+                Adjustments = engineResult.Adjustments,
+                Pipeline = engineResult.Pipeline,
+
+                // V4 Math Confidence
+                MathConfidenceScore = engineResult.MathConfidenceScore,
+                MathConfidenceLevel = engineResult.MathConfidenceLevel,
+                MathConfidenceExplanation = engineResult.MathConfidenceExplanation,
+
+                // V3 Market Research Confidence
                 ConfidenceScore = marketData.Confidence.Score,
                 ConfidenceExplanation = marketData.Confidence.Explanation,
                 ConfidenceColor = marketData.Confidence.Color,

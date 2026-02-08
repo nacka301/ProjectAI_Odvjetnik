@@ -61,11 +61,38 @@ interface AutoValuationResult {
   region_name?: string;
   note?: string;
   evaluation_id?: string;
-  // V3 confidence scoring
+  // V3 confidence scoring (market research)
   confidence_score?: number;
   confidence_explanation?: string;
   confidence_color?: string;
   search_phase_used?: string;
+  // V4 Robust Estimator fields
+  std_dev_per_m2?: number;
+  coefficient_of_variation?: number;
+  outlier_method?: string;
+  outlier_log?: string[];
+  total_adjustment_percent?: number;
+  realization_gap_reasoning?: string;
+  used_comparables?: UsedComparableV4[];
+  adjustments?: AdjustmentV4[];
+  pipeline?: string[];
+  math_confidence_score?: number;
+  math_confidence_level?: string;
+  math_confidence_explanation?: string;
+}
+
+interface UsedComparableV4 {
+  title: string;
+  url: string;
+  price_per_m2: number;
+  similarity_score: number;
+  is_outlier: boolean;
+}
+
+interface AdjustmentV4 {
+  factor: string;
+  description: string;
+  percent: number;
 }
 
 type LoadingPhase = "idle" | "reading" | "searching" | "generating" | "done";
@@ -394,35 +421,59 @@ export default function ValuationPage() {
               <p className="text-4xl font-bold">
                 {result.estimated_value_eur.toLocaleString("hr-HR")} €
               </p>
-              {result.confidence_level && (
+              {/* V4 Math Confidence (primary) */}
+              {result.math_confidence_score != null && (
                 <div className="mt-4 mx-auto max-w-md">
                   <div className="flex items-center justify-center gap-2 mb-2">
                     <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
-                      result.confidence_color === "green"
+                      result.math_confidence_score >= 75
                         ? "bg-green-500/20 text-green-100"
-                        : result.confidence_color === "yellow"
+                        : result.math_confidence_score >= 50
                         ? "bg-yellow-500/20 text-yellow-100"
                         : "bg-red-500/20 text-red-100"
                     }`}>
-                      Pouzdanost: {result.confidence_level}
-                      {result.confidence_score ? ` (${result.confidence_score}/100)` : ""}
+                      🧮 Engine: {result.math_confidence_level} ({result.math_confidence_score}/100)
                     </span>
+                    {result.confidence_score != null && (
+                      <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                        result.confidence_color === "green"
+                          ? "bg-green-500/20 text-green-100"
+                          : result.confidence_color === "yellow"
+                          ? "bg-yellow-500/20 text-yellow-100"
+                          : "bg-red-500/20 text-red-100"
+                      }`}>
+                        🔍 Podaci: {result.confidence_score}/100
+                      </span>
+                    )}
                   </div>
-                  {result.confidence_score != null && (
-                    <div className="w-full bg-white/20 rounded-full h-2 mb-2">
-                      <div
-                        className={`h-2 rounded-full transition-all duration-500 ${
-                          result.confidence_color === "green" ? "bg-green-400"
-                          : result.confidence_color === "yellow" ? "bg-yellow-400"
-                          : "bg-red-400"
-                        }`}
-                        style={{ width: `${result.confidence_score}%` }}
-                      />
-                    </div>
+                  <div className="w-full bg-white/20 rounded-full h-2 mb-2">
+                    <div
+                      className={`h-2 rounded-full transition-all duration-500 ${
+                        result.math_confidence_score >= 75 ? "bg-green-400"
+                        : result.math_confidence_score >= 50 ? "bg-yellow-400"
+                        : "bg-red-400"
+                      }`}
+                      style={{ width: `${result.math_confidence_score}%` }}
+                    />
+                  </div>
+                  {result.math_confidence_explanation && (
+                    <p className="text-xs opacity-70">{result.math_confidence_explanation}</p>
                   )}
-                  {result.confidence_explanation && (
-                    <p className="text-xs opacity-70">{result.confidence_explanation}</p>
-                  )}
+                </div>
+              )}
+              {/* Fallback to V3 confidence if no V4 */}
+              {result.math_confidence_score == null && result.confidence_level && (
+                <div className="mt-4 mx-auto max-w-md">
+                  <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                    result.confidence_color === "green"
+                      ? "bg-green-500/20 text-green-100"
+                      : result.confidence_color === "yellow"
+                      ? "bg-yellow-500/20 text-yellow-100"
+                      : "bg-red-500/20 text-red-100"
+                  }`}>
+                    Pouzdanost: {result.confidence_level}
+                    {result.confidence_score ? ` (${result.confidence_score}/100)` : ""}
+                  </span>
                 </div>
               )}
               {result.calculated_price_per_m2 && (
@@ -432,11 +483,11 @@ export default function ValuationPage() {
               )}
             </div>
 
-            {/* Engine Analytics Panel */}
+            {/* Engine Analytics Panel (V4) */}
             {result.regional_benchmark_per_m2 && (
               <div className="rounded-xl bg-white border border-gray-200 p-5">
                 <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                  📊 Analitika procjene
+                  📊 Analitika procjene (Robust Estimator V4)
                 </h3>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   <div className="text-center p-3 bg-gray-50 rounded-lg">
@@ -447,29 +498,44 @@ export default function ValuationPage() {
                     <p className="text-xs text-gray-400">{result.region_name}</p>
                   </div>
                   <div className="text-center p-3 bg-gray-50 rounded-lg">
-                    <p className="text-xs text-gray-500">Prosječna tražena</p>
+                    <p className="text-xs text-gray-500">Weighted Median</p>
                     <p className="text-lg font-bold text-gray-900">
                       {(result.market_average_asking ?? 0).toLocaleString("hr-HR")} €/m²
                     </p>
                     <p className="text-xs text-gray-400">{result.price_source}</p>
                   </div>
                   <div className="text-center p-3 bg-gray-50 rounded-lg">
-                    <p className="text-xs text-gray-500">Aktivni oglasi</p>
+                    <p className="text-xs text-gray-500">Comparables</p>
                     <p className="text-lg font-bold text-gray-900">
-                      {result.total_listings_found ?? 0}
+                      {result.usable_price_points ?? 0} / {result.total_listings_found ?? 0}
                     </p>
                     <p className="text-xs text-gray-400">
-                      {result.usable_price_points ?? 0} korisnih, {result.outliers_removed ?? 0} outlier
+                      {result.outliers_removed ?? 0} outliera ({result.outlier_method ?? "N/A"})
                     </p>
                   </div>
                   <div className="text-center p-3 bg-gray-50 rounded-lg">
-                    <p className="text-xs text-gray-500">Diskont tražena→ostvarena</p>
-                    <p className="text-lg font-bold text-red-600">
-                      {result.realization_discount_percent ?? -15}%
+                    <p className="text-xs text-gray-500">StdDev / CV</p>
+                    <p className="text-lg font-bold text-gray-900">
+                      {(result.std_dev_per_m2 ?? 0).toLocaleString("hr-HR")} €/m²
                     </p>
-                    <p className="text-xs text-gray-400">Realization gap</p>
+                    <p className={`text-xs font-medium ${
+                      (result.coefficient_of_variation ?? 0) < 15 ? "text-green-600"
+                      : (result.coefficient_of_variation ?? 0) < 30 ? "text-yellow-600"
+                      : "text-red-600"
+                    }`}>
+                      CV: {result.coefficient_of_variation ?? 0}%
+                    </p>
                   </div>
                 </div>
+                {/* Realization Gap Reasoning */}
+                {result.realization_gap_reasoning && (
+                  <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-xs font-semibold text-blue-700 mb-1">
+                      Realizacijski gap: {result.realization_discount_percent ?? 0}%
+                    </p>
+                    <p className="text-xs text-blue-600">{result.realization_gap_reasoning}</p>
+                  </div>
+                )}
                 {result.note && (
                   <div className="mt-3 flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
                     <AlertTriangle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
@@ -477,6 +543,153 @@ export default function ValuationPage() {
                   </div>
                 )}
               </div>
+            )}
+
+            {/* V4 Used Comparables Table (Engine) */}
+            {result.used_comparables && result.used_comparables.length > 0 && (
+              <div className="rounded-xl bg-white border border-gray-200 overflow-hidden">
+                <div className="px-5 py-3 border-b border-gray-100 bg-gray-50">
+                  <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
+                    🧮 Engine Comparables ({result.used_comparables.filter(c => !c.is_outlier).length} korištenih, {result.used_comparables.filter(c => c.is_outlier).length} outliera)
+                  </h3>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-100 bg-gray-50/50">
+                        <th className="text-left px-4 py-2 font-semibold text-gray-600">Oglas</th>
+                        <th className="text-right px-4 py-2 font-semibold text-gray-600">€/m²</th>
+                        <th className="text-right px-4 py-2 font-semibold text-gray-600">Similarity</th>
+                        <th className="text-center px-4 py-2 font-semibold text-gray-600">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {result.used_comparables.map((c, i) => (
+                        <tr key={i} className={`transition-colors ${c.is_outlier ? "bg-red-50/50" : "hover:bg-gray-50"}`}>
+                          <td className="px-4 py-2">
+                            {c.url ? (
+                              <a href={c.url} target="_blank" rel="noopener noreferrer" 
+                                className="text-blue-600 hover:underline text-xs truncate block max-w-[250px]">
+                                {c.title || c.url}
+                              </a>
+                            ) : (
+                              <span className="text-xs text-gray-600 truncate block max-w-[250px]">{c.title}</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-2 text-right font-mono text-xs">
+                            {c.price_per_m2.toLocaleString("hr-HR")} €
+                          </td>
+                          <td className="px-4 py-2 text-right">
+                            {!c.is_outlier && (
+                              <div className="flex items-center justify-end gap-1">
+                                <div className="w-12 bg-gray-200 rounded-full h-1.5">
+                                  <div className={`h-1.5 rounded-full ${
+                                    c.similarity_score >= 0.7 ? "bg-green-500"
+                                    : c.similarity_score >= 0.4 ? "bg-yellow-500"
+                                    : "bg-red-500"
+                                  }`} style={{ width: `${c.similarity_score * 100}%` }} />
+                                </div>
+                                <span className="text-xs text-gray-500 w-8 text-right">
+                                  {(c.similarity_score * 100).toFixed(0)}%
+                                </span>
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-4 py-2 text-center">
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+                              c.is_outlier
+                                ? "bg-red-100 text-red-700"
+                                : "bg-green-100 text-green-700"
+                            }`}>
+                              {c.is_outlier ? "Outlier" : "✓ Used"}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* V4 Engine Adjustments */}
+            {result.adjustments && result.adjustments.length > 0 && (
+              <div className="rounded-xl bg-white border border-gray-200 overflow-hidden">
+                <div className="px-5 py-3 border-b border-gray-100 bg-gray-50">
+                  <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
+                    ⚙️ Engine Korekcije (cap ±40%)
+                  </h3>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-100 bg-gray-50/50">
+                        <th className="text-left px-5 py-2 font-semibold text-gray-600">Faktor</th>
+                        <th className="text-left px-5 py-2 font-semibold text-gray-600">Opis</th>
+                        <th className="text-right px-5 py-2 font-semibold text-gray-600">%</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {result.adjustments.map((a, i) => (
+                        <tr key={i} className="hover:bg-gray-50">
+                          <td className="px-5 py-2 text-gray-800 font-medium text-xs">{a.factor}</td>
+                          <td className="px-5 py-2 text-gray-500 text-xs">{a.description}</td>
+                          <td className="px-5 py-2 text-right">
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold ${
+                              a.percent > 0 ? "bg-green-100 text-green-800"
+                              : a.percent < 0 ? "bg-red-100 text-red-800"
+                              : "bg-gray-100 text-gray-600"
+                            }`}>
+                              {a.percent > 0 ? "+" : ""}{a.percent}%
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t-2 border-gray-200 bg-gray-50">
+                        <td colSpan={2} className="px-5 py-2 font-semibold text-gray-800 text-xs">
+                          Ukupno (cap ±40%)
+                        </td>
+                        <td className="px-5 py-2 text-right">
+                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold ${
+                            (result.total_adjustment_percent ?? 0) >= 0 ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+                          }`}>
+                            {(result.total_adjustment_percent ?? 0) > 0 ? "+" : ""}{result.total_adjustment_percent ?? 0}%
+                          </span>
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* V4 Pipeline Trace (collapsible) */}
+            {result.pipeline && result.pipeline.length > 0 && (
+              <details className="rounded-xl bg-white border border-gray-200 overflow-hidden">
+                <summary className="px-5 py-3 border-b border-gray-100 bg-gray-50 cursor-pointer">
+                  <span className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
+                    🔬 Pipeline Trace ({result.pipeline.length} koraka)
+                  </span>
+                </summary>
+                <div className="px-5 py-3 space-y-1">
+                  {result.pipeline.map((step, i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <span className="text-xs text-gray-400 font-mono w-6 text-right flex-shrink-0">{i + 1}.</span>
+                      <span className="text-xs text-gray-600">{step}</span>
+                    </div>
+                  ))}
+                </div>
+                {result.outlier_log && result.outlier_log.length > 0 && (
+                  <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/50">
+                    <p className="text-xs font-semibold text-gray-500 mb-1">Outlier Log:</p>
+                    {result.outlier_log.map((log, i) => (
+                      <p key={i} className="text-xs text-gray-500 ml-4">• {log}</p>
+                    ))}
+                  </div>
+                )}
+              </details>
             )}
 
             {/* Target Property Summary */}
