@@ -5,10 +5,10 @@ using System.Text.RegularExpressions;
 namespace Backend.Services;
 
 /// <summary>
-/// V3 — "Price-First Stealth" Market Research Service.
-/// Every result MUST contain a price (€) to enter the pipeline.
-/// Ghost/archived/stale listings are killed before they reach the engine.
-/// Confidence scoring is built in — teta sees exactly how reliable the data is.
+/// V4 — "Shotgun" Market Research Service.
+/// Fires MANY parallel searches across multiple portals, query variations,
+/// property-type synonyms, and location hierarchy levels.
+/// Every result must pass the Price-First gate before entering the pipeline.
 /// </summary>
 public class MarketResearchService
 {
@@ -19,16 +19,74 @@ public class MarketResearchService
     private const string TavilyUrl = "https://api.tavily.com/search";
 
     // ══════════════════════════════════════════════════════════
-    //  V3 PRICE-FIRST REGEX — the gatekeeper
+    //  PRICE-FIRST REGEX — the gatekeeper
     // ══════════════════════════════════════════════════════════
-
-    /// <summary>
-    /// Matches: 150.000 €, 85.000€, 3.500 €, 250000 €, 1.200.000 €
-    /// Does NOT match: "cijena na upit", "kontaktirajte nas"
-    /// </summary>
     private static readonly Regex PriceGateRegex = new(
         @"\b\d{1,3}(?:\.\d{3})*\s?€",
         RegexOptions.Compiled);
+
+    // ══════════════════════════════════════════════════════════
+    //  PROPERTY TYPE SYNONYMS — more search surface
+    // ══════════════════════════════════════════════════════════
+    private static readonly Dictionary<string, string[]> TypeSynonyms = new()
+    {
+        ["stan"]                  = ["stan", "apartman", "garsonijera", "dvosoban", "trosoban", "jednosoban"],
+        ["kuća"]                  = ["kuća", "vila", "vikendica", "obiteljska kuća", "dvojna kuća"],
+        ["građevinsko zemljište"] = ["građevinsko zemljište", "zemljište", "parcela", "oranica", "građevinski teren"],
+        ["poslovni prostor"]      = ["poslovni prostor", "ured", "lokal", "trgovina", "skladište"],
+    };
+
+    // ══════════════════════════════════════════════════════════
+    //  PORTALS — multiple Croatian RE portals
+    // ══════════════════════════════════════════════════════════
+    private static readonly string[] Portals =
+    [
+        "site:njuskalo.hr",
+        "site:index.hr/oglasi",
+        "site:crozilla.com",
+        "site:nekretnine.hr",
+    ];
+
+    // ══════════════════════════════════════════════════════════
+    //  LOCATION HIERARCHY MAPPING (broader region for islands/suburbs)
+    // ══════════════════════════════════════════════════════════
+    private static readonly Dictionary<string, string> BroaderRegion =
+        new(StringComparer.OrdinalIgnoreCase)
+    {
+        // Island → nearest coast city / county
+        { "Vir", "Zadar" }, { "Murter", "Šibenik" }, { "Čiovo", "Trogir" },
+        { "Ciovo", "Trogir" }, { "Šolta", "Split" }, { "Solta", "Split" },
+        { "Brač", "Split" }, { "Brac", "Split" }, { "Hvar", "Split" },
+        { "Vis", "Split" }, { "Korčula", "Dubrovnik" }, { "Korcula", "Dubrovnik" },
+        { "Mljet", "Dubrovnik" }, { "Pelješac", "Dubrovnik" }, { "Peljesac", "Dubrovnik" },
+        { "Krk", "Rijeka" }, { "Rab", "Rijeka" }, { "Cres", "Rijeka" },
+        { "Lošinj", "Rijeka" }, { "Losinj", "Rijeka" }, { "Pag", "Zadar" },
+        { "Ugljan", "Zadar" }, { "Pašman", "Zadar" }, { "Pasman", "Zadar" },
+        { "Dugi Otok", "Zadar" },
+        // Zagreb suburbs
+        { "Velika Gorica", "Zagreb" }, { "Samobor", "Zagreb" },
+        { "Zaprešić", "Zagreb" }, { "Zapresic", "Zagreb" },
+        { "Sesvete", "Zagreb" }, { "Dugo Selo", "Zagreb" },
+        // Split suburbs
+        { "Kaštela", "Split" }, { "Kastela", "Split" },
+        { "Solin", "Split" }, { "Podstrana", "Split" },
+        { "Stobreč", "Split" }, { "Stobrec", "Split" },
+        // Rijeka suburbs
+        { "Opatija", "Rijeka" }, { "Crikvenica", "Rijeka" },
+        // Zadar suburbs
+        { "Nin", "Zadar" }, { "Sukošan", "Zadar" }, { "Sukosan", "Zadar" },
+        { "Bibinje", "Zadar" }, { "Privlaka", "Zadar" },
+        // Šibenik suburbs
+        { "Vodice", "Šibenik" }, { "Tribunj", "Šibenik" },
+        { "Primošten", "Šibenik" }, { "Primosten", "Šibenik" },
+        // Split coast
+        { "Makarska", "Split" }, { "Omiš", "Split" }, { "Omis", "Split" },
+        { "Trogir", "Split" }, { "Supetar", "Split" },
+        // Istra
+        { "Rovinj", "Pula" }, { "Poreč", "Pula" }, { "Porec", "Pula" },
+        { "Umag", "Pula" }, { "Novigrad", "Pula" }, { "Medulin", "Pula" },
+        { "Labin", "Pula" }, { "Buzet", "Pula" },
+    };
 
     // ══════════════════════════════════════════════════════════
     //  2025/2026 REGIONAL BENCHMARKS (€/m²)
@@ -63,9 +121,9 @@ public class MarketResearchService
         { "Koprivnica", 1100 }, { "Sisak", 800 },
     };
 
-    private const double DefaultBenchmark = 1250; // Kontinentalna HR fallback
+    private const double DefaultBenchmark = 1250;
 
-    // Ghost-listing keywords → listing no longer active
+    // Ghost-listing keywords
     private static readonly string[] GhostKeywords =
     [
         "prodano", "neaktivan", "oglas je neaktivan", "arhiva", "završen",
@@ -73,14 +131,13 @@ public class MarketResearchService
         "oglas je istekao", "deaktiviran", "sold", "expired"
     ];
 
-    // "No price" markers → listing hides the price on purpose
+    // "No price" markers
     private static readonly string[] NoPriceMarkers =
     [
         "cijena na upit", "na upit", "price on request", "kontaktirajte",
         "dogovor", "po dogovoru"
     ];
 
-    // Years considered "stale" — if a result references ONLY these years, skip it
     private static readonly int[] StaleYears = [2018, 2019, 2020, 2021, 2022];
 
     public MarketResearchService(HttpClient httpClient, IConfiguration config, ILogger<MarketResearchService> logger)
@@ -92,89 +149,209 @@ public class MarketResearchService
     }
 
     // ══════════════════════════════════════════════════════════
-    //  MAIN ENTRY POINT
+    //  MAIN ENTRY POINT — V4 "SHOTGUN"
     // ══════════════════════════════════════════════════════════
 
-    /// <summary>
-    /// V3 "Price-First" search: every result must pass 3 gates:
-    ///   Gate 1: Contains a price (number + €)
-    ///   Gate 2: Not ghost/archived/expired
-    ///   Gate 3: Not "cijena na upit" / stale
-    /// NEVER returns empty — always falls back to regional benchmarks.
-    /// </summary>
     public async Task<MarketResearchResult> SearchComparables(
         string location, double sizeM2, string pdfText = "")
     {
         var detectedType = DetectPropertyType(pdfText);
         var regionName = ExtractRegionName(location);
+        var subLocations = ExtractLocationHierarchy(location);
         var benchmarkPerM2 = FindRegionalBenchmark(regionName);
+        var synonyms = GetTypeSynonyms(detectedType);
         var now = DateTime.Now;
-        var searchPhase = SearchPhase.Primary; // Track which phase provided results
+        var searchPhase = SearchPhase.Primary;
+        int totalApiCalls = 0;
+
+        // Master list — all price-verified results across all phases
+        var allVerified = new List<ComparableSearchResult>();
 
         _logger.LogInformation(
-            "V3 Market Research: Type={Type}, Region={Region}, Benchmark={Benchmark} €/m²",
-            detectedType, regionName, benchmarkPerM2);
+            "V4 Shotgun: Type={Type}, Synonyms=[{Syns}], Region={Region}, SubLocs=[{Subs}], Bench={Bench} €/m²",
+            detectedType, string.Join(", ", synonyms), regionName,
+            string.Join(" → ", subLocations), benchmarkPerM2);
 
-        // ── Phase 1: Njuškalo pinpoint (ulica + naselje + €) ─────
-        var primaryQuery = $"site:njuskalo.hr \"prodaja {detectedType}\" \"{regionName}\" cijena € {now.Year}";
-        _logger.LogInformation("Phase 1 query: {Query}", primaryQuery);
-
-        var rawPhase1 = await ExecuteTavilySearch(primaryQuery, maxResults: 8);
-        var filtered = PriceFirstFilter(rawPhase1, "Phase 1");
-
-        _logger.LogInformation(
-            "Phase 1: {Passed}/{Total} passed Price-First filter",
-            filtered.Count, rawPhase1.Count);
-
-        // ── Phase 2: Broader search if <2 results with price ─────
-        if (filtered.Count < 2)
+        // ─────────────────────────────────────────────────────
+        // PHASE 1: Njuškalo pinpoint — exact location, main type + synonym
+        //   Fires 3 parallel queries
+        // ─────────────────────────────────────────────────────
         {
-            searchPhase = SearchPhase.Broader;
-            _logger.LogWarning("Phase 1 insufficient ({Count}). Expanding to Phase 2.", filtered.Count);
-
-            var broaderQuery =
-                $"prodaja {detectedType} {regionName} cijena € {now.Year} site:njuskalo.hr OR site:index.hr/oglasi";
-            var rawPhase2 = await ExecuteTavilySearch(broaderQuery, maxResults: 8);
-            var filteredPhase2 = PriceFirstFilter(rawPhase2, "Phase 2");
-
-            // Merge, deduplicate by URL
-            foreach (var r in filteredPhase2)
+            var queries = new List<string>
             {
-                if (!filtered.Any(existing => existing.Url == r.Url))
-                    filtered.Add(r);
-            }
+                // Q1: Main type, exact location, Njuškalo
+                $"site:njuskalo.hr prodaja {detectedType} {regionName} cijena € {now.Year}",
+                // Q2: Synonym variation
+                $"site:njuskalo.hr {synonyms.ElementAtOrDefault(1) ?? detectedType} {regionName} € {now.Year}",
+                // Q3: Include m² if known
+                sizeM2 > 0
+                    ? $"site:njuskalo.hr {detectedType} {regionName} {sizeM2:0}m2 €"
+                    : $"site:njuskalo.hr nekretnina {regionName} prodaja € {now.Year}",
+            };
 
-            _logger.LogInformation(
-                "Phase 2: total price-verified listings = {Count}", filtered.Count);
+            var phase1Results = await FireParallelSearches(queries, 7, "Phase1");
+            totalApiCalls += queries.Count;
+            var filtered = PriceFirstFilter(phase1Results, "Phase1");
+            MergeInto(allVerified, filtered);
+
+            _logger.LogInformation("Phase 1: {New}/{Raw} passed → total={Total}",
+                filtered.Count, phase1Results.Count, allVerified.Count);
         }
 
-        // ── Phase 3: Regional fallback search (market data, not ads) ──
-        List<ComparableSearchResult> regionalData = [];
-        if (filtered.Count < 2)
+        // ─────────────────────────────────────────────────────
+        // PHASE 2: Multi-portal spread — same location, different portals
+        //   Fires 3 parallel queries (only if <3 results)
+        // ─────────────────────────────────────────────────────
+        if (allVerified.Count < 3)
         {
-            searchPhase = filtered.Count == 0 ? SearchPhase.BenchmarkOnly : SearchPhase.RegionalFallback;
-            _logger.LogWarning("Still <2 price-verified listings. Running Phase 3 regional fallback.");
+            searchPhase = SearchPhase.MultiPortal;
 
-            var regionalQuery =
-                $"cijena nekretnina {regionName} {detectedType} {now.Year} €/m² prosječna cijena";
-            var regionalResults = await ExecuteTavilySearch(regionalQuery, maxResults: 4);
+            var queries = new List<string>
+            {
+                $"site:index.hr/oglasi prodaja {detectedType} {regionName} €",
+                $"site:crozilla.com {detectedType} {regionName} prodaja €",
+                $"site:nekretnine.hr {detectedType} {regionName} cijena €",
+            };
 
-            foreach (var r in regionalResults)
+            var phase2Results = await FireParallelSearches(queries, 5, "Phase2-Portals");
+            totalApiCalls += queries.Count;
+            var filtered = PriceFirstFilter(phase2Results, "Phase2");
+            MergeInto(allVerified, filtered);
+
+            _logger.LogInformation("Phase 2 (multi-portal): +{New} → total={Total}",
+                filtered.Count, allVerified.Count);
+        }
+
+        // ─────────────────────────────────────────────────────
+        // PHASE 3: Wider region — go from Murter → Šibenik, Vir → Zadar, etc.
+        //   Fires 4 parallel queries (only if <3 results)
+        // ─────────────────────────────────────────────────────
+        if (allVerified.Count < 3)
+        {
+            searchPhase = SearchPhase.WiderRegion;
+
+            // Get the broader region (island → nearest city)
+            var widerRegion = GetBroaderRegion(regionName);
+
+            var queries = new List<string>
+            {
+                $"site:njuskalo.hr prodaja {detectedType} {widerRegion} cijena € {now.Year}",
+                $"site:njuskalo.hr {synonyms.ElementAtOrDefault(1) ?? detectedType} {widerRegion} €",
+                $"prodaja {detectedType} {widerRegion} cijena € site:njuskalo.hr OR site:index.hr/oglasi",
+                $"site:njuskalo.hr {detectedType} {widerRegion} {now.Year} €/m²",
+            };
+
+            var phase3Results = await FireParallelSearches(queries, 6, "Phase3-Wider");
+            totalApiCalls += queries.Count;
+            var filtered = PriceFirstFilter(phase3Results, "Phase3");
+            MergeInto(allVerified, filtered);
+
+            _logger.LogInformation("Phase 3 (wider: {Region}→{Wider}): +{New} → total={Total}",
+                regionName, widerRegion, filtered.Count, allVerified.Count);
+        }
+
+        // ─────────────────────────────────────────────────────
+        // PHASE 4: Synonym blitz — try ALL synonyms across all portals
+        //   Fires up to 4 parallel queries (only if <3 results)
+        // ─────────────────────────────────────────────────────
+        if (allVerified.Count < 3)
+        {
+            searchPhase = SearchPhase.SynonymBlitz;
+
+            var widerRegion = GetBroaderRegion(regionName);
+            var queries = new List<string>();
+
+            // Build queries from remaining synonyms
+            foreach (var syn in synonyms.Skip(1).Take(3))
+            {
+                queries.Add($"site:njuskalo.hr prodaja {syn} {regionName} € {now.Year}");
+            }
+            // Also try with "nekretnina" generic + all portals
+            queries.Add($"prodaja nekretnina {regionName} cijena € {now.Year} site:njuskalo.hr OR site:crozilla.com");
+
+            if (queries.Count > 0)
+            {
+                var phase4Results = await FireParallelSearches(queries, 5, "Phase4-Synonyms");
+                totalApiCalls += queries.Count;
+                var filtered = PriceFirstFilter(phase4Results, "Phase4");
+                MergeInto(allVerified, filtered);
+
+                _logger.LogInformation("Phase 4 (synonym blitz): +{New} → total={Total}",
+                    filtered.Count, allVerified.Count);
+            }
+        }
+
+        // ─────────────────────────────────────────────────────
+        // PHASE 5: Sub-location drill — try every part of the address
+        //   "Vir, Torovi, k.o. Vir" → try "Torovi", "Vir Torovi"
+        //   Fires 1 query per sub-location (only if <2 results)
+        // ─────────────────────────────────────────────────────
+        if (allVerified.Count < 2 && subLocations.Count > 1)
+        {
+            searchPhase = SearchPhase.SubLocationDrill;
+
+            var queries = subLocations
+                .Where(loc => loc != regionName && loc.Length >= 3)
+                .Take(3)
+                .Select(loc => $"site:njuskalo.hr prodaja {detectedType} {loc} cijena €")
+                .ToList();
+
+            if (queries.Count > 0)
+            {
+                var phase5Results = await FireParallelSearches(queries, 5, "Phase5-SubLoc");
+                totalApiCalls += queries.Count;
+                var filtered = PriceFirstFilter(phase5Results, "Phase5");
+                MergeInto(allVerified, filtered);
+
+                _logger.LogInformation("Phase 5 (sub-location): +{New} → total={Total}",
+                    filtered.Count, allVerified.Count);
+            }
+        }
+
+        // ─────────────────────────────────────────────────────
+        // PHASE 6: Market intelligence — articles about prices (always if <5)
+        //   These are NOT listings but price data articles
+        // ─────────────────────────────────────────────────────
+        List<ComparableSearchResult> regionalData = [];
+        if (allVerified.Count < 5)
+        {
+            if (allVerified.Count == 0)
+                searchPhase = SearchPhase.BenchmarkOnly;
+            else if (allVerified.Count < 2 && searchPhase >= SearchPhase.WiderRegion)
+                searchPhase = SearchPhase.RegionalFallback;
+
+            var widerRegion = GetBroaderRegion(regionName);
+            var queries = new List<string>
+            {
+                $"prosječna cijena {detectedType} {regionName} {now.Year} €/m²",
+                $"tržište nekretnina {widerRegion} {now.Year} cijena kvadrat",
+            };
+
+            var phase6Results = await FireParallelSearches(queries, 4, "Phase6-Intel");
+            totalApiCalls += queries.Count;
+
+            foreach (var r in phase6Results)
                 r.Content = $"[REGIONALNI TRŽIŠNI PODACI] {r.Content}";
 
-            regionalData = regionalResults;
+            regionalData = phase6Results;
+
+            _logger.LogInformation("Phase 6 (market intel): +{Count} articles", regionalData.Count);
         }
 
-        // ── Confidence Scoring ───────────────────────────────────
-        var distinctCount = filtered.DistinctBy(x => x.Url).Count();
-        var confidence = CalculateConfidence(distinctCount, searchPhase, regionName);
+        // ─────────────────────────────────────────────────────
+        // ASSEMBLE RESULT
+        // ─────────────────────────────────────────────────────
+        var distinctListings = allVerified
+            .DistinctBy(x => x.Url)
+            .Take(12)
+            .ToList();
 
-        // ── Build note ───────────────────────────────────────────
-        var note = BuildNote(distinctCount, searchPhase, regionName, benchmarkPerM2, now.Year);
+        var confidence = CalculateConfidence(distinctListings.Count, searchPhase, regionName);
+        var note = BuildNote(distinctListings.Count, searchPhase, regionName, benchmarkPerM2, now.Year);
 
         var result = new MarketResearchResult
         {
-            ActiveListings = filtered.DistinctBy(x => x.Url).Take(8).ToList(),
+            ActiveListings = distinctListings,
             RegionalData = regionalData,
             RegionalBenchmarkPerM2 = benchmarkPerM2,
             RegionName = regionName,
@@ -182,29 +359,49 @@ public class MarketResearchService
             TargetSizeM2 = sizeM2,
             Note = note,
             Confidence = confidence,
-            SearchPhaseUsed = searchPhase.ToString()
+            SearchPhaseUsed = searchPhase.ToString(),
+            TotalApiCalls = totalApiCalls,
         };
 
         _logger.LogInformation(
-            "V3 Result: {Active} price-verified listings, {Regional} regional entries, " +
-            "Confidence={Confidence}, Phase={Phase}",
+            "V4 FINAL: {Active} price-verified, {Regional} articles, " +
+            "Confidence={Level} ({Score}/100), Phase={Phase}, API calls={Calls}",
             result.ActiveListings.Count, result.RegionalData.Count,
-            confidence.Level, searchPhase);
+            confidence.Level, confidence.Score, searchPhase, totalApiCalls);
 
         return result;
     }
 
     // ══════════════════════════════════════════════════════════
-    //  V3 PRICE-FIRST FILTER — THE CORE INNOVATION
+    //  PARALLEL SEARCH ENGINE
     // ══════════════════════════════════════════════════════════
 
     /// <summary>
-    /// Every result must pass 3 mandatory gates:
-    ///   Gate 1: Contains a visible price (number + €)
-    ///   Gate 2: Not a ghost/archived/expired listing
-    ///   Gate 3: Not "cijena na upit" and not stale-only years
-    /// Results that fail ANY gate are logged and discarded.
+    /// Fire multiple Tavily searches in parallel, merge all results.
     /// </summary>
+    private async Task<List<ComparableSearchResult>> FireParallelSearches(
+        List<string> queries, int maxResultsPerQuery, string phaseName)
+    {
+        _logger.LogInformation("[{Phase}] Firing {Count} parallel queries", phaseName, queries.Count);
+
+        var tasks = queries.Select(q => ExecuteTavilySearch(q, maxResultsPerQuery));
+        var results = await Task.WhenAll(tasks);
+
+        var merged = new List<ComparableSearchResult>();
+        for (int i = 0; i < results.Length; i++)
+        {
+            _logger.LogInformation("[{Phase}] Query {Index}: {Count} raw results — {Query}",
+                phaseName, i + 1, results[i].Count, Truncate(queries[i], 80));
+            merged.AddRange(results[i]);
+        }
+
+        return merged;
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  PRICE-FIRST FILTER
+    // ══════════════════════════════════════════════════════════
+
     private List<ComparableSearchResult> PriceFirstFilter(
         List<ComparableSearchResult> results, string phaseName)
     {
@@ -212,54 +409,46 @@ public class MarketResearchService
 
         foreach (var r in results)
         {
-            var combined = (r.Title + " " + r.Content);
+            var combined = r.Title + " " + r.Content;
             var combinedLower = combined.ToLowerInvariant();
 
-            // ── Gate 1: Must contain a price (number + €) ───────
+            // Gate 1: Must contain a price (number + €)
             if (!PriceGateRegex.IsMatch(combined))
             {
-                _logger.LogInformation(
-                    "[{Phase}] REJECTED (no price €): {Title}",
+                _logger.LogDebug("[{Phase}] REJECTED (no price €): {Title}",
                     phaseName, Truncate(r.Title, 60));
                 continue;
             }
 
-            // ── Gate 2: Must not be ghost/archived ──────────────
+            // Gate 2: Must not be ghost/archived
             if (GhostKeywords.Any(kw => combinedLower.Contains(kw)))
             {
-                _logger.LogInformation(
-                    "[{Phase}] REJECTED (ghost/archived): {Title}",
+                _logger.LogDebug("[{Phase}] REJECTED (ghost): {Title}",
                     phaseName, Truncate(r.Title, 60));
                 continue;
             }
 
-            // ── Gate 3a: Must not be "cijena na upit" ──────────
+            // Gate 3a: Must not be "cijena na upit"
             if (NoPriceMarkers.Any(m => combinedLower.Contains(m)))
             {
-                _logger.LogInformation(
-                    "[{Phase}] REJECTED (cijena na upit): {Title}",
+                _logger.LogDebug("[{Phase}] REJECTED (na upit): {Title}",
                     phaseName, Truncate(r.Title, 60));
                 continue;
             }
 
-            // ── Gate 3b: Must not reference ONLY stale years ────
+            // Gate 3b: Must not reference ONLY stale years
             var mentionsCurrent = combinedLower.Contains(DateTime.Now.Year.ToString()) ||
                                   combinedLower.Contains((DateTime.Now.Year - 1).ToString());
             var mentionsOnlyOld = StaleYears.Any(y => combinedLower.Contains(y.ToString())) &&
                                   !mentionsCurrent;
-
             if (mentionsOnlyOld)
             {
-                _logger.LogInformation(
-                    "[{Phase}] REJECTED (stale year only): {Title}",
+                _logger.LogDebug("[{Phase}] REJECTED (stale): {Title}",
                     phaseName, Truncate(r.Title, 60));
                 continue;
             }
 
-            // ── ALL GATES PASSED ────────────────────────────────
-            _logger.LogInformation(
-                "[{Phase}] ✓ ACCEPTED: {Title}",
-                phaseName, Truncate(r.Title, 60));
+            _logger.LogInformation("[{Phase}] ✓ ACCEPTED: {Title}", phaseName, Truncate(r.Title, 60));
             passed.Add(r);
         }
 
@@ -267,15 +456,27 @@ public class MarketResearchService
     }
 
     // ══════════════════════════════════════════════════════════
-    //  CONFIDENCE SCORING 🧠
+    //  MERGE HELPER (deduplicate by URL)
     // ══════════════════════════════════════════════════════════
 
-    /// <summary>
-    /// Calculate confidence based on:
-    ///   - Number of price-verified listings
-    ///   - Which search phase provided them
-    ///   - Whether we know the region benchmark
-    /// </summary>
+    private static void MergeInto(
+        List<ComparableSearchResult> master, List<ComparableSearchResult> incoming)
+    {
+        foreach (var r in incoming)
+        {
+            if (!master.Any(existing =>
+                existing.Url == r.Url ||
+                (existing.Title == r.Title && existing.Title.Length > 10)))
+            {
+                master.Add(r);
+            }
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  CONFIDENCE SCORING
+    // ══════════════════════════════════════════════════════════
+
     private ConfidenceScore CalculateConfidence(
         int priceVerifiedCount, SearchPhase phase, string regionName)
     {
@@ -283,62 +484,74 @@ public class MarketResearchService
             RegionalBenchmarks.Keys.Any(k =>
                 regionName.Contains(k, StringComparison.OrdinalIgnoreCase));
 
-        // ── HIGH: 3+ price-verified listings from Phase 1 ───────
-        if (priceVerifiedCount >= 3 && phase == SearchPhase.Primary)
+        // HIGH: 5+ from early phases
+        if (priceVerifiedCount >= 5 && phase <= SearchPhase.MultiPortal)
         {
             return new ConfidenceScore
             {
                 Level = "Visoka",
-                Score = Math.Min(95, 70 + priceVerifiedCount * 5),
-                Explanation = $"Pronađeno {priceVerifiedCount} aktivnih oglasa s cijenom na Njuškalo.hr za ciljanu lokaciju.",
+                Score = Math.Min(97, 75 + priceVerifiedCount * 3),
+                Explanation = $"Pronađeno {priceVerifiedCount} aktivnih oglasa s cijenom u prvim pretragama.",
                 Color = "green"
             };
         }
 
-        // ── MEDIUM-HIGH: 3+ listings but needed Phase 2 ────────
-        if (priceVerifiedCount >= 3 && phase == SearchPhase.Broader)
+        // HIGH: 3+ from Phase 1 or 2
+        if (priceVerifiedCount >= 3 && phase <= SearchPhase.MultiPortal)
+        {
+            return new ConfidenceScore
+            {
+                Level = "Visoka",
+                Score = Math.Min(90, 70 + priceVerifiedCount * 4),
+                Explanation = $"Pronađeno {priceVerifiedCount} oglasa s cijenom na ciljnoj lokaciji.",
+                Color = "green"
+            };
+        }
+
+        // MEDIUM-HIGH: 3+ but needed wider region
+        if (priceVerifiedCount >= 3)
         {
             return new ConfidenceScore
             {
                 Level = "Srednja-Visoka",
-                Score = 70,
-                Explanation = $"Pronađeno {priceVerifiedCount} oglasa s cijenom, ali uz proširenu pretragu na širu regiju.",
+                Score = 68,
+                Explanation = $"Pronađeno {priceVerifiedCount} oglasa s cijenom uz proširenu pretragu.",
                 Color = "green"
             };
         }
 
-        // ── MEDIUM: 1-2 price-verified listings ─────────────────
+        // MEDIUM: 1-2
         if (priceVerifiedCount >= 1)
         {
             return new ConfidenceScore
             {
                 Level = "Srednja",
-                Score = hasKnownBenchmark ? 55 : 45,
+                Score = hasKnownBenchmark ? 50 : 40,
                 Explanation = priceVerifiedCount == 1
-                    ? $"Pronađen 1 oglas s cijenom + regionalni benchmark za {regionName}."
-                    : $"Pronađena {priceVerifiedCount} oglasa s cijenom, proširena pretraga na regiju.",
+                    ? $"Pronađen samo 1 oglas s cijenom + regionalni benchmark za {regionName}."
+                    : $"Pronađena {priceVerifiedCount} oglasa s cijenom uz benchmark dopunu.",
                 Color = "yellow"
             };
         }
 
-        // ── LOW: No price-verified listings at all ──────────────
+        // LOW
         if (hasKnownBenchmark)
         {
             return new ConfidenceScore
             {
                 Level = "Niska",
-                Score = 30,
-                Explanation = $"Nema aktivnih oglasa s cijenom. Korišten regionalni benchmark za {regionName}.",
+                Score = 25,
+                Explanation = $"Nema aktivnih oglasa s cijenom unatoč {(int)SearchPhase.BenchmarkOnly + 1} faza pretrage. Korišten benchmark za {regionName}.",
                 Color = "red"
             };
         }
 
-        // ── VERY LOW: No listings + unknown region ──────────────
+        // VERY LOW
         return new ConfidenceScore
         {
             Level = "Vrlo niska",
-            Score = 15,
-            Explanation = "Nema oglasa s cijenom i regija nije u bazi benchmarkova. Korišten nacionalni prosjek.",
+            Score = 12,
+            Explanation = "Nema oglasa s cijenom, nepoznata regija. Korišten nacionalni prosjek.",
             Color = "red"
         };
     }
@@ -348,43 +561,119 @@ public class MarketResearchService
     // ══════════════════════════════════════════════════════════
 
     private static string BuildNote(
-        int priceVerifiedCount, SearchPhase phase, string regionName,
-        double benchmarkPerM2, int currentYear)
+        int count, SearchPhase phase, string region, double bench, int year)
     {
-        if (priceVerifiedCount >= 3 && phase == SearchPhase.Primary)
-            return ""; // No note needed — solid data
+        if (count >= 5 && phase <= SearchPhase.MultiPortal)
+            return "";
 
-        if (priceVerifiedCount >= 3 && phase == SearchPhase.Broader)
-            return $"Pretraga proširena izvan uže lokacije na cijelu regiju {regionName}.";
+        if (count >= 3 && phase <= SearchPhase.MultiPortal)
+            return $"Pronađeno {count} oglasa s verificiranom cijenom na lokaciji {region}.";
 
-        if (priceVerifiedCount >= 1)
-            return $"Pronađen {(priceVerifiedCount == 1 ? "samo 1 oglas" : $"{priceVerifiedCount} oglasa")} " +
-                   $"s verificiranom cijenom. Korišten benchmark od {benchmarkPerM2:N0} €/m² kao dopuna.";
+        if (count >= 3)
+            return $"Pronađeno {count} oglasa — pretraga proširena izvan uže lokacije.";
 
-        return $"Nisu pronađeni aktivni oglasi s cijenom za {currentYear}. " +
-               $"Korišten regionalni benchmark za {regionName}: {benchmarkPerM2:N0} €/m².";
+        if (count >= 1)
+            return $"Pronađen {(count == 1 ? "samo 1 oglas" : $"{count} oglasa")} " +
+                   $"s cijenom. Dopunjeno benchmarkom od {bench:N0} €/m².";
+
+        return $"Nijedan aktivan oglas s cijenom nije pronađen za {year} unatoč pretrazi " +
+               $"Njuškalo, Index, Crozilla i Nekretnine.hr. " +
+               $"Korišten regionalni benchmark za {region}: {bench:N0} €/m².";
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  LOCATION HELPERS
+    // ══════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Build a list of location levels from most specific to broadest.
+    /// "Vir, Torovi, k.o. Vir" → ["Vir", "Torovi", "Zadar"]
+    /// </summary>
+    private List<string> ExtractLocationHierarchy(string location)
+    {
+        var result = new List<string>();
+        if (string.IsNullOrWhiteSpace(location))
+            return ["Hrvatska"];
+
+        // Split by common delimiters
+        var parts = location
+            .Replace("k.o.", ",", StringComparison.OrdinalIgnoreCase)
+            .Replace("K.O.", ",")
+            .Replace("č.z.", ",", StringComparison.OrdinalIgnoreCase)
+            .Split([',', ';', '/'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(p => p.Trim())
+            .Where(p => p.Length >= 2)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        result.AddRange(parts);
+
+        // Add broader region if known
+        foreach (var part in parts)
+        {
+            if (BroaderRegion.TryGetValue(part, out var broader) &&
+                !result.Contains(broader, StringComparer.OrdinalIgnoreCase))
+            {
+                result.Add(broader);
+            }
+        }
+
+        if (result.Count == 0) result.Add("Hrvatska");
+        return result;
+    }
+
+    private static string ExtractRegionName(string location)
+    {
+        if (string.IsNullOrWhiteSpace(location))
+            return "Hrvatska";
+
+        var firstPart = location.Split(',')[0].Trim();
+        firstPart = firstPart
+            .Replace("k.o.", "", StringComparison.OrdinalIgnoreCase)
+            .Replace("K.O.", "")
+            .Trim();
+
+        return string.IsNullOrWhiteSpace(firstPart) ? "Hrvatska" : firstPart;
+    }
+
+    /// <summary>Get the next broader region for an island/suburb.</summary>
+    private static string GetBroaderRegion(string regionName)
+    {
+        if (BroaderRegion.TryGetValue(regionName, out var broader))
+            return broader;
+
+        // Try word-level match
+        foreach (var (key, value) in BroaderRegion)
+        {
+            if (regionName.Contains(key, StringComparison.OrdinalIgnoreCase))
+                return value;
+        }
+
+        return regionName; // No broader known — use self
+    }
+
+    private static string[] GetTypeSynonyms(string detectedType)
+    {
+        if (TypeSynonyms.TryGetValue(detectedType, out var syns))
+            return syns;
+        return [detectedType];
     }
 
     // ══════════════════════════════════════════════════════════
     //  REGIONAL BENCHMARK LOOKUP
     // ══════════════════════════════════════════════════════════
 
-    /// <summary>
-    /// Match a location string to the nearest regional benchmark (€/m²).
-    /// </summary>
     private static double FindRegionalBenchmark(string location)
     {
         if (string.IsNullOrWhiteSpace(location))
             return DefaultBenchmark;
 
-        // Exact key match
         foreach (var (region, benchmark) in RegionalBenchmarks)
         {
             if (location.Contains(region, StringComparison.OrdinalIgnoreCase))
                 return benchmark;
         }
 
-        // Word-level match
         var words = location.Split([' ', ',', '-', '/'],
             StringSplitOptions.RemoveEmptyEntries);
         foreach (var word in words)
@@ -405,87 +694,67 @@ public class MarketResearchService
     //  TAVILY API
     // ══════════════════════════════════════════════════════════
 
-    /// <summary>
-    /// Execute a Tavily search and return parsed results.
-    /// </summary>
     private async Task<List<ComparableSearchResult>> ExecuteTavilySearch(
         string query, int maxResults = 5)
     {
-        var requestBody = new TavilyRequest
+        try
         {
-            ApiKey = _apiKey,
-            Query = query,
-            SearchDepth = "advanced",
-            MaxResults = maxResults,
-            IncludeAnswer = false
-        };
-
-        var jsonContent = new StringContent(
-            JsonSerializer.Serialize(requestBody, new JsonSerializerOptions
+            var requestBody = new TavilyRequest
             {
-                PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
-            }),
-            System.Text.Encoding.UTF8,
-            "application/json");
+                ApiKey = _apiKey,
+                Query = query,
+                SearchDepth = "advanced",
+                MaxResults = maxResults,
+                IncludeAnswer = false
+            };
 
-        var response = await _httpClient.PostAsync(TavilyUrl, jsonContent);
-        response.EnsureSuccessStatusCode();
+            var jsonContent = new StringContent(
+                JsonSerializer.Serialize(requestBody, new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
+                }),
+                System.Text.Encoding.UTF8,
+                "application/json");
 
-        var responseJson = await response.Content.ReadAsStringAsync();
+            var response = await _httpClient.PostAsync(TavilyUrl, jsonContent);
+            response.EnsureSuccessStatusCode();
 
-        var tavilyResponse = JsonSerializer.Deserialize<TavilyResponse>(
-            responseJson, new JsonSerializerOptions
+            var responseJson = await response.Content.ReadAsStringAsync();
+
+            var tavilyResponse = JsonSerializer.Deserialize<TavilyResponse>(
+                responseJson, new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
+                });
+
+            if (tavilyResponse?.Results is null || tavilyResponse.Results.Count == 0)
             {
-                PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
-            });
+                _logger.LogWarning("Tavily 0 results for: {Query}", Truncate(query, 80));
+                return [];
+            }
 
-        if (tavilyResponse?.Results is null || tavilyResponse.Results.Count == 0)
+            return tavilyResponse.Results
+                .Where(r => !string.IsNullOrWhiteSpace(r.Content))
+                .Select(r => new ComparableSearchResult
+                {
+                    Url = r.Url ?? "",
+                    Title = r.Title ?? "",
+                    Content = r.Content ?? ""
+                })
+                .ToList();
+        }
+        catch (Exception ex)
         {
-            _logger.LogWarning("Tavily returned no results for query: {Query}", query);
+            // Don't let one failed search kill the whole pipeline
+            _logger.LogWarning(ex, "Tavily search failed for: {Query}", Truncate(query, 80));
             return [];
         }
-
-        _logger.LogInformation("Tavily returned {Count} results for query: {Query}",
-            tavilyResponse.Results.Count, query);
-
-        return tavilyResponse.Results
-            .Where(r => !string.IsNullOrWhiteSpace(r.Content))
-            .Select(r => new ComparableSearchResult
-            {
-                Url = r.Url ?? "",
-                Title = r.Title ?? "",
-                Content = r.Content ?? ""
-            })
-            .ToList();
     }
 
     // ══════════════════════════════════════════════════════════
-    //  HELPERS
+    //  PROPERTY TYPE DETECTION
     // ══════════════════════════════════════════════════════════
 
-    /// <summary>
-    /// Extract a broad region name from a detailed location string.
-    /// "Murter, Betina, k.o. Betina" → "Murter"
-    /// "Split, Bačvice" → "Split"
-    /// </summary>
-    private static string ExtractRegionName(string location)
-    {
-        if (string.IsNullOrWhiteSpace(location))
-            return "Hrvatska";
-
-        var firstPart = location.Split(',')[0].Trim();
-
-        firstPart = firstPart
-            .Replace("k.o.", "", StringComparison.OrdinalIgnoreCase)
-            .Replace("K.O.", "")
-            .Trim();
-
-        return string.IsNullOrWhiteSpace(firstPart) ? "Hrvatska" : firstPart;
-    }
-
-    /// <summary>
-    /// Detect property type from PDF text.
-    /// </summary>
     private static string DetectPropertyType(string pdfText)
     {
         if (string.IsNullOrWhiteSpace(pdfText))
@@ -515,48 +784,32 @@ public class MarketResearchService
         return "stan";
     }
 
-    /// <summary>Truncate a string for logging.</summary>
     private static string Truncate(string text, int maxLength) =>
         text.Length <= maxLength ? text : text[..maxLength] + "…";
 }
 
 // ══════════════════════════════════════════════════════════
-//  SEARCH PHASE ENUM
+//  ENUMS & MODELS
 // ══════════════════════════════════════════════════════════
 
 public enum SearchPhase
 {
-    Primary,         // Phase 1: Njuškalo pinpoint — ulica + naselje
-    Broader,         // Phase 2: Expanded to broader region + Index.hr
-    RegionalFallback,// Phase 3: Only regional market data articles
-    BenchmarkOnly    // Phase 3: Zero listings, pure benchmark
+    Primary = 0,
+    MultiPortal = 1,
+    WiderRegion = 2,
+    SynonymBlitz = 3,
+    SubLocationDrill = 4,
+    RegionalFallback = 5,
+    BenchmarkOnly = 6,
 }
 
-// ══════════════════════════════════════════════════════════
-//  CONFIDENCE SCORING MODEL
-// ══════════════════════════════════════════════════════════
-
-/// <summary>
-/// Confidence score for the valuation — shown to teta on screen.
-/// </summary>
 public class ConfidenceScore
 {
-    /// <summary>Human-readable level: Visoka / Srednja-Visoka / Srednja / Niska / Vrlo niska</summary>
     public string Level { get; set; } = "";
-
-    /// <summary>Numeric score 0-100 for sorting/comparison.</summary>
     public int Score { get; set; }
-
-    /// <summary>Croatian explanation of WHY this confidence level.</summary>
     public string Explanation { get; set; } = "";
-
-    /// <summary>CSS color hint: green / yellow / red.</summary>
     public string Color { get; set; } = "";
 }
-
-// ══════════════════════════════════════════════════════════
-//  TAVILY API MODELS
-// ══════════════════════════════════════════════════════════
 
 public class TavilyRequest
 {
@@ -580,10 +833,6 @@ public class TavilyResult
     public double Score { get; set; }
 }
 
-// ══════════════════════════════════════════════════════════
-//  OUTPUT MODELS
-// ══════════════════════════════════════════════════════════
-
 public class ComparableSearchResult
 {
     public string Url { get; set; } = "";
@@ -591,43 +840,21 @@ public class ComparableSearchResult
     public string Content { get; set; } = "";
 }
 
-/// <summary>
-/// Complete market research result: price-verified listings + benchmark context.
-/// NEVER empty — always has at least a regional benchmark.
-/// </summary>
 public class MarketResearchResult
 {
-    /// <summary>Price-verified, ghost-filtered active listings from Njuškalo/Index.</summary>
     public List<ComparableSearchResult> ActiveListings { get; set; } = [];
-
-    /// <summary>Regional fallback data (used when active listings are insufficient).</summary>
     public List<ComparableSearchResult> RegionalData { get; set; } = [];
-
-    /// <summary>Regional benchmark €/m² from 2025/2026 official data.</summary>
     public double RegionalBenchmarkPerM2 { get; set; }
-
-    /// <summary>Matched region name (e.g., "Split", "Murter").</summary>
     public string RegionName { get; set; } = "";
-
-    /// <summary>Detected property type from PDF.</summary>
     public string DetectedPropertyType { get; set; } = "";
-
-    /// <summary>Target property size for context.</summary>
     public double TargetSizeM2 { get; set; }
-
-    /// <summary>Informational note about data quality / fallback usage.</summary>
     public string Note { get; set; } = "";
-
-    /// <summary>V3 Confidence scoring — level + explanation + color.</summary>
     public ConfidenceScore Confidence { get; set; } = new();
-
-    /// <summary>Which search phase ultimately provided the data.</summary>
     public string SearchPhaseUsed { get; set; } = "";
+    public int TotalApiCalls { get; set; }
 
-    /// <summary>All search results combined (active + regional) for AI consumption.</summary>
     public List<ComparableSearchResult> AllResults =>
         [.. ActiveListings, .. RegionalData];
 
-    /// <summary>True if we had to rely on benchmarks because no active ads were found.</summary>
     public bool IsBenchmarkFallback => ActiveListings.Count == 0;
 }
