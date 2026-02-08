@@ -144,7 +144,11 @@ public class MarketResearchService
     {
         _httpClient = httpClient;
         _apiKey = config["Tavily:ApiKey"]
-            ?? throw new InvalidOperationException("Tavily:ApiKey is not configured.");
+            ?? Environment.GetEnvironmentVariable("Tavily__ApiKey")
+            ?? Environment.GetEnvironmentVariable("TAVILY_API_KEY")
+            ?? Environment.GetEnvironmentVariable("TAVILY_APIKEY")
+            ?? throw new InvalidOperationException(
+                "Tavily API key is not configured. Set Tavily__ApiKey or TAVILY_API_KEY environment variable.");
         _logger = logger;
     }
 

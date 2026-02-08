@@ -10,37 +10,43 @@ export const supabase =
 
 /**
  * Upload a PDF to the 'zk-izvadci' Supabase Storage bucket.
- * Returns the public URL, or null if Supabase is not configured.
+ * Returns the public URL, or null if Supabase is not configured or bucket doesn't exist.
+ * This is fully optional — the evaluation works without it.
  */
 export async function uploadPdfToStorage(
   file: File
 ): Promise<string | null> {
   if (!supabase) {
-    console.warn("Supabase not configured — skipping PDF upload to storage.");
     return null;
   }
 
-  const timestamp = Date.now();
-  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const path = `${timestamp}_${safeName}`;
+  try {
+    const timestamp = Date.now();
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const path = `${timestamp}_${safeName}`;
 
-  const { error } = await supabase.storage
-    .from("zk-izvadci")
-    .upload(path, file, {
-      contentType: "application/pdf",
-      upsert: false,
-    });
+    const { error } = await supabase.storage
+      .from("zk-izvadci")
+      .upload(path, file, {
+        contentType: "application/pdf",
+        upsert: false,
+      });
 
-  if (error) {
-    console.error("Supabase storage upload error:", error.message);
+    if (error) {
+      // Bucket might not exist yet — this is non-critical
+      console.warn("PDF upload skipped:", error.message);
+      return null;
+    }
+
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from("zk-izvadci").getPublicUrl(path);
+
+    return publicUrl;
+  } catch {
+    // Completely swallow — PDF upload is optional
     return null;
   }
-
-  const {
-    data: { publicUrl },
-  } = supabase.storage.from("zk-izvadci").getPublicUrl(path);
-
-  return publicUrl;
 }
 
 /**

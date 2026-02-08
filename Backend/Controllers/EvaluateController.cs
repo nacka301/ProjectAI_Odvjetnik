@@ -106,7 +106,7 @@ public class EvaluateController : ControllerBase
             // If AI value deviates >40% from engine, use engine value
             // ────────────────────────────────────────────────────
             int finalValue = engineResult.EstimatedValueEur;
-            if (aiResult.EstimatedValueEur > 0)
+            if (aiResult.EstimatedValueEur > 0 && engineResult.EstimatedValueEur > 0)
             {
                 double deviation = Math.Abs(aiResult.EstimatedValueEur - engineResult.EstimatedValueEur)
                     / (double)engineResult.EstimatedValueEur;

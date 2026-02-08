@@ -247,9 +247,9 @@ public class ValuationEngine
             // Build weight-value pairs
             var weightedPairs = cleanPrices.Select(p =>
             {
-                double sim = compDetails
-                    .First(c => c.Url == p.SourceUrl && !c.IsOutlier)
-                    .SimilarityScore;
+                var match = compDetails
+                    .FirstOrDefault(c => c.Url == p.SourceUrl && !c.IsOutlier);
+                double sim = match?.SimilarityScore ?? 0.5;
                 double weight = Math.Max(sim, 0.1); // minimum weight
                 return (Value: p.PricePerM2, Weight: weight);
             }).ToList();

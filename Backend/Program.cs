@@ -39,9 +39,13 @@ builder.Services.AddCors(options =>
     });
 });
 
-// OpenAI ChatClient (reads key from config)
+// OpenAI ChatClient (reads key from config or env var)
 var openAiKey = builder.Configuration["OpenAI:ApiKey"]
-    ?? throw new InvalidOperationException("OpenAI:ApiKey is not configured.");
+    ?? Environment.GetEnvironmentVariable("OpenAI__ApiKey")
+    ?? Environment.GetEnvironmentVariable("OPENAI_API_KEY")
+    ?? Environment.GetEnvironmentVariable("OPENAI_APIKEY")
+    ?? throw new InvalidOperationException(
+        "OpenAI API key is not configured. Set OpenAI__ApiKey or OPENAI_API_KEY environment variable.");
 
 builder.Services.AddSingleton(new ChatClient("gpt-4o", openAiKey));
 builder.Services.AddScoped<PdfService>();
