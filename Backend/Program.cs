@@ -27,15 +27,37 @@ builder.Services.AddControllers()
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// CORS — allow the Next.js frontend (reads FRONTEND_URL env var in production)
+// CORS — allow the Next.js frontend
+// Supports: FRONTEND_URL env var, multiple comma-separated URLs, and Vercel preview deploys
 var frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "http://localhost:3000";
+var allowedOrigins = frontendUrl
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+    .Select(u => u.TrimEnd('/'))
+    .ToArray();
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", policy =>
     {
-        policy.WithOrigins(frontendUrl.TrimEnd('/'))
-              .AllowAnyHeader()
-              .AllowAnyMethod();
+        policy.SetIsOriginAllowed(origin =>
+            {
+                // Always allow configured origins
+                if (allowedOrigins.Any(ao => ao.Equals(origin, StringComparison.OrdinalIgnoreCase)))
+                    return true;
+
+                // Allow all Vercel preview deploys for the same project
+                var uri = new Uri(origin);
+                if (uri.Host.EndsWith(".vercel.app", StringComparison.OrdinalIgnoreCase))
+                    return true;
+
+                // Allow localhost for development
+                if (uri.Host is "localhost" or "127.0.0.1")
+                    return true;
+
+                return false;
+            })
+            .AllowAnyHeader()
+            .AllowAnyMethod();
     });
 });
 
