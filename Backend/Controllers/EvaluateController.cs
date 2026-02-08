@@ -63,8 +63,18 @@ public class EvaluateController : ControllerBase
             // ────────────────────────────────────────────────────
             // STAGE 1: Extract property info from PDF
             // ────────────────────────────────────────────────────
-            var pdfText = _pdfService.ExtractText(file);
-            var property = await _valuationService.ExtractPropertyInfoAsync(pdfText);
+            string pdfText;
+            ExtractedPropertyInfo property;
+            try
+            {
+                pdfText = _pdfService.ExtractText(file);
+                property = await _valuationService.ExtractPropertyInfoAsync(pdfText);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Stage 1 FAILED: PDF extraction / AI property parsing.");
+                return StatusCode(500, new { error = $"Stage 1 greška (PDF/AI ekstrakcija): {ex.Message}" });
+            }
 
             _logger.LogInformation(
                 "Stage 1 done: {Desc}, {Size} m², {Location}",
@@ -73,8 +83,17 @@ public class EvaluateController : ControllerBase
             // ────────────────────────────────────────────────────
             // STAGE 2: Market research (Njuškalo stealth + benchmarks)
             // ────────────────────────────────────────────────────
-            var marketData = await _marketResearchService
-                .SearchComparables(property.Location, property.SizeM2, pdfText);
+            MarketResearchResult marketData;
+            try
+            {
+                marketData = await _marketResearchService
+                    .SearchComparables(property.Location, property.SizeM2, pdfText);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Stage 2 FAILED: Market research.");
+                return StatusCode(500, new { error = $"Stage 2 greška (pretraga tržišta): {ex.Message}" });
+            }
 
             _logger.LogInformation(
                 "Stage 2 done: {Active} active listings, benchmark={Benchmark} €/m² ({Region})",
@@ -85,7 +104,16 @@ public class EvaluateController : ControllerBase
             // ────────────────────────────────────────────────────
             // STAGE 3A: Deterministic engine (server-side math)
             // ────────────────────────────────────────────────────
-            var engineResult = _valuationEngine.Calculate(property, marketData);
+            DeterministicValuation engineResult;
+            try
+            {
+                engineResult = _valuationEngine.Calculate(property, marketData);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Stage 3A FAILED: Valuation engine.");
+                return StatusCode(500, new { error = $"Stage 3A greška (engine): {ex.Message}" });
+            }
 
             _logger.LogInformation(
                 "Stage 3A done: Engine says {Value} € (confidence: {Conf})",
@@ -93,10 +121,18 @@ public class EvaluateController : ControllerBase
 
             // ────────────────────────────────────────────────────
             // STAGE 3B: AI opinion (legal text + comparable selection)
-            // The AI receives both the raw data AND our engine numbers
             // ────────────────────────────────────────────────────
-            var aiResult = await _valuationService
-                .GenerateAutoValuationAsync(property, marketData);
+            AutoValuationResult aiResult;
+            try
+            {
+                aiResult = await _valuationService
+                    .GenerateAutoValuationAsync(property, marketData);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Stage 3B FAILED: AI valuation opinion.");
+                return StatusCode(500, new { error = $"Stage 3B greška (AI procjena): {ex.Message}" });
+            }
 
             _logger.LogInformation(
                 "Stage 3B done: AI says {Value} €", aiResult.EstimatedValueEur);

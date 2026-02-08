@@ -186,9 +186,23 @@ export default function ValuationPage() {
       clearTimeout(phaseTimer2);
       setPhase("idle");
       if (axios.isAxiosError(err)) {
-        setError(
-          err.response?.data?.error ?? "Greška pri automatskoj procjeni."
-        );
+        if (err.response) {
+          // Server responded with error
+          const serverMsg = err.response.data?.error;
+          const status = err.response.status;
+          setError(
+            serverMsg
+              ? `[${status}] ${serverMsg}`
+              : `Greška ${status} od servera. Pokušajte ponovno.`
+          );
+        } else if (err.request) {
+          // No response — server down or CORS
+          setError(
+            "Server ne odgovara. Moguće da se Render restartira (~30s). Pokušajte ponovno za minutu."
+          );
+        } else {
+          setError("Greška pri slanju zahtjeva.");
+        }
       } else {
         setError("Neočekivana greška.");
       }
