@@ -35,7 +35,9 @@ builder.Services.AddSingleton(new ChatClient("gpt-4o", openAiKey));
 builder.Services.AddScoped<PdfService>();
 builder.Services.AddScoped<DocumentService>();
 builder.Services.AddScoped<ValuationService>();
+builder.Services.AddScoped<ValuationEngine>();
 builder.Services.AddHttpClient<MarketResearchService>();
+builder.Services.AddHttpClient<SupabaseService>();
 
 var app = builder.Build();
 

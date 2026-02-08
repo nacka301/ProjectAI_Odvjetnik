@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { uploadPdfToStorage, saveEvaluation } from "@/lib/supabase";
 
-const BASE_URL = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5078"}/api/valuation`;
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5078";
 
 // --- Types ---
 
@@ -48,6 +48,19 @@ interface AutoValuationResult {
   estimated_value_eur: number;
   value_drivers: ValueDriver[];
   valuation_reasoning: string;
+  // V2 engine fields
+  confidence_level?: string;
+  regional_benchmark_per_m2?: number;
+  market_average_asking?: number;
+  calculated_price_per_m2?: number;
+  realization_discount_percent?: number;
+  total_listings_found?: number;
+  usable_price_points?: number;
+  outliers_removed?: number;
+  price_source?: string;
+  region_name?: string;
+  note?: string;
+  evaluation_id?: string;
 }
 
 type LoadingPhase = "idle" | "reading" | "searching" | "generating" | "done";
@@ -119,7 +132,7 @@ export default function ValuationPage() {
 
     try {
       const res = await axios.post<AutoValuationResult>(
-        `${BASE_URL}/auto-generate`,
+        `${API_BASE}/api/evaluate`,
         formData
       );
       clearTimeout(phaseTimer1);
@@ -376,7 +389,70 @@ export default function ValuationPage() {
               <p className="text-4xl font-bold">
                 {result.estimated_value_eur.toLocaleString("hr-HR")} €
               </p>
+              {result.confidence_level && (
+                <span className={`mt-3 inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                  result.confidence_level.startsWith("Visoka")
+                    ? "bg-green-500/20 text-green-100"
+                    : result.confidence_level.startsWith("Srednja")
+                    ? "bg-yellow-500/20 text-yellow-100"
+                    : "bg-red-500/20 text-red-100"
+                }`}>
+                  Pouzdanost: {result.confidence_level}
+                </span>
+              )}
+              {result.calculated_price_per_m2 && (
+                <p className="text-sm mt-2 opacity-80">
+                  {result.calculated_price_per_m2.toLocaleString("hr-HR")} €/m²
+                </p>
+              )}
             </div>
+
+            {/* Engine Analytics Panel */}
+            {result.regional_benchmark_per_m2 && (
+              <div className="rounded-xl bg-white border border-gray-200 p-5">
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                  📊 Analitika procjene
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="text-center p-3 bg-gray-50 rounded-lg">
+                    <p className="text-xs text-gray-500">Regionalni benchmark</p>
+                    <p className="text-lg font-bold text-gray-900">
+                      {result.regional_benchmark_per_m2.toLocaleString("hr-HR")} €/m²
+                    </p>
+                    <p className="text-xs text-gray-400">{result.region_name}</p>
+                  </div>
+                  <div className="text-center p-3 bg-gray-50 rounded-lg">
+                    <p className="text-xs text-gray-500">Prosječna tražena</p>
+                    <p className="text-lg font-bold text-gray-900">
+                      {(result.market_average_asking ?? 0).toLocaleString("hr-HR")} €/m²
+                    </p>
+                    <p className="text-xs text-gray-400">{result.price_source}</p>
+                  </div>
+                  <div className="text-center p-3 bg-gray-50 rounded-lg">
+                    <p className="text-xs text-gray-500">Aktivni oglasi</p>
+                    <p className="text-lg font-bold text-gray-900">
+                      {result.total_listings_found ?? 0}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      {result.usable_price_points ?? 0} korisnih, {result.outliers_removed ?? 0} outlier
+                    </p>
+                  </div>
+                  <div className="text-center p-3 bg-gray-50 rounded-lg">
+                    <p className="text-xs text-gray-500">Diskont tražena→ostvarena</p>
+                    <p className="text-lg font-bold text-red-600">
+                      {result.realization_discount_percent ?? -15}%
+                    </p>
+                    <p className="text-xs text-gray-400">Realization gap</p>
+                  </div>
+                </div>
+                {result.note && (
+                  <div className="mt-3 flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-amber-800">{result.note}</p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Target Property Summary */}
             <div className="rounded-xl bg-white border border-gray-200 p-5">

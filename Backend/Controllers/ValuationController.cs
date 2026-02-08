@@ -118,25 +118,17 @@ public class ValuationController : ControllerBase
                 "Extracted property: {Desc}, {Size} m², {Location}",
                 property.Description, property.SizeM2, property.Location);
 
-            // Step 3: Search web for comparables via Tavily (pdfText used for property type detection)
-            var searchResults = await _marketResearchService
+            // Step 3: Search Njuškalo for active listings + benchmark context (NEVER empty)
+            var marketData = await _marketResearchService
                 .SearchComparables(property.Location, property.SizeM2, pdfText);
 
-            if (searchResults.Count == 0)
-            {
-                return Ok(new AutoValuationResult
-                {
-                    TargetPropertySummary = $"{property.Description}, {property.SizeM2} m², {property.Location}",
-                    SelectedComparables = [],
-                    EstimatedValueEur = 0,
-                    ValuationReasoning = "Nije pronađena nijedna usporediva nekretnina na tržištu. " +
-                        "Potrebno je ručno unijeti podatke o usporedivim nekretninama."
-                });
-            }
+            _logger.LogInformation(
+                "Market research: {ActiveCount} active listings, benchmark={Benchmark} €/m² ({Region})",
+                marketData.ActiveListings.Count, marketData.RegionalBenchmarkPerM2, marketData.RegionName);
 
-            // Step 4: Send everything to OpenAI for final valuation
+            // Step 4: Send everything to OpenAI for final valuation (always proceeds — has benchmarks)
             var result = await _valuationService
-                .GenerateAutoValuationAsync(property, searchResults);
+                .GenerateAutoValuationAsync(property, marketData);
 
             return Ok(result);
         }

@@ -379,21 +379,41 @@ public class ValuationService
     }
 
     /// <summary>
-    /// Fully automated valuation: PDF data + web search results → opinion.
+    /// Fully automated valuation: PDF data + market research → opinion.
+    /// Now receives enriched MarketResearchResult with benchmark context.
     /// </summary>
     public async Task<AutoValuationResult> GenerateAutoValuationAsync(
-        ExtractedPropertyInfo property, List<ComparableSearchResult> searchResults)
+        ExtractedPropertyInfo property, MarketResearchResult marketData)
     {
-        var searchBlock = string.Join("\n\n", searchResults.Select((r, i) =>
-            $"--- Search Result {i + 1} ---\nURL (copy this exactly): {r.Url}\nTitle: {r.Title}\nContent: {r.Content}"));
+        // Build active listings block
+        var activeBlock = marketData.ActiveListings.Count > 0
+            ? string.Join("\n\n", marketData.ActiveListings.Select((r, i) =>
+                $"--- Active Listing {i + 1} ---\nURL (copy this exactly): {r.Url}\nTitle: {r.Title}\nContent: {r.Content}"))
+            : "NEMA AKTIVNIH OGLASA — koristi regionalne podatke i benchmarke ispod.";
 
-        // Separate direct ads from regional fallback data for the AI
-        var directAds = searchResults.Where(r => !r.Content.StartsWith("[REGIONALNI")).ToList();
-        var regionalData = searchResults.Where(r => r.Content.StartsWith("[REGIONALNI")).ToList();
-
-        var fallbackSection = regionalData.Count > 0
-            ? $"\n\nFALLBACK REGIONAL DATA (use if direct ads are insufficient):\n{string.Join("\n\n", regionalData.Select((r, i) => $"--- Regional Source {i + 1} ---\nURL: {r.Url}\nTitle: {r.Title}\nContent: {r.Content}"))}"
+        // Build regional fallback block
+        var regionalBlock = marketData.RegionalData.Count > 0
+            ? $"\n\nFALLBACK REGIONAL DATA (use if active ads are insufficient):\n" +
+              string.Join("\n\n", marketData.RegionalData.Select((r, i) =>
+                $"--- Regional Source {i + 1} ---\nURL: {r.Url}\nTitle: {r.Title}\nContent: {r.Content}"))
             : "";
+
+        // Build benchmark context section — always provided
+        var benchmarkSection =
+            $"\n\n" +
+            $"═══════════════════════════════════════════\n" +
+            $"MARKET INTELLIGENCE (pre-computed by server):\n" +
+            $"═══════════════════════════════════════════\n" +
+            $"- Region: {marketData.RegionName}\n" +
+            $"- Regional Benchmark: {marketData.RegionalBenchmarkPerM2:N0} €/m² (2025/2026 data)\n" +
+            $"- Detected Property Type: {marketData.DetectedPropertyType}\n" +
+            $"- Target Size: {marketData.TargetSizeM2} m²\n" +
+            $"- Active Listings Found: {marketData.ActiveListings.Count}\n" +
+            $"- Using Benchmark Fallback: {(marketData.IsBenchmarkFallback ? "DA — nema aktivnih oglasa" : "NE — pronađeni aktivni oglasi")}\n" +
+            (string.IsNullOrEmpty(marketData.Note) ? "" : $"- NAPOMENA: {marketData.Note}\n") +
+            $"\nINSTRUCTION: If active listings are missing or unreliable, " +
+            $"use the Regional Benchmark of {marketData.RegionalBenchmarkPerM2:N0} €/m² as your primary anchor. " +
+            $"Apply -15% realization gap to get transaction value = {marketData.RegionalBenchmarkPerM2 * 0.85:N0} €/m².\n";
 
         var userMessage =
             $"""
@@ -404,9 +424,10 @@ public class ValuationService
             - Condition: {property.Condition}
             - Full PDF excerpt: {property.RawText}
 
-            WEB SEARCH RESULTS (Real-time ads):
-            {searchBlock}
-            {fallbackSection}
+            ACTIVE NJUŠKALO/INDEX LISTINGS (ghost/archived filtered out):
+            {activeBlock}
+            {regionalBlock}
+            {benchmarkSection}
             """;
 
         var messages = new List<ChatMessage>

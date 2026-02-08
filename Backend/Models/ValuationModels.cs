@@ -62,3 +62,36 @@ public class ExtractedPropertyInfo
     public string Condition { get; set; } = string.Empty;
     public string RawText { get; set; } = string.Empty;
 }
+
+// --- Full Evaluation Response (V2 — deterministic + AI) ---
+
+/// <summary>
+/// Complete evaluation result returned by POST /api/evaluate.
+/// Contains the AI-generated opinion AND the server-computed deterministic numbers.
+/// Frontend-compatible: extends AutoValuationResult shape.
+/// </summary>
+public class FullEvaluationResult
+{
+    // ── AI-generated fields (same shape as AutoValuationResult) ──
+    public string TargetPropertySummary { get; set; } = string.Empty;
+    public List<SelectedComparable> SelectedComparables { get; set; } = [];
+    public int EstimatedValueEur { get; set; }
+    public List<ValueDriver> ValueDrivers { get; set; } = [];
+    public string ValuationReasoning { get; set; } = string.Empty;
+
+    // ── Deterministic engine fields (NEW) ──
+    public string ConfidenceLevel { get; set; } = "";
+    public double RegionalBenchmarkPerM2 { get; set; }
+    public double MarketAverageAsking { get; set; }
+    public double CalculatedPricePerM2 { get; set; }
+    public double RealizationDiscountPercent { get; set; }
+    public int TotalListingsFound { get; set; }
+    public int UsablePricePoints { get; set; }
+    public int OutliersRemoved { get; set; }
+    public string PriceSource { get; set; } = "";
+    public string RegionName { get; set; } = "";
+    public string? Note { get; set; }
+
+    // ── Supabase ──
+    public string? EvaluationId { get; set; }
+}
