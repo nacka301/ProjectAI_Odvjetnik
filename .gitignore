@@ -1,0 +1,38 @@
+# ========================================
+# Monorepo Root .gitignore
+# ========================================
+
+# --- Backend (.NET) ---
+Backend/bin/
+Backend/obj/
+Backend/appsettings.Development.json
+Backend/Properties/launchSettings.json
+
+# --- Frontend (Next.js) ---
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.env
+frontend/.env.local
+frontend/.env.production
+frontend/.env*.local
+
+# --- IDE / OS ---
+.vs/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+.DS_Store
+Thumbs.db
+
+# --- Secrets (NEVER commit) ---
+*.pfx
+*.pem
+appsettings.*.json
+!Backend/appsettings.json
+.env
+.env.*
+!frontend/.env.example
+!Backend/.env.example

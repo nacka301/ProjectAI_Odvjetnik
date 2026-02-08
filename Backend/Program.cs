@@ -1,0 +1,70 @@
+using System.Text.Json;
+using Backend.Services;
+using OpenAI.Chat;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// --- Services ---
+
+builder.Services.AddControllers()
+    .AddJsonOptions(opts =>
+    {
+        opts.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower;
+    });
+
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+// CORS — allow the Next.js frontend (reads FRONTEND_URL env var in production)
+var frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "http://localhost:3000";
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("Frontend", policy =>
+    {
+        policy.WithOrigins(frontendUrl.TrimEnd('/'))
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
+
+// OpenAI ChatClient (reads key from config)
+var openAiKey = builder.Configuration["OpenAI:ApiKey"]
+    ?? throw new InvalidOperationException("OpenAI:ApiKey is not configured.");
+
+builder.Services.AddSingleton(new ChatClient("gpt-4o", openAiKey));
+builder.Services.AddScoped<PdfService>();
+builder.Services.AddScoped<DocumentService>();
+builder.Services.AddScoped<ValuationService>();
+builder.Services.AddHttpClient<MarketResearchService>();
+
+var app = builder.Build();
+
+// --- Middleware ---
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+app.UseCors("Frontend");
+
+// Only redirect to HTTPS in development; Render handles TLS at the proxy level
+if (app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
+
+app.MapControllers();
+
+// In production (Docker/Render), bind to PORT env var.
+// In development, launchSettings.json controls the URL.
+if (!app.Environment.IsDevelopment())
+{
+    var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
+    app.Run($"http://0.0.0.0:{port}");
+}
+else
+{
+    app.Run();
+}
