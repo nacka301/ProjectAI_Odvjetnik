@@ -92,6 +92,12 @@ public class FullEvaluationResult
     public string RegionName { get; set; } = "";
     public string? Note { get; set; }
 
+    // ── V3 Confidence Scoring ──
+    public int ConfidenceScore { get; set; }
+    public string ConfidenceExplanation { get; set; } = "";
+    public string ConfidenceColor { get; set; } = "";
+    public string SearchPhaseUsed { get; set; } = "";
+
     // ── Supabase ──
     public string? EvaluationId { get; set; }
 }

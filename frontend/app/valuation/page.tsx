@@ -61,6 +61,11 @@ interface AutoValuationResult {
   region_name?: string;
   note?: string;
   evaluation_id?: string;
+  // V3 confidence scoring
+  confidence_score?: number;
+  confidence_explanation?: string;
+  confidence_color?: string;
+  search_phase_used?: string;
 }
 
 type LoadingPhase = "idle" | "reading" | "searching" | "generating" | "done";
@@ -390,15 +395,35 @@ export default function ValuationPage() {
                 {result.estimated_value_eur.toLocaleString("hr-HR")} €
               </p>
               {result.confidence_level && (
-                <span className={`mt-3 inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
-                  result.confidence_level.startsWith("Visoka")
-                    ? "bg-green-500/20 text-green-100"
-                    : result.confidence_level.startsWith("Srednja")
-                    ? "bg-yellow-500/20 text-yellow-100"
-                    : "bg-red-500/20 text-red-100"
-                }`}>
-                  Pouzdanost: {result.confidence_level}
-                </span>
+                <div className="mt-4 mx-auto max-w-md">
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                      result.confidence_color === "green"
+                        ? "bg-green-500/20 text-green-100"
+                        : result.confidence_color === "yellow"
+                        ? "bg-yellow-500/20 text-yellow-100"
+                        : "bg-red-500/20 text-red-100"
+                    }`}>
+                      Pouzdanost: {result.confidence_level}
+                      {result.confidence_score ? ` (${result.confidence_score}/100)` : ""}
+                    </span>
+                  </div>
+                  {result.confidence_score != null && (
+                    <div className="w-full bg-white/20 rounded-full h-2 mb-2">
+                      <div
+                        className={`h-2 rounded-full transition-all duration-500 ${
+                          result.confidence_color === "green" ? "bg-green-400"
+                          : result.confidence_color === "yellow" ? "bg-yellow-400"
+                          : "bg-red-400"
+                        }`}
+                        style={{ width: `${result.confidence_score}%` }}
+                      />
+                    </div>
+                  )}
+                  {result.confidence_explanation && (
+                    <p className="text-xs opacity-70">{result.confidence_explanation}</p>
+                  )}
+                </div>
               )}
               {result.calculated_price_per_m2 && (
                 <p className="text-sm mt-2 opacity-80">

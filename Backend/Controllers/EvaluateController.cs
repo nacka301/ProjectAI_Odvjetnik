@@ -139,8 +139,8 @@ public class EvaluateController : ControllerBase
                 ValueDrivers = aiResult.ValueDrivers,
                 ValuationReasoning = aiResult.ValuationReasoning,
 
-                // Engine fields
-                ConfidenceLevel = engineResult.ConfidenceLevel,
+                // Engine fields (V3: use market research confidence)
+                ConfidenceLevel = marketData.Confidence.Level,
                 RegionalBenchmarkPerM2 = engineResult.RegionalBenchmarkPerM2,
                 MarketAverageAsking = engineResult.MarketAverageAsking,
                 CalculatedPricePerM2 = engineResult.CalculatedPricePerM2,
@@ -150,7 +150,13 @@ public class EvaluateController : ControllerBase
                 OutliersRemoved = engineResult.OutliersRemoved,
                 PriceSource = engineResult.PriceSource,
                 RegionName = engineResult.RegionName,
-                Note = string.IsNullOrEmpty(marketData.Note) ? null : marketData.Note
+                Note = string.IsNullOrEmpty(marketData.Note) ? null : marketData.Note,
+
+                // V3 Confidence Scoring
+                ConfidenceScore = marketData.Confidence.Score,
+                ConfidenceExplanation = marketData.Confidence.Explanation,
+                ConfidenceColor = marketData.Confidence.Color,
+                SearchPhaseUsed = marketData.SearchPhaseUsed
             };
 
             // ────────────────────────────────────────────────────
