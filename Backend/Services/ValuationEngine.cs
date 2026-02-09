@@ -105,10 +105,12 @@ public class ValuationEngine
     };
 
     // ══════════════════════════════════════════════════════════
-    //  RENT-TRAP — Rental / Sub-€15k Filter (V6.2 backport)
+    //  SALES-ONLY GATEKEEPER — Aggressive Price Floor (V6.3)
+    //  Anything below these is 100% RENTAL or ERROR.
     // ══════════════════════════════════════════════════════════
-    private const double MinSalePriceEur = 15_000;
-    private const double MinPricePerM2Floor = 500;
+    private const double MinSalePriceEur = 35_000;       // No real sale in HR below €35k
+    private const double MinPricePerM2Floor = 800;       // Min €/m² for any habitable property
+    private const double HighClusterCvThreshold = 40.0;  // CV% above which we trust high cluster
 
     private static readonly string[] RentalKeywords =
     [
@@ -230,9 +232,22 @@ public class ValuationEngine
             pipeline.Add("Benchmark only mode");
         }
 
-        // ── 3b. Pre-IQR 10x Sanity Check (V6.2 backport) ──
+        // ── 3b. SALES-ONLY GATEKEEPER (V6.3) ──
+        // Hard floor: nothing below 800 €/m² can EVER enter the math.
+        // This kills any rental that survived keyword + total-price filters.
+        {
+            int beforeGatekeeper = cleanPrices.Count;
+            cleanPrices = cleanPrices.Where(p => p.PricePerM2 >= MinPricePerM2Floor).ToList();
+            int gatekeeperRemoved = beforeGatekeeper - cleanPrices.Count;
+            if (gatekeeperRemoved > 0)
+            {
+                outlierLog.Add($"Sales-Only Gatekeeper: removed {gatekeeperRemoved} listings below €{MinPricePerM2Floor}/m²");
+                pipeline.Add($"Gatekeeper: {cleanPrices.Count} remain after enforcing €{MinPricePerM2Floor}/m² floor");
+            }
+        }
+
+        // ── 3c. 10x Ratio Sanity Check ──
         // If max/min ratio > 10, rental contamination likely persists.
-        // Discard bottom tail using median/5 as floor.
         if (cleanPrices.Count >= 3)
         {
             var sortedPpm2 = cleanPrices.Select(p => p.PricePerM2).OrderBy(v => v).ToList();
@@ -249,6 +264,32 @@ public class ValuationEngine
                 {
                     outlierLog.Add($"10x sanity: removed {sanityRemoved} extreme low values (floor=€{sanityFloor:F0}/m²)");
                     pipeline.Add($"10x sanity: {cleanPrices.Count} remain after removing {sanityRemoved} suspect entries");
+                }
+            }
+        }
+
+        // ── 3d. HIGH-CLUSTER TRUST (CV > 40%) ──
+        // If CV is huge, we likely have two populations (rentals vs sales).
+        // Trust the HIGHER cluster — those are the real sales.
+        if (cleanPrices.Count >= 4)
+        {
+            var sortedVals = cleanPrices.Select(p => p.PricePerM2).OrderBy(v => v).ToList();
+            double mean = sortedVals.Average();
+            double sumSq = sortedVals.Sum(v => (v - mean) * (v - mean));
+            double cv = mean > 0 ? Math.Sqrt(sumSq / sortedVals.Count) / mean * 100 : 0;
+
+            if (cv > HighClusterCvThreshold)
+            {
+                // Split at median — keep only upper half
+                double medianSplit = sortedVals[sortedVals.Count / 2];
+                int beforeSplit = cleanPrices.Count;
+                cleanPrices = cleanPrices.Where(p => p.PricePerM2 >= medianSplit).ToList();
+                int splitRemoved = beforeSplit - cleanPrices.Count;
+
+                if (splitRemoved > 0)
+                {
+                    outlierLog.Add($"High-Cluster Trust: CV={cv:F1}% > {HighClusterCvThreshold}% → discarded {splitRemoved} low-cluster listings (split at €{medianSplit:F0}/m²)");
+                    pipeline.Add($"High-Cluster Trust: kept {cleanPrices.Count} upper-cluster listings (CV was {cv:F1}%)");
                 }
             }
         }
@@ -392,6 +433,13 @@ public class ValuationEngine
         result.OutlierLog = outlierLog;
         result.UsedComparables = compDetails;
         result.RealizationGapReasoning = BuildGapReasoning(coeffVar, searchPhase, cleanPrices.Count, realizationGap);
+
+        // ── 13. Sync: Record URLs of non-outlier comps for LLM filtering ──
+        result.FinalUsedUrls = new HashSet<string>(
+            compDetails.Where(c => !c.IsOutlier && !string.IsNullOrEmpty(c.Url))
+                       .Select(c => c.Url),
+            StringComparer.OrdinalIgnoreCase);
+        pipeline.Add($"LLM sync: {result.FinalUsedUrls.Count} clean URLs exported for AI prompt");
 
         _logger.LogInformation(
             "Engine V4: {Comps} comps, WM={WM:F0}, gap={Gap:F1}%, adj={Adj:+0;-0}%, final={Val:N0} €, confidence={Conf}/100",
@@ -1158,6 +1206,9 @@ public class DeterministicValuation
 
     // ── Pipeline trace ──
     public List<string> Pipeline { get; set; } = [];
+
+    // ── Filtered URL list for LLM sync (V6.3) ──
+    public HashSet<string> FinalUsedUrls { get; set; } = [];
 }
 
 public class UsedComparable

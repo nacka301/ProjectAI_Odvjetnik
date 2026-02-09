@@ -120,8 +120,8 @@ public class CandidateGenerator : ICandidateGenerator
     //  RENT-TRAP — Rental / Parking / Sub-€15k Filter
     // ══════════════════════════════════════════════════════════
 
-    private const double MinSalePriceEur = 15_000;
-    private const double MinPricePerM2 = 500;
+    private const double MinSalePriceEur = 35_000;
+    private const double MinPricePerM2 = 800;
 
     private static readonly string[] RentalKeywords =
     [

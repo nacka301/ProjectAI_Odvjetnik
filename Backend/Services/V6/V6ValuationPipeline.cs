@@ -521,12 +521,21 @@ public class V6ValuationPipeline : IValuationPipeline
             CanonicalPropertyModel subject,
             List<CanonicalPropertyModel> cluster)
     {
-        // ── Extract price/m² from cluster ──
+        // ── Extract price/m² from cluster (with €800/m² hard floor) ──
+        const double SalesOnlyFloor = 800.0;
+        const double HighClusterCvThreshold = 40.0;
+
         var ppsqmValues = cluster
-            .Where(c => c.PricePerM2.HasValue && c.PricePerM2.Value > 0)
+            .Where(c => c.PricePerM2.HasValue && c.PricePerM2.Value >= SalesOnlyFloor)
             .Select(c => c.PricePerM2!.Value)
             .OrderBy(v => v)
             .ToList();
+
+        int droppedByFloor = cluster.Count(c => c.PricePerM2.HasValue && c.PricePerM2.Value > 0
+            && c.PricePerM2.Value < SalesOnlyFloor);
+        if (droppedByFloor > 0)
+            _logger.LogWarning("V6 Phase 7: Sales-Only Gatekeeper dropped {Count} listings below €{Floor}/m²",
+                droppedByFloor, SalesOnlyFloor);
 
         if (ppsqmValues.Count == 0)
         {
@@ -558,6 +567,24 @@ public class V6ValuationPipeline : IValuationPipeline
                 _logger.LogInformation(
                     "V6 Phase 7: After 10x sanity: {Count} values remain (floor=€{Floor:F0}/m²)",
                     ppsqmValues.Count, sanityFloor);
+            }
+        }
+
+        // ── High-Cluster Trust: CV > 40% → keep upper cluster only ──
+        if (ppsqmValues.Count >= 4)
+        {
+            double mean = ppsqmValues.Average();
+            double sumSq = ppsqmValues.Sum(v => (v - mean) * (v - mean));
+            double cv = mean > 0 ? Math.Sqrt(sumSq / ppsqmValues.Count) / mean * 100 : 0;
+
+            if (cv > HighClusterCvThreshold)
+            {
+                double medianSplit = ppsqmValues[ppsqmValues.Count / 2];
+                int beforeSplit = ppsqmValues.Count;
+                ppsqmValues = ppsqmValues.Where(v => v >= medianSplit).ToList();
+                _logger.LogWarning(
+                    "V6 Phase 7: High-Cluster Trust — CV={CV:F1}% > {Thresh}%. Discarded {Removed} low-cluster, kept {Kept}",
+                    cv, HighClusterCvThreshold, beforeSplit - ppsqmValues.Count, ppsqmValues.Count);
             }
         }
 

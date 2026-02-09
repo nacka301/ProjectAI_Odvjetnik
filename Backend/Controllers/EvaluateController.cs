@@ -116,8 +116,38 @@ public class EvaluateController : ControllerBase
             }
 
             _logger.LogInformation(
-                "Stage 3A done: Engine says {Value} € (confidence: {Conf})",
-                engineResult.EstimatedValueEur, engineResult.ConfidenceLevel);
+                "Stage 3A done: Engine says {Value} € (confidence: {Conf}), {Used} clean URLs",
+                engineResult.EstimatedValueEur, engineResult.ConfidenceLevel,
+                engineResult.FinalUsedUrls.Count);
+
+            // ────────────────────────────────────────────────────
+            // STAGE 3A.5: SYNC — Filter ActiveListings for LLM
+            // Only let the LLM see listings that the engine approved.
+            // This prevents the AI from picking rental/junk comparables
+            // that the math engine already rejected.
+            // ────────────────────────────────────────────────────
+            if (engineResult.FinalUsedUrls.Count > 0)
+            {
+                int beforeSync = marketData.ActiveListings.Count;
+                var filteredListings = marketData.ActiveListings
+                    .Where(l => engineResult.FinalUsedUrls.Contains(l.Url))
+                    .ToList();
+
+                // Only replace if we still have at least 1 listing
+                if (filteredListings.Count > 0)
+                {
+                    marketData.ActiveListings = filteredListings;
+                    _logger.LogInformation(
+                        "LLM Sync: filtered ActiveListings {Before} → {After} (engine-approved only)",
+                        beforeSync, filteredListings.Count);
+                }
+                else
+                {
+                    _logger.LogWarning(
+                        "LLM Sync: No URL overlap between engine and ActiveListings — keeping all {Count} for LLM",
+                        beforeSync);
+                }
+            }
 
             // ────────────────────────────────────────────────────
             // STAGE 3B: AI opinion (legal text + comparable selection)

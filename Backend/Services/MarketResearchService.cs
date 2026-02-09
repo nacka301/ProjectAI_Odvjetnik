@@ -406,9 +406,9 @@ public class MarketResearchService
     //  PRICE-FIRST FILTER
     // ══════════════════════════════════════════════════════════
 
-    // Rent-trap constants
-    private const double MinSalePriceEur = 15_000;
-    private const double MinPricePerM2 = 500;
+    // Sales-only gatekeeper constants (V6.3)
+    private const double MinSalePriceEur = 35_000;
+    private const double MinPricePerM2 = 800;
 
     private static readonly string[] RentalKeywords =
     [
