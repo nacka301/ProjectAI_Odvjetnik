@@ -312,7 +312,7 @@ public class ValuationService
             $"═══════════════════════════════════════════\n" +
             $"- Region: {marketData.RegionName}\n" +
             $"- Detected Property Type: {marketData.DetectedPropertyType}\n" +
-            $"- Target Size: {marketData.TargetSizeM2} m²\n" +
+            $"- Target Size: {marketData.TargetSizeM2} m2\n" +
             $"- Active Listings Found: {marketData.ActiveListings.Count}\n" +
             (string.IsNullOrEmpty(marketData.Note) ? "" : $"- NAPOMENA: {marketData.Note}\n") +
             $"\nINSTRUCTION: Base your valuation ONLY on the search results above. " +

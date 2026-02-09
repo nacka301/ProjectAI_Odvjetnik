@@ -62,7 +62,7 @@ public class MarketResearchService
     };
 
     private static readonly Regex NjuskaloListingPattern = new(
-        @"###\s*\[(?<title>[^\]]+)\]\((?<url>https://www\.njuskalo\.hr/nekretnine/[^)]+)\)",
+        @"###\s*\[(?<title>[^\]]+)\]\((?<url>https://www\.njuskalo\.hr/[^)]+)\)",
         RegexOptions.Compiled);
 
     private static readonly Regex NjuskaloPricePattern = new(
@@ -178,7 +178,7 @@ public class MarketResearchService
         {
             var njuskaloResults = await FetchNjuskaloDirectListings(detectedType, regionName);
             totalApiCalls += (njuskaloResults.Count > 0 ? 1 : 0);
-            var filtered = PriceFirstFilter(njuskaloResults, "Phase0-NjuskaloDirect");
+            var filtered = PriceFirstFilter(njuskaloResults, "Phase0-NjuskaloDirect", regionName);
             MergeInto(allVerified, filtered);
 
             _logger.LogInformation("Phase 0 (Njuškalo Direct): {New}/{Raw} passed → total={Total}",
@@ -205,7 +205,7 @@ public class MarketResearchService
 
             var phase1Results = await FireParallelSearches(queries, 7, "Phase1");
             totalApiCalls += queries.Count;
-            var filtered = PriceFirstFilter(phase1Results, "Phase1");
+            var filtered = PriceFirstFilter(phase1Results, "Phase1", regionName);
             MergeInto(allVerified, filtered);
 
             _logger.LogInformation("Phase 1: {New}/{Raw} passed → total={Total}",
@@ -229,7 +229,7 @@ public class MarketResearchService
 
             var phase2Results = await FireParallelSearches(queries, 5, "Phase2-Portals");
             totalApiCalls += queries.Count;
-            var filtered = PriceFirstFilter(phase2Results, "Phase2");
+            var filtered = PriceFirstFilter(phase2Results, "Phase2", regionName);
             MergeInto(allVerified, filtered);
 
             _logger.LogInformation("Phase 2 (multi-portal): +{New} → total={Total}",
@@ -490,8 +490,10 @@ public class MarketResearchService
     {
         var requestBody = new
         {
-            api_key = _apiKey,
-            urls = new[] { url }
+            urls = new[] { url },
+            extract_depth = "advanced",
+            format = "markdown",
+            timeout = 30
         };
 
         var jsonContent = new StringContent(
@@ -499,7 +501,13 @@ public class MarketResearchService
             System.Text.Encoding.UTF8,
             "application/json");
 
-        var response = await _httpClient.PostAsync(TavilyExtractUrl, jsonContent);
+        var request = new HttpRequestMessage(HttpMethod.Post, TavilyExtractUrl)
+        {
+            Content = jsonContent
+        };
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _apiKey);
+
+        var response = await _httpClient.SendAsync(request);
         response.EnsureSuccessStatusCode();
 
         var responseJson = await response.Content.ReadAsStringAsync();
@@ -539,8 +547,8 @@ public class MarketResearchService
             var title = listingMatch.Groups["title"].Value.Trim();
             var url = listingMatch.Groups["url"].Value.Trim();
 
-            // Skip non-real-estate listings (Njuškalo shows unrelated "latest ads" at bottom)
-            if (!url.Contains("/nekretnine/"))
+            // Skip non-Njuškalo links that might appear in navigation
+            if (!url.Contains("njuskalo.hr/"))
                 continue;
 
             // Extract price: number + €
@@ -653,14 +661,28 @@ public class MarketResearchService
     private string _currentDetectedType = "stan";
 
     private List<ComparableSearchResult> PriceFirstFilter(
-        List<ComparableSearchResult> results, string phaseName)
+        List<ComparableSearchResult> results, string phaseName,
+        string? requiredLocation = null)
     {
         var passed = new List<ComparableSearchResult>();
+        var locationLower = requiredLocation?.ToLowerInvariant();
 
         foreach (var r in results)
         {
             var combined = r.Title + " " + r.Content;
             var combinedLower = combined.ToLowerInvariant();
+
+            // Gate 0: LOCATION — for early phases, must mention target city/area
+            if (!string.IsNullOrEmpty(locationLower))
+            {
+                if (!combinedLower.Contains(locationLower) &&
+                    !r.Url.Contains(locationLower, StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.LogDebug("[{Phase}] REJECTED (wrong location, need '{Loc}'): {Title}",
+                        phaseName, requiredLocation, Truncate(r.Title, 60));
+                    continue;
+                }
+            }
 
             // Gate 1: Must contain a price (number + €)
             if (!PriceGateRegex.IsMatch(combined))
