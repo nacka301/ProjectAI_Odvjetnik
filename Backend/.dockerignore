@@ -5,3 +5,10 @@ Properties/launchSettings.json
 *.md
 .git
 .gitignore
+.dockerignore
+*.http
+*.log
+*.user
+*.suo
+.vs/
+.vscode/
