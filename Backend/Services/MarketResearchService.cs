@@ -16,7 +16,8 @@ public class MarketResearchService
     private readonly string _apiKey;
     private readonly ILogger<MarketResearchService> _logger;
 
-    private const string TavilyUrl = "https://api.tavily.com/search";
+    private const string TavilySearchUrl = "https://api.tavily.com/search";
+    private const string TavilyExtractUrl = "https://api.tavily.com/extract";
 
     // ══════════════════════════════════════════════════════════
     //  PRICE-FIRST REGEX — the gatekeeper
@@ -46,6 +47,27 @@ public class MarketResearchService
         "site:crozilla.com",
         "site:nekretnine.hr",
     ];
+
+    // ══════════════════════════════════════════════════════════
+    //  NJUŠKALO URL SLUGS — for direct page extraction
+    // ══════════════════════════════════════════════════════════
+    private static readonly Dictionary<string, string> NjuskaloTypeSlug = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["stan"]                  = "prodaja-stanova",
+        ["kuća"]                  = "prodaja-kuca",
+        ["kuca"]                  = "prodaja-kuca",
+        ["građevinsko zemljište"] = "prodaja-zemljista",
+        ["gradjevinsko zemljiste"] = "prodaja-zemljista",
+        ["poslovni prostor"]      = "prodaja-poslovnih-prostora",
+    };
+
+    private static readonly Regex NjuskaloListingPattern = new(
+        @"###\s*\[(?<title>[^\]]+)\]\((?<url>https://www\.njuskalo\.hr/nekretnine/[^)]+)\)",
+        RegexOptions.Compiled);
+
+    private static readonly Regex NjuskaloPricePattern = new(
+        @"(?<price>\d{1,3}(?:\.\d{3})*)\s*€",
+        RegexOptions.Compiled);
 
     // ══════════════════════════════════════════════════════════
     //  LOCATION HIERARCHY MAPPING (broader region for islands/suburbs)
@@ -148,9 +170,26 @@ public class MarketResearchService
             string.Join(" → ", subLocations));
 
         // ─────────────────────────────────────────────────────
-        // PHASE 1: Njuškalo pinpoint — exact location, main type + synonym
-        //   Fires 3 parallel queries
+        // PHASE 0: Njuškalo DIRECT — extract the actual search page
+        //   Constructs njuskalo.hr/prodaja-zemljista/vir URL
+        //   Uses Tavily Extract API (their browser infra bypasses CAPTCHA)
+        //   Gets 25+ listings per page vs. 3-5 from search
         // ─────────────────────────────────────────────────────
+        {
+            var njuskaloResults = await FetchNjuskaloDirectListings(detectedType, regionName);
+            totalApiCalls += (njuskaloResults.Count > 0 ? 1 : 0);
+            var filtered = PriceFirstFilter(njuskaloResults, "Phase0-NjuskaloDirect");
+            MergeInto(allVerified, filtered);
+
+            _logger.LogInformation("Phase 0 (Njuškalo Direct): {New}/{Raw} passed → total={Total}",
+                filtered.Count, njuskaloResults.Count, allVerified.Count);
+        }
+
+        // ─────────────────────────────────────────────────────
+        // PHASE 1: Tavily search fallback — only if Phase 0 got <5
+        //   Fires 3 parallel queries via Tavily Search
+        // ─────────────────────────────────────────────────────
+        if (allVerified.Count < 5)
         {
             var queries = new List<string>
             {
@@ -171,13 +210,13 @@ public class MarketResearchService
 
             _logger.LogInformation("Phase 1: {New}/{Raw} passed → total={Total}",
                 filtered.Count, phase1Results.Count, allVerified.Count);
-        }
+        } // end Phase 1 (if <5)
 
         // ─────────────────────────────────────────────────────
         // PHASE 2: Multi-portal spread — same location, different portals
-        //   Fires 3 parallel queries (only if <3 results)
+        //   Fires 3 parallel queries (only if <5 results)
         // ─────────────────────────────────────────────────────
-        if (allVerified.Count < 3)
+        if (allVerified.Count < 5)
         {
             searchPhase = SearchPhase.MultiPortal;
 
@@ -344,6 +383,193 @@ public class MarketResearchService
             confidence.Level, confidence.Score, searchPhase, totalApiCalls);
 
         return result;
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  PHASE 0: NJUŠKALO DIRECT — Tavily Extract on search page
+    // ══════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Constructs the Njuškalo search URL, uses Tavily Extract API to fetch
+    /// the page content (bypassing ShieldSquare CAPTCHA via Tavily's browser infra),
+    /// then parses listings from the extracted text.
+    /// </summary>
+    private async Task<List<ComparableSearchResult>> FetchNjuskaloDirectListings(
+        string detectedType, string regionName)
+    {
+        try
+        {
+            var njuskaloUrl = BuildNjuskaloSearchUrl(detectedType, regionName);
+            if (njuskaloUrl is null)
+            {
+                _logger.LogWarning("Phase0: Could not build Njuškalo URL for type={Type}, region={Region}",
+                    detectedType, regionName);
+                return [];
+            }
+
+            _logger.LogInformation("Phase0: Extracting {Url}", njuskaloUrl);
+
+            var extractedText = await ExecuteTavilyExtract(njuskaloUrl);
+            if (string.IsNullOrWhiteSpace(extractedText))
+            {
+                _logger.LogWarning("Phase0: Tavily Extract returned empty for {Url}", njuskaloUrl);
+                return [];
+            }
+
+            var listings = ParseNjuskaloExtractedText(extractedText);
+
+            _logger.LogInformation("Phase0: Parsed {Count} listings from Njuškalo direct page", listings.Count);
+            return listings;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Phase0: Njuškalo direct extraction failed");
+            return [];
+        }
+    }
+
+    /// <summary>
+    /// Build the Njuškalo search URL from property type + location.
+    /// e.g. "građevinsko zemljište" + "Vir" → "https://www.njuskalo.hr/prodaja-zemljista/vir"
+    /// </summary>
+    private static string? BuildNjuskaloSearchUrl(string detectedType, string regionName)
+    {
+        // Find the correct URL slug for this property type
+        string? slug = null;
+        foreach (var (key, value) in NjuskaloTypeSlug)
+        {
+            if (detectedType.Contains(key, StringComparison.OrdinalIgnoreCase))
+            {
+                slug = value;
+                break;
+            }
+        }
+
+        // Default fallback for unknown types
+        slug ??= detectedType.Contains("zemlj", StringComparison.OrdinalIgnoreCase)
+            ? "prodaja-zemljista"
+            : detectedType.Contains("kuć", StringComparison.OrdinalIgnoreCase)
+                ? "prodaja-kuca"
+                : "prodaja-stanova";
+
+        var locSlug = NormalizeLocationSlug(regionName);
+        if (string.IsNullOrWhiteSpace(locSlug))
+            return null;
+
+        return $"https://www.njuskalo.hr/{slug}/{locSlug}";
+    }
+
+    /// <summary>
+    /// Normalize Croatian location name to Njuškalo URL slug.
+    /// "Šibenik" → "sibenik", "Velika Gorica" → "velika-gorica"
+    /// </summary>
+    private static string NormalizeLocationSlug(string location)
+    {
+        if (string.IsNullOrWhiteSpace(location))
+            return "";
+
+        var slug = location.ToLowerInvariant().Trim();
+
+        // Strip Croatian diacritics
+        slug = slug
+            .Replace("č", "c").Replace("ć", "c")
+            .Replace("đ", "d").Replace("ð", "d")
+            .Replace("š", "s").Replace("ž", "z");
+
+        // Replace spaces with hyphens, remove non-alphanumeric
+        slug = Regex.Replace(slug, @"[^a-z0-9]+", "-").Trim('-');
+
+        return slug;
+    }
+
+    /// <summary>
+    /// Call Tavily Extract API to fetch content from a specific URL.
+    /// Returns the raw text content of the page.
+    /// </summary>
+    private async Task<string> ExecuteTavilyExtract(string url)
+    {
+        var requestBody = new
+        {
+            api_key = _apiKey,
+            urls = new[] { url }
+        };
+
+        var jsonContent = new StringContent(
+            JsonSerializer.Serialize(requestBody),
+            System.Text.Encoding.UTF8,
+            "application/json");
+
+        var response = await _httpClient.PostAsync(TavilyExtractUrl, jsonContent);
+        response.EnsureSuccessStatusCode();
+
+        var responseJson = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(responseJson);
+
+        if (doc.RootElement.TryGetProperty("results", out var results) && results.GetArrayLength() > 0)
+        {
+            var first = results[0];
+            if (first.TryGetProperty("raw_content", out var rawContent))
+                return rawContent.GetString() ?? "";
+        }
+
+        return "";
+    }
+
+    /// <summary>
+    /// Parse Njuškalo listings from text extracted by Tavily.
+    /// The text format has: ### [Title](URL) ... Price €
+    /// </summary>
+    private List<ComparableSearchResult> ParseNjuskaloExtractedText(string text)
+    {
+        var listings = new List<ComparableSearchResult>();
+
+        // Split text into listing blocks: each starts with "### ["
+        var blocks = Regex.Split(text, @"(?=###\s*\[)");
+
+        foreach (var block in blocks)
+        {
+            if (string.IsNullOrWhiteSpace(block))
+                continue;
+
+            // Extract title + URL: ### [Title](URL)
+            var listingMatch = NjuskaloListingPattern.Match(block);
+            if (!listingMatch.Success)
+                continue;
+
+            var title = listingMatch.Groups["title"].Value.Trim();
+            var url = listingMatch.Groups["url"].Value.Trim();
+
+            // Skip non-real-estate listings (Njuškalo shows unrelated "latest ads" at bottom)
+            if (!url.Contains("/nekretnine/"))
+                continue;
+
+            // Extract price: number + €
+            var priceMatch = NjuskaloPricePattern.Match(block);
+            string priceStr = priceMatch.Success ? priceMatch.Groups["price"].Value : "";
+
+            // Build content string with all available data
+            var contentParts = new List<string> { title };
+
+            // Extract location if present: "Lokacija: City, Area"
+            var locMatch = Regex.Match(block, @"Lokacija:\s*([^\n]+)");
+            if (locMatch.Success)
+                contentParts.Add($"Lokacija: {locMatch.Groups[1].Value.Trim()}");
+
+            if (!string.IsNullOrEmpty(priceStr))
+                contentParts.Add($"Cijena: {priceStr} €");
+
+            listings.Add(new ComparableSearchResult
+            {
+                Url = url,
+                Title = title,
+                Content = string.Join(". ", contentParts)
+            });
+        }
+
+        _logger.LogInformation("Phase0 parser: {Total} listings extracted from text ({Chars} chars)",
+            listings.Count, text.Length);
+
+        return listings;
     }
 
     // ══════════════════════════════════════════════════════════
@@ -744,7 +970,7 @@ public class MarketResearchService
                 System.Text.Encoding.UTF8,
                 "application/json");
 
-            var response = await _httpClient.PostAsync(TavilyUrl, jsonContent);
+            var response = await _httpClient.PostAsync(TavilySearchUrl, jsonContent);
             response.EnsureSuccessStatusCode();
 
             var responseJson = await response.Content.ReadAsStringAsync();
