@@ -268,4 +268,165 @@ public class EvaluateController : ControllerBase
             return StatusCode(500, new { error = "Greška pri evaluaciji nekretnine." });
         }
     }
+
+    /// <summary>
+    /// Text-based evaluation: accepts raw property text instead of PDF.
+    /// Skips PDF extraction — goes straight into the pipeline.
+    /// </summary>
+    [HttpPost("text")]
+    public async Task<IActionResult> EvaluateText([FromBody] TextEvaluationRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request?.Text))
+            return BadRequest(new { error = "Tekst nekretnine je prazan." });
+
+        if (request.Text.Length < 20)
+            return BadRequest(new { error = "Tekst je prekratak. Unesite barem opis lokacije i tipa nekretnine." });
+
+        _logger.LogInformation("=== Text Evaluate: {Length} chars ===", request.Text.Length);
+
+        try
+        {
+            // STAGE 1: Extract property info from text (same AI as PDF path)
+            string pdfText = request.Text;
+            ExtractedPropertyInfo property;
+            try
+            {
+                property = await _valuationService.ExtractPropertyInfoAsync(pdfText);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Stage 1 FAILED: AI property parsing from text.");
+                return StatusCode(500, new { error = $"Stage 1 greška (AI ekstrakcija): {ex.Message}" });
+            }
+
+            _logger.LogInformation(
+                "Stage 1 done (text): {Desc}, {Size} m2, {Location}",
+                property.Description, property.SizeM2, property.Location);
+
+            // STAGE 2: Market research
+            MarketResearchResult marketData;
+            try
+            {
+                marketData = await _marketResearchService
+                    .SearchComparables(property.Location, property.SizeM2, pdfText);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Stage 2 FAILED: Market research.");
+                return StatusCode(500, new { error = $"Stage 2 greška (pretraga tržišta): {ex.Message}" });
+            }
+
+            // STAGE 3A: Deterministic engine
+            DeterministicValuation engineResult;
+            try
+            {
+                engineResult = _valuationEngine.Calculate(property, marketData);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Stage 3A FAILED: Valuation engine.");
+                return StatusCode(500, new { error = $"Stage 3A greška (engine): {ex.Message}" });
+            }
+
+            // STAGE 3A.5: Sync — filter for LLM
+            if (engineResult.FinalUsedUrls.Count > 0)
+            {
+                var filteredListings = marketData.ActiveListings
+                    .Where(l => engineResult.FinalUsedUrls.Contains(l.Url))
+                    .ToList();
+                if (filteredListings.Count > 0)
+                    marketData.ActiveListings = filteredListings;
+            }
+
+            // STAGE 3B: AI opinion
+            AutoValuationResult aiResult;
+            try
+            {
+                aiResult = await _valuationService
+                    .GenerateAutoValuationAsync(property, marketData);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Stage 3B FAILED: AI valuation opinion.");
+                return StatusCode(500, new { error = $"Stage 3B greška (AI procjena): {ex.Message}" });
+            }
+
+            // MERGE
+            int finalValue = engineResult.EstimatedValueEur;
+            if (aiResult.EstimatedValueEur > 0 && engineResult.EstimatedValueEur > 0)
+            {
+                double deviation = Math.Abs(aiResult.EstimatedValueEur - engineResult.EstimatedValueEur)
+                    / (double)engineResult.EstimatedValueEur;
+                if (deviation <= 0.40)
+                    finalValue = (int)Math.Round(
+                        (aiResult.EstimatedValueEur + engineResult.EstimatedValueEur) / 2.0);
+            }
+
+            // BUILD RESPONSE
+            var response = new FullEvaluationResult
+            {
+                TargetPropertySummary = aiResult.TargetPropertySummary,
+                SelectedComparables = aiResult.SelectedComparables,
+                EstimatedValueEur = finalValue,
+                ValueDrivers = aiResult.ValueDrivers,
+                ValuationReasoning = aiResult.ValuationReasoning,
+                ConfidenceLevel = engineResult.ConfidenceLevel,
+                MarketAverageAsking = engineResult.MarketAverageAsking,
+                CalculatedPricePerM2 = engineResult.CalculatedPricePerM2,
+                RealizationDiscountPercent = engineResult.RealizationDiscountPercent,
+                TotalListingsFound = engineResult.TotalListingsFound,
+                UsablePricePoints = engineResult.UsablePricePoints,
+                OutliersRemoved = engineResult.OutliersRemoved,
+                PriceSource = engineResult.PriceSource,
+                RegionName = engineResult.RegionName,
+                Note = string.IsNullOrEmpty(marketData.Note) ? null : marketData.Note,
+                StdDevPerM2 = engineResult.StdDevPerM2,
+                CoefficientOfVariation = engineResult.CoefficientOfVariation,
+                OutlierMethod = engineResult.OutlierMethod,
+                OutlierLog = engineResult.OutlierLog,
+                TotalAdjustmentPercent = engineResult.TotalAdjustmentPercent,
+                RealizationGapReasoning = engineResult.RealizationGapReasoning,
+                UsedComparables = engineResult.UsedComparables,
+                Adjustments = engineResult.Adjustments,
+                Pipeline = engineResult.Pipeline,
+                MathConfidenceScore = engineResult.MathConfidenceScore,
+                MathConfidenceLevel = engineResult.MathConfidenceLevel,
+                MathConfidenceExplanation = engineResult.MathConfidenceExplanation,
+                ConfidenceScore = marketData.Confidence.Score,
+                ConfidenceExplanation = marketData.Confidence.Explanation,
+                ConfidenceColor = marketData.Confidence.Color,
+                SearchPhaseUsed = marketData.SearchPhaseUsed
+            };
+
+            // Save to Supabase
+            try
+            {
+                var evaluationId = await _supabaseService.SaveEvaluationAsync(new EvaluationRecord
+                {
+                    PropertyType = marketData.DetectedPropertyType,
+                    Location = property.Location,
+                    SizeM2 = property.SizeM2 > 0 ? property.SizeM2 : null,
+                    EstimatedValue = finalValue,
+                    RawJsonOutput = response
+                });
+                response.EvaluationId = evaluationId;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to save to Supabase (non-critical).");
+            }
+
+            return Ok(response);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in text evaluation pipeline.");
+            return StatusCode(500, new { error = "Greška pri evaluaciji nekretnine." });
+        }
+    }
+}
+
+public class TextEvaluationRequest
+{
+    public string Text { get; set; } = "";
 }

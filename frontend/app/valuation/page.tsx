@@ -102,8 +102,12 @@ const PHASE_LABELS: Record<Exclude<LoadingPhase, "idle" | "done">, string> = {
 
 // --- Component ---
 
+type InputMode = "pdf" | "text";
+
 export default function ValuationPage() {
+  const [inputMode, setInputMode] = useState<InputMode>("pdf");
   const [file, setFile] = useState<File | null>(null);
+  const [propertyText, setPropertyText] = useState("");
   const [dragOver, setDragOver] = useState(false);
   const [phase, setPhase] = useState<LoadingPhase>("idle");
   const [result, setResult] = useState<AutoValuationResult | null>(null);
@@ -111,6 +115,7 @@ export default function ValuationPage() {
   const [copied, setCopied] = useState(false);
 
   const isLoading = phase !== "idle" && phase !== "done";
+  const canStart = inputMode === "pdf" ? !!file : propertyText.trim().length >= 20;
 
   // --- File Handling ---
 
@@ -145,7 +150,9 @@ export default function ValuationPage() {
   // --- Auto Generate ---
 
   const runAutoGenerate = async () => {
-    if (!file) return;
+    if (inputMode === "pdf" && !file) return;
+    if (inputMode === "text" && propertyText.trim().length < 20) return;
+
     setError(null);
     setResult(null);
 
@@ -153,17 +160,26 @@ export default function ValuationPage() {
     const phaseTimer1 = setTimeout(() => setPhase("searching"), 3000);
     const phaseTimer2 = setTimeout(() => setPhase("generating"), 8000);
 
-    // Upload PDF to Supabase Storage (non-blocking — runs in parallel)
-    const pdfUrlPromise = uploadPdfToStorage(file);
-
-    const formData = new FormData();
-    formData.append("file", file);
+    // Upload PDF to Supabase Storage (non-blocking, only for PDF mode)
+    const pdfUrlPromise = inputMode === "pdf" && file
+      ? uploadPdfToStorage(file)
+      : Promise.resolve(null);
 
     try {
-      const res = await axios.post<AutoValuationResult>(
-        `${API_BASE}/api/evaluate`,
-        formData
-      );
+      let res;
+      if (inputMode === "pdf" && file) {
+        const formData = new FormData();
+        formData.append("file", file);
+        res = await axios.post<AutoValuationResult>(
+          `${API_BASE}/api/evaluate`,
+          formData
+        );
+      } else {
+        res = await axios.post<AutoValuationResult>(
+          `${API_BASE}/api/evaluate/text`,
+          { text: propertyText.trim() }
+        );
+      }
       clearTimeout(phaseTimer1);
       clearTimeout(phaseTimer2);
       setResult(res.data);
@@ -230,6 +246,7 @@ export default function ValuationPage() {
 
   const reset = () => {
     setFile(null);
+    setPropertyText("");
     setResult(null);
     setError(null);
     setPhase("idle");
@@ -271,58 +288,124 @@ export default function ValuationPage() {
         {/* ===================== UPLOAD ===================== */}
         {phase === "idle" && !result && (
           <div className="space-y-6">
-            {/* Drop Zone */}
-            <div
-              onDrop={onDrop}
-              onDragOver={onDragOver}
-              onDragLeave={onDragLeave}
-              className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-12 transition-colors cursor-pointer ${
-                dragOver
-                  ? "border-blue-500 bg-blue-50"
-                  : "border-gray-300 bg-white hover:border-gray-400"
-              }`}
-            >
-              <Upload className="h-12 w-12 text-gray-400 mb-4" />
-              <p className="text-gray-600 font-medium text-lg">
-                Povucite ZK izvadak (PDF) ovdje
-              </p>
-              <p className="text-gray-400 mt-1">
-                ili{" "}
-                <label className="text-blue-600 underline cursor-pointer">
-                  odaberite datoteku
-                  <input
-                    type="file"
-                    accept=".pdf"
-                    className="hidden"
-                    onChange={onFileChange}
-                  />
-                </label>
-              </p>
-              <p className="text-xs text-gray-400 mt-3">
-                Max 10 MB • Sustav će automatski pretražiti Njuškalo i Index za
-                usporedive nekretnine
-              </p>
+            {/* Mode tabs */}
+            <div className="flex rounded-lg bg-gray-100 p-1">
+              <button
+                onClick={() => setInputMode("pdf")}
+                className={`flex-1 flex items-center justify-center gap-2 rounded-md py-2.5 text-sm font-medium transition ${
+                  inputMode === "pdf"
+                    ? "bg-white text-blue-600 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                <Upload className="h-4 w-4" />
+                PDF Upload
+              </button>
+              <button
+                onClick={() => setInputMode("text")}
+                className={`flex-1 flex items-center justify-center gap-2 rounded-md py-2.5 text-sm font-medium transition ${
+                  inputMode === "text"
+                    ? "bg-white text-blue-600 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                <FileText className="h-4 w-4" />
+                Ručni unos teksta
+              </button>
             </div>
 
-            {/* Selected File + Start Button */}
-            {file && (
-              <div className="flex items-center justify-between rounded-lg bg-white border border-gray-200 p-4">
-                <div className="flex items-center gap-3">
-                  <FileText className="h-5 w-5 text-blue-600" />
-                  <span className="text-sm font-medium text-gray-700 truncate max-w-xs">
-                    {file.name}
-                  </span>
-                  <span className="text-xs text-gray-400">
-                    ({(file.size / 1024).toFixed(0)} KB)
-                  </span>
-                </div>
-                <button
-                  onClick={runAutoGenerate}
-                  className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition flex items-center gap-2"
+            {/* PDF Drop Zone */}
+            {inputMode === "pdf" && (
+              <>
+                <div
+                  onDrop={onDrop}
+                  onDragOver={onDragOver}
+                  onDragLeave={onDragLeave}
+                  className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-12 transition-colors cursor-pointer ${
+                    dragOver
+                      ? "border-blue-500 bg-blue-50"
+                      : "border-gray-300 bg-white hover:border-gray-400"
+                  }`}
                 >
-                  <Scale className="h-4 w-4" />
-                  Pokreni procjenu
-                </button>
+                  <Upload className="h-12 w-12 text-gray-400 mb-4" />
+                  <p className="text-gray-600 font-medium text-lg">
+                    Povucite ZK izvadak (PDF) ovdje
+                  </p>
+                  <p className="text-gray-400 mt-1">
+                    ili{" "}
+                    <label className="text-blue-600 underline cursor-pointer">
+                      odaberite datoteku
+                      <input
+                        type="file"
+                        accept=".pdf"
+                        className="hidden"
+                        onChange={onFileChange}
+                      />
+                    </label>
+                  </p>
+                  <p className="text-xs text-gray-400 mt-3">
+                    Max 10 MB • Sustav će automatski pretražiti Njuškalo i Index za
+                    usporedive nekretnine
+                  </p>
+                </div>
+
+                {file && (
+                  <div className="flex items-center justify-between rounded-lg bg-white border border-gray-200 p-4">
+                    <div className="flex items-center gap-3">
+                      <FileText className="h-5 w-5 text-blue-600" />
+                      <span className="text-sm font-medium text-gray-700 truncate max-w-xs">
+                        {file.name}
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        ({(file.size / 1024).toFixed(0)} KB)
+                      </span>
+                    </div>
+                    <button
+                      onClick={runAutoGenerate}
+                      className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition flex items-center gap-2"
+                    >
+                      <Scale className="h-4 w-4" />
+                      Pokreni procjenu
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Text Input Mode */}
+            {inputMode === "text" && (
+              <div className="space-y-4">
+                <div className="rounded-xl bg-white border border-gray-200 p-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Opis nekretnine
+                  </label>
+                  <textarea
+                    value={propertyText}
+                    onChange={(e) => setPropertyText(e.target.value)}
+                    placeholder={"Primjer:\nGrađevinsko zemljište, 450 m², Vir (Zadar), k.o. Vir\nili\nStan, 65 m², Split, Spinut, 3. kat, novogradnja"}
+                    rows={8}
+                    className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm text-gray-800 placeholder-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-y"
+                  />
+                  <p className="text-xs text-gray-400 mt-2">
+                    Unesite lokaciju, tip nekretnine, kvadraturu i ostale relevantne podatke.
+                    Možete zalijepiti tekst iz ZK izvadka, oglasa ili vlastitog opisa.
+                  </p>
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    onClick={runAutoGenerate}
+                    disabled={!canStart}
+                    className={`rounded-lg px-6 py-2.5 text-sm font-semibold text-white transition flex items-center gap-2 ${
+                      canStart
+                        ? "bg-blue-600 hover:bg-blue-700"
+                        : "bg-gray-300 cursor-not-allowed"
+                    }`}
+                  >
+                    <Scale className="h-4 w-4" />
+                    Pokreni procjenu
+                  </button>
+                </div>
               </div>
             )}
 
