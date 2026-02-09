@@ -1,6 +1,5 @@
 using System.Text.Json;
 using Backend.Services;
-using Backend.Services.V6;
 using OpenAI.Chat;
 
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions
@@ -77,14 +76,6 @@ builder.Services.AddScoped<ValuationService>();
 builder.Services.AddScoped<ValuationEngine>();
 builder.Services.AddHttpClient<MarketResearchService>();
 builder.Services.AddHttpClient<SupabaseService>();
-
-// ── V6 Pipeline Services ──
-builder.Services.AddScoped<ISimilarityEngine, SimilarityEngine>();
-builder.Services.AddHttpClient<ICandidateGenerator, CandidateGenerator>();
-builder.Services.AddHttpClient<IDeepFetcher, DeepFetcher>();
-builder.Services.AddHttpClient<INlpExtractor, NlpExtractor>();
-builder.Services.AddScoped<IValuationPipeline, V6ValuationPipeline>();
-builder.Services.AddScoped<IPlaywrightScraper, PlaywrightScraper>();
 
 var app = builder.Build();
 

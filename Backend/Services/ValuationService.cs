@@ -9,29 +9,6 @@ public class ValuationService
     private readonly ChatClient _chatClient;
     private readonly ILogger<ValuationService> _logger;
 
-    private const string SystemPrompt =
-        """
-        You are an expert Court Expert Witness for Real Estate Valuation (Sudski vještak za graditeljstvo) in Croatia.
-
-        Your task is to write a formal 'Opinion on Market Value' for a court case (e.g., divorce settlement).
-
-        Input data:
-        1. Target Property: [Details will be provided]
-        2. Comparable Properties: [List of ads provided by user]
-
-        Instructions:
-        - Write in formal Croatian legal/technical language.
-        - Analyze the 'Comparables' and explain why they are good/bad benchmarks (e.g., 'Usporediva nekretnina 1 je renovirana, što opravdava višu cijenu...').
-        - Calculate a realistic estimated value for the Target Property based on these inputs.
-        - Output the result as a structured JSON with these exact keys:
-          {
-            "estimated_value_eur": number,
-            "price_per_m2": number,
-            "rationale_text": "The full text of the opinion, formatted with paragraphs, ready to copy-paste into MS Word."
-          }
-        Return ONLY the raw JSON object, no markdown fences, no extra text.
-        """;
-
     private const string PropertyExtractionPrompt =
         """
         You are a document analysis assistant. Extract property information from this Croatian Land Registry Extract (Zemljišnoknjižni izvadak).
@@ -331,51 +308,6 @@ public class ValuationService
         }
 
         return result ?? throw new InvalidOperationException("Failed to extract property info from PDF.");
-    }
-
-    /// <summary>
-    /// Generate the full valuation opinion.
-    /// </summary>
-    public async Task<ValuationResult> GenerateValuationAsync(ValuationRequest request)
-    {
-        var comparablesBlock = string.Join("\n\n", request.Comparables.Select((c, i) =>
-            $"--- Usporediva nekretnina {i + 1} ---\n{c}"));
-
-        var userMessage =
-            $"""
-            TARGET PROPERTY:
-            - Description: {request.TargetProperty.Description}
-            - Size: {request.TargetProperty.SizeM2} m²
-            - Location: {request.TargetProperty.Location}
-            - Condition: {request.TargetProperty.Condition}
-
-            COMPARABLE PROPERTIES:
-            {comparablesBlock}
-            """;
-
-        var messages = new List<ChatMessage>
-        {
-            new SystemChatMessage(SystemPrompt),
-            new UserChatMessage(userMessage)
-        };
-
-        var options = new ChatCompletionOptions
-        {
-            Temperature = 0.3f,
-            ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
-        };
-
-        ChatCompletion completion = await _chatClient.CompleteChatAsync(messages, options);
-        var json = completion.Content[0].Text;
-
-        _logger.LogInformation("Valuation opinion generated successfully.");
-
-        var result = JsonSerializer.Deserialize<ValuationResult>(json, new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
-        });
-
-        return result ?? throw new InvalidOperationException("Failed to deserialize valuation response.");
     }
 
     /// <summary>

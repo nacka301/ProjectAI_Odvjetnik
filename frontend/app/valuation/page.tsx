@@ -60,12 +60,10 @@ interface AutoValuationResult {
   price_source?: string;
   region_name?: string;
   note?: string;
-  evaluation_id?: string;
   // V3 confidence scoring (market research)
   confidence_score?: number;
   confidence_explanation?: string;
   confidence_color?: string;
-  search_phase_used?: string;
   // V4 Robust Estimator fields
   std_dev_per_m2?: number;
   coefficient_of_variation?: number;

@@ -1,30 +1,5 @@
 namespace Backend.Models;
 
-// --- Valuation Request ---
-
-public class ValuationRequest
-{
-    public TargetPropertyInfo TargetProperty { get; set; } = new();
-    public List<string> Comparables { get; set; } = [];
-}
-
-public class TargetPropertyInfo
-{
-    public string Description { get; set; } = string.Empty;
-    public double SizeM2 { get; set; }
-    public string Location { get; set; } = string.Empty;
-    public string Condition { get; set; } = string.Empty;
-}
-
-// --- Valuation Response ---
-
-public class ValuationResult
-{
-    public double EstimatedValueEur { get; set; }
-    public double PricePerM2 { get; set; }
-    public string RationaleText { get; set; } = string.Empty;
-}
-
 // --- Auto-Valuation Response ---
 
 public class AutoValuationResult
