@@ -178,7 +178,7 @@ public class MarketResearchService
         {
             var njuskaloResults = await FetchNjuskaloDirectListings(detectedType, regionName);
             totalApiCalls += (njuskaloResults.Count > 0 ? 1 : 0);
-            var filtered = PriceFirstFilter(njuskaloResults, "Phase0-NjuskaloDirect", regionName);
+            var filtered = PriceFirstFilter(njuskaloResults, "Phase0-NjuskaloDirect", [regionName]);
             MergeInto(allVerified, filtered);
 
             _logger.LogInformation("Phase 0 (Njuškalo Direct): {New}/{Raw} passed → total={Total}",
@@ -205,7 +205,7 @@ public class MarketResearchService
 
             var phase1Results = await FireParallelSearches(queries, 7, "Phase1");
             totalApiCalls += queries.Count;
-            var filtered = PriceFirstFilter(phase1Results, "Phase1", regionName);
+            var filtered = PriceFirstFilter(phase1Results, "Phase1", [regionName]);
             MergeInto(allVerified, filtered);
 
             _logger.LogInformation("Phase 1: {New}/{Raw} passed → total={Total}",
@@ -229,7 +229,7 @@ public class MarketResearchService
 
             var phase2Results = await FireParallelSearches(queries, 5, "Phase2-Portals");
             totalApiCalls += queries.Count;
-            var filtered = PriceFirstFilter(phase2Results, "Phase2", regionName);
+            var filtered = PriceFirstFilter(phase2Results, "Phase2", [regionName]);
             MergeInto(allVerified, filtered);
 
             _logger.LogInformation("Phase 2 (multi-portal): +{New} → total={Total}",
@@ -257,7 +257,7 @@ public class MarketResearchService
 
             var phase3Results = await FireParallelSearches(queries, 6, "Phase3-Wider");
             totalApiCalls += queries.Count;
-            var filtered = PriceFirstFilter(phase3Results, "Phase3");
+            var filtered = PriceFirstFilter(phase3Results, "Phase3", [regionName, widerRegion]);
             MergeInto(allVerified, filtered);
 
             _logger.LogInformation("Phase 3 (wider: {Region}→{Wider}): +{New} → total={Total}",
@@ -287,7 +287,7 @@ public class MarketResearchService
             {
                 var phase4Results = await FireParallelSearches(queries, 5, "Phase4-Synonyms");
                 totalApiCalls += queries.Count;
-                var filtered = PriceFirstFilter(phase4Results, "Phase4");
+                var filtered = PriceFirstFilter(phase4Results, "Phase4", [regionName, GetBroaderRegion(regionName)]);
                 MergeInto(allVerified, filtered);
 
                 _logger.LogInformation("Phase 4 (synonym blitz): +{New} → total={Total}",
@@ -314,7 +314,7 @@ public class MarketResearchService
             {
                 var phase5Results = await FireParallelSearches(queries, 5, "Phase5-SubLoc");
                 totalApiCalls += queries.Count;
-                var filtered = PriceFirstFilter(phase5Results, "Phase5");
+                var filtered = PriceFirstFilter(phase5Results, "Phase5", subLocations);
                 MergeInto(allVerified, filtered);
 
                 _logger.LogInformation("Phase 5 (sub-location): +{New} → total={Total}",
@@ -662,24 +662,30 @@ public class MarketResearchService
 
     private List<ComparableSearchResult> PriceFirstFilter(
         List<ComparableSearchResult> results, string phaseName,
-        string? requiredLocation = null)
+        IReadOnlyList<string>? allowedLocations = null)
     {
         var passed = new List<ComparableSearchResult>();
-        var locationLower = requiredLocation?.ToLowerInvariant();
+        var locationsLower = allowedLocations?
+            .Where(l => !string.IsNullOrWhiteSpace(l))
+            .Select(l => l.ToLowerInvariant())
+            .ToList();
 
         foreach (var r in results)
         {
             var combined = r.Title + " " + r.Content;
             var combinedLower = combined.ToLowerInvariant();
 
-            // Gate 0: LOCATION — for early phases, must mention target city/area
-            if (!string.IsNullOrEmpty(locationLower))
+            // Gate 0: LOCATION — must mention at least one allowed location
+            if (locationsLower is { Count: > 0 })
             {
-                if (!combinedLower.Contains(locationLower) &&
-                    !r.Url.Contains(locationLower, StringComparison.OrdinalIgnoreCase))
+                bool locationMatch = locationsLower.Any(loc =>
+                    combinedLower.Contains(loc) ||
+                    r.Url.Contains(loc, StringComparison.OrdinalIgnoreCase));
+
+                if (!locationMatch)
                 {
-                    _logger.LogDebug("[{Phase}] REJECTED (wrong location, need '{Loc}'): {Title}",
-                        phaseName, requiredLocation, Truncate(r.Title, 60));
+                    _logger.LogDebug("[{Phase}] REJECTED (wrong location, need [{Locs}]): {Title}",
+                        phaseName, string.Join("|", allowedLocations!), Truncate(r.Title, 60));
                     continue;
                 }
             }
