@@ -42,6 +42,7 @@ public class ListingData
     public bool PassedPriceGate { get; set; }           // has a visible price?
     public bool PassedIronGate { get; set; }            // type-match filter passed?
     public bool PassedJunkFilter { get; set; } = true;  // anti-article filter passed?
+    public bool PassedRentTrap { get; set; } = true;    // rent / parking / sub-€15k filter passed?
     public string? DetectedType { get; set; }           // inferred property type from text
 }
 

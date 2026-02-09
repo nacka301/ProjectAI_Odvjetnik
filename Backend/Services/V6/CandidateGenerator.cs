@@ -117,6 +117,22 @@ public class CandidateGenerator : ICandidateGenerator
     ];
 
     // ══════════════════════════════════════════════════════════
+    //  RENT-TRAP — Rental / Parking / Sub-€15k Filter
+    // ══════════════════════════════════════════════════════════
+
+    private const double MinSalePriceEur = 15_000;
+    private const double MinPricePerM2 = 500;
+
+    private static readonly string[] RentalKeywords =
+    [
+        "najam", "iznajmljivanje", "iznajmi", "rent", "rental",
+        "mjesečno", "mjesecno", "monthly", "polog", "deposit",
+        "za najam", "u najam", "for rent", "do iznajmljivanja",
+        "kratkoročni", "kratkorocni", "dugoročni", "dugorocni",
+        "najamnina", "rezije", "režije"
+    ];
+
+    // ══════════════════════════════════════════════════════════
     //  TYPE SYNONYMS FOR SEARCH QUERY BUILDING
     // ══════════════════════════════════════════════════════════
 
@@ -155,7 +171,7 @@ public class CandidateGenerator : ICandidateGenerator
 
         var allValid = new List<ListingData>();
         var seenUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        int totalFetched = 0, discardedType = 0, discardedJunk = 0, discardedNoPrice = 0;
+        int totalFetched = 0, discardedType = 0, discardedJunk = 0, discardedNoPrice = 0, discardedRent = 0;
 
         // Ensure subject has a type category
         if (subject.TypeCategory == PropertyCategory.Unknown)
@@ -208,15 +224,20 @@ public class CandidateGenerator : ICandidateGenerator
                     if (!PassesIronGate(listing, subject.TypeCategory))
                     { listing.PassedIronGate = false; discardedType++; continue; }
 
+                    // ── GATE 4: RENT-TRAP (Rental / Parking / Sub-€15k) ──
+                    if (!PassesRentTrapFilter(listing))
+                    { listing.PassedRentTrap = false; discardedRent++; continue; }
+
                     listing.PassedIronGate = true;
                     listing.PassedJunkFilter = true;
+                    listing.PassedRentTrap = true;
                     allValid.Add(listing);
                 }
             }
 
             _logger.LogInformation(
-                "V6 Phase 1 Round {Round}: {Valid} valid (fetched={Fetched}, junk={Junk}, type={Type}, noPrice={Price})",
-                round + 1, allValid.Count, totalFetched, discardedJunk, discardedType, discardedNoPrice);
+                "V6 Phase 1 Round {Round}: {Valid} valid (fetched={Fetched}, junk={Junk}, type={Type}, noPrice={Price}, rent={Rent})",
+                round + 1, allValid.Count, totalFetched, discardedJunk, discardedType, discardedNoPrice, discardedRent);
 
             if (allValid.Count >= MinValidCandidates) break;
 
@@ -226,8 +247,8 @@ public class CandidateGenerator : ICandidateGenerator
         }
 
         _logger.LogInformation(
-            "V6 Phase 1 FINAL: {Valid}/{Fetched} passed all gates (junk={Junk}, type={Type}, noPrice={Price})",
-            allValid.Count, totalFetched, discardedJunk, discardedType, discardedNoPrice);
+            "V6 Phase 1 FINAL: {Valid}/{Fetched} passed all gates (junk={Junk}, type={Type}, noPrice={Price}, rent={Rent})",
+            allValid.Count, totalFetched, discardedJunk, discardedType, discardedNoPrice, discardedRent);
 
         return allValid;
     }
@@ -304,6 +325,52 @@ public class CandidateGenerator : ICandidateGenerator
             "oglasnik", "plavi-oglasnik"];
         bool isFromPortal = validPortals.Any(p => urlLower.Contains(p));
         if (!isFromPortal && (listing.PriceEur is null or <= 0 || listing.SizeM2 is null or <= 0))
+            return false;
+
+        return true;
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  RENT-TRAP FILTER — Discard Rentals, Parking, Sub-€15k
+    // ══════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Returns FALSE (= discard) if the listing is a rental, parking space,
+    /// or has an unrealistically low total price for a sale.
+    /// Three layers:
+    ///   1. Price floor: TotalPrice &lt; €15,000 → DISCARD
+    ///   2. Rental keywords in title/snippet/description → DISCARD
+    ///   3. Price/m² sanity: if both price and size exist and €/m² &lt; 500 → DISCARD
+    /// </summary>
+    public static bool PassesRentTrapFilter(ListingData listing)
+    {
+        // LAYER 1: Price floor — anything under €15k is not a real-estate sale
+        //          (monthly rent, parking spot, storage unit, etc.)
+        if (listing.PriceEur.HasValue && listing.PriceEur.Value < MinSalePriceEur)
+            return false;
+
+        // LAYER 2: Rental keyword detection in title + snippet + description
+        string combined = $"{listing.Title} {listing.Snippet} {listing.RawDescription}"
+            .ToLowerInvariant();
+
+        foreach (var keyword in RentalKeywords)
+        {
+            if (combined.Contains(keyword))
+                return false;
+        }
+
+        // LAYER 3: Price/m² sanity — if we have both values and €/m² is absurdly low,
+        //          it's almost certainly a monthly rent misinterpreted as a sale price
+        if (listing.PriceEur.HasValue && listing.SizeM2.HasValue && listing.SizeM2.Value > 0)
+        {
+            double impliedPpsm = listing.PriceEur.Value / listing.SizeM2.Value;
+            if (impliedPpsm < MinPricePerM2)
+                return false;
+        }
+
+        // Also check explicit PricePerM2 if already set
+        if (listing.PricePerM2.HasValue && listing.PricePerM2.Value > 0
+            && listing.PricePerM2.Value < MinPricePerM2)
             return false;
 
         return true;

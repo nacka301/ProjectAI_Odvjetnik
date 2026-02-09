@@ -537,6 +537,30 @@ public class V6ValuationPipeline : IValuationPipeline
                 (0, 0, 0, 0, 0));
         }
 
+        // ── Pre-IQR Sanity: 10x Ratio Outlier Removal ──
+        // If max/min ratio > 10, the extremes are almost certainly
+        // rental prices mixed with sale prices. Discard the lower tail.
+        if (ppsqmValues.Count >= 3)
+        {
+            double minVal = ppsqmValues.First();
+            double maxVal = ppsqmValues.Last();
+            if (minVal > 0 && maxVal / minVal > 10)
+            {
+                _logger.LogWarning(
+                    "V6 Phase 7: 10x outlier detected — max €{Max:F0}/m² vs min €{Min:F0}/m². Discarding bottom tail.",
+                    maxVal, minVal);
+
+                // Use the median as anchor; discard anything below median / 5
+                double median = ppsqmValues[ppsqmValues.Count / 2];
+                double sanityFloor = median / 5.0;
+                ppsqmValues = ppsqmValues.Where(v => v >= sanityFloor).ToList();
+
+                _logger.LogInformation(
+                    "V6 Phase 7: After 10x sanity: {Count} values remain (floor=€{Floor:F0}/m²)",
+                    ppsqmValues.Count, sanityFloor);
+            }
+        }
+
         // ── IQR Outlier Removal ──
         double q1 = MathHelpers.Percentile(ppsqmValues, 25);
         double q3 = MathHelpers.Percentile(ppsqmValues, 75);

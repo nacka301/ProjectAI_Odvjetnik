@@ -406,6 +406,23 @@ public class MarketResearchService
     //  PRICE-FIRST FILTER
     // ══════════════════════════════════════════════════════════
 
+    // Rent-trap constants
+    private const double MinSalePriceEur = 15_000;
+    private const double MinPricePerM2 = 500;
+
+    private static readonly string[] RentalKeywords =
+    [
+        "najam", "iznajmljivanje", "iznajmi", "rent", "rental",
+        "mjesečno", "mjesecno", "monthly", "polog", "deposit",
+        "za najam", "u najam", "for rent", "do iznajmljivanja",
+        "kratkoročni", "kratkorocni", "dugoročni", "dugorocni",
+        "najamnina", "rezije", "režije"
+    ];
+
+    private static readonly Regex PriceAmountRegex = new(
+        @"(\d{1,3}(?:\.\d{3})*(?:,\d+)?)\s*(?:€|EUR|eur)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
     private List<ComparableSearchResult> PriceFirstFilter(
         List<ComparableSearchResult> results, string phaseName)
     {
@@ -450,6 +467,34 @@ public class MarketResearchService
                 _logger.LogDebug("[{Phase}] REJECTED (stale): {Title}",
                     phaseName, Truncate(r.Title, 60));
                 continue;
+            }
+
+            // ── GATE 4: RENT-TRAP — Rental / Parking / Sub-€15k ──
+
+            // 4a: Rental keyword detection
+            if (RentalKeywords.Any(kw => combinedLower.Contains(kw)))
+            {
+                _logger.LogDebug("[{Phase}] REJECTED (rental keyword): {Title}",
+                    phaseName, Truncate(r.Title, 60));
+                continue;
+            }
+
+            // 4b: Price floor — extract first price and reject if < €15k
+            var priceMatch = PriceAmountRegex.Match(combined);
+            if (priceMatch.Success)
+            {
+                string priceStr = priceMatch.Groups[1].Value
+                    .Replace(".", "").Replace(",", ".");
+                if (double.TryParse(priceStr, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out double extractedPrice))
+                {
+                    if (extractedPrice < MinSalePriceEur)
+                    {
+                        _logger.LogDebug("[{Phase}] REJECTED (price €{Price:N0} < €15k floor): {Title}",
+                            phaseName, extractedPrice, Truncate(r.Title, 60));
+                        continue;
+                    }
+                }
             }
 
             _logger.LogInformation("[{Phase}] ✓ ACCEPTED: {Title}", phaseName, Truncate(r.Title, 60));
