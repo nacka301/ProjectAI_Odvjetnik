@@ -48,7 +48,7 @@ public class V6ValuationPipeline : IValuationPipeline
     private const double InitialScoreThreshold = 0.75;
     private const double MinScoreThreshold = 0.45;
     private const double ThresholdRelaxStep = 0.05;
-    private const int MinRequiredComparables = 15;
+    private const int MinRequiredComparables = 10;
     private const int AbsoluteMinComparables = 5;
 
     // ── Phase 6 DBSCAN parameters ──
@@ -137,7 +137,7 @@ public class V6ValuationPipeline : IValuationPipeline
 
             phase0Timer.Stop();
             phaseDurations["Phase0_Enrichment"] = phase0Timer.ElapsedMilliseconds;
-            pipeline.Add($"Phase 0: Subject canonicalized — {subject.PropertyType}, " +
+            pipeline.Add($"Phase 0: Subject canonicalized — {subject.PropertyType} ({subject.TypeCategory}), " +
                 $"{subject.SizeM2:F0} m², {subject.Location}, condition={subject.ConditionOrdinal}");
             pipeline.Add($"  Weights: Loc={weights.LocationWeight}, Area={weights.AreaWeight}, " +
                 $"Cond={weights.ConditionWeight}, Feat={weights.FeaturesWeight}, Sem={weights.SemanticWeight}");
@@ -183,6 +183,35 @@ public class V6ValuationPipeline : IValuationPipeline
             if (canonicalCandidates.Count == 0)
             {
                 pipeline.Add("Phase 3: NO valid models — using benchmark fallback");
+                return BuildBenchmarkFallback(report, subject, pipeline, phaseDurations, totalTimer);
+            }
+
+            // ── POST-PHASE 3: Iron Gate on canonical models ──
+            // Ensure TypeCategory is set on every candidate, then filter mismatches
+            foreach (var cand in canonicalCandidates)
+            {
+                if (cand.TypeCategory == PropertyCategory.Unknown)
+                    cand.TypeCategory = CandidateGenerator.ClassifyPropertyType(cand.PropertyType);
+            }
+
+            int preIronGateCount = canonicalCandidates.Count;
+            if (subject.TypeCategory != PropertyCategory.Unknown)
+            {
+                canonicalCandidates = canonicalCandidates
+                    .Where(c => c.TypeCategory == PropertyCategory.Unknown
+                             || c.TypeCategory == subject.TypeCategory)
+                    .ToList();
+            }
+            int ironGateFiltered = preIronGateCount - canonicalCandidates.Count;
+            if (ironGateFiltered > 0)
+            {
+                pipeline.Add($"  Iron Gate (Phase 3→4): Removed {ironGateFiltered} type-mismatched candidates " +
+                    $"({canonicalCandidates.Count} remain)");
+            }
+
+            if (canonicalCandidates.Count == 0)
+            {
+                pipeline.Add("Iron Gate filtered ALL candidates — using benchmark fallback");
                 return BuildBenchmarkFallback(report, subject, pipeline, phaseDurations, totalTimer);
             }
 
@@ -342,6 +371,9 @@ public class V6ValuationPipeline : IValuationPipeline
             CadastralParcel = ExtractCadastralParcel(pdfText),
             CadastralMunicipality = ExtractCadastralMunicipality(pdfText)
         };
+
+        // ── IRON GATE: Classify subject type ──
+        subject.TypeCategory = CandidateGenerator.ClassifyPropertyType(subject.PropertyType);
 
         // Enrich with features from raw text
         subject.Features = ExtractSubjectFeatures(pdfText);

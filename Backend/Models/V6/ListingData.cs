@@ -40,6 +40,9 @@ public class ListingData
     public bool DeepFetched { get; set; }               // Phase 2 completed?
     public bool NlpParsed { get; set; }                 // Phase 3 completed?
     public bool PassedPriceGate { get; set; }           // has a visible price?
+    public bool PassedIronGate { get; set; }            // type-match filter passed?
+    public bool PassedJunkFilter { get; set; } = true;  // anti-article filter passed?
+    public string? DetectedType { get; set; }           // inferred property type from text
 }
 
 /// <summary>

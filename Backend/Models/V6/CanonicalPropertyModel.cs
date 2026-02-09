@@ -14,6 +14,7 @@ public class CanonicalPropertyModel
 
     // ── Core attributes ──────────────────────────────────────
     public string PropertyType { get; set; } = "";           // stan, kuća, zemljište, poslovni prostor
+    public PropertyCategory TypeCategory { get; set; } = PropertyCategory.Unknown;
     public double SizeM2 { get; set; }
     public double LandSizeM2 { get; set; }                   // for houses / land plots
     public string Location { get; set; } = "";               // city / municipality name
@@ -60,8 +61,25 @@ public class CanonicalPropertyModel
     public double SimilarityScore { get; set; }
     public SimilarityVector? SimilarityDetail { get; set; }
 
+    // ── Filter flags ─────────────────────────────────────────
+    public bool PassedIronGate { get; set; } = true;         // type-match filter
+    public bool PassedJunkFilter { get; set; } = true;       // anti-article filter
+
     // ── Cluster (Phase 6) ────────────────────────────────────
     public int ClusterId { get; set; } = -1;                 // -1 = unassigned / noise
+}
+
+/// <summary>
+/// Normalized property type category for Iron Gate matching.
+/// Prevents cross-type contamination (e.g., land scored against houses).
+/// </summary>
+public enum PropertyCategory
+{
+    Unknown = 0,
+    Apartment = 1,   // stan, apartman, garsonijera
+    House = 2,       // kuća, vila, vikendica, obiteljska kuća, dvojna kuća
+    Land = 3,        // zemljište, parcela, oranica, teren, građevinsko zemljište
+    Commercial = 4,  // poslovni prostor, ured, lokal, trgovina, skladište
 }
 
 /// <summary>
@@ -76,4 +94,6 @@ public class SimilarityVector
     public double FeaturesScore { get; set; }    // S_feat — Jaccard index
     public double SemanticScore { get; set; }    // S_sem — cosine similarity of embeddings
     public double WeightedTotal { get; set; }    // final composite score
+    public bool TypeMatch { get; set; } = true;  // Iron Gate: false → total forced to 0
+    public bool IsJunk { get; set; }              // Junk Detection: true → total forced to 0
 }

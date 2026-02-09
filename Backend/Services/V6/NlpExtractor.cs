@@ -153,7 +153,12 @@ public class NlpExtractor : INlpExtractor
                 ListingTitle = listing.Title,
                 Latitude = listing.Latitude,
                 Longitude = listing.Longitude,
-                RawText = textToAnalyze
+                RawText = textToAnalyze,
+                // ── Iron Gate: carry forward filter flags ──
+                PassedIronGate = listing.PassedIronGate,
+                PassedJunkFilter = listing.PassedJunkFilter,
+                TypeCategory = CandidateGenerator.ClassifyPropertyType(
+                    listing.DetectedType ?? listing.PropertyType ?? listing.Title)
             };
 
             // Apply NLP features if available

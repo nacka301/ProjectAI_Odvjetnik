@@ -75,6 +75,10 @@ public class SimilarityEngine : ISimilarityEngine
 
     /// <summary>
     /// Calculate the full multi-dimensional similarity vector.
+    /// 
+    /// CRITICAL: Binary gates are checked FIRST. If type mismatch or junk,
+    /// the score is forced to 0 and the method returns immediately.
+    /// This prevents cross-type contamination (e.g., Land scored against House).
     /// </summary>
     public SimilarityVector CalculateSimilarity(
         CanonicalPropertyModel subject,
@@ -84,6 +88,33 @@ public class SimilarityEngine : ISimilarityEngine
         weights ??= V6SimilarityWeights.Default;
 
         var vector = new SimilarityVector();
+
+        // ══════════════════════════════════════════════════════
+        //  BINARY GATE 1: IRON GATE (Type Matching)
+        //  If subject is House and candidate is Land → score = 0
+        // ══════════════════════════════════════════════════════
+        if (subject.TypeCategory != PropertyCategory.Unknown
+            && candidate.TypeCategory != PropertyCategory.Unknown
+            && subject.TypeCategory != candidate.TypeCategory)
+        {
+            vector.TypeMatch = false;
+            vector.WeightedTotal = 0;
+            _logger.LogDebug("Iron Gate REJECT: {SubjectType} vs {CandidateType} for {Url}",
+                subject.TypeCategory, candidate.TypeCategory, candidate.SourceUrl);
+            return vector;
+        }
+        vector.TypeMatch = true;
+
+        // ══════════════════════════════════════════════════════
+        //  BINARY GATE 2: JUNK DETECTION
+        //  If candidate was flagged as junk → score = 0
+        // ══════════════════════════════════════════════════════
+        if (!candidate.PassedJunkFilter)
+        {
+            vector.IsJunk = true;
+            vector.WeightedTotal = 0;
+            return vector;
+        }
 
         // ── S_loc: Location similarity ────────────────────────
         vector.LocationScore = CalculateLocationScore(subject, candidate);
