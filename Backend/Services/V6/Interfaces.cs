@@ -84,3 +84,25 @@ public interface INlpExtractor
         List<ListingData> listings,
         CancellationToken cancellationToken = default);
 }
+
+/// <summary>
+/// Playwright-based scraper interface.
+/// Mimics a real human browsing njuskalo.hr to harvest listing data.
+/// </summary>
+public interface IPlaywrightScraper
+{
+    /// <summary>
+    /// Scrape listings from njuskalo.hr using a real headless browser.
+    /// Simulates human browsing: homepage → search → pogo-stick through results.
+    /// </summary>
+    /// <param name="location">City/location (e.g., "Vir", "Split").</param>
+    /// <param name="type">Property type keyword (e.g., "zemljište", "stan").</param>
+    /// <param name="maxListings">Maximum listings to scrape (default 10-15).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>List of scraped listing data with full descriptions.</returns>
+    Task<List<ListingData>> ScrapeListingsAsync(
+        string location,
+        string type,
+        int maxListings = 12,
+        CancellationToken cancellationToken = default);
+}

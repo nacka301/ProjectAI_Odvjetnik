@@ -23,6 +23,7 @@ namespace Backend.Services.V6;
 public class DeepFetcher : IDeepFetcher
 {
     private readonly HttpClient _httpClient;
+    private readonly IPlaywrightScraper? _playwrightScraper;
     private readonly ILogger<DeepFetcher> _logger;
 
     private const int MaxConcurrent = 3;
@@ -32,13 +33,17 @@ public class DeepFetcher : IDeepFetcher
     private static readonly Regex HtmlTagRegex = new(@"<[^>]+>", RegexOptions.Compiled);
     private static readonly Regex WhitespaceRegex = new(@"\s{2,}", RegexOptions.Compiled);
 
-    public DeepFetcher(HttpClient httpClient, ILogger<DeepFetcher> logger)
+    public DeepFetcher(
+        HttpClient httpClient,
+        ILogger<DeepFetcher> logger,
+        IPlaywrightScraper? playwrightScraper = null)
     {
         _httpClient = httpClient;
         _httpClient.Timeout = TimeSpan.FromSeconds(TimeoutSeconds);
         _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(
             "Mozilla/5.0 (compatible; PropertyValuationBot/1.0)");
         _logger = logger;
+        _playwrightScraper = playwrightScraper;
     }
 
     public async Task<List<ListingData>> DeepFetchAsync(

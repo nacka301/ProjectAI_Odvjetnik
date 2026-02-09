@@ -84,6 +84,7 @@ builder.Services.AddHttpClient<ICandidateGenerator, CandidateGenerator>();
 builder.Services.AddHttpClient<IDeepFetcher, DeepFetcher>();
 builder.Services.AddHttpClient<INlpExtractor, NlpExtractor>();
 builder.Services.AddScoped<IValuationPipeline, V6ValuationPipeline>();
+builder.Services.AddScoped<IPlaywrightScraper, PlaywrightScraper>();
 
 var app = builder.Build();
 
