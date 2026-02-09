@@ -56,7 +56,6 @@ public class FullEvaluationResult
 
     // ── Deterministic engine fields ──
     public string ConfidenceLevel { get; set; } = "";
-    public double RegionalBenchmarkPerM2 { get; set; }
     public double MarketAverageAsking { get; set; }
     public double CalculatedPricePerM2 { get; set; }
     public double RealizationDiscountPercent { get; set; }

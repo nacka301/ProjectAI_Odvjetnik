@@ -29,58 +29,17 @@ public class ValuationEngine
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex PricePerM2Regex = new(
-        @"(\d{1,3}(?:\.\d{3})*(?:,\d+)?)\s*(?:€|EUR|eur)\s*/\s*m[²2]",
+        @"(\d{1,3}(?:\.\d{3})*(?:,\d+)?)\s*(?:€|EUR|eur)\s*/\s*m[�?2]",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex SizeRegex = new(
-        @"(\d{1,6}(?:[,\.]\d+)?)\s*m[²2]",
+        @"(\d{1,6}(?:[,\.]\d+)?)\s*m[�?2]",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     // ══════════════════════════════════════════════════════════
-    //  REGIONAL BENCHMARKS — €/m² (2024/2025 market)
+    //  NOTE: Regional benchmarks REMOVED.
+    //  Engine works ONLY with real extracted prices from search data.
     // ══════════════════════════════════════════════════════════
-    private static readonly Dictionary<string, double> RegionalBenchmarks =
-        new(StringComparer.OrdinalIgnoreCase)
-    {
-        // Zagreb
-        { "Zagreb", 2800 }, { "Zagreb - centar", 3200 }, { "Zagreb - Trnje", 2900 },
-        { "Zagreb - Maksimir", 2700 }, { "Zagreb - Novi Zagreb", 2400 },
-        { "Zagreb - Dubrava", 2100 }, { "Zagreb - Podsljeme", 3000 },
-
-        // Dalmatian coast
-        { "Split", 3400 }, { "Dubrovnik", 4500 }, { "Zadar", 2800 },
-        { "Šibenik", 2500 }, { "Trogir", 3000 }, { "Makarska", 3200 },
-        { "Omiš", 2700 }, { "Kaštela", 2500 }, { "Solin", 2600 },
-        { "Podstrana", 3100 }, { "Brela", 3300 },
-
-        // Istria & Kvarner
-        { "Rijeka", 2200 }, { "Pula", 2400 }, { "Rovinj", 3800 },
-        { "Poreč", 3000 }, { "Umag", 2800 }, { "Opatija", 3500 },
-        { "Novigrad", 2700 }, { "Medulin", 2600 }, { "Labin", 2000 },
-        { "Krk", 2800 }, { "Crikvenica", 2200 }, { "Rab", 2400 },
-        { "Mali Lošinj", 3000 }, { "Cres", 2200 },
-
-        // Islands
-        { "Hvar", 4000 }, { "Brač", 2800 }, { "Korčula", 2600 },
-        { "Vis", 3000 }, { "Vir", 2200 }, { "Murter", 2400 },
-        { "Čiovo", 2800 }, { "Šolta", 2500 }, { "Mljet", 2200 },
-        { "Pag", 2000 }, { "Ugljan", 1800 }, { "Pašman", 1800 },
-        { "Pelješac", 2400 }, { "Lošinj", 3000 },
-
-        // Slavonia + continental
-        { "Osijek", 1200 }, { "Slavonski Brod", 900 }, { "Vukovar", 800 },
-        { "Vinkovci", 850 }, { "Požega", 800 }, { "Đakovo", 900 },
-        { "Varaždin", 1400 }, { "Čakovec", 1300 }, { "Koprivnica", 1100 },
-        { "Bjelovar", 1000 }, { "Sisak", 900 }, { "Karlovac", 1100 },
-        { "Velika Gorica", 2200 }, { "Samobor", 2100 }, { "Zaprešić", 2000 },
-
-        // Fallback by county (broader)
-        { "Splitsko-dalmatinska", 2800 }, { "Dubrovačko-neretvanska", 3200 },
-        { "Zadarska", 2400 }, { "Šibensko-kninska", 2200 },
-        { "Istarska", 2600 }, { "Primorsko-goranska", 2200 },
-        { "Zagrebačka", 2000 }, { "Osječko-baranjska", 1100 },
-        { "Ličko-senjska", 1200 },
-    };
 
     // ══════════════════════════════════════════════════════════
     //  TYPE SIMILARITY MAP
@@ -90,8 +49,8 @@ public class ValuationEngine
     {
         ["stan"]              = new(StringComparer.OrdinalIgnoreCase) { "apartman", "garsonijera", "dvosoban", "trosoban", "jednosoban" },
         ["kuća"]              = new(StringComparer.OrdinalIgnoreCase) { "vila", "vikendica", "obiteljska kuća", "dvojna kuća" },
-        ["zemljište"]         = new(StringComparer.OrdinalIgnoreCase) { "građevinsko zemljište", "parcela", "oranica", "teren" },
-        ["poslovni prostor"]  = new(StringComparer.OrdinalIgnoreCase) { "ured", "lokal", "trgovina", "skladište" },
+        ["zemljiL?te"]         = new(StringComparer.OrdinalIgnoreCase) { "građevinsko zemljiL?te", "parcela", "oranica", "teren" },
+        ["poslovni prostor"]  = new(StringComparer.OrdinalIgnoreCase) { "ured", "lokal", "trgovina", "skladiL?te" },
     };
 
     // ══════════════════════════════════════════════════════════
@@ -101,13 +60,13 @@ public class ValuationEngine
         new(StringComparer.OrdinalIgnoreCase)
     {
         "prvi red", "1. red", "1.red", "first row", "uz more", "na moru",
-        "pogled na more", "sea view", "beach", "plaža", "waterfront"
+        "pogled na more", "sea view", "beach", "plaLla", "waterfront"
     };
 
     // ══════════════════════════════════════════════════════════
     //  SALES-ONLY GATEKEEPER — Dynamic Price Floors
-    //  Buildings: aggressive (800€/m², 35k€ total) — kills rentals
-    //  Land: permissive (15€/m², 5k€ total) — land is 30-150€/m²
+    //  Buildings: aggressive (800€/m�?, 35k€ total) — kills rentals
+    //  Land: permissive (15€/m�?, 5k€ total) — land is 30-150€/m�?
     // ══════════════════════════════════════════════════════════
     private const double MinSalePriceEur_Building = 35_000;
     private const double MinSalePriceEur_Land     =  5_000;
@@ -118,10 +77,10 @@ public class ValuationEngine
     private static readonly string[] RentalKeywords =
     [
         "najam", "iznajmljivanje", "iznajmi", "rent", "rental",
-        "mjesečno", "mjesecno", "monthly", "polog", "deposit",
+        "mjese�Tno", "mjesecno", "monthly", "polog", "deposit",
         "za najam", "u najam", "for rent", "do iznajmljivanja",
-        "kratkoročni", "kratkorocni", "dugoročni", "dugorocni",
-        "najamnina", "rezije", "režije"
+        "kratkoro�Tni", "kratkorocni", "dugoro�Tni", "dugorocni",
+        "najamnina", "rezije", "reLlije"
     ];
 
     /// <summary>
@@ -155,19 +114,14 @@ public class ValuationEngine
         // ── 1. Context ──
         result.RegionName = marketData.RegionName;
         result.TotalListingsFound = marketData.ActiveListings.Count + marketData.RegionalData.Count;
-
-        double benchmarkPerM2 = marketData.RegionalBenchmarkPerM2 > 0
-            ? marketData.RegionalBenchmarkPerM2
-            : FindBenchmark(property.Location);
-        result.RegionalBenchmarkPerM2 = benchmarkPerM2;
-        pipeline.Add($"Benchmark: {benchmarkPerM2:F0} €/m² ({result.RegionName})");
+        pipeline.Add($"Region: {result.RegionName} — no hardcoded benchmarks, pure search data");
 
         // ── 2. Extract all prices from listings ──
         bool isLand = MarketResearchService.IsLandType(marketData.DetectedPropertyType);
         double minPricePerM2 = isLand ? MinPricePerM2_Land : MinPricePerM2_Building;
         double minSalePrice  = isLand ? MinSalePriceEur_Land : MinSalePriceEur_Building;
         var rawPrices = ExtractPricesFromListings(marketData.AllResults, property.SizeM2, isLand);
-        pipeline.Add($"Izvučeno {rawPrices.Count} cijena iz {result.TotalListingsFound} oglasa");
+        pipeline.Add($"Izvu�Teno {rawPrices.Count} cijena iz {result.TotalListingsFound} oglasa");
 
         // ── 3. IQR Outlier Detection ──
         string outlierMethod;
@@ -198,56 +152,67 @@ public class ValuationEngine
             int removed = rawPrices.Count - cleanPrices.Count;
             outlierMethod = "IQR";
             outlierLog.Add($"IQR: Q1={q1:F0}, Q3={q3:F0}, IQR={iqr:F0}");
-            outlierLog.Add($"Bounds: [{lowerBound:F0} – {upperBound:F0}] €/m²");
+            outlierLog.Add($"Bounds: [{lowerBound:F0} – {upperBound:F0}] €/m�?");
             outlierLog.Add($"Uklonjeno {removed} outliera od {rawPrices.Count}");
             pipeline.Add($"IQR filter: {cleanPrices.Count} ostalo, {removed} uklonjeno");
 
-            // Fallback: if IQR was too aggressive and <3 remain
+            // Fallback: if IQR was too aggressive and <3 remain → use median ±80%
             if (cleanPrices.Count < 3 && rawPrices.Count >= 3)
             {
+                double rawMedian = ppsqmValues[ppsqmValues.Count / 2];
                 cleanPrices = rawPrices
-                    .Where(p => p.PricePerM2 >= benchmarkPerM2 * 0.50
-                             && p.PricePerM2 <= benchmarkPerM2 * 1.80)
+                    .Where(p => p.PricePerM2 >= rawMedian * 0.20
+                             && p.PricePerM2 <= rawMedian * 1.80)
                     .ToList();
-                outlierMethod = "IQR→Benchmark±50%";
+                outlierMethod = "IQR→Median±80%";
                 int removedFallback = rawPrices.Count - cleanPrices.Count;
-                outlierLog.Add($"IQR previše agresivan — fallback na benchmark ±50%");
+                outlierLog.Add($"IQR previL?e agresivan — fallback na median ±80% ({rawMedian:F0} €/m�?)");
                 outlierLog.Add($"Fallback: {cleanPrices.Count} ostalo, {removedFallback} uklonjeno");
-                pipeline.Add($"IQR fallback: {cleanPrices.Count} ostalo");
+                pipeline.Add($"IQR fallback (median-based): {cleanPrices.Count} ostalo");
             }
         }
-        else if (rawPrices.Count >= 1)
+        else if (rawPrices.Count >= 2)
         {
-            // Not enough for IQR — use benchmark ±50%
+            // 2-4 prices: use median ±80% as filter
+            var sorted = rawPrices.Select(p => p.PricePerM2).OrderBy(v => v).ToList();
+            double median = sorted[sorted.Count / 2];
             cleanPrices = rawPrices
-                .Where(p => p.PricePerM2 >= benchmarkPerM2 * 0.50
-                         && p.PricePerM2 <= benchmarkPerM2 * 1.80)
+                .Where(p => p.PricePerM2 >= median * 0.20
+                         && p.PricePerM2 <= median * 1.80)
                 .ToList();
             int removed = rawPrices.Count - cleanPrices.Count;
-            outlierMethod = "Benchmark±50%";
-            outlierLog.Add($"Premalo za IQR ({rawPrices.Count}) — benchmark filter ±50%");
+            outlierMethod = "Median±80%";
+            outlierLog.Add($"Premalo za IQR ({rawPrices.Count}) — median filter ±80% ({median:F0} €/m�?)");
             outlierLog.Add($"Uklonjeno {removed} outliera od {rawPrices.Count}");
-            pipeline.Add($"Benchmark filter: {cleanPrices.Count} ostalo");
+            pipeline.Add($"Median filter: {cleanPrices.Count} ostalo");
+        }
+        else if (rawPrices.Count == 1)
+        {
+            // Single price — pass through (gatekeeper will catch rentals)
+            cleanPrices = rawPrices.ToList();
+            outlierMethod = "Single Price";
+            outlierLog.Add("Samo 1 cijena — prolazi bez filtera");
+            pipeline.Add("Single price mode");
         }
         else
         {
-            // No prices at all — benchmark only
+            // No prices at all
             cleanPrices = [];
-            outlierMethod = "Benchmark Only";
-            outlierLog.Add("Nema cijena iz oglasa — koristi se samo benchmark");
-            pipeline.Add("Benchmark only mode");
+            outlierMethod = "No Data";
+            outlierLog.Add("Nema cijena iz oglasa — nedovoljno podataka");
+            pipeline.Add("No price data available");
         }
 
         // ── 3b. SALES-ONLY GATEKEEPER (dynamic floor) ──
-        // For buildings: 800 €/m² kills rentals. For land: 15 €/m² allows real parcels.
+        // For buildings: 800 €/m�? kills rentals. For land: 15 €/m�? allows real parcels.
         {
             int beforeGatekeeper = cleanPrices.Count;
             cleanPrices = cleanPrices.Where(p => p.PricePerM2 >= minPricePerM2).ToList();
             int gatekeeperRemoved = beforeGatekeeper - cleanPrices.Count;
             if (gatekeeperRemoved > 0)
             {
-                outlierLog.Add($"Sales-Only Gatekeeper: removed {gatekeeperRemoved} listings below €{minPricePerM2}/m²");
-                pipeline.Add($"Gatekeeper: {cleanPrices.Count} remain after enforcing €{minPricePerM2}/m² floor");
+                outlierLog.Add($"Sales-Only Gatekeeper: removed {gatekeeperRemoved} listings below €{minPricePerM2}/m�?");
+                pipeline.Add($"Gatekeeper: {cleanPrices.Count} remain after enforcing €{minPricePerM2}/m�? floor");
             }
         }
 
@@ -267,7 +232,7 @@ public class ValuationEngine
                 int sanityRemoved = beforeCount - cleanPrices.Count;
                 if (sanityRemoved > 0)
                 {
-                    outlierLog.Add($"10x sanity: removed {sanityRemoved} extreme low values (floor=€{sanityFloor:F0}/m²)");
+                    outlierLog.Add($"10x sanity: removed {sanityRemoved} extreme low values (floor=€{sanityFloor:F0}/m�?)");
                     pipeline.Add($"10x sanity: {cleanPrices.Count} remain after removing {sanityRemoved} suspect entries");
                 }
             }
@@ -293,7 +258,7 @@ public class ValuationEngine
 
                 if (splitRemoved > 0)
                 {
-                    outlierLog.Add($"High-Cluster Trust: CV={cv:F1}% > {HighClusterCvThreshold}% → discarded {splitRemoved} low-cluster listings (split at €{medianSplit:F0}/m²)");
+                    outlierLog.Add($"High-Cluster Trust: CV={cv:F1}% > {HighClusterCvThreshold}% → discarded {splitRemoved} low-cluster listings (split at €{medianSplit:F0}/m�?)");
                     pipeline.Add($"High-Cluster Trust: kept {cleanPrices.Count} upper-cluster listings (CV was {cv:F1}%)");
                 }
             }
@@ -351,21 +316,21 @@ public class ValuationEngine
 
             basePricePerM2 = WeightedMedian(weightedPairs);
             priceSource = $"Weighted Median ({cleanPrices.Count} comparables)";
-            pipeline.Add($"Weighted Median = {basePricePerM2:F0} €/m²");
+            pipeline.Add($"Weighted Median = {basePricePerM2:F0} €/m�?");
         }
         else if (cleanPrices.Count == 1)
         {
-            // Single comparable — blend 60% comparable + 40% benchmark
-            basePricePerM2 = cleanPrices[0].PricePerM2 * 0.60 + benchmarkPerM2 * 0.40;
-            priceSource = "Blend (1 comparable 60% + benchmark 40%)";
-            pipeline.Add($"Single comp blend = {basePricePerM2:F0} €/m²");
+            // Single comparable — use 100% of that price (no benchmark blend)
+            basePricePerM2 = cleanPrices[0].PricePerM2;
+            priceSource = "Single Comparable";
+            pipeline.Add($"Single comp = {basePricePerM2:F0} €/m�?");
         }
         else
         {
-            // Benchmark only
-            basePricePerM2 = benchmarkPerM2;
-            priceSource = "Benchmark Only";
-            pipeline.Add($"Benchmark only = {basePricePerM2:F0} €/m²");
+            // No data — engine cannot produce a reliable estimate
+            basePricePerM2 = 0;
+            priceSource = "Nedovoljno podataka";
+            pipeline.Add("Nema ekstrahiranih cijena — deterministic engine ne moLle procijeniti");
         }
 
         result.MarketAverageAsking = Math.Round(basePricePerM2, 0);
@@ -380,7 +345,7 @@ public class ValuationEngine
             double sumSqDiff = values.Sum(v => (v - mean) * (v - mean));
             stdDev = Math.Sqrt(sumSqDiff / values.Count);
             coeffVar = mean > 0 ? (stdDev / mean) * 100 : 0;
-            pipeline.Add($"StdDev = {stdDev:F0} €/m² (CV = {coeffVar:F1}%)");
+            pipeline.Add($"StdDev = {stdDev:F0} €/m�? (CV = {coeffVar:F1}%)");
         }
 
         result.StdDevPerM2 = Math.Round(stdDev, 0);
@@ -392,7 +357,7 @@ public class ValuationEngine
         result.RealizationDiscountPercent = Math.Round(realizationGap * 100, 1);
 
         double afterGap = basePricePerM2 * (1 + realizationGap);
-        pipeline.Add($"Realization gap: {realizationGap * 100:F1}% → {afterGap:F0} €/m²");
+        pipeline.Add($"Realization gap: {realizationGap * 100:F1}% → {afterGap:F0} €/m�?");
 
         // ── 8. Contextual Adjustments (with hard cap ±40%) ──
         var adjustments = CalculateAdjustments(property, marketData);
@@ -403,7 +368,7 @@ public class ValuationEngine
         if (totalAdjPercent < -40) totalAdjPercent = -40;
 
         double adjustedPricePerM2 = afterGap * (1 + totalAdjPercent / 100.0);
-        pipeline.Add($"Adjustments: {totalAdjPercent:+0.0;-0.0}% → {adjustedPricePerM2:F0} €/m²");
+        pipeline.Add($"Adjustments: {totalAdjPercent:+0.0;-0.0}% → {adjustedPricePerM2:F0} €/m�?");
 
         result.CalculatedPricePerM2 = Math.Round(adjustedPricePerM2, 0);
         result.Adjustments = adjustments;
@@ -413,13 +378,9 @@ public class ValuationEngine
         double sizeM2 = property.SizeM2 > 0 ? property.SizeM2 : EstimateSizeFromContext(property);
         int finalValue = (int)Math.Round(adjustedPricePerM2 * sizeM2);
 
-        // Sanity: ensure value is reasonable (not <1000 unless land)
-        if (finalValue < 1000 && sizeM2 > 1)
-            finalValue = (int)Math.Round(benchmarkPerM2 * sizeM2 * 0.85);
-
         result.EstimatedValueEur = finalValue;
         result.PriceSource = priceSource;
-        pipeline.Add($"Final: {adjustedPricePerM2:F0} €/m² × {sizeM2:F0} m² = {finalValue:N0} €");
+        pipeline.Add($"Final: {adjustedPricePerM2:F0} €/m�? A� {sizeM2:F0} m�? = {finalValue:N0} €");
 
         // ── 10. Mathematical Confidence Score ──
         var mathConfidence = CalculateMathConfidence(
@@ -680,18 +641,18 @@ public class ValuationEngine
         var parts = new List<string>();
 
         if (compCount == 0)
-            parts.Add("Nema usporedivih oglasa — korišten samo benchmark (+20% nesigurnost)");
+            parts.Add("Nema usporedivih oglasa — koriL?ten samo benchmark (+20% nesigurnost)");
         else if (coeffVar < 10)
             parts.Add($"Nizak CV ({coeffVar:F1}%) — podaci su konzistentni, manji gap");
         else if (coeffVar < 20)
             parts.Add($"Umjeren CV ({coeffVar:F1}%) — standardni gap");
         else
-            parts.Add($"Visok CV ({coeffVar:F1}%) — velika raspršenost, veći gap");
+            parts.Add($"Visok CV ({coeffVar:F1}%) — velika rasprL?enost, veći gap");
 
         if (phase >= SearchPhase.SubLocationDrill)
-            parts.Add("Kasna faza pretraživanja — podaci iz šire regije");
+            parts.Add("Kasna faza pretraLlivanja — podaci iz L?ire regije");
         if (compCount <= 2 && compCount > 0)
-            parts.Add($"Samo {compCount} usporediv(a) — ograničena pouzdanost");
+            parts.Add($"Samo {compCount} usporediv(a) — ograni�Tena pouzdanost");
 
         parts.Add($"Ukupni realizacijski gap: {gap * 100:F1}%");
         return string.Join(". ", parts);
@@ -711,65 +672,65 @@ public class ValuationEngine
         if (priceSource == "Benchmark Only")
         {
             score -= 30;
-            penalties.Add("−30: samo benchmark (nema usporedivih oglasa)");
+            penalties.Add("�?�30: samo benchmark (nema usporedivih oglasa)");
         }
 
         // Penalty: few comparables
         if (compCount == 0)
         {
             score -= 20;
-            penalties.Add("−20: nema cijena iz oglasa");
+            penalties.Add("�?�20: nema cijena iz oglasa");
         }
         else if (compCount < 3)
         {
             score -= 15;
-            penalties.Add($"−15: malo usporedivih ({compCount})");
+            penalties.Add($"�?�15: malo usporedivih ({compCount})");
         }
         else if (compCount < 5)
         {
             score -= 5;
-            penalties.Add($"−5: umjereno usporedivih ({compCount})");
+            penalties.Add($"�?�5: umjereno usporedivih ({compCount})");
         }
 
         // Penalty: high variation
         if (coeffVar > 35)
         {
             score -= 15;
-            penalties.Add($"−15: vrlo visok CV ({coeffVar:F1}%)");
+            penalties.Add($"�?�15: vrlo visok CV ({coeffVar:F1}%)");
         }
         else if (coeffVar > 20)
         {
             score -= 10;
-            penalties.Add($"−10: visok CV ({coeffVar:F1}%)");
+            penalties.Add($"�?�10: visok CV ({coeffVar:F1}%)");
         }
         else if (coeffVar > 10)
         {
             score -= 3;
-            penalties.Add($"−3: umjeren CV ({coeffVar:F1}%)");
+            penalties.Add($"�?�3: umjeren CV ({coeffVar:F1}%)");
         }
 
         // Penalty: late search phase
         if (searchPhase >= SearchPhase.RegionalFallback)
         {
             score -= 15;
-            penalties.Add("−15: regionalni fallback faza");
+            penalties.Add("�?�15: regionalni fallback faza");
         }
         else if (searchPhase >= SearchPhase.SubLocationDrill)
         {
             score -= 10;
-            penalties.Add("−10: kasna faza pretraživanja");
+            penalties.Add("�?�10: kasna faza pretraLlivanja");
         }
         else if (searchPhase >= SearchPhase.SynonymBlitz)
         {
             score -= 5;
-            penalties.Add("−5: synonym blitz faza");
+            penalties.Add("�?�5: synonym blitz faza");
         }
 
         // Penalty: IQR fallback (means IQR was too aggressive)
         if (outlierMethod.Contains("→"))
         {
             score -= 5;
-            penalties.Add("−5: IQR fallback korišten");
+            penalties.Add("�?�5: IQR fallback koriL?ten");
         }
 
         // Bonus: many high-quality comps
@@ -851,12 +812,12 @@ public class ValuationEngine
 
         // ── Needs renovation ──
         if (allText.Contains("potrebna adaptac") || allText.Contains("potrebna obnova")
-            || allText.Contains("ruševin") || allText.Contains("zapušten"))
+            || allText.Contains("ruL?evin") || allText.Contains("zapuL?ten"))
         {
             adj.Add(new ValuationAdjustment
             {
                 Factor = "Potrebna adaptacija",
-                Description = "Nekretnina zahtijeva značajnu adaptaciju",
+                Description = "Nekretnina zahtijeva zna�Tajnu adaptaciju",
                 Percent = -20.0
             });
         }
@@ -872,47 +833,47 @@ public class ValuationEngine
         }
 
         // ── Island premium ──
-        if (allText.Contains("otok") || allText.Contains("otočn"))
+        if (allText.Contains("otok") || allText.Contains("oto�Tn"))
         {
             adj.Add(new ValuationAdjustment
             {
-                Factor = "Otočna lokacija",
-                Description = "Otočna nekretnina — ograničena ponuda",
+                Factor = "Oto�Tna lokacija",
+                Description = "Oto�Tna nekretnina — ograni�Tena ponuda",
                 Percent = 8.0
             });
         }
 
-        // ── Small apartment (<35m²) ──
+        // ── Small apartment (<35m�?) ──
         if (property.SizeM2 > 0 && property.SizeM2 < 35
             && marketData.DetectedPropertyType.Contains("stan", StringComparison.OrdinalIgnoreCase))
         {
             adj.Add(new ValuationAdjustment
             {
                 Factor = "Mali stan",
-                Description = "Stanovi <35 m² imaju veću cijenu po m²",
+                Description = "Stanovi <35 m�? imaju veću cijenu po m�?",
                 Percent = 7.0
             });
         }
 
-        // ── Very large property (>200m²) ──
+        // ── Very large property (>200m�?) ──
         if (property.SizeM2 > 200)
         {
             adj.Add(new ValuationAdjustment
             {
                 Factor = "Velika nekretnina",
-                Description = "Nekretnine >200 m² obično imaju niži €/m²",
+                Description = "Nekretnine >200 m�? obi�Tno imaju niLli €/m�?",
                 Percent = -7.0
             });
         }
 
         // ── Bad infrastructure ──
         if (allText.Contains("neasfalt") || allText.Contains("bez pristup")
-            || allText.Contains("makadamsk") || allText.Contains("šumski put"))
+            || allText.Contains("makadamsk") || allText.Contains("L?umski put"))
         {
             adj.Add(new ValuationAdjustment
             {
-                Factor = "Loša infrastruktura",
-                Description = "Neasfaltirani pristup / loša infrastruktura",
+                Factor = "LoL?a infrastruktura",
+                Description = "Neasfaltirani pristup / loL?a infrastruktura",
                 Percent = -10.0
             });
         }
@@ -924,34 +885,34 @@ public class ValuationEngine
             adj.Add(new ValuationAdjustment
             {
                 Factor = "Legalizacija",
-                Description = "Neriješena legalizacija — pravni rizik",
+                Description = "NerijeL?ena legalizacija — pravni rizik",
                 Percent = -12.0
             });
         }
 
         // ── Parking / garage ──
-        if (allText.Contains("garaža") || allText.Contains("garaza")
-            || allText.Contains("parking") || allText.Contains("garažno mjesto"))
+        if (allText.Contains("garaLla") || allText.Contains("garaza")
+            || allText.Contains("parking") || allText.Contains("garaLlno mjesto"))
         {
             adj.Add(new ValuationAdjustment
             {
-                Factor = "Parking/garaža",
-                Description = "Uključen parking ili garaža",
+                Factor = "Parking/garaLla",
+                Description = "Uklju�Ten parking ili garaLla",
                 Percent = 5.0
             });
         }
 
         // ── Land — agricultural vs building ──
-        if (marketData.DetectedPropertyType.Contains("zemljišt", StringComparison.OrdinalIgnoreCase)
+        if (marketData.DetectedPropertyType.Contains("zemljiL?t", StringComparison.OrdinalIgnoreCase)
             || marketData.DetectedPropertyType.Contains("parcela", StringComparison.OrdinalIgnoreCase))
         {
             if (allText.Contains("poljopriv") || allText.Contains("oranica")
-                || allText.Contains("šuma") || allText.Contains("pašnjak"))
+                || allText.Contains("L?uma") || allText.Contains("paL?njak"))
             {
                 adj.Add(new ValuationAdjustment
                 {
-                    Factor = "Poljoprivredno zemljište",
-                    Description = "Poljoprivredno/šumsko — značajno niža cijena od građevinskog",
+                    Factor = "Poljoprivredno zemljiL?te",
+                    Description = "Poljoprivredno/L?umsko — zna�Tajno niLla cijena od građevinskog",
                     Percent = -35.0
                 });
             }
@@ -959,8 +920,8 @@ public class ValuationEngine
             {
                 adj.Add(new ValuationAdjustment
                 {
-                    Factor = "Građevinsko zemljište",
-                    Description = "Građevinsko zemljište s dozvolom",
+                    Factor = "Građevinsko zemljiL?te",
+                    Description = "Građevinsko zemljiL?te s dozvolom",
                     Percent = 5.0
                 });
             }
@@ -980,7 +941,7 @@ public class ValuationEngine
         var prices = new List<ExtractedPrice>();
         double minPpm2 = isLand ? MinPricePerM2_Land : MinPricePerM2_Building;
         double minTotal = isLand ? MinSalePriceEur_Land : MinSalePriceEur_Building;
-        double maxPpm2 = isLand ? 1500 : 15000;  // Land rarely above 1500 €/m²
+        double maxPpm2 = isLand ? 1500 : 15000;  // Land rarely above 1500 €/m�?
 
         foreach (var listing in listings)
         {
@@ -990,7 +951,7 @@ public class ValuationEngine
             if (IsRentalListing(text))
                 continue;
 
-            // Try price per m² first (most reliable)
+            // Try price per m�? first (most reliable)
             var ppm2Match = PricePerM2Regex.Match(text);
             if (ppm2Match.Success)
             {
@@ -1007,7 +968,7 @@ public class ValuationEngine
                 }
             }
 
-            // Try absolute price + size → calculate per m²
+            // Try absolute price + size → calculate per m�?
             var priceMatches = PriceRegex.Matches(text);
             var sizeMatch = SizeRegex.Match(text);
 
@@ -1031,7 +992,7 @@ public class ValuationEngine
                     double ppm2;
                     if (price < 1000)
                     {
-                        // Below €1000: treat as price/m² only if ≥ floor
+                        // Below €1000: treat as price/m�? only if �A floor
                         ppm2 = price;
                     }
                     else
@@ -1120,36 +1081,6 @@ public class ValuationEngine
     }
 
     // ══════════════════════════════════════════════════════════
-    //  HELPER: Find regional benchmark
-    // ══════════════════════════════════════════════════════════
-    private double FindBenchmark(string location)
-    {
-        if (string.IsNullOrEmpty(location)) return 2000;
-
-        // Try exact match first
-        foreach (var kvp in RegionalBenchmarks)
-        {
-            if (location.Contains(kvp.Key, StringComparison.OrdinalIgnoreCase))
-                return kvp.Value;
-        }
-
-        // Try each word
-        var words = location.Split(new[] { ' ', ',', '-', '/' }, StringSplitOptions.RemoveEmptyEntries);
-        foreach (var word in words)
-        {
-            if (word.Length < 3) continue;
-            foreach (var kvp in RegionalBenchmarks)
-            {
-                if (kvp.Key.Contains(word, StringComparison.OrdinalIgnoreCase))
-                    return kvp.Value;
-            }
-        }
-
-        // Croatian average fallback
-        return 2000;
-    }
-
-    // ══════════════════════════════════════════════════════════
     //  HELPER: Extract size from text
     // ══════════════════════════════════════════════════════════
     private double ExtractSize(string text)
@@ -1185,7 +1116,6 @@ public class DeterministicValuation
     public int EstimatedValueEur { get; set; }
     public double CalculatedPricePerM2 { get; set; }
     public double MarketAverageAsking { get; set; }
-    public double RegionalBenchmarkPerM2 { get; set; }
     public double RealizationDiscountPercent { get; set; }
     public string ConfidenceLevel { get; set; } = "";
     public string PriceSource { get; set; } = "";
@@ -1219,6 +1149,7 @@ public class DeterministicValuation
     // ── Filtered URL list for LLM sync (V6.3) ──
     public HashSet<string> FinalUsedUrls { get; set; } = [];
 }
+
 
 public class UsedComparable
 {

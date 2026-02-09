@@ -38,7 +38,7 @@ public class EvaluateController : ControllerBase
     /// <summary>
     /// Full 3-stage evaluation pipeline:
     /// 1. Extract property info from PDF
-    /// 2. Market research (Njuškalo + benchmarks)
+    /// 2. Market research (Njuškalo search)
     /// 3. Deterministic engine + AI opinion
     /// 4. Save to Supabase
     /// </summary>
@@ -81,7 +81,7 @@ public class EvaluateController : ControllerBase
                 property.Description, property.SizeM2, property.Location);
 
             // ────────────────────────────────────────────────────
-            // STAGE 2: Market research (Njuškalo stealth + benchmarks)
+            // STAGE 2: Market research (Njuškalo stealth search)
             // ────────────────────────────────────────────────────
             MarketResearchResult marketData;
             try
@@ -96,9 +96,8 @@ public class EvaluateController : ControllerBase
             }
 
             _logger.LogInformation(
-                "Stage 2 done: {Active} active listings, benchmark={Benchmark} €/m² ({Region})",
+                "Stage 2 done: {Active} active listings ({Region})",
                 marketData.ActiveListings.Count,
-                marketData.RegionalBenchmarkPerM2,
                 marketData.RegionName);
 
             // ────────────────────────────────────────────────────
@@ -207,7 +206,6 @@ public class EvaluateController : ControllerBase
 
                 // Engine core fields
                 ConfidenceLevel = engineResult.ConfidenceLevel,
-                RegionalBenchmarkPerM2 = engineResult.RegionalBenchmarkPerM2,
                 MarketAverageAsking = engineResult.MarketAverageAsking,
                 CalculatedPricePerM2 = engineResult.CalculatedPricePerM2,
                 RealizationDiscountPercent = engineResult.RealizationDiscountPercent,

@@ -50,7 +50,6 @@ interface AutoValuationResult {
   valuation_reasoning: string;
   // V2 engine fields
   confidence_level?: string;
-  regional_benchmark_per_m2?: number;
   market_average_asking?: number;
   calculated_price_per_m2?: number;
   realization_discount_percent?: number;
@@ -496,19 +495,12 @@ export default function ValuationPage() {
             </div>
 
             {/* Engine Analytics Panel (V4) */}
-            {result.regional_benchmark_per_m2 && (
+            {result.market_average_asking && (
               <div className="rounded-xl bg-white border border-gray-200 p-5">
                 <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
                   📊 Analitika procjene (Robust Estimator V4)
                 </h3>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  <div className="text-center p-3 bg-gray-50 rounded-lg">
-                    <p className="text-xs text-gray-500">Regionalni benchmark</p>
-                    <p className="text-lg font-bold text-gray-900">
-                      {result.regional_benchmark_per_m2.toLocaleString("hr-HR")} €/m²
-                    </p>
-                    <p className="text-xs text-gray-400">{result.region_name}</p>
-                  </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                   <div className="text-center p-3 bg-gray-50 rounded-lg">
                     <p className="text-xs text-gray-500">Weighted Median</p>
                     <p className="text-lg font-bold text-gray-900">

@@ -50,30 +50,13 @@ public class ValuationService
              analizi hrvatskog tržišta nekretnina 2024/2025."
            - Add "Diskont tražene cijene" as a value_driver with adjustment_percent = -15 (or -5).
 
-        2. REGIONAL BENCHMARKS & SANITY CHECK — 2025 Data (CRITICAL):
-           Use these official 2025 benchmarks to validate if comparable prices are realistic:
-           ┌───────────────────────────────┬──────────────┬─────────────┐
-           │ Region / City                 │ Avg. €/m²    │ YoY Growth  │
-           ├───────────────────────────────┼──────────────┼─────────────┤
-           │ Zagreb                        │ 2.751        │ +12,2%      │
-           │ Split                         │ 3.728        │ —           │
-           │ Dubrovnik                     │ 3.217        │ —           │
-           │ Rijeka                        │ ~2.200       │ —           │
-           │ Osijek                        │ ~1.200       │ —           │
-           │ Zadar                         │ ~2.800       │ —           │
-           │ Šibenik                       │ ~2.500       │ +42,9% (!)  │
-           │ Pula / Istra                  │ ~2.600       │ —           │
-           │ Kontinentalna HR (ostalo)     │ ~1.000–1.500 │ +18,2%      │
-           └───────────────────────────────┴──────────────┴─────────────┘
-           - OUTLIER DETECTION: If a comparable's price per m² deviates MORE THAN 30% from
-             the regional benchmark above, FLAG it as an outlier in reason_for_selection:
-             "UPOZORENJE: Cijena od X €/m² odstupa >30% od regionalnog prosjeka (Y €/m²).
-              Korigirano na realniju razinu."
-             Then either exclude it or adjust it toward the benchmark.
-           - Split is the MOST EXPENSIVE city — if you see Split prices above 3.728 €/m²,
-             that's plausible only for premium/seafront. Otherwise flag it.
-           - Šibenik has had a 42,9% price jump — recent prices there may look inflated vs.
-             historical data. Accept higher prices there as a market reality.
+        2. OUTLIER DETECTION (from search data only):
+           - Compare each comparable's price per m² against the MEDIAN of all comparables found.
+           - If a comparable deviates MORE THAN 50% from the median, FLAG it as an outlier:
+             "UPOZORENJE: Cijena od X €/m² znatno odstupa od medijana usporedivih (Y €/m²)."
+             Then either exclude it or adjust it.
+           - Do NOT use any hardcoded regional benchmark numbers. Base all analysis on the actual
+             search results provided to you.
 
         3. Novogradnja vs. Starogradnja:
            - If the PDF does NOT explicitly say 'Novogradnja' or the building is old, assume 'Starogradnja' (Old Build).
@@ -90,7 +73,7 @@ public class ValuationService
            - If you only find 1 or 2 usable comparables: YOU MUST STILL CALCULATE THE VALUE based on what you have. Do NOT return 0. Return your best estimate.
            - Add disclaimer in valuation_reasoning: 'UPOZORENJE: Procjena se temelji na ograničenom broju podataka (N usporedivih nekretnina).'
            - If ads don't show an exact price but show price per m² or a range, estimate from that.
-           - If NO comparables are usable at all, use the REGIONAL BENCHMARKS from Rule 2 as your baseline and explicitly state this.
+           - If NO comparables are usable at all, use the FALLBACK REGIONAL DATA section (if provided) and provide your best professional estimate. Never return 0.
 
         6. estimated_value_eur MUST be a positive integer (e.g., 150000). NEVER return 0, null, or a string.
 
@@ -98,7 +81,7 @@ public class ValuationService
            - In Croatian ads, a DOT (.) is a THOUSANDS separator and a COMMA (,) is a DECIMAL separator.
              '1.088' means ONE THOUSAND AND EIGHTY-EIGHT (1088), NOT 1.088.
              '115.000' means ONE HUNDRED AND FIFTEEN THOUSAND (115000), NOT 115.
-           - ALWAYS sanity-check extracted prices per m² against the REGIONAL BENCHMARKS in Rule 2.
+           - ALWAYS sanity-check extracted prices per m² against OTHER comparables found in the search.
            - If a price per m² seems impossibly high or low, re-examine:
              * Did you confuse the TOTAL PRICE with the PRICE PER m²?
              * Did you misread a thousands separator as a decimal point?
@@ -138,10 +121,7 @@ public class ValuationService
            c) TROŠKOVNA METODA (Cost Method):
               - Use for: industrial buildings, public buildings, unique structures with no comparables.
               - Formula: V = (New Construction Cost per m² × m²) - Depreciation + Land Value
-              - New construction cost benchmarks (Croatia 2025):
-                * Residential: 1.200–1.800 €/m²
-                * Commercial/office: 1.000–1.500 €/m²
-                * Industrial/warehouse: 600–1.000 €/m²
+              - Estimate construction costs from the search data and your professional knowledge.
               - Depreciation: 1-2% per year of building age, max 60-70%.
               - Use only when neither Comparative nor Income methods are feasible.
               - State in reasoning: "Primijenjena troškovna metoda zbog nedostatka usporedivih nekretnina."
@@ -155,14 +135,10 @@ public class ValuationService
                 prosjek usporedne i prinosne metode."
 
         10. LAND & AGRICULTURE SPECIFICS:
-            a) Agricultural Land benchmarks (Adriatic region, 2025):
-               - Oranice (arable): avg. 6.655 €/ha = ~0,67 €/m²
-               - Pašnjaci (pastures): avg. 4.334 €/ha = ~0,43 €/m²
-               - Vinogradi (vineyards): typically higher, 2–5 €/m²
-               - If the property is clearly agricultural land, use these benchmarks for sanity-check.
-            b) Conversion fee (Prenamjena — agricultural → building land):
-               - If the PDF or context mentions "prenamjena" or the land is agricultural but in a
-                 building zone (građevinska zona), note that the conversion fee is 30% of the land value.
+            a) Agricultural Land:
+               - If the property is clearly agricultural land, base the valuation on the search results provided.
+               - Agricultural land is typically much cheaper than building land — adjust expectations accordingly.
+               - Do NOT use any hardcoded per-hectare benchmarks. Use only real comparable data.
                - Example: Agricultural land worth 50.000 € → prenamjena fee = 15.000 € → total investment = 65.000 €.
                - Add as a value_driver: "Prenamjena (30% naknada)" with the impact description.
             c) Forestry (Šumsko zemljište):
@@ -216,14 +192,18 @@ public class ValuationService
               or very few usable ads (0-1 with actual prices):
               * Look at the FALLBACK REGIONAL DATA section (if provided) for regional market trends.
               * Use the regional average price per m² as your baseline.
+            LIMITED DATA FALLBACK:
+            - If the web search results contain mostly CAPTCHA pages, error messages, blocked content,
+              or very few usable ads (0-1 with actual prices):
+              * Look at the FALLBACK REGIONAL DATA section (if provided) for regional market trends.
+              * Extract any price data you can find from those sources.
               * Apply a sea-distance multiplier for coastal/island properties:
-                - 1st row to sea (< 100m): regional_avg × 2.5 to 3.0
-                - 2nd row (100-500m): regional_avg × 1.5 to 2.0
-                - 3rd row (500m-1km): regional_avg × 1.0 to 1.3
-                - Interior (> 1km): regional_avg × 0.7 to 1.0
+                - 1st row to sea (< 100m): avg × 2.5 to 3.0
+                - 2nd row (100-500m): avg × 1.5 to 2.0
+                - 3rd row (500m-1km): avg × 1.0 to 1.3
+                - Interior (> 1km): avg × 0.7 to 1.0
               * Clearly state in valuation_reasoning: "NAPOMENA: Direktni oglasi nisu bili dostupni.
-                Procjena se temelji na regionalnim tržišnim trendovima za [Location] sa korekcijom za
-                udaljenost od mora."
+                Procjena se temelji na dostupnim regionalnim tržišnim podacima za [Location]."
 
         ═══════════════════════════════════════════
 
@@ -237,13 +217,7 @@ public class ValuationService
           3. Show the adjusted price per m² for each comparable
           4. Show the average adjusted price per m²
           5. Apply the -15% Realization Gap discount (or -5% for high-demand Novogradnja)
-          6. Show the REGIONAL BENCHMARK comparison: "Regionalni prosjek za [City]: X €/m². Naša procjena: Y €/m²."
-          7. Final: Target_m2 × Adjusted_Average = estimated_value_eur
-        - Include a VALUE DRIVERS SUMMARY section in valuation_reasoning listing all contextual factors.
-
-        IMPORTANT — URL PRESERVATION:
-        - Each search result includes a URL. You MUST copy each URL exactly as provided into the output. Do NOT modify, shorten, or invent URLs.
-        - If a search result does not have a URL, set "url" to an empty string.
+          6f a search result does not have a URL, set "url" to an empty string.
 
         Output JSON (return ONLY this, no markdown fences):
         {
@@ -265,7 +239,7 @@ public class ValuationService
                 "adjustment_percent": number (e.g. 0, -5, -15, +15 — the % adjustment applied)
               }
           ],
-          "valuation_reasoning": "Formal legal text explaining the value including: method used, all corrections, -15% realization gap, regional benchmark comparison, contextual adjustments, infrastructure analysis, and location factors. Formatted with paragraphs, ready to copy-paste into MS Word."
+          "valuation_reasoning": "Formal legal text explaining the value including: method used, all corrections, -15% realization gap, market data comparison, contextual adjustments, infrastructure analysis, and location factors. Formatted with paragraphs, ready to copy-paste into MS Word."
         }
         """;
 
@@ -312,7 +286,7 @@ public class ValuationService
 
     /// <summary>
     /// Fully automated valuation: PDF data + market research → opinion.
-    /// Now receives enriched MarketResearchResult with benchmark context.
+    /// Uses ONLY real search data — no hardcoded benchmarks.
     /// </summary>
     public async Task<AutoValuationResult> GenerateAutoValuationAsync(
         ExtractedPropertyInfo property, MarketResearchResult marketData)
@@ -321,7 +295,7 @@ public class ValuationService
         var activeBlock = marketData.ActiveListings.Count > 0
             ? string.Join("\n\n", marketData.ActiveListings.Select((r, i) =>
                 $"--- Active Listing {i + 1} ---\nURL (copy this exactly): {r.Url}\nTitle: {r.Title}\nContent: {r.Content}"))
-            : "NEMA AKTIVNIH OGLASA — koristi regionalne podatke i benchmarke ispod.";
+            : "NEMA AKTIVNIH OGLASA — koristi regionalne podatke ispod ako postoje.";
 
         // Build regional fallback block
         var regionalBlock = marketData.RegionalData.Count > 0
@@ -330,22 +304,20 @@ public class ValuationService
                 $"--- Regional Source {i + 1} ---\nURL: {r.Url}\nTitle: {r.Title}\nContent: {r.Content}"))
             : "";
 
-        // Build benchmark context section — always provided
-        var benchmarkSection =
+        // Build context section — NO hardcoded benchmarks, only search metadata
+        var contextSection =
             $"\n\n" +
             $"═══════════════════════════════════════════\n" +
-            $"MARKET INTELLIGENCE (pre-computed by server):\n" +
+            $"SEARCH METADATA (pre-computed by server):\n" +
             $"═══════════════════════════════════════════\n" +
             $"- Region: {marketData.RegionName}\n" +
-            $"- Regional Benchmark: {marketData.RegionalBenchmarkPerM2:N0} €/m² (2025/2026 data)\n" +
             $"- Detected Property Type: {marketData.DetectedPropertyType}\n" +
             $"- Target Size: {marketData.TargetSizeM2} m²\n" +
             $"- Active Listings Found: {marketData.ActiveListings.Count}\n" +
-            $"- Using Benchmark Fallback: {(marketData.IsBenchmarkFallback ? "DA — nema aktivnih oglasa" : "NE — pronađeni aktivni oglasi")}\n" +
             (string.IsNullOrEmpty(marketData.Note) ? "" : $"- NAPOMENA: {marketData.Note}\n") +
-            $"\nINSTRUCTION: If active listings are missing or unreliable, " +
-            $"use the Regional Benchmark of {marketData.RegionalBenchmarkPerM2:N0} €/m² as your primary anchor. " +
-            $"Apply -15% realization gap to get transaction value = {marketData.RegionalBenchmarkPerM2 * 0.85:N0} €/m².\n";
+            $"\nINSTRUCTION: Base your valuation ONLY on the search results above. " +
+            $"Do NOT use any memorized or hardcoded benchmark prices. " +
+            $"Apply -15% realization gap to asking prices to estimate transaction values.\n";
 
         var userMessage =
             $"""
@@ -359,7 +331,7 @@ public class ValuationService
             ACTIVE NJUŠKALO/INDEX LISTINGS (ghost/archived filtered out):
             {activeBlock}
             {regionalBlock}
-            {benchmarkSection}
+            {contextSection}
             """;
 
         var messages = new List<ChatMessage>

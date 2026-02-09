@@ -89,64 +89,9 @@ public class MarketResearchService
     };
 
     // ══════════════════════════════════════════════════════════
-    //  2025/2026 REGIONAL BENCHMARKS (€/m²)
+    //  NOTE: Regional benchmarks REMOVED.
+    //  Engine works ONLY with real search data from Tavily.
     // ══════════════════════════════════════════════════════════
-    private static readonly Dictionary<string, double> RegionalBenchmarks =
-        new(StringComparer.OrdinalIgnoreCase)
-    {
-        // Major cities
-        { "Zagreb", 2751 }, { "Split", 3728 }, { "Dubrovnik", 3217 },
-        { "Rijeka", 2200 }, { "Osijek", 1200 }, { "Zadar", 2800 },
-        { "Šibenik", 2500 }, { "Sibenik", 2500 }, { "Pula", 2600 },
-        // Istra
-        { "Istra", 2600 }, { "Rovinj", 3500 }, { "Poreč", 2800 },
-        { "Porec", 2800 }, { "Umag", 2500 }, { "Novigrad", 2500 },
-        { "Opatija", 3000 },
-        // Coast
-        { "Makarska", 3200 }, { "Trogir", 3000 }, { "Kaštela", 2400 },
-        { "Kastela", 2400 }, { "Solin", 2600 }, { "Crikvenica", 2200 },
-        { "Vodice", 2500 }, { "Biograd", 2400 }, { "Omiš", 2600 },
-        { "Omis", 2600 },
-        // Islands
-        { "Murter", 2500 }, { "Hvar", 3500 }, { "Brač", 2800 },
-        { "Brac", 2800 }, { "Korčula", 2500 }, { "Korcula", 2500 },
-        { "Krk", 2800 }, { "Rab", 2200 }, { "Pag", 2000 },
-        { "Vis", 2500 }, { "Mljet", 2000 }, { "Šolta", 2200 },
-        { "Solta", 2200 }, { "Čiovo", 3000 }, { "Ciovo", 3000 },
-        { "Pelješac", 2500 }, { "Peljesac", 2500 }, { "Vir", 2200 },
-        // Continental
-        { "Varaždin", 1400 }, { "Varazdin", 1400 }, { "Karlovac", 1100 },
-        { "Slavonski Brod", 900 }, { "Vukovar", 800 }, { "Vinkovci", 850 },
-        { "Požega", 800 }, { "Bjelovar", 900 }, { "Čakovec", 1200 },
-        { "Koprivnica", 1100 }, { "Sisak", 800 },
-    };
-
-    private const double DefaultBenchmark = 1250;
-    private const double DefaultLandBenchmark = 80;  // €/m² for land
-
-    // ── Land-specific benchmarks (€/m² for građevinsko zemljište) ──
-    private static readonly Dictionary<string, double> LandBenchmarks =
-        new(StringComparer.OrdinalIgnoreCase)
-    {
-        // Coastal / Islands — land is 50-200 €/m²
-        { "Split", 250 }, { "Dubrovnik", 300 }, { "Zadar", 150 },
-        { "Rijeka", 120 }, { "Pula", 150 }, { "Šibenik", 120 },
-        { "Sibenik", 120 }, { "Trogir", 200 }, { "Makarska", 200 },
-        { "Rovinj", 250 }, { "Poreč", 180 }, { "Porec", 180 },
-        { "Umag", 150 }, { "Opatija", 200 }, { "Vodice", 120 },
-        // Islands
-        { "Vir", 100 }, { "Murter", 100 }, { "Hvar", 200 },
-        { "Brač", 120 }, { "Brac", 120 }, { "Krk", 150 },
-        { "Korčula", 100 }, { "Korcula", 100 }, { "Vis", 120 },
-        { "Čiovo", 180 }, { "Ciovo", 180 }, { "Pag", 80 },
-        { "Rab", 100 }, { "Pelješac", 100 }, { "Peljesac", 100 },
-        { "Šolta", 80 }, { "Solta", 80 }, { "Mljet", 60 },
-        { "Ugljan", 60 }, { "Pašman", 60 }, { "Pasman", 60 },
-        // Continental
-        { "Zagreb", 200 }, { "Osijek", 40 }, { "Varaždin", 50 },
-        { "Varazdin", 50 }, { "Karlovac", 30 }, { "Sisak", 20 },
-        { "Slavonski Brod", 25 }, { "Vukovar", 15 },
-    };
 
     // Ghost-listing keywords
     private static readonly string[] GhostKeywords =
@@ -189,9 +134,6 @@ public class MarketResearchService
         var regionName = ExtractRegionName(location);
         var subLocations = ExtractLocationHierarchy(location);
         bool isLand = IsLandType(detectedType);
-        var benchmarkPerM2 = isLand
-            ? FindLandBenchmark(regionName)
-            : FindRegionalBenchmark(regionName);
         var synonyms = GetTypeSynonyms(detectedType);
         var now = DateTime.Now;
         var searchPhase = SearchPhase.Primary;
@@ -201,9 +143,9 @@ public class MarketResearchService
         var allVerified = new List<ComparableSearchResult>();
 
         _logger.LogInformation(
-            "V4 Shotgun: Type={Type}, Synonyms=[{Syns}], Region={Region}, SubLocs=[{Subs}], Bench={Bench} €/m²",
+            "V4 Shotgun: Type={Type}, Synonyms=[{Syns}], Region={Region}, SubLocs=[{Subs}]",
             detectedType, string.Join(", ", synonyms), regionName,
-            string.Join(" → ", subLocations), benchmarkPerM2);
+            string.Join(" → ", subLocations));
 
         // ─────────────────────────────────────────────────────
         // PHASE 1: Njuškalo pinpoint — exact location, main type + synonym
@@ -349,7 +291,7 @@ public class MarketResearchService
         if (allVerified.Count < 5)
         {
             if (allVerified.Count == 0)
-                searchPhase = SearchPhase.BenchmarkOnly;
+                searchPhase = SearchPhase.NoComparables;
             else if (allVerified.Count < 2 && searchPhase >= SearchPhase.WiderRegion)
                 searchPhase = SearchPhase.RegionalFallback;
 
@@ -379,14 +321,13 @@ public class MarketResearchService
             .Take(12)
             .ToList();
 
-        var confidence = CalculateConfidence(distinctListings.Count, searchPhase, regionName);
-        var note = BuildNote(distinctListings.Count, searchPhase, regionName, benchmarkPerM2, now.Year);
+        var confidence = CalculateConfidence(distinctListings.Count, searchPhase);
+        var note = BuildNote(distinctListings.Count, searchPhase, regionName, now.Year);
 
         var result = new MarketResearchResult
         {
             ActiveListings = distinctListings,
             RegionalData = regionalData,
-            RegionalBenchmarkPerM2 = benchmarkPerM2,
             RegionName = regionName,
             DetectedPropertyType = detectedType,
             TargetSizeM2 = sizeM2,
@@ -613,12 +554,8 @@ public class MarketResearchService
     // ══════════════════════════════════════════════════════════
 
     private ConfidenceScore CalculateConfidence(
-        int priceVerifiedCount, SearchPhase phase, string regionName)
+        int priceVerifiedCount, SearchPhase phase)
     {
-        bool hasKnownBenchmark = RegionalBenchmarks.ContainsKey(regionName) ||
-            RegionalBenchmarks.Keys.Any(k =>
-                regionName.Contains(k, StringComparison.OrdinalIgnoreCase));
-
         // HIGH: 5+ from early phases
         if (priceVerifiedCount >= 5 && phase <= SearchPhase.MultiPortal)
         {
@@ -661,32 +598,20 @@ public class MarketResearchService
             return new ConfidenceScore
             {
                 Level = "Srednja",
-                Score = hasKnownBenchmark ? 50 : 40,
+                Score = 40,
                 Explanation = priceVerifiedCount == 1
-                    ? $"Pronađen samo 1 oglas s cijenom + regionalni benchmark za {regionName}."
-                    : $"Pronađena {priceVerifiedCount} oglasa s cijenom uz benchmark dopunu.",
+                    ? "Pronađen samo 1 oglas s cijenom. Procjena ograničene pouzdanosti."
+                    : $"Pronađena {priceVerifiedCount} oglasa s cijenom.",
                 Color = "yellow"
             };
         }
 
-        // LOW
-        if (hasKnownBenchmark)
-        {
-            return new ConfidenceScore
-            {
-                Level = "Niska",
-                Score = 25,
-                Explanation = $"Nema aktivnih oglasa s cijenom unatoč {(int)SearchPhase.BenchmarkOnly + 1} faza pretrage. Korišten benchmark za {regionName}.",
-                Color = "red"
-            };
-        }
-
-        // VERY LOW
+        // LOW — no listings at all
         return new ConfidenceScore
         {
             Level = "Vrlo niska",
-            Score = 12,
-            Explanation = "Nema oglasa s cijenom, nepoznata regija. Korišten nacionalni prosjek.",
+            Score = 10,
+            Explanation = "Nema aktivnih oglasa s cijenom. Nedovoljno podataka za pouzdanu procjenu.",
             Color = "red"
         };
     }
@@ -696,7 +621,7 @@ public class MarketResearchService
     // ══════════════════════════════════════════════════════════
 
     private static string BuildNote(
-        int count, SearchPhase phase, string region, double bench, int year)
+        int count, SearchPhase phase, string region, int year)
     {
         if (count >= 5 && phase <= SearchPhase.MultiPortal)
             return "";
@@ -709,11 +634,10 @@ public class MarketResearchService
 
         if (count >= 1)
             return $"Pronađen {(count == 1 ? "samo 1 oglas" : $"{count} oglasa")} " +
-                   $"s cijenom. Dopunjeno benchmarkom od {bench:N0} €/m².";
+                   $"s cijenom. Ograničeni podaci za procjenu.";
 
         return $"Nijedan aktivan oglas s cijenom nije pronađen za {year} unatoč pretrazi " +
-               $"Njuškalo, Index, Crozilla i Nekretnine.hr. " +
-               $"Korišten regionalni benchmark za {region}: {bench:N0} €/m².";
+               $"Njuškalo, Index, Crozilla i Nekretnine.hr za {region}.";
     }
 
     // ══════════════════════════════════════════════════════════
@@ -792,64 +716,6 @@ public class MarketResearchService
         if (TypeSynonyms.TryGetValue(detectedType, out var syns))
             return syns;
         return [detectedType];
-    }
-
-    // ══════════════════════════════════════════════════════════
-    //  REGIONAL BENCHMARK LOOKUP
-    // ══════════════════════════════════════════════════════════
-
-    private static double FindRegionalBenchmark(string location)
-    {
-        if (string.IsNullOrWhiteSpace(location))
-            return DefaultBenchmark;
-
-        foreach (var (region, benchmark) in RegionalBenchmarks)
-        {
-            if (location.Contains(region, StringComparison.OrdinalIgnoreCase))
-                return benchmark;
-        }
-
-        var words = location.Split([' ', ',', '-', '/'],
-            StringSplitOptions.RemoveEmptyEntries);
-        foreach (var word in words)
-        {
-            if (word.Length < 3) continue;
-            foreach (var (region, benchmark) in RegionalBenchmarks)
-            {
-                if (region.Contains(word, StringComparison.OrdinalIgnoreCase) ||
-                    word.Contains(region, StringComparison.OrdinalIgnoreCase))
-                    return benchmark;
-            }
-        }
-
-        return DefaultBenchmark;
-    }
-
-    private static double FindLandBenchmark(string location)
-    {
-        if (string.IsNullOrWhiteSpace(location))
-            return DefaultLandBenchmark;
-
-        foreach (var (region, benchmark) in LandBenchmarks)
-        {
-            if (location.Contains(region, StringComparison.OrdinalIgnoreCase))
-                return benchmark;
-        }
-
-        var words = location.Split([' ', ',', '-', '/'],
-            StringSplitOptions.RemoveEmptyEntries);
-        foreach (var word in words)
-        {
-            if (word.Length < 3) continue;
-            foreach (var (region, benchmark) in LandBenchmarks)
-            {
-                if (region.Contains(word, StringComparison.OrdinalIgnoreCase) ||
-                    word.Contains(region, StringComparison.OrdinalIgnoreCase))
-                    return benchmark;
-            }
-        }
-
-        return DefaultLandBenchmark;
     }
 
     // ══════════════════════════════════════════════════════════
@@ -1026,7 +892,7 @@ public enum SearchPhase
     SynonymBlitz = 3,
     SubLocationDrill = 4,
     RegionalFallback = 5,
-    BenchmarkOnly = 6,
+    NoComparables = 6,
 }
 
 public class ConfidenceScore
@@ -1070,7 +936,6 @@ public class MarketResearchResult
 {
     public List<ComparableSearchResult> ActiveListings { get; set; } = [];
     public List<ComparableSearchResult> RegionalData { get; set; } = [];
-    public double RegionalBenchmarkPerM2 { get; set; }
     public string RegionName { get; set; } = "";
     public string DetectedPropertyType { get; set; } = "";
     public double TargetSizeM2 { get; set; }
@@ -1081,6 +946,4 @@ public class MarketResearchResult
 
     public List<ComparableSearchResult> AllResults =>
         [.. ActiveListings, .. RegionalData];
-
-    public bool IsBenchmarkFallback => ActiveListings.Count == 0;
 }
