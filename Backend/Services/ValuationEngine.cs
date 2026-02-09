@@ -105,12 +105,15 @@ public class ValuationEngine
     };
 
     // ══════════════════════════════════════════════════════════
-    //  SALES-ONLY GATEKEEPER — Aggressive Price Floor (V6.3)
-    //  Anything below these is 100% RENTAL or ERROR.
+    //  SALES-ONLY GATEKEEPER — Dynamic Price Floors
+    //  Buildings: aggressive (800€/m², 35k€ total) — kills rentals
+    //  Land: permissive (15€/m², 5k€ total) — land is 30-150€/m²
     // ══════════════════════════════════════════════════════════
-    private const double MinSalePriceEur = 35_000;       // No real sale in HR below €35k
-    private const double MinPricePerM2Floor = 800;       // Min €/m² for any habitable property
-    private const double HighClusterCvThreshold = 40.0;  // CV% above which we trust high cluster
+    private const double MinSalePriceEur_Building = 35_000;
+    private const double MinSalePriceEur_Land     =  5_000;
+    private const double MinPricePerM2_Building   =    800;
+    private const double MinPricePerM2_Land       =     15;
+    private const double HighClusterCvThreshold   =   40.0;  // CV% above which we trust high cluster
 
     private static readonly string[] RentalKeywords =
     [
@@ -160,7 +163,10 @@ public class ValuationEngine
         pipeline.Add($"Benchmark: {benchmarkPerM2:F0} €/m² ({result.RegionName})");
 
         // ── 2. Extract all prices from listings ──
-        var rawPrices = ExtractPricesFromListings(marketData.AllResults, property.SizeM2);
+        bool isLand = MarketResearchService.IsLandType(marketData.DetectedPropertyType);
+        double minPricePerM2 = isLand ? MinPricePerM2_Land : MinPricePerM2_Building;
+        double minSalePrice  = isLand ? MinSalePriceEur_Land : MinSalePriceEur_Building;
+        var rawPrices = ExtractPricesFromListings(marketData.AllResults, property.SizeM2, isLand);
         pipeline.Add($"Izvučeno {rawPrices.Count} cijena iz {result.TotalListingsFound} oglasa");
 
         // ── 3. IQR Outlier Detection ──
@@ -232,17 +238,16 @@ public class ValuationEngine
             pipeline.Add("Benchmark only mode");
         }
 
-        // ── 3b. SALES-ONLY GATEKEEPER (V6.3) ──
-        // Hard floor: nothing below 800 €/m² can EVER enter the math.
-        // This kills any rental that survived keyword + total-price filters.
+        // ── 3b. SALES-ONLY GATEKEEPER (dynamic floor) ──
+        // For buildings: 800 €/m² kills rentals. For land: 15 €/m² allows real parcels.
         {
             int beforeGatekeeper = cleanPrices.Count;
-            cleanPrices = cleanPrices.Where(p => p.PricePerM2 >= MinPricePerM2Floor).ToList();
+            cleanPrices = cleanPrices.Where(p => p.PricePerM2 >= minPricePerM2).ToList();
             int gatekeeperRemoved = beforeGatekeeper - cleanPrices.Count;
             if (gatekeeperRemoved > 0)
             {
-                outlierLog.Add($"Sales-Only Gatekeeper: removed {gatekeeperRemoved} listings below €{MinPricePerM2Floor}/m²");
-                pipeline.Add($"Gatekeeper: {cleanPrices.Count} remain after enforcing €{MinPricePerM2Floor}/m² floor");
+                outlierLog.Add($"Sales-Only Gatekeeper: removed {gatekeeperRemoved} listings below €{minPricePerM2}/m²");
+                pipeline.Add($"Gatekeeper: {cleanPrices.Count} remain after enforcing €{minPricePerM2}/m² floor");
             }
         }
 
@@ -969,9 +974,13 @@ public class ValuationEngine
     // ══════════════════════════════════════════════════════════
     private List<ExtractedPrice> ExtractPricesFromListings(
         List<ComparableSearchResult> listings,
-        double targetSizeM2)
+        double targetSizeM2,
+        bool isLand = false)
     {
         var prices = new List<ExtractedPrice>();
+        double minPpm2 = isLand ? MinPricePerM2_Land : MinPricePerM2_Building;
+        double minTotal = isLand ? MinSalePriceEur_Land : MinSalePriceEur_Building;
+        double maxPpm2 = isLand ? 1500 : 15000;  // Land rarely above 1500 €/m²
 
         foreach (var listing in listings)
         {
@@ -986,7 +995,7 @@ public class ValuationEngine
             if (ppm2Match.Success)
             {
                 double ppm2 = ParseCroatianNumber(ppm2Match.Groups[1].Value);
-                if (ppm2 >= MinPricePerM2Floor && ppm2 <= 15000)
+                if (ppm2 >= minPpm2 && ppm2 <= maxPpm2)
                 {
                     prices.Add(new ExtractedPrice
                     {
@@ -1015,9 +1024,9 @@ public class ValuationEngine
 
                 if (size > 0 && price > 0)
                 {
-                    // ── RENT-TRAP: Reject total price < €15k ──
-                    if (price >= 1000 && price < MinSalePriceEur)
-                        continue; // Almost certainly monthly rent
+                    // ── RENT-TRAP: Reject total price below floor ──
+                    if (price >= 1000 && price < minTotal)
+                        continue; // Almost certainly monthly rent or land scrap
 
                     double ppm2;
                     if (price < 1000)
@@ -1030,7 +1039,7 @@ public class ValuationEngine
                         ppm2 = price / size;
                     }
 
-                    if (ppm2 >= MinPricePerM2Floor && ppm2 <= 15000)
+                    if (ppm2 >= minPpm2 && ppm2 <= maxPpm2)
                     {
                         prices.Add(new ExtractedPrice
                         {

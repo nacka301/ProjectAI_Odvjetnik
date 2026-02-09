@@ -122,6 +122,31 @@ public class MarketResearchService
     };
 
     private const double DefaultBenchmark = 1250;
+    private const double DefaultLandBenchmark = 80;  // €/m² for land
+
+    // ── Land-specific benchmarks (€/m² for građevinsko zemljište) ──
+    private static readonly Dictionary<string, double> LandBenchmarks =
+        new(StringComparer.OrdinalIgnoreCase)
+    {
+        // Coastal / Islands — land is 50-200 €/m²
+        { "Split", 250 }, { "Dubrovnik", 300 }, { "Zadar", 150 },
+        { "Rijeka", 120 }, { "Pula", 150 }, { "Šibenik", 120 },
+        { "Sibenik", 120 }, { "Trogir", 200 }, { "Makarska", 200 },
+        { "Rovinj", 250 }, { "Poreč", 180 }, { "Porec", 180 },
+        { "Umag", 150 }, { "Opatija", 200 }, { "Vodice", 120 },
+        // Islands
+        { "Vir", 100 }, { "Murter", 100 }, { "Hvar", 200 },
+        { "Brač", 120 }, { "Brac", 120 }, { "Krk", 150 },
+        { "Korčula", 100 }, { "Korcula", 100 }, { "Vis", 120 },
+        { "Čiovo", 180 }, { "Ciovo", 180 }, { "Pag", 80 },
+        { "Rab", 100 }, { "Pelješac", 100 }, { "Peljesac", 100 },
+        { "Šolta", 80 }, { "Solta", 80 }, { "Mljet", 60 },
+        { "Ugljan", 60 }, { "Pašman", 60 }, { "Pasman", 60 },
+        // Continental
+        { "Zagreb", 200 }, { "Osijek", 40 }, { "Varaždin", 50 },
+        { "Varazdin", 50 }, { "Karlovac", 30 }, { "Sisak", 20 },
+        { "Slavonski Brod", 25 }, { "Vukovar", 15 },
+    };
 
     // Ghost-listing keywords
     private static readonly string[] GhostKeywords =
@@ -160,9 +185,13 @@ public class MarketResearchService
         string location, double sizeM2, string pdfText = "")
     {
         var detectedType = DetectPropertyType(pdfText);
+        _currentDetectedType = detectedType;   // Set for PriceFirstFilter gates
         var regionName = ExtractRegionName(location);
         var subLocations = ExtractLocationHierarchy(location);
-        var benchmarkPerM2 = FindRegionalBenchmark(regionName);
+        bool isLand = IsLandType(detectedType);
+        var benchmarkPerM2 = isLand
+            ? FindLandBenchmark(regionName)
+            : FindRegionalBenchmark(regionName);
         var synonyms = GetTypeSynonyms(detectedType);
         var now = DateTime.Now;
         var searchPhase = SearchPhase.Primary;
@@ -406,9 +435,39 @@ public class MarketResearchService
     //  PRICE-FIRST FILTER
     // ══════════════════════════════════════════════════════════
 
-    // Sales-only gatekeeper constants (V6.3)
-    private const double MinSalePriceEur = 35_000;
-    private const double MinPricePerM2 = 800;
+    // ── Sales-only gatekeeper constants ──
+    // Dynamic: land has much lower floors (30-150 €/m² is normal)
+    private const double MinSalePriceEur_Building = 35_000;
+    private const double MinSalePriceEur_Land     =  5_000;
+    private const double MinPricePerM2_Building    =    800;
+    private const double MinPricePerM2_Land        =     15;  // Land can be 20-150 €/m²
+
+    // ── Article / junk keywords — not actual listings ──
+    private static readonly string[] ArticleKeywords =
+    [
+        "tržište nekretnina", "trziste nekretnina",
+        "prosječna cijena", "prosjecna cijena",
+        "stručnjaci", "strucnjaci",
+        "analiza tržišta", "analitičar", "analiticar",
+        "porezi i lokacija diktiraju", "trendovi",
+        "prognoza", "izvještaj", "izvjestaj",
+        "rast cijena", "pad cijena",
+        "hina.hr", "jutarnji.hr", "vecernji.hr", "index.hr/vijesti",
+        "poslovni.hr", "forbes.hr", "lider.media",
+        "telegram.hr", "dnevnik.hr", "n1info.hr"
+    ];
+
+    // ── Wrong-type keywords — used by Type Gate ──
+    private static readonly Dictionary<string, string[]> WrongTypeKeywords = new()
+    {
+        ["građevinsko zemljište"] = ["stan", "apartman", "garsonijera", "soba",
+            "kuća", "kuca", "vila", "vikendica", "etaža", "etaza",
+            "poslovni prostor", "ured", "lokal"],
+        ["stan"]                  = ["građevinsko zemljište", "parcela", "oranica",
+            "pašnjak", "livada", "šuma"],
+        ["kuća"]                  = ["građevinsko zemljište", "parcela", "oranica"],
+        ["poslovni prostor"]      = ["parcela", "oranica", "livada"],
+    };
 
     private static readonly string[] RentalKeywords =
     [
@@ -422,6 +481,9 @@ public class MarketResearchService
     private static readonly Regex PriceAmountRegex = new(
         @"(\d{1,3}(?:\.\d{3})*(?:,\d+)?)\s*(?:€|EUR|eur)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    /// <summary>The currently detected property type — set per search call.</summary>
+    private string _currentDetectedType = "stan";
 
     private List<ComparableSearchResult> PriceFirstFilter(
         List<ComparableSearchResult> results, string phaseName)
@@ -469,9 +531,7 @@ public class MarketResearchService
                 continue;
             }
 
-            // ── GATE 4: RENT-TRAP — Rental / Parking / Sub-€15k ──
-
-            // 4a: Rental keyword detection
+            // ── GATE 4: RENT-TRAP — Rental keywords ──
             if (RentalKeywords.Any(kw => combinedLower.Contains(kw)))
             {
                 _logger.LogDebug("[{Phase}] REJECTED (rental keyword): {Title}",
@@ -479,7 +539,33 @@ public class MarketResearchService
                 continue;
             }
 
-            // 4b: Price floor — extract first price and reject if < €15k
+            // ── GATE 5: ARTICLE FILTER — news/analysis, not a listing ──
+            if (ArticleKeywords.Any(kw => combinedLower.Contains(kw)))
+            {
+                _logger.LogDebug("[{Phase}] REJECTED (article/news): {Title}",
+                    phaseName, Truncate(r.Title, 60));
+                continue;
+            }
+
+            // ── GATE 6: TYPE GATE — reject wrong property type ──
+            // If we search for "zemljište", reject results about "stan" or "kuća"
+            if (WrongTypeKeywords.TryGetValue(_currentDetectedType, out var wrongKws))
+            {
+                // Check title (strongest signal) — URL is OK too
+                string titleLower = r.Title.ToLowerInvariant();
+                if (wrongKws.Any(wk => titleLower.Contains(wk)))
+                {
+                    _logger.LogDebug("[{Phase}] REJECTED (wrong type '{WrongType}' for '{Wanted}'): {Title}",
+                        phaseName, wrongKws.First(wk => titleLower.Contains(wk)),
+                        _currentDetectedType, Truncate(r.Title, 60));
+                    continue;
+                }
+            }
+
+            // ── GATE 7: PRICE FLOOR (dynamic by type) ──
+            bool isLand = IsLandType(_currentDetectedType);
+            double minSale = isLand ? MinSalePriceEur_Land : MinSalePriceEur_Building;
+
             var priceMatch = PriceAmountRegex.Match(combined);
             if (priceMatch.Success)
             {
@@ -488,10 +574,10 @@ public class MarketResearchService
                 if (double.TryParse(priceStr, System.Globalization.NumberStyles.Float,
                     System.Globalization.CultureInfo.InvariantCulture, out double extractedPrice))
                 {
-                    if (extractedPrice < MinSalePriceEur)
+                    if (extractedPrice < minSale)
                     {
-                        _logger.LogDebug("[{Phase}] REJECTED (price €{Price:N0} < €15k floor): {Title}",
-                            phaseName, extractedPrice, Truncate(r.Title, 60));
+                        _logger.LogDebug("[{Phase}] REJECTED (price €{Price:N0} < €{Floor:N0} floor): {Title}",
+                            phaseName, extractedPrice, minSale, Truncate(r.Title, 60));
                         continue;
                     }
                 }
@@ -739,6 +825,33 @@ public class MarketResearchService
         return DefaultBenchmark;
     }
 
+    private static double FindLandBenchmark(string location)
+    {
+        if (string.IsNullOrWhiteSpace(location))
+            return DefaultLandBenchmark;
+
+        foreach (var (region, benchmark) in LandBenchmarks)
+        {
+            if (location.Contains(region, StringComparison.OrdinalIgnoreCase))
+                return benchmark;
+        }
+
+        var words = location.Split([' ', ',', '-', '/'],
+            StringSplitOptions.RemoveEmptyEntries);
+        foreach (var word in words)
+        {
+            if (word.Length < 3) continue;
+            foreach (var (region, benchmark) in LandBenchmarks)
+            {
+                if (region.Contains(word, StringComparison.OrdinalIgnoreCase) ||
+                    word.Contains(region, StringComparison.OrdinalIgnoreCase))
+                    return benchmark;
+            }
+        }
+
+        return DefaultLandBenchmark;
+    }
+
     // ══════════════════════════════════════════════════════════
     //  TAVILY API
     // ══════════════════════════════════════════════════════════
@@ -802,7 +915,36 @@ public class MarketResearchService
 
     // ══════════════════════════════════════════════════════════
     //  PROPERTY TYPE DETECTION
+    //  Order matters! Land MUST be checked BEFORE house/flat
+    //  because ZK extracts for parcels often contain words like
+    //  "stambena zgrada" or "kuća" in their legal descriptions.
     // ══════════════════════════════════════════════════════════
+
+    // ── Land-specific keywords found in Croatian ZK / cadastral documents ──
+    private static readonly string[] LandKeywords =
+    [
+        // Cadastral terms
+        "čest.zem.", "čest. zem.", "č.zem.", "čestica zemlje",
+        "k.č.", "k.č.br.", "kat.čestica", "katastarska čestica",
+        "katastar", "čest.zgr",  // čest.zgr can still be land parcel
+        // Land types
+        "građevinsko zemljište", "građevinsko", "gradjevinsko",
+        "oranica", "pašnjak", "pasnjak", "livada",
+        "šuma", "suma", "vinograd", "voćnjak", "vocnjak",
+        "neizgrađeno", "neizgradjeno", "neplodno",
+        "parcela", "zemljište", "zemljiste",
+        // Legal land terms
+        "nekretnina upisana kao", "etažno vlasništvo" // negative — skip below
+    ];
+
+    // If these appear, it's NOT land even if land keywords match
+    private static readonly string[] NotLandOverrides =
+    [
+        "etažno vlasništvo", "etazno vlasnistvo",
+        "stan na adresi", "stan u ",
+        "posebni dio zgrade", "suvlasnički dio",
+        "suvlasnicki dio"
+    ];
 
     private static string DetectPropertyType(string pdfText)
     {
@@ -811,27 +953,62 @@ public class MarketResearchService
 
         var text = pdfText.ToLowerInvariant();
 
+        // ── 1. Commercial — check first (rare, unambiguous) ──
         if (text.Contains("poslovni prostor") || text.Contains("lokal"))
             return "poslovni prostor";
 
-        bool looksLikeFlat = text.Contains("stan na") || text.Contains("stan u");
+        // ── 2. LAND — check BEFORE house! ──
+        // ZK extracts for pure land parcels often mention "stambena zgrada"
+        // in the broader context, so we must check land indicators first.
+        bool hasLandKeyword = LandKeywords.Any(kw => text.Contains(kw));
+        bool hasNotLandOverride = NotLandOverrides.Any(kw => text.Contains(kw));
+
+        if (hasLandKeyword && !hasNotLandOverride)
+        {
+            // Extra confidence: if it says "oranica", "pašnjak" etc. → definitely land
+            // If it says "k.č." but also says "stan" prominently → might be flat
+            bool hasStrongLand = text.Contains("oranica") || text.Contains("pašnjak")
+                || text.Contains("pasnjak") || text.Contains("livada")
+                || text.Contains("šuma") || text.Contains("suma")
+                || text.Contains("vinograd") || text.Contains("voćnjak")
+                || text.Contains("neplodno") || text.Contains("neizgrađeno")
+                || text.Contains("neizgradjeno") || text.Contains("građevinsko zemljište")
+                || text.Contains("gradjevinsko") || text.Contains("parcela")
+                || text.Contains("čest.zem.") || text.Contains("čest. zem.")
+                || text.Contains("čestica zemlje");
+
+            if (hasStrongLand)
+                return "građevinsko zemljište";
+
+            // Weak land signal (only k.č. etc.) — check if house/flat is more prominent
+            bool hasHouseKeyword = text.Contains("kuća") || text.Contains("kuca")
+                || text.Contains("vikendica") || text.Contains("stambena zgrada");
+            bool hasFlatKeyword = text.Contains("stan ") || text.Contains("apartman");
+
+            if (!hasHouseKeyword && !hasFlatKeyword)
+                return "građevinsko zemljište";
+        }
+
+        // ── 3. House ──
+        bool looksLikeFlat = text.Contains("stan na") || text.Contains("stan u ");
         if (!looksLikeFlat &&
             (text.Contains("kuća") || text.Contains("kuca") ||
              text.Contains("vikendica") ||
              text.Contains("zgrada mješovite uporabe") ||
-             text.Contains("zgrada mjesovite uporabe") ||
-             text.Contains("stambena zgrada")))
+             text.Contains("zgrada mjesovite uporabe")))
             return "kuća";
 
-        if (text.Contains("građevinsko") || text.Contains("gradjevinsko") ||
-            text.Contains("oranica") || text.Contains("pašnjak") ||
-            text.Contains("pasnjak") || text.Contains("livada") ||
-            text.Contains("šuma") || text.Contains("suma") ||
-            text.Contains("neizgrađeno") || text.Contains("neizgradjeno"))
-            return "građevinsko zemljište";
-
+        // ── 4. Default: flat ──
         return "stan";
     }
+
+    /// <summary>
+    /// Returns true if detected type is any form of land/parcel.
+    /// </summary>
+    public static bool IsLandType(string detectedType) =>
+        detectedType.Contains("zemljišt", StringComparison.OrdinalIgnoreCase) ||
+        detectedType.Contains("parcela", StringComparison.OrdinalIgnoreCase) ||
+        detectedType.Contains("oranica", StringComparison.OrdinalIgnoreCase);
 
     private static string Truncate(string text, int maxLength) =>
         text.Length <= maxLength ? text : text[..maxLength] + "…";
