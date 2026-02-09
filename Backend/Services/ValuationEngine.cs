@@ -104,6 +104,32 @@ public class ValuationEngine
         "pogled na more", "sea view", "beach", "plaža", "waterfront"
     };
 
+    // ══════════════════════════════════════════════════════════
+    //  RENT-TRAP — Rental / Sub-€15k Filter (V6.2 backport)
+    // ══════════════════════════════════════════════════════════
+    private const double MinSalePriceEur = 15_000;
+    private const double MinPricePerM2Floor = 500;
+
+    private static readonly string[] RentalKeywords =
+    [
+        "najam", "iznajmljivanje", "iznajmi", "rent", "rental",
+        "mjesečno", "mjesecno", "monthly", "polog", "deposit",
+        "za najam", "u najam", "for rent", "do iznajmljivanja",
+        "kratkoročni", "kratkorocni", "dugoročni", "dugorocni",
+        "najamnina", "rezije", "režije"
+    ];
+
+    /// <summary>
+    /// Returns TRUE if the listing text contains rental keywords.
+    /// </summary>
+    private static bool IsRentalListing(string text)
+    {
+        string lower = text.ToLowerInvariant();
+        foreach (var kw in RentalKeywords)
+            if (lower.Contains(kw)) return true;
+        return false;
+    }
+
     public ValuationEngine(ILogger<ValuationEngine> logger)
     {
         _logger = logger;
@@ -202,6 +228,29 @@ public class ValuationEngine
             outlierMethod = "Benchmark Only";
             outlierLog.Add("Nema cijena iz oglasa — koristi se samo benchmark");
             pipeline.Add("Benchmark only mode");
+        }
+
+        // ── 3b. Pre-IQR 10x Sanity Check (V6.2 backport) ──
+        // If max/min ratio > 10, rental contamination likely persists.
+        // Discard bottom tail using median/5 as floor.
+        if (cleanPrices.Count >= 3)
+        {
+            var sortedPpm2 = cleanPrices.Select(p => p.PricePerM2).OrderBy(v => v).ToList();
+            double minVal = sortedPpm2.First();
+            double maxVal = sortedPpm2.Last();
+            if (minVal > 0 && maxVal / minVal > 10)
+            {
+                double medianVal = sortedPpm2[sortedPpm2.Count / 2];
+                double sanityFloor = medianVal / 5.0;
+                int beforeCount = cleanPrices.Count;
+                cleanPrices = cleanPrices.Where(p => p.PricePerM2 >= sanityFloor).ToList();
+                int sanityRemoved = beforeCount - cleanPrices.Count;
+                if (sanityRemoved > 0)
+                {
+                    outlierLog.Add($"10x sanity: removed {sanityRemoved} extreme low values (floor=€{sanityFloor:F0}/m²)");
+                    pipeline.Add($"10x sanity: {cleanPrices.Count} remain after removing {sanityRemoved} suspect entries");
+                }
+            }
         }
 
         result.OutliersRemoved = rawPrices.Count - cleanPrices.Count;
@@ -880,12 +929,16 @@ public class ValuationEngine
         {
             string text = $"{listing.Title} {listing.Content}";
 
+            // ── RENT-TRAP: Skip rental listings ──
+            if (IsRentalListing(text))
+                continue;
+
             // Try price per m² first (most reliable)
             var ppm2Match = PricePerM2Regex.Match(text);
             if (ppm2Match.Success)
             {
                 double ppm2 = ParseCroatianNumber(ppm2Match.Groups[1].Value);
-                if (ppm2 >= 200 && ppm2 <= 15000)
+                if (ppm2 >= MinPricePerM2Floor && ppm2 <= 15000)
                 {
                     prices.Add(new ExtractedPrice
                     {
@@ -914,23 +967,22 @@ public class ValuationEngine
 
                 if (size > 0 && price > 0)
                 {
-                    // Heuristic: if price < 500, it's probably already per m²
+                    // ── RENT-TRAP: Reject total price < €15k ──
+                    if (price >= 1000 && price < MinSalePriceEur)
+                        continue; // Almost certainly monthly rent
+
                     double ppm2;
-                    if (price < 500)
+                    if (price < 1000)
                     {
+                        // Below €1000: treat as price/m² only if ≥ floor
                         ppm2 = price;
-                    }
-                    else if (price < 1000)
-                    {
-                        // Ambiguous range — might be €/m² or total for tiny space
-                        ppm2 = price; // Treat as per m²
                     }
                     else
                     {
                         ppm2 = price / size;
                     }
 
-                    if (ppm2 >= 200 && ppm2 <= 15000)
+                    if (ppm2 >= MinPricePerM2Floor && ppm2 <= 15000)
                     {
                         prices.Add(new ExtractedPrice
                         {

@@ -560,12 +560,31 @@ export default function ValuationPage() {
             )}
 
             {/* V4 Used Comparables Table (Engine) */}
-            {result.used_comparables && result.used_comparables.length > 0 && (
+            {result.used_comparables && result.used_comparables.length > 0 && (() => {
+              // Sort: used (by similarity desc) first, then outliers
+              const sorted = [...result.used_comparables].sort((a, b) => {
+                if (a.is_outlier !== b.is_outlier) return a.is_outlier ? 1 : -1;
+                return b.similarity_score - a.similarity_score;
+              });
+              const usedCount = sorted.filter(c => !c.is_outlier).length;
+              const outlierCount = sorted.filter(c => c.is_outlier).length;
+              // Calculate median of used comparables for sanity display
+              const usedPrices = sorted.filter(c => !c.is_outlier).map(c => c.price_per_m2).sort((a, b) => a - b);
+              const medianPrice = usedPrices.length > 0
+                ? usedPrices[Math.floor(usedPrices.length / 2)]
+                : 0;
+
+              return (
               <div className="rounded-xl bg-white border border-gray-200 overflow-hidden">
                 <div className="px-5 py-3 border-b border-gray-100 bg-gray-50">
                   <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
-                    🧮 Engine Comparables ({result.used_comparables.filter(c => !c.is_outlier).length} korištenih, {result.used_comparables.filter(c => c.is_outlier).length} outliera)
+                    🧮 Engine Comparables ({usedCount} korištenih{outlierCount > 0 ? `, ${outlierCount} uklonjenih` : ""})
                   </h3>
+                  {medianPrice > 0 && (
+                    <p className="text-xs text-gray-400 mt-1">
+                      Median korištenih: {medianPrice.toLocaleString("hr-HR")} €/m²
+                    </p>
+                  )}
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -578,36 +597,35 @@ export default function ValuationPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {result.used_comparables.map((c, i) => (
-                        <tr key={i} className={`transition-colors ${c.is_outlier ? "bg-red-50/50" : "hover:bg-gray-50"}`}>
+                      {sorted.map((c, i) => (
+                        <tr key={i} className={`transition-colors ${c.is_outlier ? "bg-red-50/50 opacity-60" : "hover:bg-gray-50"}`}>
                           <td className="px-4 py-2">
                             {c.url ? (
                               <a href={c.url} target="_blank" rel="noopener noreferrer" 
-                                className="text-blue-600 hover:underline text-xs truncate block max-w-[250px]">
+                                className={`hover:underline text-xs truncate block max-w-[250px] ${c.is_outlier ? "text-gray-400" : "text-blue-600"}`}>
                                 {c.title || c.url}
                               </a>
                             ) : (
                               <span className="text-xs text-gray-600 truncate block max-w-[250px]">{c.title}</span>
                             )}
                           </td>
-                          <td className="px-4 py-2 text-right font-mono text-xs">
+                          <td className={`px-4 py-2 text-right font-mono text-xs ${c.is_outlier ? "text-red-400 line-through" : ""}`}>
                             {c.price_per_m2.toLocaleString("hr-HR")} €
                           </td>
                           <td className="px-4 py-2 text-right">
-                            {!c.is_outlier && (
-                              <div className="flex items-center justify-end gap-1">
-                                <div className="w-12 bg-gray-200 rounded-full h-1.5">
-                                  <div className={`h-1.5 rounded-full ${
-                                    c.similarity_score >= 0.7 ? "bg-green-500"
-                                    : c.similarity_score >= 0.4 ? "bg-yellow-500"
-                                    : "bg-red-500"
-                                  }`} style={{ width: `${c.similarity_score * 100}%` }} />
-                                </div>
-                                <span className="text-xs text-gray-500 w-8 text-right">
-                                  {(c.similarity_score * 100).toFixed(0)}%
-                                </span>
+                            <div className="flex items-center justify-end gap-1">
+                              <div className="w-12 bg-gray-200 rounded-full h-1.5">
+                                <div className={`h-1.5 rounded-full ${
+                                  c.is_outlier ? "bg-red-300"
+                                  : c.similarity_score >= 0.7 ? "bg-green-500"
+                                  : c.similarity_score >= 0.4 ? "bg-yellow-500"
+                                  : "bg-red-500"
+                                }`} style={{ width: `${Math.max(c.similarity_score * 100, 5)}%` }} />
                               </div>
-                            )}
+                              <span className={`text-xs w-8 text-right ${c.is_outlier ? "text-gray-400" : "text-gray-500"}`}>
+                                {(c.similarity_score * 100).toFixed(0)}%
+                              </span>
+                            </div>
                           </td>
                           <td className="px-4 py-2 text-center">
                             <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
@@ -615,7 +633,7 @@ export default function ValuationPage() {
                                 ? "bg-red-100 text-red-700"
                                 : "bg-green-100 text-green-700"
                             }`}>
-                              {c.is_outlier ? "Outlier" : "✓ Used"}
+                              {c.is_outlier ? "✗ Uklonjen" : "✓ Korišten"}
                             </span>
                           </td>
                         </tr>
@@ -624,7 +642,8 @@ export default function ValuationPage() {
                   </table>
                 </div>
               </div>
-            )}
+              );
+            })()}
 
             {/* V4 Engine Adjustments */}
             {result.adjustments && result.adjustments.length > 0 && (
