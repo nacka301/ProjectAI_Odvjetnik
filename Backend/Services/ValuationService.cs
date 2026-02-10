@@ -24,7 +24,9 @@ public class ValuationService
           * "renovated" = renovirano, adaptirano, obnovljeno, novoureaeno
           * "good" = odrzavano, uredno, dobro stanje
           * "original" = izvorno stanje, originalno, nije renovirano
-          * "needs_adaptation" = potrebna adaptacija, rusevina, zapusteno, treba obnovu
+          * "needs_adaptation" = potrebna adaptacija, rusevina, zapusteno, treba obnovu,
+            vlazno, stara stolarija, dotrajalo, plijesan, prokisnjavanje, curenje,
+            oronulo, neuseljivo, napuknuto, budj, probija vlaga
           If no info → use "good" as default.
         - "yard_area_m2": number (size of okucnica/yard/garden in m2 if found, 0 if not found or not applicable)
           Look for: okucnica, dvoriste, vrt, zemljiste uz kucu, parcela uz objekt.
