@@ -18,7 +18,10 @@ namespace Backend.Services;
 public class NjuskaloScraperService
 {
     private readonly ILogger<NjuskaloScraperService> _logger;
-    private static readonly Random _rng = new();
+
+    // Concurrency limiter: max 2 Playwright browsers at once
+    // Prevents OOM on Render (each Chromium ~200MB)
+    private static readonly SemaphoreSlim _browserSemaphore = new(2, 2);
 
     // ── Selectors ──
     private const string ListingSelector = ".EntityList-item";
@@ -55,6 +58,7 @@ public class NjuskaloScraperService
     {
         _logger.LogInformation("Playwright scraper: navigating to {Url}", url);
 
+        await _browserSemaphore.WaitAsync();
         IPlaywright? pw = null;
         IBrowser? browser = null;
 
@@ -203,6 +207,7 @@ public class NjuskaloScraperService
             if (browser is not null)
                 await browser.CloseAsync();
             pw?.Dispose();
+            _browserSemaphore.Release();
         }
     }
 
@@ -227,13 +232,13 @@ public class NjuskaloScraperService
         for (int i = 0; i < maxScrollAttempts; i++)
         {
             // Random scroll distance between 400-600px
-            int scrollPx = _rng.Next(MinScrollPx, MaxScrollPx + 1);
+            int scrollPx = Random.Shared.Next(MinScrollPx, MaxScrollPx + 1);
 
             await page.EvaluateAsync($"window.scrollBy(0, {scrollPx})");
             scrollCount++;
 
             // Random human-like delay between scrolls
-            int delayMs = _rng.Next(MinDelayMs, MaxDelayMs + 1);
+            int delayMs = Random.Shared.Next(MinDelayMs, MaxDelayMs + 1);
             await page.WaitForTimeoutAsync(delayMs);
 
             // Check how many items are in the DOM now
@@ -322,6 +327,7 @@ public class NjuskaloScraperService
     {
         _logger.LogInformation("DeepDive: visiting {Url}", url);
 
+        await _browserSemaphore.WaitAsync();
         IPlaywright? pw = null;
         IBrowser? browser = null;
 
@@ -357,7 +363,7 @@ public class NjuskaloScraperService
             });
 
             // Human-like reading delay (2-4 seconds)
-            int readDelay = _rng.Next(2000, 4001);
+            int readDelay = Random.Shared.Next(2000, 4001);
             await page.WaitForTimeoutAsync(readDelay);
 
             var details = new ListingDetails { Url = url };
@@ -582,6 +588,7 @@ public class NjuskaloScraperService
             if (browser is not null)
                 await browser.CloseAsync();
             pw?.Dispose();
+            _browserSemaphore.Release();
         }
     }
 
