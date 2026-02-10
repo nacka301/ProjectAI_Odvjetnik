@@ -287,9 +287,11 @@ public class ValuationService
     /// <summary>
     /// Fully automated valuation: PDF data + market research → opinion.
     /// Uses ONLY real search data — no hardcoded benchmarks.
+    /// The engine's deterministic value is injected so the LLM must use it.
     /// </summary>
     public async Task<AutoValuationResult> GenerateAutoValuationAsync(
-        ExtractedPropertyInfo property, MarketResearchResult marketData)
+        ExtractedPropertyInfo property, MarketResearchResult marketData,
+        DeterministicValuation? engineResult = null)
     {
         // Build active listings block
         var activeBlock = marketData.ActiveListings.Count > 0
@@ -319,6 +321,32 @@ public class ValuationService
             $"Do NOT use any memorized or hardcoded benchmark prices. " +
             $"Apply -15% realization gap to asking prices to estimate transaction values.\n";
 
+        // ── ENGINE OVERRIDE: inject the deterministic value so the LLM MUST use it ──
+        var engineOverride = "";
+        if (engineResult is not null && engineResult.EstimatedValueEur > 0)
+        {
+            engineOverride =
+                $"\n" +
+                $"═══════════════════════════════════════════\n" +
+                $"MANDATORY ENGINE VALUE (DO NOT OVERRIDE):\n" +
+                $"═══════════════════════════════════════════\n" +
+                $"The deterministic engine has ALREADY computed the final market value.\n" +
+                $"- Engine Estimated Value: {engineResult.EstimatedValueEur} EUR\n" +
+                $"- Engine Price Per m2: {engineResult.CalculatedPricePerM2:F0} EUR/m2\n" +
+                $"- Weighted Median of {engineResult.UsablePricePoints} comparables\n" +
+                $"- Realization discount already applied: {engineResult.RealizationDiscountPercent:F1}%\n" +
+                $"- Confidence: {engineResult.MathConfidenceLevel} ({engineResult.MathConfidenceScore}/100)\n" +
+                $"\n" +
+                $"CRITICAL INSTRUCTION:\n" +
+                $"- Your estimated_value_eur MUST be exactly {engineResult.EstimatedValueEur}.\n" +
+                $"- Your valuation_reasoning text MUST conclude with this value ({engineResult.EstimatedValueEur} EUR).\n" +
+                $"- Do NOT calculate your own value. The engine value is authoritative.\n" +
+                $"- Your job is to provide the LEGAL NARRATIVE explaining WHY this value is correct,\n" +
+                $"  referencing the comparables and adjustments.\n" +
+                $"- Format the value in Croatian style in the text: {engineResult.EstimatedValueEur:N0} EUR\n" +
+                $"═══════════════════════════════════════════\n";
+        }
+
         var userMessage =
             $"""
             TARGET PROPERTY (from Land Registry Extract):
@@ -332,6 +360,7 @@ public class ValuationService
             {activeBlock}
             {regionalBlock}
             {contextSection}
+            {engineOverride}
             """;
 
         var messages = new List<ChatMessage>

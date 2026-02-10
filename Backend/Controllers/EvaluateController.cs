@@ -171,6 +171,7 @@ public class EvaluateController : ControllerBase
             // If AI value deviates >40% from engine, use engine value
             // ────────────────────────────────────────────────────
             int finalValue = engineResult.EstimatedValueEur;
+            string finalReasoning = aiResult.ValuationReasoning;
             if (aiResult.EstimatedValueEur > 0 && engineResult.EstimatedValueEur > 0)
             {
                 double deviation = Math.Abs(aiResult.EstimatedValueEur - engineResult.EstimatedValueEur)
@@ -189,6 +190,13 @@ public class EvaluateController : ControllerBase
                     _logger.LogWarning(
                         "AI value ({AiValue}) deviates {Dev:P0} from engine ({EngineValue}). Using engine value.",
                         aiResult.EstimatedValueEur, deviation, engineResult.EstimatedValueEur);
+
+                    // PATCH the reasoning text: replace AI's wrong final value with the engine value
+                    // so the displayed text doesn't contradict the displayed number
+                    finalReasoning = PatchReasoningValue(
+                        aiResult.ValuationReasoning,
+                        aiResult.EstimatedValueEur,
+                        engineResult.EstimatedValueEur);
                 }
             }
 
@@ -202,7 +210,7 @@ public class EvaluateController : ControllerBase
                 SelectedComparables = aiResult.SelectedComparables,
                 EstimatedValueEur = finalValue,
                 ValueDrivers = aiResult.ValueDrivers,
-                ValuationReasoning = aiResult.ValuationReasoning,
+                ValuationReasoning = finalReasoning,
 
                 // Engine core fields
                 ConfidenceLevel = engineResult.ConfidenceLevel,
@@ -267,6 +275,49 @@ public class EvaluateController : ControllerBase
             _logger.LogError(ex, "Error in V2 evaluation pipeline.");
             return StatusCode(500, new { error = "Greška pri evaluaciji nekretnine." });
         }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  PATCH REASONING — replace the AI's wrong final value
+    //  with the engine's authoritative value in the text body
+    // ══════════════════════════════════════════════════════════
+    private static string PatchReasoningValue(
+        string reasoning, double aiValue, int engineValue)
+    {
+        if (string.IsNullOrWhiteSpace(reasoning))
+            return reasoning;
+
+        int aiInt = (int)Math.Round(aiValue);
+
+        // Format both values in Croatian style (dot thousands separator)
+        string[] aiFormats =
+        [
+            aiInt.ToString("N0", System.Globalization.CultureInfo.GetCultureInfo("hr-HR")),   // 221.000
+            aiInt.ToString("N0", System.Globalization.CultureInfo.InvariantCulture),           // 221,000
+            aiInt.ToString(),                                                                   // 221000
+        ];
+
+        string engineFormatted = engineValue.ToString("N0",
+            System.Globalization.CultureInfo.GetCultureInfo("hr-HR")); // 382.500
+
+        foreach (var fmt in aiFormats)
+        {
+            if (reasoning.Contains(fmt))
+            {
+                reasoning = reasoning.Replace(fmt, engineFormatted);
+            }
+        }
+
+        // Also try replacing "X €" / "X EUR" patterns
+        foreach (var fmt in aiFormats)
+        {
+            reasoning = reasoning
+                .Replace($"{fmt} €", $"{engineFormatted} €")
+                .Replace($"{fmt} EUR", $"{engineFormatted} EUR")
+                .Replace($"{fmt} eur", $"{engineFormatted} EUR");
+        }
+
+        return reasoning;
     }
 
     /// <summary>
@@ -343,7 +394,7 @@ public class EvaluateController : ControllerBase
             try
             {
                 aiResult = await _valuationService
-                    .GenerateAutoValuationAsync(property, marketData);
+                    .GenerateAutoValuationAsync(property, marketData, engineResult);
             }
             catch (Exception ex)
             {
@@ -353,6 +404,7 @@ public class EvaluateController : ControllerBase
 
             // MERGE
             int finalValue = engineResult.EstimatedValueEur;
+            string finalReasoning = aiResult.ValuationReasoning;
             if (aiResult.EstimatedValueEur > 0 && engineResult.EstimatedValueEur > 0)
             {
                 double deviation = Math.Abs(aiResult.EstimatedValueEur - engineResult.EstimatedValueEur)
@@ -360,6 +412,11 @@ public class EvaluateController : ControllerBase
                 if (deviation <= 0.40)
                     finalValue = (int)Math.Round(
                         (aiResult.EstimatedValueEur + engineResult.EstimatedValueEur) / 2.0);
+                else
+                    finalReasoning = PatchReasoningValue(
+                        aiResult.ValuationReasoning,
+                        aiResult.EstimatedValueEur,
+                        engineResult.EstimatedValueEur);
             }
 
             // BUILD RESPONSE
@@ -369,7 +426,7 @@ public class EvaluateController : ControllerBase
                 SelectedComparables = aiResult.SelectedComparables,
                 EstimatedValueEur = finalValue,
                 ValueDrivers = aiResult.ValueDrivers,
-                ValuationReasoning = aiResult.ValuationReasoning,
+                ValuationReasoning = finalReasoning,
                 ConfidenceLevel = engineResult.ConfidenceLevel,
                 MarketAverageAsking = engineResult.MarketAverageAsking,
                 CalculatedPricePerM2 = engineResult.CalculatedPricePerM2,
