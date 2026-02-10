@@ -362,77 +362,207 @@ public class NjuskaloScraperService
 
             var details = new ListingDetails { Url = url };
 
-            // ── 1. Full description text ──
-            var descEl = await page.QuerySelectorAsync(
-                ".ClassifiedDetail-description, .classified-detail-description, " +
-                "[class*='Description'] .description-text, " +
-                ".oglas-description, .entity-body");
-            if (descEl is not null)
-                details.Description = (await descEl.InnerTextAsync()).Trim();
+            // ── RESILIENT EXTRACTION via JavaScript ──
+            // Njuškalo detail pages use dynamic class names that change on redesigns.
+            // Instead of fragile CSS selectors, use JS to extract by page structure.
 
-            // ── 2. Attribute table (key-value pairs) ──
-            //    Njuškalo uses .ClassifiedDetail-attributes or similar tables
-            var attrRows = await page.QuerySelectorAllAsync(
-                ".ClassifiedDetail-attributes li, " +
-                ".ClassifiedDetail-attributes tr, " +
-                ".classified-detail-attributes li, " +
-                ".attribute-list li, " +
-                "table.attributes-table tr, " +
-                ".ClassifiedDetail-extras li");
+            // ── 1. Full description text ("Opis oglasa" section) ──
+            details.Description = await page.EvaluateAsync<string?>(@"
+                (() => {
+                    // Try known CSS selectors first
+                    const selectors = [
+                        '.ClassifiedDetail-description',
+                        '.classified-detail-description',
+                        '.oglas-description',
+                        '[class*=""Description""] .description-text',
+                        '.entity-body'
+                    ];
+                    for (const sel of selectors) {
+                        const el = document.querySelector(sel);
+                        if (el && el.innerText.trim().length > 10) return el.innerText.trim();
+                    }
 
-            foreach (var row in attrRows)
+                    // Fallback: find heading 'Opis oglasa' and get next sibling text
+                    const headings = [...document.querySelectorAll('h2, h3, h4')];
+                    const opisH = headings.find(h => h.innerText.trim().toLowerCase().includes('opis oglasa'));
+                    if (opisH) {
+                        let sibling = opisH.nextElementSibling;
+                        while (sibling) {
+                            const txt = sibling.innerText?.trim();
+                            if (txt && txt.length > 10 && !sibling.matches('h2, h3, h4')) return txt;
+                            if (sibling.matches('h2')) break;
+                            sibling = sibling.nextElementSibling;
+                        }
+                    }
+
+                    // Last resort: grab largest paragraph-like block
+                    const paras = [...document.querySelectorAll('p, div')]
+                        .filter(el => el.innerText.trim().length > 50 && el.children.length < 3);
+                    if (paras.length > 0) {
+                        paras.sort((a, b) => b.innerText.length - a.innerText.length);
+                        return paras[0].innerText.trim();
+                    }
+                    return null;
+                })()
+            ");
+
+            // ── 2. Attribute table (key-value pairs from "Osnovne informacije") ──
+            var attrJson = await page.EvaluateAsync<string>(@"
+                (() => {
+                    const attrs = {};
+
+                    // Strategy 1: <li> with <strong>/<b> key
+                    document.querySelectorAll('li').forEach(li => {
+                        const strong = li.querySelector('strong, b');
+                        if (strong) {
+                            const key = strong.innerText.replace(/[:\s]+$/, '').trim();
+                            const fullText = li.innerText.trim();
+                            const value = fullText.substring(strong.innerText.length).replace(/^[:\s]+/, '').trim();
+                            if (key && value && key.length < 60) attrs[key] = value;
+                        }
+                    });
+
+                    // Strategy 2: <tr> with <th> key and <td> value
+                    document.querySelectorAll('tr').forEach(tr => {
+                        const th = tr.querySelector('th');
+                        const td = tr.querySelector('td');
+                        if (th && td) {
+                            const key = th.innerText.trim();
+                            const value = td.innerText.trim();
+                            if (key && value && key.length < 60) attrs[key] = value;
+                        }
+                    });
+
+                    // Strategy 3: <dt>/<dd> pairs
+                    document.querySelectorAll('dt').forEach(dt => {
+                        const dd = dt.nextElementSibling;
+                        if (dd && dd.tagName === 'DD') {
+                            const key = dt.innerText.trim();
+                            const value = dd.innerText.trim();
+                            if (key && value) attrs[key] = value;
+                        }
+                    });
+
+                    return JSON.stringify(attrs);
+                })()
+            ");
+
+            try
             {
-                var text = (await row.InnerTextAsync()).Trim();
-                if (string.IsNullOrWhiteSpace(text)) continue;
+                var parsedAttrs = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(attrJson);
+                if (parsedAttrs is not null)
+                {
+                    foreach (var (key, value) in parsedAttrs)
+                    {
+                        details.RawAttributes[key] = value;
 
-                // Parse "Key: Value" or "Key\tValue" patterns
-                var pair = ParseAttributePair(text);
-                if (pair is null) continue;
-
-                var (key, value) = pair.Value;
-                details.RawAttributes[key] = value;
-
-                // Intelligent field mapping
-                var lk = key.ToLowerInvariant();
-                if (lk.Contains("godina izgradnje") || lk.Contains("god. izgradnje"))
-                    details.YearBuilt = ParseIntSafe(value);
-                else if (lk.Contains("godina") && lk.Contains("renovac"))
-                    details.YearLastRenovation = ParseIntSafe(value);
-                else if (lk.Contains("energetski razred") || lk.Contains("energetski certifikat"))
-                    details.EnergyClass = value.Trim();
-                else if (lk.Contains("okućnica") || lk.Contains("okucnica") ||
-                         lk.Contains("površina zemljišta") || lk.Contains("površina parcele"))
-                    details.YardAreaM2 = ParseDoubleSafe(value);
-                else if (lk.Contains("stambena površina") || lk.Contains("korisna površina") ||
-                         lk.Contains("površina") && !lk.Contains("parcele") && !lk.Contains("zemljišta"))
-                    details.SizeM2 = ParseDoubleSafe(value);
-                else if (lk.Contains("grijanje") || lk.Contains("heating"))
-                    details.HeatingType = value.Trim();
-                else if (lk.Contains("kat") || lk.Contains("etaža"))
-                    details.Floor = value.Trim();
+                        var lk = key.ToLowerInvariant();
+                        if (lk.Contains("godina izgradnje") || lk.Contains("god. izgradnje"))
+                            details.YearBuilt = ParseIntSafe(value);
+                        else if (lk.Contains("godina") && lk.Contains("renovac"))
+                            details.YearLastRenovation = ParseIntSafe(value);
+                        else if (lk.Contains("energetski razred") || lk.Contains("energetski certifikat"))
+                            details.EnergyClass = value.Trim();
+                        else if (lk.Contains("okućnica") || lk.Contains("okucnica") ||
+                                 lk.Contains("površina zemljišta") || lk.Contains("površina parcele"))
+                            details.YardAreaM2 = ParseDoubleSafe(value);
+                        else if ((lk.Contains("stambena površina") || lk.Contains("korisna površina") ||
+                                  lk.Contains("površina")) && !lk.Contains("parcele") && !lk.Contains("zemljišta"))
+                            details.SizeM2 = ParseDoubleSafe(value);
+                        else if (lk.Contains("grijanje") || lk.Contains("heating"))
+                            details.HeatingType = value.Trim();
+                        else if (lk.Contains("kat") || lk.Contains("etaža"))
+                            details.Floor = value.Trim();
+                    }
+                }
             }
+            catch { /* JSON parse failed — attributes remain empty */ }
 
-            // ── 3. Equipment / features list ──
-            var equipEls = await page.QuerySelectorAllAsync(
-                ".ClassifiedDetail-features li, " +
-                ".classified-detail-features li, " +
-                ".ClassifiedDetail-featuresItem, " +
-                ".features-list li, " +
-                ".equipment-list li");
+            // ── 3. Equipment / features ("Dodatne informacije" section) ──
+            var equipJson = await page.EvaluateAsync<string>(@"
+                (() => {
+                    const items = [];
 
-            foreach (var eq in equipEls)
+                    // Strategy 1: Known CSS selectors
+                    const selectors = [
+                        '.ClassifiedDetail-features li',
+                        '.classified-detail-features li',
+                        '.ClassifiedDetail-featuresItem',
+                        '.features-list li',
+                        '.equipment-list li'
+                    ];
+                    for (const sel of selectors) {
+                        document.querySelectorAll(sel).forEach(el => {
+                            const t = el.innerText.trim();
+                            if (t && t.length > 1 && t.length < 200) items.push(t);
+                        });
+                    }
+                    if (items.length > 0) return JSON.stringify(items);
+
+                    // Strategy 2: Find 'Dodatne informacije' heading and grab all <li> after it
+                    const headings = [...document.querySelectorAll('h2, h3, h4')];
+                    const addH = headings.find(h => h.innerText.trim().toLowerCase().includes('dodatne informacije'));
+                    if (addH) {
+                        let sibling = addH.nextElementSibling;
+                        while (sibling && !sibling.matches('h2')) {
+                            sibling.querySelectorAll('li').forEach(li => {
+                                const t = li.innerText.trim();
+                                if (t && t.length > 1 && t.length < 200) items.push(t);
+                            });
+                            // Also grab subsection headings as context (e.g. 'Grijanje')
+                            if (sibling.matches('h3, h4')) {
+                                const hText = sibling.innerText.trim();
+                                if (hText) items.push('[' + hText + ']');
+                            }
+                            sibling = sibling.nextElementSibling;
+                        }
+                    }
+
+                    return JSON.stringify(items);
+                })()
+            ");
+
+            try
             {
-                var txt = (await eq.InnerTextAsync()).Trim();
-                if (!string.IsNullOrWhiteSpace(txt))
-                    details.Equipment.Add(txt);
+                var parsedEquip = System.Text.Json.JsonSerializer.Deserialize<List<string>>(equipJson);
+                if (parsedEquip is not null)
+                    details.Equipment = parsedEquip;
             }
+            catch { /* JSON parse failed — equipment remains empty */ }
 
-            // ── 4. Price from detail page (sometimes more accurate) ──
-            var priceEl = await page.QuerySelectorAsync(
-                ".ClassifiedDetail-price, .classified-detail-price, " +
-                ".entity-price, [class*='price']");
-            if (priceEl is not null)
-                details.PriceText = (await priceEl.InnerTextAsync()).Trim();
+            // ── 4. Price from detail page ──
+            var priceText = await page.EvaluateAsync<string?>(@"
+                (() => {
+                    // Known selectors
+                    const selectors = [
+                        '.ClassifiedDetail-price',
+                        '.classified-detail-price',
+                        '.entity-price',
+                        '[class*=""price""]'
+                    ];
+                    for (const sel of selectors) {
+                        const el = document.querySelector(sel);
+                        if (el) {
+                            const t = el.innerText.trim();
+                            if (t.match(/\d/) && t.includes('€')) return t;
+                        }
+                    }
+
+                    // Fallback: find 'Cijena' label
+                    const labels = [...document.querySelectorAll('strong, b, dt, th')];
+                    const priceLabel = labels.find(l => l.innerText.trim().toLowerCase().includes('cijena'));
+                    if (priceLabel) {
+                        const parent = priceLabel.closest('li, tr, div, dl');
+                        if (parent) {
+                            const t = parent.innerText.replace(priceLabel.innerText, '').trim();
+                            if (t.match(/\d/)) return t;
+                        }
+                    }
+                    return null;
+                })()
+            ");
+            if (!string.IsNullOrWhiteSpace(priceText))
+                details.PriceText = priceText;
 
             _logger.LogInformation(
                 "DeepDive: extracted {AttrCount} attributes, {EquipCount} equipment items, " +

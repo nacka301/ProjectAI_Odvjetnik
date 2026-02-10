@@ -526,7 +526,7 @@ public class MarketResearchService
         {
             try
             {
-                await DeepDiveTopListingsAsync(distinctListings);
+                await DeepDiveTopListingsAsync(distinctListings, regionName);
             }
             catch (Exception ex)
             {
@@ -658,7 +658,7 @@ public class MarketResearchService
     /// Discards listings with "vanknjižno vlasništvo" and reclassifies
     /// "prodaje se samo gornji kat" as apartment.
     /// </summary>
-    private async Task DeepDiveTopListingsAsync(List<ComparableSearchResult> listings)
+    private async Task DeepDiveTopListingsAsync(List<ComparableSearchResult> listings, string regionName = "")
     {
         // ── Step 1: Only Njuškalo URLs (we have selectors for those) ──
         var njuskaloListings = listings
@@ -671,18 +671,26 @@ public class MarketResearchService
             return;
         }
 
-        // ── Step 2: Rough Filter — score by price presence + content richness ──
-        //    Prioritize listings that have a detectable price (most useful for engine)
-        //    and shorter content (meaning they need enrichment most).
+        // ── Step 2: Neighborhood filter — prioritize listings matching target region ──
+        //    Score: neighborhood match in URL/title/content → high priority
+        //    This prevents wasting deep-dive time on Gornji Grad when searching Retfala.
+        var regionLower = regionName.ToLowerInvariant();
+        var regionNormalized = NormalizeLocationSlug(regionName);
+
         var scored = njuskaloListings
             .Select(l => new
             {
                 Listing = l,
                 HasPrice = _deepDivePriceRegex.IsMatch(l.Content),
-                ContentLength = l.Content.Length
+                ContentLength = l.Content.Length,
+                MatchesNeighborhood = !string.IsNullOrEmpty(regionLower) && (
+                    l.Url.Contains(regionNormalized, StringComparison.OrdinalIgnoreCase) ||
+                    l.Title.Contains(regionLower, StringComparison.OrdinalIgnoreCase) ||
+                    l.Content.Contains(regionLower, StringComparison.OrdinalIgnoreCase))
             })
-            .OrderByDescending(x => x.HasPrice)    // Price-bearing listings first
-            .ThenBy(x => x.ContentLength)           // Shortest content = needs enrichment most
+            .OrderByDescending(x => x.MatchesNeighborhood)  // Neighborhood matches first!
+            .ThenByDescending(x => x.HasPrice)
+            .ThenBy(x => x.ContentLength)
             .Take(12)
             .Select(x => x.Listing)
             .ToList();
@@ -850,20 +858,27 @@ public class MarketResearchService
                 ? "prodaja-kuca"
                 : "prodaja-stanova";
 
-        // NEIGHBORHOOD FIX: If regionName is a neighborhood (has a parent city),
-        // use the CITY slug — Njuškalo doesn't have neighborhood-level URL slugs.
-        // e.g. "Retfala" → use "osijek", not "retfala" (which 404s).
+        // NEIGHBORHOOD URL: Njuškalo supports neighborhood-level slugs!
+        // Format: "{city-slug}-{neighborhood-slug}" e.g. "osijek-retfala"
+        // Try neighborhood-specific URL first for much better results.
         string urlRegion = regionName;
+        string? neighborhoodUrl = null;
+
         if (BroaderRegion.TryGetValue(regionName, out var parentCity))
         {
-            urlRegion = parentCity;
+            // Build neighborhood-specific URL: osijek-retfala, split-spinut, etc.
+            var citySlug = NormalizeLocationSlug(parentCity);
+            var neighborhoodSlug = NormalizeLocationSlug(regionName);
+            neighborhoodUrl = $"https://www.njuskalo.hr/{slug}/{citySlug}-{neighborhoodSlug}";
+            urlRegion = parentCity; // fallback to city-level
         }
 
         var locSlug = NormalizeLocationSlug(urlRegion);
         if (string.IsNullOrWhiteSpace(locSlug))
             return null;
 
-        return $"https://www.njuskalo.hr/{slug}/{locSlug}";
+        // Return neighborhood URL if available, otherwise city-level
+        return neighborhoodUrl ?? $"https://www.njuskalo.hr/{slug}/{locSlug}";
     }
 
     /// <summary>
