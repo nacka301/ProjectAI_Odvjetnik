@@ -212,6 +212,7 @@ export default function WizardPage() {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [email, setEmail] = useState("");
+  const [notes, setNotes] = useState("");
 
   // View state machine: INPUT → PROCESSING → RESULT
   const [viewState, setViewState] = useState<ViewState>("INPUT");
@@ -219,7 +220,7 @@ export default function WizardPage() {
   // ── Build JSON payload ──
 
   const buildPayload = () => {
-    const base = { location, property_type: propertyType };
+    const base = { location, property_type: propertyType, notes: notes.trim() || undefined };
     if (propertyType === "Apartment") return { type: "Apartment", ...base, ...apt };
     if (propertyType === "House") return { type: "House", ...base, ...house };
     if (propertyType === "Land") return { type: "Land", ...base, ...land };
@@ -371,6 +372,7 @@ export default function WizardPage() {
     setResult(null);
     setError(null);
     setIsStreaming(false);
+    setNotes("");
   };
 
   const formatPrice = (n: number) => n.toLocaleString("hr-HR");
@@ -589,6 +591,17 @@ export default function WizardPage() {
                 ))}
               </div>
             )}
+
+            {/* Dodatne informacije */}
+            <div className="rounded-xl bg-white border border-gray-200 p-5">
+              <h4 className="text-sm font-semibold text-gray-700 mb-2">✍️ Dodatne informacije <span className="text-xs font-normal text-gray-400">(opcionalno)</span></h4>
+              <p className="text-xs text-gray-400 mb-2">Navedite sve što može utjecati na vrijednost: renovacije, posebnosti, blizina sadržaja...</p>
+              <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
+                rows={3} maxLength={500}
+                placeholder="npr. Stan je potpuno renoviran 2023., ima podne grijanje, klima u svim sobama, u blizini škole i tramvaja..."
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-none" />
+              <p className="text-xs text-gray-400 mt-1 text-right">{notes.length}/500</p>
+            </div>
 
             {/* Email */}
             <div className="rounded-xl bg-white border border-gray-200 p-5">

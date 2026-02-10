@@ -11,13 +11,19 @@ public static class PropertyDescriptionGenerator
 {
     public static string Generate(PropertyInputBase input)
     {
-        return input switch
+        var description = input switch
         {
             ApartmentInput apt => GenerateApartment(apt),
             HouseInput house => GenerateHouse(house),
             LandInput land => GenerateLand(land),
             _ => $"Nekretnina u {FormatLocation(input.Location)}"
         };
+
+        // Append user's free-form notes if provided
+        if (!string.IsNullOrWhiteSpace(input.Notes))
+            description += $" Dodatne informacije: {input.Notes.Trim()}";
+
+        return description;
     }
 
     private static string GenerateApartment(ApartmentInput a)
