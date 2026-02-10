@@ -23,6 +23,19 @@ import {
   Cpu,
   Bot,
   Save,
+  TrendingUp,
+  TrendingDown,
+  BarChart3,
+  Target,
+  MapPin,
+  Info,
+  RefreshCw,
+  Shield,
+  Activity,
+  Eye,
+  Layers,
+  Hash,
+  Percent,
 } from "lucide-react";
 import { saveEvaluation } from "@/lib/supabase";
 
@@ -37,6 +50,7 @@ type LandUse = "Construction" | "Agricultural" | "Mixed";
 type Orientation = "Unknown" | "North" | "NorthEast" | "East" | "SouthEast" | "South" | "SouthWest" | "West" | "NorthWest";
 type ViewType = "Unknown" | "Street" | "Courtyard" | "Park" | "City" | "Sea" | "Panoramic";
 type ViewState = "INPUT" | "PROCESSING" | "RESULT";
+type ResultTab = "overview" | "comparables" | "market" | "details";
 
 interface LocationInfo {
   city: string;
@@ -120,6 +134,20 @@ interface ValueDriver {
   adjustment_percent: number;
 }
 
+interface UsedComparable {
+  title: string;
+  url: string;
+  price_per_m2: number;
+  similarity_score: number;
+  is_outlier: boolean;
+}
+
+interface ValuationAdjustment {
+  factor: string;
+  description: string;
+  percent: number;
+}
+
 interface ValuationResult {
   target_property_summary: string;
   selected_comparables: SelectedComparable[];
@@ -134,6 +162,24 @@ interface ValuationResult {
   realization_discount_percent?: number;
   math_confidence_score?: number;
   math_confidence_level?: string;
+  math_confidence_explanation?: string;
+  market_average_asking?: number;
+  std_dev_per_m2?: number;
+  coefficient_of_variation?: number;
+  total_adjustment_percent?: number;
+  realization_gap_reasoning?: string;
+  used_comparables?: UsedComparable[];
+  adjustments?: ValuationAdjustment[];
+  pipeline?: string[];
+  outlier_log?: string[];
+  outlier_method?: string;
+  confidence_score?: number;
+  confidence_explanation?: string;
+  confidence_color?: string;
+  price_source?: string;
+  region_name?: string;
+  note?: string;
+  search_phase_used?: string;
 }
 
 const INITIAL_STAGES: StreamStage[] = [
@@ -297,6 +343,7 @@ export default function WizardPage() {
   const [copied, setCopied] = useState(false);
   const [email, setEmail] = useState("");
   const [notes, setNotes] = useState("");
+  const [resultTab, setResultTab] = useState<ResultTab>("overview");
 
   // View state machine: INPUT → PROCESSING → RESULT
   const [viewState, setViewState] = useState<ViewState>("INPUT");
@@ -480,6 +527,7 @@ export default function WizardPage() {
     setError(null);
     setIsStreaming(false);
     setNotes("");
+    setResultTab("overview");
   };
 
   const formatPrice = (n: number) => n.toLocaleString("hr-HR");
@@ -955,107 +1003,440 @@ export default function WizardPage() {
         {/* ═══ VALUATION RESULT ═══ */}
         {viewState === "RESULT" && result && (
           <div className="space-y-6">
-            {/* Main Value */}
-            <div className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-700 p-8 text-white text-center">
-              <p className="text-sm font-medium text-blue-100 uppercase tracking-wide">Procijenjena tržišna vrijednost</p>
-              <p className="text-5xl font-bold mt-2">{formatPrice(result.estimated_value_eur)} €</p>
-              {result.calculated_price_per_m2 && result.calculated_price_per_m2 > 0 && (
-                <p className="mt-2 text-blue-200">
-                  {formatPrice(Math.round(result.calculated_price_per_m2))} €/m²
-                  {result.confidence_level && ` • ${result.confidence_level}`}
-                </p>
-              )}
-              {result.math_confidence_score !== undefined && result.math_confidence_score > 0 && (
-                <div className="mt-3 inline-flex items-center gap-2 bg-white/20 rounded-full px-4 py-1.5">
-                  <span className="text-sm font-medium">
-                    Pouzdanost: {result.math_confidence_score}/100 ({result.math_confidence_level})
-                  </span>
+
+            {/* ── Hero: Estimated Value ── */}
+            <div className="rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 p-8 text-white relative overflow-hidden">
+              <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle at 30% 20%, white 1px, transparent 1px), radial-gradient(circle at 70% 80%, white 1px, transparent 1px)", backgroundSize: "40px 40px" }} />
+              <div className="relative z-10 text-center">
+                <p className="text-xs font-semibold uppercase tracking-widest text-blue-200">Procijenjena tržišna vrijednost</p>
+                <p className="text-5xl md:text-6xl font-extrabold mt-3 tracking-tight">{formatPrice(result.estimated_value_eur)} €</p>
+
+                {/* Price range from std_dev */}
+                {result.std_dev_per_m2 && result.calculated_price_per_m2 && result.calculated_price_per_m2 > 0 && (() => {
+                  const areaM2 = propertyType === "Apartment" ? apt.area_m2 : propertyType === "House" ? house.living_area_m2 : land.land_area_m2;
+                  const rangeLow = Math.round((result.calculated_price_per_m2! - result.std_dev_per_m2!) * Math.max(areaM2, 1));
+                  const rangeHigh = Math.round((result.calculated_price_per_m2! + result.std_dev_per_m2!) * Math.max(areaM2, 1));
+                  return (
+                    <p className="mt-2 text-sm text-blue-200">
+                      Raspon: {formatPrice(Math.max(rangeLow, 0))} € — {formatPrice(rangeHigh)} €
+                    </p>
+                  );
+                })()}
+
+                <div className="flex flex-wrap items-center justify-center gap-3 mt-4">
+                  {result.calculated_price_per_m2 && result.calculated_price_per_m2 > 0 && (
+                    <span className="inline-flex items-center gap-1.5 bg-white/15 backdrop-blur-sm rounded-full px-4 py-1.5 text-sm font-medium">
+                      <Target className="h-3.5 w-3.5" /> {formatPrice(Math.round(result.calculated_price_per_m2))} €/m²
+                    </span>
+                  )}
+                  {result.math_confidence_score !== undefined && result.math_confidence_score > 0 && (
+                    <span className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-semibold ${
+                      result.math_confidence_score >= 70 ? "bg-green-400/20 text-green-100" :
+                      result.math_confidence_score >= 40 ? "bg-yellow-400/20 text-yellow-100" :
+                      "bg-red-400/20 text-red-100"
+                    }`}>
+                      <Shield className="h-3.5 w-3.5" /> {result.math_confidence_score}/100 — {result.math_confidence_level}
+                    </span>
+                  )}
+                  {result.confidence_level && (
+                    <span className="inline-flex items-center gap-1.5 bg-white/15 backdrop-blur-sm rounded-full px-4 py-1.5 text-sm">
+                      {result.confidence_level}
+                    </span>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
 
-            {/* Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <StatCard label="Pronađeno oglasa" value={result.total_listings_found ?? 0} />
-              <StatCard label="Korištenih" value={result.usable_price_points ?? 0} />
-              <StatCard label="Outlieri" value={result.outliers_removed ?? 0} />
-              <StatCard label="Diskont" value={`${result.realization_discount_percent?.toFixed(1) ?? "15"}%`} />
+            {/* ── Tab Navigation ── */}
+            <div className="flex border-b border-gray-200 gap-1">
+              {([
+                { key: "overview" as ResultTab, label: "Pregled", icon: <BarChart3 className="h-4 w-4" /> },
+                { key: "comparables" as ResultTab, label: "Usporedbe", icon: <Layers className="h-4 w-4" /> },
+                { key: "market" as ResultTab, label: "Tržište", icon: <Activity className="h-4 w-4" /> },
+                { key: "details" as ResultTab, label: "Detalji", icon: <Info className="h-4 w-4" /> },
+              ]).map((tab) => (
+                <button key={tab.key} onClick={() => setResultTab(tab.key)}
+                  className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                    resultTab === tab.key
+                      ? "border-blue-600 text-blue-700"
+                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                  }`}>
+                  {tab.icon} {tab.label}
+                </button>
+              ))}
             </div>
 
-            {/* Comparables */}
-            {result.selected_comparables?.length > 0 && (
-              <div className="rounded-xl bg-white border border-gray-200 p-6">
-                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4 flex items-center gap-2">
-                  <Search className="h-4 w-4" /> Usporedive nekretnine
-                </h3>
-                <div className="space-y-3">
-                  {result.selected_comparables.map((c, i) => (
-                    <div key={i} className="p-4 border border-gray-100 rounded-lg">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 min-w-0">
-                          <h4 className="text-sm font-semibold text-gray-900 truncate">{c.title}</h4>
-                          <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
-                            <span className="font-semibold text-blue-700">{c.price}</span>
-                            <span>{c.location}</span>
+            {/* ════════ TAB: Overview ════════ */}
+            {resultTab === "overview" && (
+              <div className="space-y-6">
+                {/* Stats Grid */}
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                  <MiniStat icon={<Search className="h-4 w-4 text-blue-500" />} label="Pronađeno" value={result.total_listings_found ?? 0} />
+                  <MiniStat icon={<Check className="h-4 w-4 text-green-500" />} label="Korištenih" value={result.usable_price_points ?? 0} />
+                  <MiniStat icon={<Hash className="h-4 w-4 text-red-500" />} label="Outlieri" value={result.outliers_removed ?? 0} />
+                  <MiniStat icon={<Percent className="h-4 w-4 text-orange-500" />} label="Diskont" value={`${result.realization_discount_percent?.toFixed(1) ?? "15"}%`} />
+                  <MiniStat icon={<Target className="h-4 w-4 text-purple-500" />} label="€/m² prosjek" value={result.market_average_asking ? formatPrice(Math.round(result.market_average_asking)) : "—"} />
+                  <MiniStat icon={<Activity className="h-4 w-4 text-indigo-500" />} label="Σ korekcija" value={result.total_adjustment_percent !== undefined ? `${result.total_adjustment_percent > 0 ? "+" : ""}${result.total_adjustment_percent.toFixed(1)}%` : "—"} />
+                </div>
+
+                {/* Adjustments as chips */}
+                {result.adjustments && result.adjustments.length > 0 && (
+                  <div className="rounded-xl bg-white border border-gray-200 p-6">
+                    <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4" /> Korekcije primijenjene na usporedbe
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {result.adjustments.map((a, i) => (
+                        <div key={i} className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium border ${
+                          a.percent > 0 ? "bg-green-50 border-green-200 text-green-800" :
+                          a.percent < 0 ? "bg-red-50 border-red-200 text-red-800" :
+                          "bg-gray-50 border-gray-200 text-gray-700"
+                        }`}>
+                          <span>{a.factor}</span>
+                          <span className="font-bold">{a.percent > 0 ? "+" : ""}{a.percent.toFixed(1)}%</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Value Drivers */}
+                {result.value_drivers?.length > 0 && (
+                  <div className="rounded-xl bg-white border border-gray-200 p-6">
+                    <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">AI Faktori vrijednosti</h3>
+                    <div className="space-y-2">
+                      {result.value_drivers.map((d, i) => (
+                        <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition">
+                          <div className="flex-1 min-w-0">
+                            <span className="text-sm font-medium text-gray-800">{d.factor}</span>
+                            <p className="text-xs text-gray-500 mt-0.5">{d.impact}</p>
+                          </div>
+                          <span className={`ml-4 text-sm font-bold whitespace-nowrap ${d.adjustment_percent > 0 ? "text-green-600" : d.adjustment_percent < 0 ? "text-red-600" : "text-gray-400"}`}>
+                            {d.adjustment_percent > 0 ? "+" : ""}{d.adjustment_percent}%
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Property Summary */}
+                {result.target_property_summary && (
+                  <div className="rounded-xl bg-blue-50 border border-blue-100 p-6">
+                    <h3 className="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                      <Home className="h-4 w-4" /> Sažetak nekretnine
+                    </h3>
+                    <p className="text-sm text-blue-900 leading-relaxed">{result.target_property_summary}</p>
+                  </div>
+                )}
+
+                {/* Quick Reasoning Excerpt */}
+                {result.valuation_reasoning && (
+                  <div className="rounded-xl bg-white border border-gray-200 p-6">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                        <Brain className="h-4 w-4" /> Stručno mišljenje
+                      </h3>
+                      <button onClick={() => setResultTab("details")} className="text-xs text-blue-600 hover:text-blue-800 font-medium">
+                        Prikaži sve →
+                      </button>
+                    </div>
+                    <p className="text-sm text-gray-700 leading-relaxed line-clamp-4">{result.valuation_reasoning}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ════════ TAB: Comparables ════════ */}
+            {resultTab === "comparables" && (
+              <div className="space-y-6">
+
+                {/* Engine comparables (used_comparables) */}
+                {result.used_comparables && result.used_comparables.length > 0 && (
+                  <div className="rounded-xl bg-white border border-gray-200 p-6">
+                    <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                      <Cpu className="h-4 w-4" /> Engine — korištene usporedbe ({result.used_comparables.filter(c => !c.is_outlier).length})
+                    </h3>
+                    <div className="space-y-3">
+                      {result.used_comparables
+                        .sort((a, b) => b.similarity_score - a.similarity_score)
+                        .map((c, i) => (
+                        <div key={i} className={`p-4 rounded-xl border transition ${c.is_outlier ? "border-red-200 bg-red-50/50 opacity-60" : "border-gray-100 bg-gray-50 hover:border-blue-200 hover:bg-blue-50/30"}`}>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h4 className="text-sm font-semibold text-gray-900 truncate">{c.title}</h4>
+                                {c.is_outlier && (
+                                  <span className="text-[10px] font-bold uppercase tracking-wider bg-red-100 text-red-700 px-2 py-0.5 rounded-full">Outlier</span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-4 mt-1.5">
+                                <span className="text-sm font-bold text-blue-700">{formatPrice(Math.round(c.price_per_m2))} €/m²</span>
+                                <SimilarityBadge score={c.similarity_score} />
+                              </div>
+                            </div>
+                            {c.url && (
+                              <a href={c.url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-700 shrink-0">
+                                <ExternalLink className="h-4 w-4" />
+                              </a>
+                            )}
+                          </div>
+                          {/* Similarity bar */}
+                          <div className="mt-3 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                            <div className="h-full rounded-full transition-all duration-500" style={{
+                              width: `${Math.min(c.similarity_score, 100)}%`,
+                              backgroundColor: c.similarity_score >= 70 ? "#22c55e" : c.similarity_score >= 40 ? "#eab308" : "#ef4444"
+                            }} />
                           </div>
                         </div>
-                        {c.url && (
-                          <a href={c.url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-700 ml-2">
-                            <ExternalLink className="h-4 w-4" />
-                          </a>
-                        )}
-                      </div>
-                      <p className="text-xs text-gray-500 mt-2">{c.reason_for_selection}</p>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
+                  </div>
+                )}
 
-            {/* Value Drivers */}
-            {result.value_drivers?.length > 0 && (
-              <div className="rounded-xl bg-white border border-gray-200 p-6">
-                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Faktori</h3>
-                <div className="space-y-2">
-                  {result.value_drivers.map((d, i) => (
-                    <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-gray-50">
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">{d.factor}</span>
-                        <p className="text-xs text-gray-500">{d.impact}</p>
-                      </div>
-                      <span className={`text-sm font-bold ${d.adjustment_percent > 0 ? "text-green-600" : d.adjustment_percent < 0 ? "text-red-600" : "text-gray-500"}`}>
-                        {d.adjustment_percent > 0 ? "+" : ""}{d.adjustment_percent}%
-                      </span>
+                {/* AI-selected comparables */}
+                {result.selected_comparables?.length > 0 && (
+                  <div className="rounded-xl bg-white border border-gray-200 p-6">
+                    <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                      <Bot className="h-4 w-4" /> AI — odabrane usporedbe ({result.selected_comparables.length})
+                    </h3>
+                    <div className="space-y-3">
+                      {result.selected_comparables.map((c, i) => (
+                        <div key={i} className="p-4 border border-gray-100 rounded-xl bg-gray-50 hover:border-blue-200 hover:bg-blue-50/30 transition">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex-1 min-w-0">
+                              <h4 className="text-sm font-semibold text-gray-900 truncate">{c.title}</h4>
+                              <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                                <span className="font-bold text-blue-700 text-sm">{c.price}</span>
+                                <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {c.location}</span>
+                              </div>
+                            </div>
+                            {c.url && (
+                              <a href={c.url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-700 shrink-0">
+                                <ExternalLink className="h-4 w-4" />
+                              </a>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-500 mt-2 italic">{c.reason_for_selection}</p>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  </div>
+                )}
+
+                {/* Scatter: Price per m2 */}
+                {result.used_comparables && result.used_comparables.filter(c => !c.is_outlier).length > 0 && (
+                  <div className="rounded-xl bg-white border border-gray-200 p-6">
+                    <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                      <BarChart3 className="h-4 w-4" /> Raspodjela cijena/m²
+                    </h3>
+                    <PriceDistributionChart
+                      comparables={result.used_comparables.filter(c => !c.is_outlier)}
+                      calculatedPricePerM2={result.calculated_price_per_m2 ?? 0}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ════════ TAB: Market ════════ */}
+            {resultTab === "market" && (
+              <div className="space-y-6">
+                {/* Market Stats */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="rounded-xl bg-white border border-gray-200 p-6">
+                    <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Tržišni prosjek</h4>
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Prosječna tražena cijena/m²</span>
+                        <span className="text-lg font-bold text-gray-900">
+                          {result.market_average_asking ? `${formatPrice(Math.round(result.market_average_asking))} €` : "—"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Naša procjena/m²</span>
+                        <span className="text-lg font-bold text-blue-700">
+                          {result.calculated_price_per_m2 ? `${formatPrice(Math.round(result.calculated_price_per_m2))} €` : "—"}
+                        </span>
+                      </div>
+                      {result.market_average_asking && result.calculated_price_per_m2 && (
+                        <div className="flex justify-between items-center pt-2 border-t border-gray-100">
+                          <span className="text-sm text-gray-600">Razlika</span>
+                          {(() => {
+                            const diff = ((result.calculated_price_per_m2! - result.market_average_asking!) / result.market_average_asking!) * 100;
+                            return (
+                              <span className={`text-sm font-bold flex items-center gap-1 ${diff >= 0 ? "text-green-600" : "text-red-600"}`}>
+                                {diff >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+                                {diff >= 0 ? "+" : ""}{diff.toFixed(1)}%
+                              </span>
+                            );
+                          })()}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl bg-white border border-gray-200 p-6">
+                    <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Kvaliteta podataka</h4>
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Std. devijacija/m²</span>
+                        <span className="text-sm font-semibold text-gray-900">
+                          {result.std_dev_per_m2 ? `± ${formatPrice(Math.round(result.std_dev_per_m2))} €` : "—"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Koef. varijacije</span>
+                        <span className={`text-sm font-semibold ${
+                          (result.coefficient_of_variation ?? 0) < 0.15 ? "text-green-600" :
+                          (result.coefficient_of_variation ?? 0) < 0.30 ? "text-yellow-600" :
+                          "text-red-600"
+                        }`}>
+                          {result.coefficient_of_variation !== undefined ? `${(result.coefficient_of_variation * 100).toFixed(1)}%` : "—"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Metoda outliera</span>
+                        <span className="text-sm font-semibold text-gray-900">{result.outlier_method ?? "—"}</span>
+                      </div>
+                      {result.price_source && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-600">Izvor cijena</span>
+                          <span className="text-sm font-semibold text-gray-900">{result.price_source}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Realization Gap */}
+                {result.realization_gap_reasoning && (
+                  <div className="rounded-xl bg-amber-50 border border-amber-200 p-6">
+                    <h3 className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-3 flex items-center gap-2">
+                      <Info className="h-4 w-4" /> Diskont realizacije ({result.realization_discount_percent?.toFixed(1)}%)
+                    </h3>
+                    <p className="text-sm text-amber-900 leading-relaxed">{result.realization_gap_reasoning}</p>
+                  </div>
+                )}
+
+                {/* Confidence Explanation */}
+                {result.math_confidence_explanation && (
+                  <div className="rounded-xl bg-white border border-gray-200 p-6">
+                    <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                      <Shield className="h-4 w-4" /> Objašnjenje pouzdanosti
+                    </h3>
+                    <p className="text-sm text-gray-700 leading-relaxed">{result.math_confidence_explanation}</p>
+                  </div>
+                )}
+
+                {/* Note from market data */}
+                {result.note && (
+                  <div className="rounded-xl bg-gray-50 border border-gray-200 p-6">
+                    <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                      <Eye className="h-4 w-4" /> Napomena
+                    </h3>
+                    <p className="text-sm text-gray-700 leading-relaxed">{result.note}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ════════ TAB: Details ════════ */}
+            {resultTab === "details" && (
+              <div className="space-y-6">
+
+                {/* Full Reasoning */}
+                {result.valuation_reasoning && (
+                  <div className="rounded-xl bg-white border border-gray-200 p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                        <Brain className="h-4 w-4" /> Stručno mišljenje — puni tekst
+                      </h3>
+                      <button onClick={() => copyToClipboard(result.valuation_reasoning)}
+                        className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg px-3 py-1.5 transition">
+                        {copied ? <><Check className="h-3.5 w-3.5 text-green-600" /> Kopirano</> : <><ClipboardCopy className="h-3.5 w-3.5" /> Kopiraj</>}
+                      </button>
+                    </div>
+                    <div className="prose prose-sm max-w-none text-gray-800 leading-relaxed whitespace-pre-wrap">
+                      {result.valuation_reasoning}
+                    </div>
+                  </div>
+                )}
+
+                {/* Pipeline Log */}
+                {result.pipeline && result.pipeline.length > 0 && (
+                  <div className="rounded-xl bg-white border border-gray-200 p-6">
+                    <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                      <Cpu className="h-4 w-4" /> Pipeline log
+                    </h3>
+                    <div className="space-y-1.5 font-mono text-xs text-gray-600 bg-gray-50 rounded-lg p-4 max-h-64 overflow-y-auto">
+                      {result.pipeline.map((line, i) => (
+                        <div key={i} className="flex gap-2">
+                          <span className="text-gray-400 select-none w-6 text-right shrink-0">{i + 1}.</span>
+                          <span>{line}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Outlier Log */}
+                {result.outlier_log && result.outlier_log.length > 0 && (
+                  <div className="rounded-xl bg-white border border-gray-200 p-6">
+                    <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4" /> Outlier log ({result.outlier_method})
+                    </h3>
+                    <div className="space-y-1.5 font-mono text-xs text-gray-600 bg-gray-50 rounded-lg p-4 max-h-48 overflow-y-auto">
+                      {result.outlier_log.map((line, i) => (
+                        <div key={i}>{line}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Search info */}
+                <div className="rounded-xl bg-gray-50 border border-gray-200 p-6">
+                  <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Informacije o pretrazi</h3>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    {result.region_name && (
+                      <div><span className="text-gray-500">Regija:</span> <span className="font-medium text-gray-800">{result.region_name}</span></div>
+                    )}
+                    {result.search_phase_used && (
+                      <div><span className="text-gray-500">Faza pretrage:</span> <span className="font-medium text-gray-800">{result.search_phase_used}</span></div>
+                    )}
+                    {result.price_source && (
+                      <div><span className="text-gray-500">Izvor:</span> <span className="font-medium text-gray-800">{result.price_source}</span></div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Disclaimer */}
+                <div className="rounded-xl bg-gray-50 border border-gray-200 p-5 text-xs text-gray-500 leading-relaxed">
+                  <p className="font-semibold text-gray-600 mb-1">Napomena</p>
+                  <p>
+                    Ova procjena vrijednosti nekretnine generirana je algoritmom na temelju javno dostupnih podataka o tržištu nekretnina. 
+                    Rezultat nije zamjena za službenu procjenu ovlaštenog sudskog vještaka. Stvarna tržišna vrijednost može odstupati 
+                    ovisno o specifičnim karakteristikama nekretnine, lokacije i trenutnim tržišnim uvjetima.
+                  </p>
                 </div>
               </div>
             )}
 
-            {/* Reasoning */}
-            {result.valuation_reasoning && (
-              <div className="rounded-xl bg-white border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-2">
-                    <Brain className="h-4 w-4" /> Stručno mišljenje
-                  </h3>
-                  <button onClick={() => copyToClipboard(result.valuation_reasoning)}
-                    className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
-                    {copied ? <><Check className="h-4 w-4 text-green-600" /> Kopirano</> : <><ClipboardCopy className="h-4 w-4" /> Kopiraj</>}
-                  </button>
-                </div>
-                <div className="prose prose-sm max-w-none text-gray-800 leading-relaxed whitespace-pre-wrap">
-                  {result.valuation_reasoning}
-                </div>
-              </div>
-            )}
-
-            {/* Reset */}
-            <div className="text-center">
-              <button onClick={reset} className="rounded-lg bg-gray-100 px-6 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-200 transition">
-                Nova procjena
+            {/* ── Action Buttons ── */}
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+              <button onClick={reset} className="rounded-xl bg-gray-100 px-6 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-200 transition flex items-center gap-2">
+                <RefreshCw className="h-4 w-4" /> Nova procjena
+              </button>
+              <button onClick={() => copyToClipboard(
+                `Procjena: ${formatPrice(result.estimated_value_eur)} €\n` +
+                `Cijena/m²: ${result.calculated_price_per_m2 ? formatPrice(Math.round(result.calculated_price_per_m2)) + " €" : "N/A"}\n` +
+                `Pouzdanost: ${result.math_confidence_score ?? "N/A"}/100\n\n` +
+                (result.valuation_reasoning ?? "")
+              )} className="rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-blue-700 transition flex items-center gap-2">
+                <ClipboardCopy className="h-4 w-4" /> Kopiraj izvještaj
               </button>
             </div>
+
           </div>
         )}
       </div>
@@ -1134,6 +1515,71 @@ function FloorSelect({ value, onChange }: { value: string; onChange: (v: string)
           ))}
         </optgroup>
       </select>
+    </div>
+  );
+}
+
+function MiniStat({ icon, label, value }: { icon: React.ReactNode; label: string; value: string | number }) {
+  return (
+    <div className="rounded-xl bg-white border border-gray-200 p-3 flex items-center gap-3">
+      <div className="shrink-0">{icon}</div>
+      <div className="min-w-0">
+        <p className="text-lg font-bold text-gray-900 truncate">{value}</p>
+        <p className="text-[10px] text-gray-500 uppercase tracking-wider">{label}</p>
+      </div>
+    </div>
+  );
+}
+
+function SimilarityBadge({ score }: { score: number }) {
+  const color = score >= 70 ? "bg-green-100 text-green-800" : score >= 40 ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800";
+  const label = score >= 70 ? "Visoka" : score >= 40 ? "Srednja" : "Niska";
+  return (
+    <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${color}`}>
+      {label} {score.toFixed(0)}%
+    </span>
+  );
+}
+
+function PriceDistributionChart({ comparables, calculatedPricePerM2 }: { comparables: { title: string; price_per_m2: number }[]; calculatedPricePerM2: number }) {
+  if (comparables.length === 0) return null;
+  const prices = comparables.map(c => c.price_per_m2);
+  const minP = Math.min(...prices);
+  const maxP = Math.max(...prices);
+  const range = maxP - minP || 1;
+
+  return (
+    <div className="space-y-3">
+      {/* Bar chart */}
+      <div className="space-y-2">
+        {comparables
+          .sort((a, b) => b.price_per_m2 - a.price_per_m2)
+          .map((c, i) => {
+          const widthPct = Math.max(((c.price_per_m2 - minP * 0.9) / (maxP * 1.1 - minP * 0.9)) * 100, 8);
+          return (
+            <div key={i} className="flex items-center gap-3">
+              <span className="text-xs text-gray-500 w-20 truncate shrink-0" title={c.title}>{c.title.slice(0, 18)}</span>
+              <div className="flex-1 h-6 bg-gray-100 rounded-full overflow-hidden relative">
+                <div className="h-full rounded-full transition-all duration-700" style={{
+                  width: `${widthPct}%`,
+                  backgroundColor: Math.abs(c.price_per_m2 - calculatedPricePerM2) / calculatedPricePerM2 < 0.1 ? "#3b82f6" : "#94a3b8"
+                }} />
+              </div>
+              <span className="text-xs font-semibold text-gray-700 w-20 text-right shrink-0">{Math.round(c.price_per_m2).toLocaleString("hr-HR")} €</span>
+            </div>
+          );
+        })}
+      </div>
+      {/* Legend */}
+      <div className="flex items-center justify-center gap-4 text-xs text-gray-500 pt-2 border-t border-gray-100">
+        <span className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-full" style={{ backgroundColor: "#3b82f6" }} /> Blizu procjene (±10%)
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-full" style={{ backgroundColor: "#94a3b8" }} /> Ostale
+        </span>
+        <span className="font-semibold text-blue-700">Procjena: {Math.round(calculatedPricePerM2).toLocaleString("hr-HR")} €/m²</span>
+      </div>
     </div>
   );
 }
