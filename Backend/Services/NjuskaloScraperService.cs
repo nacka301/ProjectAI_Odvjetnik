@@ -29,7 +29,8 @@ public class NjuskaloScraperService
     private const int MaxScrollPx = 600;
     private const int MinDelayMs  = 200;
     private const int MaxDelayMs  = 500;
-    private const int MaxListings = 50;
+    private const int MaxListings = 80;
+    private const int MaxPages    = 2;
 
     // ── Price extraction ──
     private static readonly Regex PriceRegex = new(
@@ -129,15 +130,65 @@ public class NjuskaloScraperService
                     allListings.Add(listing);
             }
 
-            _logger.LogInformation("Playwright: parsed {Total} listings from DOM", allListings.Count);
+            _logger.LogInformation("Playwright: parsed {Total} listings from page 1", allListings.Count);
+
+            // ── 6. Scrape additional pages (page 2, etc.) for more listings ──
+            var seenUrls = new HashSet<string>(allListings.Select(l => l.Url), StringComparer.OrdinalIgnoreCase);
+
+            for (int pg = 2; pg <= MaxPages; pg++)
+            {
+                if (allListings.Count >= MaxListings)
+                    break;
+
+                var pageUrl = url.Contains('?')
+                    ? $"{url}&page={pg}"
+                    : $"{url}?page={pg}";
+
+                _logger.LogInformation("Playwright: navigating to page {Page} → {Url}", pg, pageUrl);
+
+                try
+                {
+                    await page.GotoAsync(pageUrl, new PageGotoOptions
+                    {
+                        WaitUntil = WaitUntilState.DOMContentLoaded,
+                        Timeout = 20_000
+                    });
+                    await page.WaitForTimeoutAsync(1200);
+                    await SmoothScrollAsync(page);
+
+                    var pgItems = await page.QuerySelectorAllAsync(ListingSelector);
+                    _logger.LogInformation("Playwright: page {Page} has {Count} DOM items", pg, pgItems.Count);
+
+                    if (pgItems.Count == 0) break; // no more pages
+
+                    int addedFromPage = 0;
+                    foreach (var pgItem in pgItems)
+                    {
+                        var listing = await ParseListingElement(pgItem, page);
+                        if (listing is not null && seenUrls.Add(listing.Url))
+                        {
+                            allListings.Add(listing);
+                            addedFromPage++;
+                        }
+                    }
+
+                    _logger.LogInformation("Playwright: page {Page} added {Added} new listings (total: {Total})",
+                        pg, addedFromPage, allListings.Count);
+                }
+                catch (Exception pgEx)
+                {
+                    _logger.LogWarning(pgEx, "Playwright: failed to scrape page {Page}, continuing", pg);
+                    break;
+                }
+            }
 
             // Filter out sponsored/Adsense AFTER full capture
             var sponsoredCount = allListings.Count(l => l.IsSponsored);
             var organic = allListings.Where(l => !l.IsSponsored).ToList();
 
             _logger.LogInformation(
-                "Playwright: {Organic} organic + {Sponsored} sponsored = {Total} total",
-                organic.Count, sponsoredCount, allListings.Count);
+                "Playwright: {Organic} organic + {Sponsored} sponsored = {Total} total (across {Pages} pages)",
+                organic.Count, sponsoredCount, allListings.Count, Math.Min(MaxPages, 2));
 
             return organic;
         }

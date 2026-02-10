@@ -525,6 +525,28 @@ public class ValuationEngine
 
         pipeline.Add($"Scored {cleanPrices.Count} comparables with SimilarityScore");
 
+        // ── 4c½. SIMILARITY FLOOR ──
+        // Remove any comparable below 50% similarity — too dissimilar to be useful.
+        const double MinSimilarityThreshold = 0.50;
+        {
+            var belowFloor = compDetails.Where(c => !c.IsOutlier && c.SimilarityScore < MinSimilarityThreshold).ToList();
+            if (belowFloor.Count > 0)
+            {
+                var belowFloorUrls = new HashSet<string>(belowFloor.Select(c => c.Url), StringComparer.OrdinalIgnoreCase);
+                foreach (var cd in belowFloor)
+                    cd.IsOutlier = true;
+
+                cleanPrices = cleanPrices
+                    .Where(p => !belowFloorUrls.Contains(p.SourceUrl))
+                    .ToList();
+
+                pipeline.Add($"Similarity floor ({MinSimilarityThreshold:P0}): removed {belowFloor.Count} comps below threshold, {cleanPrices.Count} remaining");
+                _logger.LogInformation(
+                    "Similarity floor: removed {Removed} comps below {Threshold:P0}, {Remaining} remaining",
+                    belowFloor.Count, MinSimilarityThreshold, cleanPrices.Count);
+            }
+        }
+
         // ── 4c+. TOP-N LIMITER ──
         // Never let a long tail of weak comps drag down the median.
         // After scoring, keep only the top 7 by SimilarityScore.
