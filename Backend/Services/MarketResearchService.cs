@@ -148,6 +148,36 @@ public class MarketResearchService
         { "Rovinj", "Pula" }, { "Poreč", "Pula" }, { "Porec", "Pula" },
         { "Umag", "Pula" }, { "Novigrad", "Pula" }, { "Medulin", "Pula" },
         { "Labin", "Pula" }, { "Buzet", "Pula" },
+        // ── Osijek — city neighborhoods ──
+        { "Retfala", "Osijek" }, { "Gornji grad", "Osijek" }, { "Donji grad", "Osijek" },
+        { "Tvrđa", "Osijek" }, { "Tvrda", "Osijek" },
+        { "Sjenjak", "Osijek" }, { "Jug II", "Osijek" }, { "Jug 2", "Osijek" },
+        { "Vijenac", "Osijek" }, { "Višnjevac", "Osijek" }, { "Visnjevac", "Osijek" },
+        { "Josipovac", "Osijek" }, { "Čepin", "Osijek" }, { "Cepin", "Osijek" },
+        { "Tenja", "Osijek" }, { "Sarvaš", "Osijek" }, { "Sarvas", "Osijek" },
+        { "Briješće", "Osijek" }, { "Brijesce", "Osijek" },
+        { "Industrijska", "Osijek" }, { "Nemetin", "Osijek" },
+        // ── Rijeka — city neighborhoods ──
+        { "Trsat", "Rijeka" }, { "Sušak", "Rijeka" }, { "Susak", "Rijeka" },
+        { "Martinkovac", "Rijeka" }, { "Kozala", "Rijeka" }, { "Turnić", "Rijeka" },
+        { "Turnic", "Rijeka" }, { "Zamet", "Rijeka" },
+        // ── Dubrovnik — neighborhoods ──
+        { "Lapad", "Dubrovnik" }, { "Gruž", "Dubrovnik" }, { "Gruz", "Dubrovnik" },
+        { "Mokošica", "Dubrovnik" }, { "Mokosica", "Dubrovnik" },
+        // ── Zadar — neighborhoods ──
+        { "Borik", "Zadar" }, { "Brodarica", "Zadar" }, { "Bili Brig", "Zadar" },
+        { "Arbanasi", "Zadar" }, { "Diklo", "Zadar" }, { "Višnjik", "Zadar" },
+        // ── Pula — neighborhoods ──
+        { "Veruda", "Pula" }, { "Stoja", "Pula" }, { "Vidikovac", "Pula" },
+        { "Šijana", "Pula" }, { "Sijana", "Pula" }, { "Kaštanjer", "Pula" },
+        // ── Šibenik — neighborhoods ──
+        { "Baldekin", "Šibenik" }, { "Meterize", "Šibenik" }, { "Vidici", "Šibenik" },
+        // ── Split — neighborhoods (not already in PrestigePeers) ──
+        { "Split 3", "Split" }, { "Sućidar", "Split" }, { "Sucidar", "Split" },
+        { "Kman", "Split" }, { "Brda", "Split" }, { "Gripe", "Split" },
+        { "Lovret", "Split" }, { "Lučac", "Split" }, { "Lucac", "Split" },
+        { "Pujanke", "Split" }, { "Ravne njive", "Split" },
+        { "Mejaši", "Split" }, { "Mejasi", "Split" },
     };
 
     // ══════════════════════════════════════════════════════════
@@ -219,7 +249,15 @@ public class MarketResearchService
         {
             var njuskaloResults = await FetchNjuskaloDirectListings(detectedType, regionName);
             totalApiCalls += (njuskaloResults.Count > 0 ? 1 : 0);
-            var filtered = PriceFirstFilter(njuskaloResults, "Phase0-NjuskaloDirect", [regionName]);
+
+            // Phase 0 location gate: allow both the neighborhood AND parent city.
+            // When searching city-level URL (e.g. /prodaja-kuca/osijek for Retfala),
+            // listings say "Osijek" not "Retfala" — must accept both.
+            var phase0Locs = new List<string> { regionName };
+            if (BroaderRegion.TryGetValue(regionName, out var parentCity))
+                phase0Locs.Add(parentCity);
+
+            var filtered = PriceFirstFilter(njuskaloResults, "Phase0-NjuskaloDirect", phase0Locs);
             MergeInto(allVerified, filtered);
 
             _logger.LogInformation("Phase 0 (Njuškalo Direct): {New}/{Raw} passed → total={Total}",
@@ -752,7 +790,16 @@ public class MarketResearchService
                 ? "prodaja-kuca"
                 : "prodaja-stanova";
 
-        var locSlug = NormalizeLocationSlug(regionName);
+        // NEIGHBORHOOD FIX: If regionName is a neighborhood (has a parent city),
+        // use the CITY slug — Njuškalo doesn't have neighborhood-level URL slugs.
+        // e.g. "Retfala" → use "osijek", not "retfala" (which 404s).
+        string urlRegion = regionName;
+        if (BroaderRegion.TryGetValue(regionName, out var parentCity))
+        {
+            urlRegion = parentCity;
+        }
+
+        var locSlug = NormalizeLocationSlug(urlRegion);
         if (string.IsNullOrWhiteSpace(locSlug))
             return null;
 
