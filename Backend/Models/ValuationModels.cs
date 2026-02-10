@@ -36,6 +36,10 @@ public class ExtractedPropertyInfo
     public string Location { get; set; } = string.Empty;
     public string Condition { get; set; } = string.Empty;
     public string RawText { get; set; } = string.Empty;
+
+    // V5: Fine-tuning fields
+    public string PropertyState { get; set; } = "";   // "new", "renovated", "good", "original", "needs_adaptation"
+    public double YardAreaM2 { get; set; }             // Okucnica / yard size for houses
 }
 
 // --- Full Evaluation Response (V2 — deterministic + AI) ---

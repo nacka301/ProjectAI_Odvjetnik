@@ -11,13 +11,24 @@ public class ValuationService
 
     private const string PropertyExtractionPrompt =
         """
-        You are a document analysis assistant. Extract property information from this Croatian Land Registry Extract (Zemljišnoknjižni izvadak).
+        You are a document analysis assistant. Extract property information from this Croatian Land Registry Extract (Zemljisnjoknjizni izvadak) or property description.
 
         Return a JSON object with:
-        - "description": string (type of property, e.g. "Stan", "Kuća", "Zemljište", include katastarska čestica if found)
+        - "description": string (type of property, e.g. "Stan", "Kuca", "Zemljiste", include katastarska cestica if found)
         - "size_m2": number (size in square meters if found, 0 if not found)
         - "location": string (address, municipality, or cadastral municipality)
         - "condition": string (any info about condition, or "Nije navedeno" if not found)
+        - "property_state": string (one of: "new", "renovated", "good", "original", "needs_adaptation")
+          Detection rules:
+          * "new" = novogradnja, novo izgradjeno, nova zgrada
+          * "renovated" = renovirano, adaptirano, obnovljeno, novoureaeno
+          * "good" = odrzavano, uredno, dobro stanje
+          * "original" = izvorno stanje, originalno, nije renovirano
+          * "needs_adaptation" = potrebna adaptacija, rusevina, zapusteno, treba obnovu
+          If no info → use "good" as default.
+        - "yard_area_m2": number (size of okucnica/yard/garden in m2 if found, 0 if not found or not applicable)
+          Look for: okucnica, dvoriste, vrt, zemljiste uz kucu, parcela uz objekt.
+          If the text says "okucnica 500 m2" → 500. If no mention → 0.
 
         Return ONLY the raw JSON object, no markdown fences, no extra text.
         """;
