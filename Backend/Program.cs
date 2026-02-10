@@ -1,5 +1,9 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using Backend.Models;
 using Backend.Services;
+using Backend.Validators;
+using FluentValidation;
 using OpenAI.Chat;
 
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions
@@ -22,7 +26,11 @@ builder.Services.AddControllers()
     .AddJsonOptions(opts =>
     {
         opts.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower;
+        opts.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
     });
+
+// FluentValidation — auto-register all validators from this assembly
+builder.Services.AddValidatorsFromAssemblyContaining<PropertyInputBaseValidator>();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
