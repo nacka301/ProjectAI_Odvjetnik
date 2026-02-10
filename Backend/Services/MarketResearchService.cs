@@ -15,7 +15,6 @@ public class MarketResearchService
     private readonly HttpClient _httpClient;
     private readonly string _apiKey;
     private readonly ILogger<MarketResearchService> _logger;
-    private readonly NjuskaloScraperService _scraper;
 
     private const string TavilySearchUrl = "https://api.tavily.com/search";
     private const string TavilyExtractUrl = "https://api.tavily.com/extract";
@@ -292,10 +291,9 @@ public class MarketResearchService
 
     private static readonly int[] StaleYears = [2018, 2019, 2020, 2021, 2022];
 
-    public MarketResearchService(HttpClient httpClient, IConfiguration config, ILogger<MarketResearchService> logger, NjuskaloScraperService scraper)
+    public MarketResearchService(HttpClient httpClient, IConfiguration config, ILogger<MarketResearchService> logger)
     {
         _httpClient = httpClient;
-        _scraper = scraper;
         _apiKey = config["Tavily:ApiKey"]
             ?? Environment.GetEnvironmentVariable("Tavily__ApiKey")
             ?? Environment.GetEnvironmentVariable("TAVILY_API_KEY")
@@ -683,8 +681,7 @@ public class MarketResearchService
     // ══════════════════════════════════════════════════════════
 
     /// <summary>
-    /// Constructs the Njuškalo search URL, tries Playwright scraper first
-    /// (full scroll + DOM capture), falls back to Tavily Extract on failure.
+    /// Constructs the Njuškalo search URL and extracts listings via Tavily Extract API.
     /// </summary>
     private async Task<List<ComparableSearchResult>> FetchNjuskaloDirectListings(
         string detectedType, string regionName, double sizeM2 = 0)
@@ -733,63 +730,22 @@ public class MarketResearchService
     }
 
     /// <summary>
-    /// Attempt to scrape a single Njuškalo URL via Playwright, falling back to Tavily Extract.
+    /// Extract listings from a single Njuškalo URL via Tavily Extract API.
     /// </summary>
     private async Task<List<ComparableSearchResult>> TryScrapeSingleUrl(string njuskaloUrl)
     {
-        // ── PRIMARY: Playwright scraper (scrolls page, captures full DOM) ──
-        _logger.LogInformation("Phase0: Playwright scraper → {Url}", njuskaloUrl);
-        var scraped = await _scraper.ScrapeListingsAsync(njuskaloUrl);
+        _logger.LogInformation("Phase0: Tavily Extract → {Url}", njuskaloUrl);
 
-        if (scraped.Count > 0)
-        {
-            var converted = scraped.Select(s => new ComparableSearchResult
-            {
-                Url = s.Url,
-                Title = s.Title,
-                Content = BuildScrapedContent(s)
-            }).ToList();
-
-            _logger.LogInformation(
-                "Phase0: Playwright captured {Count} organic listings", converted.Count);
-            return converted;
-        }
-
-        _logger.LogWarning("Phase0: Playwright returned 0 listings — falling back to Tavily Extract");
-
-        // ── FALLBACK: Tavily Extract API ──
         var extractedText = await ExecuteTavilyExtract(njuskaloUrl);
         if (string.IsNullOrWhiteSpace(extractedText))
         {
-            _logger.LogWarning("Phase0: Tavily Extract also returned empty for {Url}", njuskaloUrl);
+            _logger.LogWarning("Phase0: Tavily Extract returned empty for {Url}", njuskaloUrl);
             return [];
         }
 
         var listings = ParseNjuskaloExtractedText(extractedText);
-        _logger.LogInformation("Phase0: Tavily fallback parsed {Count} listings", listings.Count);
+        _logger.LogInformation("Phase0: Tavily parsed {Count} listings from {Url}", listings.Count, njuskaloUrl);
         return listings;
-    }
-
-    /// <summary>
-    /// Build the Content string from a ScrapedListing for the downstream pipeline.
-    /// </summary>
-    private static string BuildScrapedContent(ScrapedListing s)
-    {
-        var parts = new List<string>();
-        if (!string.IsNullOrWhiteSpace(s.Title))
-            parts.Add(s.Title);
-        if (!string.IsNullOrWhiteSpace(s.Location))
-            parts.Add($"Lokacija: {s.Location}");
-        if (!string.IsNullOrWhiteSpace(s.PriceText))
-            parts.Add($"Cijena: {s.PriceText}");
-        if (!string.IsNullOrWhiteSpace(s.Description))
-            parts.Add(s.Description);
-
-        // If structured parts are sparse, include the raw fullText
-        if (parts.Count < 2 && !string.IsNullOrWhiteSpace(s.FullText))
-            parts.Add(s.FullText);
-
-        return string.Join(". ", parts);
     }
 
     // ══════════════════════════════════════════════════════════
@@ -849,7 +805,7 @@ public class MarketResearchService
         _logger.LogInformation("DeepDive: selected {Count}/{Total} Njuškalo listings for detail scrape",
             scored.Count, njuskaloListings.Count);
 
-        // ── Step 3: Visit each listing sequentially (avoid rate-limiting) ──
+        // ── Step 3: Visit each listing via Tavily Extract (sequential to avoid rate-limiting) ──
         int enriched = 0;
         var toDiscard = new List<ComparableSearchResult>();
 
@@ -857,10 +813,10 @@ public class MarketResearchService
         {
             try
             {
-                var details = await _scraper.ScrapeListingDetailsAsync(listing.Url);
-                if (details is null) continue;
+                var rawText = await ExecuteTavilyExtract(listing.Url);
+                if (string.IsNullOrWhiteSpace(rawText)) continue;
 
-                var descLower = (details.Description ?? "").ToLowerInvariant();
+                var descLower = rawText.ToLowerInvariant();
 
                 // ── DISCARD: "vanknjižno vlasništvo" — unreliable property rights ──
                 if (descLower.Contains("vanknjižno vlasništvo") || descLower.Contains("vanknjižno"))
@@ -880,11 +836,25 @@ public class MarketResearchService
                     _logger.LogInformation("DeepDive: reclassified {Url} as APARTMENT (gornji kat)", listing.Url);
                 }
 
-                // ── Enrich the listing's Content with detail page data ──
-                var enrichedText = details.ToEnrichedText();
-                if (!string.IsNullOrWhiteSpace(enrichedText))
+                // ── Enrich the listing's Content with detail page text ──
+                // Trim to a reasonable length to avoid bloating the pipeline
+                var enrichedText = rawText.Length > 3000 ? rawText[..3000] : rawText;
+                listing.Content = $"{listing.Content} [DEEP DIVE] {enrichedText}";
+
+                // ── Extract renovation year from raw text ──
+                int? yearRenovation = null;
+                var renovYearMatch = Regex.Match(rawText,
+                    @"(?:renovir|adaptir|obnovljen|zadnja?\s*(?:renovacija|adaptacija))[^\d]{0,30}(\d{4})",
+                    RegexOptions.IgnoreCase);
+                if (renovYearMatch.Success && int.TryParse(renovYearMatch.Groups[1].Value, out var ry) && ry >= 1990 && ry <= 2030)
+                    yearRenovation = ry;
+
+                // Also try "Godina zadnje renovacije: YYYY" format
+                if (!yearRenovation.HasValue)
                 {
-                    listing.Content = $"{listing.Content} [DEEP DIVE] {enrichedText}";
+                    var yearKvMatch = Regex.Match(rawText, @"(?:godina\s+(?:zadnje\s+)?renovacije|godina\s+adaptacije)[:\s]+(\d{4})", RegexOptions.IgnoreCase);
+                    if (yearKvMatch.Success && int.TryParse(yearKvMatch.Groups[1].Value, out var ry2) && ry2 >= 1990 && ry2 <= 2030)
+                        yearRenovation = ry2;
                 }
 
                 // ── Intelligent condition detection ──
@@ -898,7 +868,7 @@ public class MarketResearchService
                     listing.NeedsRenovation = true;
                     listing.IsRenovated = false;
                 }
-                else if (details.YearLastRenovation.HasValue && details.YearLastRenovation >= 2020)
+                else if (yearRenovation.HasValue && yearRenovation >= 2020)
                 {
                     listing.AiCondition ??= "renovated";
                     listing.IsRenovated = true;
@@ -918,7 +888,7 @@ public class MarketResearchService
                     listing.IsRenovated = true;
                     listing.NeedsRenovation = false;
                 }
-                else if (details.YearLastRenovation.HasValue && details.YearLastRenovation >= 2015)
+                else if (yearRenovation.HasValue && yearRenovation >= 2015)
                 {
                     listing.IsRenovated = true;
                     listing.NeedsRenovation = false;
@@ -939,30 +909,37 @@ public class MarketResearchService
                 }
 
                 // ── Store renovation year ──
-                if (details.YearLastRenovation.HasValue)
-                    listing.YearLastRenovation = details.YearLastRenovation;
+                if (yearRenovation.HasValue)
+                    listing.YearLastRenovation = yearRenovation;
 
-                // ── Yard area from detail page ──
-                if (details.YardAreaM2.HasValue && details.YardAreaM2 > 0)
-                    listing.AiYardAreaM2 ??= details.YardAreaM2;
+                // ── Extract yard area from text (okućnica / dvorište / zemljište) ──
+                var yardMatch = Regex.Match(rawText,
+                    @"(?:okućnica|dvorišt|zemljišt|parcela)[^\d]{0,20}(\d{1,5}(?:[.,]\d+)?)\s*m",
+                    RegexOptions.IgnoreCase);
+                if (yardMatch.Success && double.TryParse(yardMatch.Groups[1].Value.Replace(',', '.'),
+                        System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var yardArea) && yardArea > 0)
+                    listing.AiYardAreaM2 ??= yardArea;
 
-                // ── Size from detail page ──
-                if (details.SizeM2.HasValue && details.SizeM2 > 0)
-                    listing.AiSizeM2 ??= details.SizeM2;
+                // ── Extract size from text (površina / stambena) ──
+                var sizeMatch = Regex.Match(rawText,
+                    @"(?:površina|stambena|korisna)[^\d]{0,20}(\d{1,5}(?:[.,]\d+)?)\s*m",
+                    RegexOptions.IgnoreCase);
+                if (sizeMatch.Success && double.TryParse(sizeMatch.Groups[1].Value.Replace(',', '.'),
+                        System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var sizeVal) && sizeVal > 0)
+                    listing.AiSizeM2 ??= sizeVal;
 
                 // ── Equipment-based feature detection ──
-                var equipLower = details.Equipment
-                    .Select(e => e.ToLowerInvariant()).ToList();
-
-                if (equipLower.Any(e => e.Contains("garaž") || e.Contains("garaz") ||
-                                        e.Contains("parking")))
+                if (descLower.Contains("garaž") || descLower.Contains("garaz") || descLower.Contains("parking"))
                     listing.HasGarage ??= true;
 
-                if (equipLower.Any(e => e.Contains("bazen") || e.Contains("pool")))
+                if (descLower.Contains("bazen") || descLower.Contains("pool"))
                     listing.Content += " [Oprema: Bazen]";
 
-                if (equipLower.Any(e => e.Contains("plinsko") || e.Contains("centralno grijanje")))
-                    listing.Content += $" [Grijanje: {details.HeatingType ?? "plinsko"}]";
+                if (descLower.Contains("plinsko grijanje") || descLower.Contains("centralno grijanje"))
+                {
+                    var heatingMatch = Regex.Match(rawText, @"(?:grijanje)[:\s]+([^\n,.]{3,30})", RegexOptions.IgnoreCase);
+                    listing.Content += $" [Grijanje: {(heatingMatch.Success ? heatingMatch.Groups[1].Value.Trim() : "plinsko")}]";
+                }
 
                 enriched++;
             }
