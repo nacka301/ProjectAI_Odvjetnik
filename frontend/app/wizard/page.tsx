@@ -24,15 +24,12 @@ import {
   Bot,
   Save,
   TrendingUp,
-  TrendingDown,
   BarChart3,
   Target,
   MapPin,
-  Info,
   RefreshCw,
   Shield,
   Activity,
-  Eye,
   Layers,
   Hash,
   Percent,
@@ -50,7 +47,7 @@ type LandUse = "Construction" | "Agricultural" | "Mixed";
 type Orientation = "Unknown" | "North" | "NorthEast" | "East" | "SouthEast" | "South" | "SouthWest" | "West" | "NorthWest";
 type ViewType = "Unknown" | "Street" | "Courtyard" | "Park" | "City" | "Sea" | "Panoramic";
 type ViewState = "INPUT" | "PROCESSING" | "RESULT";
-type ResultTab = "overview" | "comparables" | "market" | "details";
+type ResultTab = "overview" | "comparables";
 
 interface LocationInfo {
   city: string;
@@ -1053,8 +1050,6 @@ export default function WizardPage() {
               {([
                 { key: "overview" as ResultTab, label: "Pregled", icon: <BarChart3 className="h-4 w-4" /> },
                 { key: "comparables" as ResultTab, label: "Usporedbe", icon: <Layers className="h-4 w-4" /> },
-                { key: "market" as ResultTab, label: "Tržište", icon: <Activity className="h-4 w-4" /> },
-                { key: "details" as ResultTab, label: "Detalji", icon: <Info className="h-4 w-4" /> },
               ]).map((tab) => (
                 <button key={tab.key} onClick={() => setResultTab(tab.key)}
                   className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
@@ -1138,11 +1133,12 @@ export default function WizardPage() {
                       <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2">
                         <Brain className="h-4 w-4" /> Stručno mišljenje
                       </h3>
-                      <button onClick={() => setResultTab("details")} className="text-xs text-blue-600 hover:text-blue-800 font-medium">
-                        Prikaži sve →
+                      <button onClick={() => copyToClipboard(result.valuation_reasoning)}
+                        className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg px-3 py-1.5 transition">
+                        {copied ? <><Check className="h-3.5 w-3.5 text-green-600" /> Kopirano</> : <><ClipboardCopy className="h-3.5 w-3.5" /> Kopiraj</>}
                       </button>
                     </div>
-                    <p className="text-sm text-gray-700 leading-relaxed line-clamp-4">{result.valuation_reasoning}</p>
+                    <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{result.valuation_reasoning}</p>
                   </div>
                 )}
               </div>
@@ -1240,200 +1236,7 @@ export default function WizardPage() {
               </div>
             )}
 
-            {/* ════════ TAB: Market ════════ */}
-            {resultTab === "market" && (
-              <div className="space-y-6">
-                {/* Market Stats */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="rounded-xl bg-white border border-gray-200 p-6">
-                    <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Tržišni prosjek</h4>
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">Prosječna tražena cijena/m²</span>
-                        <span className="text-lg font-bold text-gray-900">
-                          {result.market_average_asking ? `${formatPrice(Math.round(result.market_average_asking))} €` : "—"}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">Naša procjena/m²</span>
-                        <span className="text-lg font-bold text-blue-700">
-                          {result.calculated_price_per_m2 ? `${formatPrice(Math.round(result.calculated_price_per_m2))} €` : "—"}
-                        </span>
-                      </div>
-                      {result.market_average_asking && result.calculated_price_per_m2 && (
-                        <div className="flex justify-between items-center pt-2 border-t border-gray-100">
-                          <span className="text-sm text-gray-600">Razlika</span>
-                          {(() => {
-                            const diff = ((result.calculated_price_per_m2! - result.market_average_asking!) / result.market_average_asking!) * 100;
-                            return (
-                              <span className={`text-sm font-bold flex items-center gap-1 ${diff >= 0 ? "text-green-600" : "text-red-600"}`}>
-                                {diff >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-                                {diff >= 0 ? "+" : ""}{diff.toFixed(1)}%
-                              </span>
-                            );
-                          })()}
-                        </div>
-                      )}
-                    </div>
-                  </div>
 
-                  <div className="rounded-xl bg-white border border-gray-200 p-6">
-                    <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Kvaliteta podataka</h4>
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">Std. devijacija/m²</span>
-                        <span className="text-sm font-semibold text-gray-900">
-                          {result.std_dev_per_m2 ? `± ${formatPrice(Math.round(result.std_dev_per_m2))} €` : "—"}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">Koef. varijacije</span>
-                        <span className={`text-sm font-semibold ${
-                          (result.coefficient_of_variation ?? 0) < 0.15 ? "text-green-600" :
-                          (result.coefficient_of_variation ?? 0) < 0.30 ? "text-yellow-600" :
-                          "text-red-600"
-                        }`}>
-                          {result.coefficient_of_variation !== undefined ? `${(result.coefficient_of_variation * 100).toFixed(1)}%` : "—"}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">Metoda outliera</span>
-                        <span className="text-sm font-semibold text-gray-900">{result.outlier_method ?? "—"}</span>
-                      </div>
-                      {result.price_source && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-600">Izvor cijena</span>
-                          <span className="text-sm font-semibold text-gray-900">{result.price_source}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Realization Gap */}
-                {result.realization_gap_reasoning && (
-                  <div className="rounded-xl bg-amber-50 border border-amber-200 p-6">
-                    <h3 className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-3 flex items-center gap-2">
-                      <Info className="h-4 w-4" /> Diskont realizacije ({result.realization_discount_percent?.toFixed(1)}%)
-                    </h3>
-                    <p className="text-sm text-amber-900 leading-relaxed">{result.realization_gap_reasoning}</p>
-                  </div>
-                )}
-
-                {/* Confidence Explanation */}
-                {result.math_confidence_explanation && (
-                  <div className="rounded-xl bg-white border border-gray-200 p-6">
-                    <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                      <Shield className="h-4 w-4" /> Objašnjenje pouzdanosti
-                    </h3>
-                    <p className="text-sm text-gray-700 leading-relaxed">{result.math_confidence_explanation}</p>
-                  </div>
-                )}
-
-                {/* Note from market data */}
-                {result.note && (
-                  <div className="rounded-xl bg-gray-50 border border-gray-200 p-6">
-                    <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                      <Eye className="h-4 w-4" /> Napomena
-                    </h3>
-                    <p className="text-sm text-gray-700 leading-relaxed">{result.note}</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* ════════ TAB: Details ════════ */}
-            {resultTab === "details" && (
-              <div className="space-y-6">
-
-                {/* Sherlock Insight */}
-                {result.sherlock_insight && (
-                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-6">
-                    <h3 className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-3 flex items-center gap-2">
-                      <Eye className="h-4 w-4" /> Sherlock Insight — Kontrola kvalitete
-                    </h3>
-                    <p className="text-sm text-amber-900 leading-relaxed">
-                      {result.sherlock_insight}
-                    </p>
-                  </div>
-                )}
-
-                {/* Full Reasoning */}
-                {result.valuation_reasoning && (
-                  <div className="rounded-xl bg-white border border-gray-200 p-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2">
-                        <Brain className="h-4 w-4" /> Stručno mišljenje — puni tekst
-                      </h3>
-                      <button onClick={() => copyToClipboard(result.valuation_reasoning)}
-                        className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg px-3 py-1.5 transition">
-                        {copied ? <><Check className="h-3.5 w-3.5 text-green-600" /> Kopirano</> : <><ClipboardCopy className="h-3.5 w-3.5" /> Kopiraj</>}
-                      </button>
-                    </div>
-                    <div className="prose prose-sm max-w-none text-gray-800 leading-relaxed whitespace-pre-wrap">
-                      {result.valuation_reasoning}
-                    </div>
-                  </div>
-                )}
-
-                {/* Pipeline Log */}
-                {result.pipeline && result.pipeline.length > 0 && (
-                  <div className="rounded-xl bg-white border border-gray-200 p-6">
-                    <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                      <Cpu className="h-4 w-4" /> Pipeline log
-                    </h3>
-                    <div className="space-y-1.5 font-mono text-xs text-gray-600 bg-gray-50 rounded-lg p-4 max-h-64 overflow-y-auto">
-                      {result.pipeline.map((line, i) => (
-                        <div key={i} className="flex gap-2">
-                          <span className="text-gray-400 select-none w-6 text-right shrink-0">{i + 1}.</span>
-                          <span>{line}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Outlier Log */}
-                {result.outlier_log && result.outlier_log.length > 0 && (
-                  <div className="rounded-xl bg-white border border-gray-200 p-6">
-                    <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                      <AlertTriangle className="h-4 w-4" /> Outlier log ({result.outlier_method})
-                    </h3>
-                    <div className="space-y-1.5 font-mono text-xs text-gray-600 bg-gray-50 rounded-lg p-4 max-h-48 overflow-y-auto">
-                      {result.outlier_log.map((line, i) => (
-                        <div key={i}>{line}</div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Search info */}
-                <div className="rounded-xl bg-gray-50 border border-gray-200 p-6">
-                  <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Informacije o pretrazi</h3>
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    {result.region_name && (
-                      <div><span className="text-gray-500">Regija:</span> <span className="font-medium text-gray-800">{result.region_name}</span></div>
-                    )}
-                    {result.search_phase_used && (
-                      <div><span className="text-gray-500">Faza pretrage:</span> <span className="font-medium text-gray-800">{result.search_phase_used}</span></div>
-                    )}
-                    {result.price_source && (
-                      <div><span className="text-gray-500">Izvor:</span> <span className="font-medium text-gray-800">{result.price_source}</span></div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Disclaimer */}
-                <div className="rounded-xl bg-gray-50 border border-gray-200 p-5 text-xs text-gray-500 leading-relaxed">
-                  <p className="font-semibold text-gray-600 mb-1">Napomena</p>
-                  <p>
-                    Ova procjena vrijednosti nekretnine generirana je algoritmom na temelju javno dostupnih podataka o tržištu nekretnina. 
-                    Rezultat nije zamjena za službenu procjenu ovlaštenog sudskog vještaka. Stvarna tržišna vrijednost može odstupati 
-                    ovisno o specifičnim karakteristikama nekretnine, lokacije i trenutnim tržišnim uvjetima.
-                  </p>
-                </div>
-              </div>
-            )}
 
             {/* ── Action Buttons ── */}
             <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
