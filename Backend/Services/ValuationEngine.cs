@@ -363,6 +363,24 @@ public class ValuationEngine
                     pipeline.Add($"Neighborhood drift: {drifted} comps penalized -20% (not in {neighborhood})");
                 if (exactMatches > 0)
                     pipeline.Add($"Exact neighborhood match: {exactMatches} comps tagged for '{neighborhood}'");
+
+                // ── 4b+. STRICT NEIGHBORHOOD PURGE ──
+                // If we have ≥3 exact neighborhood matches, DISCARD everything else.
+                // 3 perfect comps > 15 mixed comps from wrong neighborhoods.
+                if (exactMatches >= 3)
+                {
+                    int beforePurge = cleanPrices.Count;
+                    cleanPrices = cleanPrices.Where(p => p.IsExactNeighborhoodMatch).ToList();
+                    int purged = beforePurge - cleanPrices.Count;
+                    if (purged > 0)
+                    {
+                        pipeline.Add($"NEIGHBORHOOD PURGE: {purged} non-{neighborhood} comps discarded " +
+                            $"({cleanPrices.Count} exact-match comps kept)");
+                        _logger.LogInformation(
+                            "Neighborhood purge: kept {Kept} exact-match, discarded {Purged} from other neighborhoods",
+                            cleanPrices.Count, purged);
+                    }
+                }
             }
         }
 
@@ -396,6 +414,38 @@ public class ValuationEngine
         }
 
         pipeline.Add($"Scored {cleanPrices.Count} comparables with SimilarityScore");
+
+        // ── 4c+. TOP-N LIMITER ──
+        // Never let a long tail of weak comps drag down the median.
+        // After scoring, keep only the top 7 by SimilarityScore.
+        const int MaxCompsForValuation = 7;
+        if (cleanPrices.Count > MaxCompsForValuation)
+        {
+            // Sort compDetails (non-outliers) by similarity descending, mark excess as outliers
+            var ranked = compDetails
+                .Where(c => !c.IsOutlier)
+                .OrderByDescending(c => c.SimilarityScore)
+                .ToList();
+
+            var keepUrls = new HashSet<string>(
+                ranked.Take(MaxCompsForValuation).Select(c => c.Url),
+                StringComparer.OrdinalIgnoreCase);
+
+            // Mark excess comps as outliers so they don't participate in valuation
+            int trimmed = 0;
+            foreach (var cd in ranked.Skip(MaxCompsForValuation))
+            {
+                cd.IsOutlier = true;
+                trimmed++;
+            }
+
+            // Also remove from cleanPrices so weighted median ignores them
+            cleanPrices = cleanPrices
+                .Where(p => keepUrls.Contains(p.SourceUrl))
+                .ToList();
+
+            pipeline.Add($"Top-N limiter: kept top {cleanPrices.Count} comps, trimmed {trimmed} low-similarity tail");
+        }
 
         // ── 4d. Reality Check Cap ──
         // Any comp priced >50% above median → weight crushed to 0.1
@@ -599,17 +649,27 @@ public class ValuationEngine
             .Where(s => s.Length > 2)
             .ToList();
 
+        // V8: Check if comp is in the exact neighborhood (first loc part)
+        bool isExactNeighborhood = locParts.Count >= 2
+            && compText.Contains(locParts[0]); // e.g. "retfala"
+
         if (locParts.Count >= 2 && compText.Contains(locParts[^1]) && compText.Contains(locParts[0]))
         {
-            score += 0.30; // Same street + city
+            score += 0.30; // Same neighborhood + city = full score
+        }
+        else if (isExactNeighborhood)
+        {
+            score += 0.25; // Neighborhood match without city context
         }
         else if (locParts.Any(part => compText.Contains(part)))
         {
-            score += 0.22; // Same city/area
+            // V8: Same city but WRONG neighborhood → hard cap at 0.12
+            // (was 0.22 — allowed Donji Grad to score 67% for Retfala subject)
+            score += 0.12;
         }
         else if (!string.IsNullOrEmpty(regionName) && compText.Contains(regionName.ToLowerInvariant()))
         {
-            score += 0.12; // Same region
+            score += 0.08; // Same region only
         }
         else
         {
