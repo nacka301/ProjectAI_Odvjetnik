@@ -94,4 +94,7 @@ public class FullEvaluationResult
 
     // ── Supabase ──
     public string? EvaluationId { get; set; }
+
+    // ── V13: Sherlock Insight ──
+    public string SherlockInsight { get; set; } = "";
 }

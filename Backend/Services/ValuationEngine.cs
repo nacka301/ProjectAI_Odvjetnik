@@ -632,6 +632,43 @@ public class ValuationEngine
             }
         }
 
+        // ── 4b++. V13: CROSS-TYPE PENALTY ──
+        // If subject is "House" but comp is "Apartment" (or vice versa, even in same city),
+        // apply automatic 25% penalty to the comp's price before it enters the weighted median.
+        {
+            string subjectType = marketData.DetectedPropertyType.ToLowerInvariant();
+            bool subjectIsHouse = subjectType.Contains("kuć") || subjectType.Contains("kuc")
+                               || subjectType.Contains("vila") || subjectType.Contains("vikend");
+            bool subjectIsApt   = subjectType.Contains("stan") || subjectType.Contains("apartman")
+                               || subjectType.Contains("garsonije");
+
+            int crossTypePenalized = 0;
+            foreach (var p in cleanPrices)
+            {
+                string compText = $"{p.SourceTitle} {p.SourceUrl}".ToLowerInvariant();
+                bool compIsHouse = compText.Contains("kuć") || compText.Contains("kuc")
+                                || compText.Contains("vila") || compText.Contains("vikend");
+                bool compIsApt   = compText.Contains("stan") || compText.Contains("apartman")
+                                || compText.Contains("garsonije");
+
+                // Cross-type: subject is House, comp is Apartment (or reverse)
+                if ((subjectIsHouse && compIsApt) || (subjectIsApt && compIsHouse))
+                {
+                    double original = p.PricePerM2;
+                    p.PricePerM2 *= 0.75; // 25% cross-type penalty
+                    crossTypePenalized++;
+                    _logger.LogDebug(
+                        "Cross-type penalty: {Title} {Old:F0}->{New:F0} EUR/m2 (-25%, {SubjType} vs {CompType})",
+                        p.SourceTitle.Length > 40 ? p.SourceTitle[..40] : p.SourceTitle,
+                        original, p.PricePerM2,
+                        subjectIsHouse ? "kuća" : "stan",
+                        compIsHouse ? "kuća" : "stan");
+                }
+            }
+            if (crossTypePenalized > 0)
+                pipeline.Add($"V13 Cross-Type Penalty: {crossTypePenalized} comps penalized -25% (house↔apartment mismatch)");
+        }
+
         // ── 4c. Similarity Scoring ──
         foreach (var price in cleanPrices)
         {
@@ -905,6 +942,10 @@ public class ValuationEngine
             StringComparer.OrdinalIgnoreCase);
         pipeline.Add($"LLM sync: {result.FinalUsedUrls.Count} clean URLs exported for AI prompt");
 
+        // ── 14. V13: Sherlock Insight — explain city integrity & quality controls ──
+        result.SherlockInsight = BuildSherlockInsight(
+            marketData, cleanPrices.Count, compDetails, result.OutliersRemoved);
+
         _logger.LogInformation(
             "Engine V4: {Comps} comps, WM={WM:F0}, gap={Gap:F1}%, adj={Adj:+0;-0}%, final={Val:N0} €, confidence={Conf}/100",
             cleanPrices.Count, basePricePerM2, realizationGap * 100, totalAdjPercent,
@@ -916,6 +957,11 @@ public class ValuationEngine
     // ══════════════════════════════════════════════════════════
     //  SIMILARITY SCORE (0.0 – 1.0)
     // ══════════════════════════════════════════════════════════
+    /// <summary>
+    /// V13: Location-First Similarity Score.
+    /// Weight distribution: Location 70% | Type+Size 20% | Condition+Features 10%
+    /// Hard floor: if score < 0.50, listing is excluded from valuation.
+    /// </summary>
     private double CalculateSimilarityScore(
         ExtractedPrice comp,
         ExtractedPropertyInfo target,
@@ -929,8 +975,8 @@ public class ValuationEngine
                           || detectedType.Contains("vila", StringComparison.OrdinalIgnoreCase)
                           || MarketResearchService.IsLandType(detectedType);
 
-        // ── Location (max 0.30) ──
-        maxScore += 0.30;
+        // ── Location (max 0.70) — 70% of total ──
+        maxScore += 0.70;
         string compText = $"{comp.SourceTitle} {comp.SourceUrl}".ToLowerInvariant();
         string targetLoc = target.Location.ToLowerInvariant().Trim();
 
@@ -945,45 +991,44 @@ public class ValuationEngine
 
         if (locParts.Count >= 2 && compText.Contains(locParts[^1]) && compText.Contains(locParts[0]))
         {
-            score += 0.30; // Same neighborhood + city = full score
+            score += 0.70; // Same neighborhood + city = full score
         }
         else if (isExactNeighborhood)
         {
-            score += 0.25; // Neighborhood match without city context
+            score += 0.60; // Neighborhood match without city context
         }
         else if (locParts.Any(part => compText.Contains(part)))
         {
-            // V8: Same city but WRONG neighborhood → hard cap at 0.12
-            // (was 0.22 — allowed Donji Grad to score 67% for Retfala subject)
-            score += 0.12;
+            // V13: Same city but WRONG neighborhood → hard cap at 0.25 (was 0.12 on 0.30 scale)
+            score += 0.25;
         }
         else if (!string.IsNullOrEmpty(regionName) && compText.Contains(regionName.ToLowerInvariant()))
         {
-            score += 0.08; // Same region only
+            score += 0.15; // Same region only
         }
         else
         {
-            score += 0.03; // At least from Croatia
+            score += 0.03; // Unknown location — near-zero
         }
 
-        // ── Property Type (max 0.20) ──
-        maxScore += 0.20;
+        // ── Property Type (max 0.10) — 10% of total ──
+        maxScore += 0.10;
         string type = detectedType.ToLowerInvariant();
         if (compText.Contains(type))
         {
-            score += 0.20;
+            score += 0.10;
         }
         else if (IsSimilarType(type, compText))
         {
-            score += 0.14;
+            score += 0.07;
         }
         else
         {
-            score += 0.04;
+            score += 0.02;
         }
 
-        // ── Size Proximity (max 0.20) ──
-        maxScore += 0.20;
+        // ── Size Proximity (max 0.10) — 10% of total ──
+        maxScore += 0.10;
         if (target.SizeM2 > 0)
         {
             double compSize = ExtractSize(compText);
@@ -994,20 +1039,20 @@ public class ValuationEngine
                     : target.SizeM2 / compSize;
 
                 double sizeScore = Math.Max(0, sizeRatio);
-                score += 0.20 * sizeScore;
+                score += 0.10 * sizeScore;
             }
             else
             {
-                score += 0.08;
+                score += 0.04;
             }
         }
         else
         {
-            score += 0.10;
+            score += 0.05;
         }
 
-        // ── Condition Match (max 0.15) ──
-        maxScore += 0.15;
+        // ── Condition Match (max 0.05) — 5% of total ──
+        maxScore += 0.05;
         var targetCond = ParseTargetState(target);
         var compCond = comp.DetectedCondition;
 
@@ -1016,20 +1061,20 @@ public class ValuationEngine
             int rankDiff = Math.Abs(StateRank(targetCond) - StateRank(compCond));
             double condScore = rankDiff switch
             {
-                0 => 0.15,   // Perfect match
-                1 => 0.10,   // Close
-                2 => 0.05,   // Different
-                _ => 0.02    // Very different
+                0 => 0.05,   // Perfect match
+                1 => 0.03,   // Close
+                2 => 0.01,   // Different
+                _ => 0.00    // Very different
             };
             score += condScore;
         }
         else
         {
-            score += 0.07; // Unknown — neutral
+            score += 0.025; // Unknown — neutral
         }
 
-        // ── Yard Area Proximity (max 0.15) — only for houses/land ──
-        maxScore += 0.15;
+        // ── Yard Area Proximity (max 0.05) — only for houses/land ──
+        maxScore += 0.05;
         if (isHouseOrLand && target.YardAreaM2 > 0 && comp.DetectedYardM2 > 0)
         {
             double yardRatio = target.YardAreaM2 > comp.DetectedYardM2
@@ -1038,29 +1083,24 @@ public class ValuationEngine
 
             if (yardRatio >= 0.80)
             {
-                // Within ±20% → full bonus
-                score += 0.15;
+                score += 0.05;
             }
             else if (yardRatio >= 0.40)
             {
-                // Moderate difference → partial
-                score += 0.15 * yardRatio;
+                score += 0.05 * yardRatio;
             }
             else
             {
-                // Massive plot difference (e.g., 2000m² vs 300m²)
-                // → treat as different asset class → heavily penalize
-                score += 0.02;
+                score += 0.005;
             }
         }
         else if (isHouseOrLand && target.YardAreaM2 > 0 && comp.DetectedYardM2 <= 0)
         {
-            score += 0.05; // Can't compare — slight penalty
+            score += 0.015; // Can't compare — slight penalty
         }
         else
         {
-            // Not a house/no yard info — distribute neutrally
-            score += 0.08;
+            score += 0.025; // Not a house/no yard info — distribute neutrally
         }
 
         // Normalize to 0.0–1.0
@@ -1663,6 +1703,58 @@ public class ValuationEngine
     // ══════════════════════════════════════════════════════════
     //  HELPER: Percentile (linear interpolation)
     // ══════════════════════════════════════════════════════════
+    // ══════════════════════════════════════════════════════════
+    //  V13: SHERLOCK INSIGHT — Explain quality controls to the user
+    // ══════════════════════════════════════════════════════════
+    private static string BuildSherlockInsight(
+        MarketResearchResult marketData,
+        int usedCompsCount,
+        List<UsedComparable> compDetails,
+        int outliersRemoved)
+    {
+        var parts = new List<string>();
+
+        // 1. City Integrity report
+        if (marketData.CityIntegrityRejections > 0 && marketData.RejectedCityNames.Count > 0)
+        {
+            string cities = string.Join(", ", marketData.RejectedCityNames.Select(c =>
+                char.ToUpper(c[0]) + c[1..]));
+            parts.Add(
+                $"Sustav je automatski odbacio {marketData.CityIntegrityRejections} oglas(a) iz okolnih gradova " +
+                $"({cities}) jer ne zadovoljavaju kriterij mikrolokacije, osiguravajući da se procjena " +
+                $"temelji isključivo na tržištu {marketData.RegionName}.");
+        }
+
+        // 2. Outlier removal
+        if (outliersRemoved > 0)
+        {
+            parts.Add(
+                $"Statistički filter uklonio je {outliersRemoved} oglasa sa cijenama koje " +
+                "značajno odstupaju od lokalnog tržišta (IQR metoda).");
+        }
+
+        // 3. Similarity floor
+        int belowFloor = compDetails.Count(c => c.IsOutlier && c.SimilarityScore < 0.50);
+        if (belowFloor > 0)
+        {
+            parts.Add(
+                $"Dodatno je {belowFloor} oglas(a) isključeno jer sličnost s predmetnom " +
+                "nekretninom ne prelazi minimalni prag od 50%.");
+        }
+
+        // 4. Final comp count
+        if (usedCompsCount > 0)
+        {
+            parts.Add(
+                $"Konačna procjena temelji se na {usedCompsCount} pažljivo odabran(ih) " +
+                "usporedivih nekretnina s iste mikrolokacije.");
+        }
+
+        return parts.Count > 0
+            ? string.Join(" ", parts)
+            : "Svi oglasi prošli su kontrolu kvalitete i lokacije bez potrebe za posebnim intervencijama.";
+    }
+
     private static double Percentile(List<double> sortedValues, double percentile)
     {
         if (sortedValues.Count == 0) return 0;
@@ -2141,6 +2233,9 @@ public class DeterministicValuation
 
     // ── Filtered URL list for LLM sync (V6.3) ──
     public HashSet<string> FinalUsedUrls { get; set; } = [];
+
+    // ── V13: Sherlock Insight ──
+    public string SherlockInsight { get; set; } = "";
 }
 
 public class UsedComparable

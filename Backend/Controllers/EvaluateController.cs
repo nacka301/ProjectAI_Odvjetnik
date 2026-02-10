@@ -814,7 +814,8 @@ public class EvaluateController : ControllerBase
             ConfidenceScore = marketData.Confidence.Score,
             ConfidenceExplanation = marketData.Confidence.Explanation,
             ConfidenceColor = marketData.Confidence.Color,
-            SearchPhaseUsed = marketData.SearchPhaseUsed
+            SearchPhaseUsed = marketData.SearchPhaseUsed,
+            SherlockInsight = engineResult.SherlockInsight,
         };
 
         // ── Save to Supabase ──

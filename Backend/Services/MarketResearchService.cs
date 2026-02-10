@@ -133,7 +133,8 @@ public class MarketResearchService
         { "Solin", "Split" }, { "Podstrana", "Split" },
         { "Stobreč", "Split" }, { "Stobrec", "Split" },
         // Rijeka suburbs
-        { "Opatija", "Rijeka" }, { "Crikvenica", "Rijeka" },
+        { "Opatija", "Rijeka" },
+        // NOTE: Crikvenica intentionally NOT mapped to Rijeka (Location Lock — City Integrity).
         // Zadar suburbs
         { "Nin", "Zadar" }, { "Sukošan", "Zadar" }, { "Sukosan", "Zadar" },
         { "Bibinje", "Zadar" }, { "Privlaka", "Zadar" },
@@ -177,6 +178,46 @@ public class MarketResearchService
         { "Lovret", "Split" }, { "Lučac", "Split" }, { "Lucac", "Split" },
         { "Pujanke", "Split" }, { "Ravne njive", "Split" },
         { "Mejaši", "Split" }, { "Mejasi", "Split" },
+    };
+
+    // ══════════════════════════════════════════════════════════
+    //  SUB-DISTRICTS — nearby places to expand to when <3 local results
+    //  Key: city name → sub-districts / nearby small towns within ~5 km.
+    //  This is used INSTEAD of jumping to a completely different city.
+    //  Maintains City Integrity: Crikvenica → Dramalj/Selce, NOT → Rijeka.
+    // ══════════════════════════════════════════════════════════
+    private static readonly Dictionary<string, string[]> SubDistricts =
+        new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "Crikvenica", ["Dramalj", "Selce", "Jadranovo", "Novi Vinodolski"] },
+        { "Opatija",    ["Lovran", "Ičići", "Ika", "Matulji", "Medveja"] },
+        { "Makarska",   ["Tučepi", "Podgora", "Brela", "Baška Voda", "Gradac"] },
+        { "Vodice",     ["Tribunj", "Srima", "Prvić"] },
+        { "Biograd na Moru", ["Sv. Filip i Jakov", "Pakoštane", "Turanj"] },
+        { "Omiš",       ["Dugi Rat", "Mimice", "Pisak"] },
+        { "Nin",        ["Privlaka", "Vrsi", "Zaton"] },
+        { "Senj",       ["Sv. Juraj", "Klada", "Lukovo"] },
+        { "Cavtat",     ["Plat", "Mlini", "Srebreno"] },
+        { "Novalja",    ["Stara Novalja", "Zubovići", "Caska"] },
+    };
+
+    // ══════════════════════════════════════════════════════════
+    //  FORBIDDEN CITY PAIRS — hard block cross-city contamination
+    //  If subject is in city A, listings from city B are FORBIDDEN.
+    //  Bidirectional: both directions are blocked.
+    // ══════════════════════════════════════════════════════════
+    private static readonly HashSet<(string, string)> ForbiddenCityPairs =
+        new()
+    {
+        ("crikvenica", "rijeka"), ("rijeka", "crikvenica"),
+        ("opatija", "rijeka"),    ("rijeka", "opatija"),
+        ("makarska", "split"),    ("split", "makarska"),
+        ("omiš", "split"),        ("split", "omiš"),
+        ("omis", "split"),        ("split", "omis"),
+        ("vodice", "šibenik"),    ("šibenik", "vodice"),
+        ("vodice", "sibenik"),    ("sibenik", "vodice"),
+        ("cavtat", "dubrovnik"),  ("dubrovnik", "cavtat"),
+        ("nin", "zadar"),         ("zadar", "nin"),
     };
 
     // ══════════════════════════════════════════════════════════
@@ -312,6 +353,9 @@ public class MarketResearchService
     {
         var detectedType = DetectPropertyType(pdfText);
         _currentDetectedType = detectedType;   // Set for PriceFirstFilter gates
+        _currentSubjectRegion = ExtractRegionName(location);  // Set for City Integrity gate
+        _cityIntegrityRejections = 0;          // Reset per-call counters
+        _rejectedCityNames.Clear();
         var regionName = ExtractRegionName(location);
         var subLocations = ExtractLocationHierarchy(location);
         bool isLand = IsLandType(detectedType);
@@ -468,24 +512,50 @@ public class MarketResearchService
             }
             else
             {
-                // No peer list → fall back to broader region (islands/suburbs)
-                var widerRegion = GetBroaderRegion(regionName);
-
-                var queries = new List<string>
+                // V13: Try SUB-DISTRICTS first (nearby places <5km) before broader region
+                var subs = GetSubDistricts(regionName);
+                if (subs is { Length: > 0 })
                 {
-                    $"site:njuskalo.hr prodaja {detectedType} \"{widerRegion}\" cijena € {now.Year}",
-                    $"site:njuskalo.hr {synonyms.ElementAtOrDefault(1) ?? detectedType} \"{widerRegion}\" €",
-                    $"prodaja {detectedType} \"{widerRegion}\" cijena € site:njuskalo.hr OR site:index.hr/oglasi",
-                    $"site:njuskalo.hr {detectedType} \"{widerRegion}\" {now.Year}",
-                };
+                    // Search each sub-district individually
+                    var subQueries = subs.Take(4)
+                        .Select(sd => $"site:njuskalo.hr prodaja {detectedType} \"{sd}\" cijena € {now.Year}")
+                        .ToList();
 
-                var phase3Results = await FireParallelSearches(queries, 6, "Phase3-Wider");
-                totalApiCalls += queries.Count;
-                var filtered = PriceFirstFilter(phase3Results, "Phase3", [regionName, widerRegion]);
-                MergeInto(allVerified, filtered);
+                    var subResults = await FireParallelSearches(subQueries, 5, "Phase3-SubDistricts");
+                    totalApiCalls += subQueries.Count;
 
-                _logger.LogInformation("Phase 3 (wider: {Region}->{Wider}): +{New} → total={Total}",
-                    regionName, widerRegion, filtered.Count, allVerified.Count);
+                    // Allow listings from sub-districts + regionName itself
+                    var subAllowed = new List<string> { regionName };
+                    subAllowed.AddRange(subs);
+                    var subFiltered = PriceFirstFilter(subResults, "Phase3-SubDistricts", subAllowed);
+                    MergeInto(allVerified, subFiltered);
+
+                    _logger.LogInformation(
+                        "Phase 3 (sub-districts of {Region}: [{Subs}]): +{New} → total={Total}",
+                        regionName, string.Join(", ", subs), subFiltered.Count, allVerified.Count);
+                }
+
+                // If still <3 after sub-districts, try broader region (but City Integrity blocks forbidden cities)
+                if (allVerified.Count < 3)
+                {
+                    var widerRegion = GetBroaderRegion(regionName);
+
+                    var queries = new List<string>
+                    {
+                        $"site:njuskalo.hr prodaja {detectedType} \"{widerRegion}\" cijena € {now.Year}",
+                        $"site:njuskalo.hr {synonyms.ElementAtOrDefault(1) ?? detectedType} \"{widerRegion}\" €",
+                        $"prodaja {detectedType} \"{widerRegion}\" cijena € site:njuskalo.hr OR site:index.hr/oglasi",
+                        $"site:njuskalo.hr {detectedType} \"{widerRegion}\" {now.Year}",
+                    };
+
+                    var phase3Results = await FireParallelSearches(queries, 6, "Phase3-Wider");
+                    totalApiCalls += queries.Count;
+                    var filtered = PriceFirstFilter(phase3Results, "Phase3", [regionName, widerRegion]);
+                    MergeInto(allVerified, filtered);
+
+                    _logger.LogInformation("Phase 3 (wider: {Region}->{Wider}): +{New} → total={Total}",
+                        regionName, widerRegion, filtered.Count, allVerified.Count);
+                }
             }
         }
 
@@ -665,6 +735,8 @@ public class MarketResearchService
             Confidence = confidence,
             SearchPhaseUsed = searchPhase.ToString(),
             TotalApiCalls = totalApiCalls,
+            CityIntegrityRejections = _cityIntegrityRejections,
+            RejectedCityNames = [.. _rejectedCityNames],
         };
 
         _logger.LogInformation(
@@ -1247,6 +1319,13 @@ public class MarketResearchService
     /// <summary>The currently detected property type — set per search call.</summary>
     private string _currentDetectedType = "stan";
 
+    /// <summary>The subject's region name — set per search call for City Integrity checks.</summary>
+    private string _currentSubjectRegion = "";
+
+    /// <summary>Track how many listings were rejected by city integrity. Thread-local per search call.</summary>
+    private int _cityIntegrityRejections;
+    private readonly List<string> _rejectedCityNames = [];
+
     private List<ComparableSearchResult> PriceFirstFilter(
         List<ComparableSearchResult> results, string phaseName,
         IReadOnlyList<string>? allowedLocations = null)
@@ -1256,6 +1335,9 @@ public class MarketResearchService
             .Where(l => !string.IsNullOrWhiteSpace(l))
             .Select(l => l.ToLowerInvariant())
             .ToList();
+
+        // Resolve the subject region for City Integrity check
+        string subjectLower = _currentSubjectRegion.ToLowerInvariant();
 
         foreach (var r in results)
         {
@@ -1275,6 +1357,35 @@ public class MarketResearchService
                         phaseName, string.Join("|", allowedLocations!), Truncate(r.Title, 60));
                     continue;
                 }
+            }
+
+            // Gate 0.5: CITY INTEGRITY — hard block forbidden city cross-contamination
+            // If subject is "Crikvenica" and listing mentions "Rijeka", reject immediately.
+            if (!string.IsNullOrEmpty(subjectLower))
+            {
+                bool forbidden = false;
+                foreach (var (cityA, cityB) in ForbiddenCityPairs)
+                {
+                    if (subjectLower.Contains(cityA) &&
+                        (combinedLower.Contains(cityB) ||
+                         r.Url.Contains(cityB, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        // But allow if listing ALSO mentions the subject city
+                        if (combinedLower.Contains(subjectLower) ||
+                            r.Url.Contains(subjectLower, StringComparison.OrdinalIgnoreCase))
+                            continue; // Listing mentions both — probably OK
+
+                        _logger.LogDebug(
+                            "[{Phase}] REJECTED (City Integrity: subject={Subject}, blocked={Blocked}): {Title}",
+                            phaseName, subjectLower, cityB, Truncate(r.Title, 60));
+                        forbidden = true;
+                        _cityIntegrityRejections++;
+                        if (!_rejectedCityNames.Contains(cityB, StringComparer.OrdinalIgnoreCase))
+                            _rejectedCityNames.Add(cityB);
+                        break;
+                    }
+                }
+                if (forbidden) continue;
             }
 
             // Gate 1: Must contain a price (number + €)
@@ -1541,9 +1652,16 @@ public class MarketResearchService
         return string.IsNullOrWhiteSpace(firstPart) ? "Hrvatska" : firstPart;
     }
 
-    /// <summary>Get the next broader region for an island/suburb/village.</summary>
+    /// <summary>Get the next broader region for an island/suburb/village.
+    /// V13: SubDistricts are tried FIRST — if Crikvenica has sub-districts,
+    /// we return "Crikvenica" itself (the sub-districts are searched separately).
+    /// We NEVER jump to a forbidden city (e.g. Rijeka for Crikvenica).</summary>
     private static string GetBroaderRegion(string regionName)
     {
+        // V13: If the place has sub-districts, stay local — do NOT jump to a bigger city
+        if (SubDistricts.ContainsKey(regionName))
+            return regionName;
+
         if (BroaderRegion.TryGetValue(regionName, out var broader))
             return broader;
 
@@ -1559,6 +1677,20 @@ public class MarketResearchService
         }
 
         return regionName; // No broader known — use self
+    }
+
+    /// <summary>Check whether listingCity is FORBIDDEN for the given subjectRegion.
+    /// Returns true if the listing should be REJECTED.</summary>
+    private static bool IsForbiddenCity(string subjectRegion, string listingCity)
+    {
+        return ForbiddenCityPairs.Contains(
+            (subjectRegion.ToLowerInvariant(), listingCity.ToLowerInvariant()));
+    }
+
+    /// <summary>Get sub-districts for a city (if defined). Used for local expansion.</summary>
+    internal static string[]? GetSubDistricts(string regionName)
+    {
+        return SubDistricts.TryGetValue(regionName, out var subs) ? subs : null;
     }
 
     private static string[] GetTypeSynonyms(string detectedType)
@@ -1807,6 +1939,10 @@ public class MarketResearchResult
     public ConfidenceScore Confidence { get; set; } = new();
     public string SearchPhaseUsed { get; set; } = "";
     public int TotalApiCalls { get; set; }
+
+    // V13: City Integrity stats
+    public int CityIntegrityRejections { get; set; }
+    public List<string> RejectedCityNames { get; set; } = [];
 
     public List<ComparableSearchResult> AllResults =>
         [.. ActiveListings, .. RegionalData];

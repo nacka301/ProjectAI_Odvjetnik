@@ -180,6 +180,7 @@ interface ValuationResult {
   region_name?: string;
   note?: string;
   search_phase_used?: string;
+  sherlock_insight?: string;
 }
 
 const INITIAL_STAGES: StreamStage[] = [
@@ -1344,6 +1345,18 @@ export default function WizardPage() {
             {/* ════════ TAB: Details ════════ */}
             {resultTab === "details" && (
               <div className="space-y-6">
+
+                {/* Sherlock Insight */}
+                {result.sherlock_insight && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-6">
+                    <h3 className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-3 flex items-center gap-2">
+                      <Eye className="h-4 w-4" /> Sherlock Insight — Kontrola kvalitete
+                    </h3>
+                    <p className="text-sm text-amber-900 leading-relaxed">
+                      {result.sherlock_insight}
+                    </p>
+                  </div>
+                )}
 
                 {/* Full Reasoning */}
                 {result.valuation_reasoning && (
