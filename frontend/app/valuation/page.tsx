@@ -127,6 +127,9 @@ export default function ValuationPage() {
   const [city, setCity] = useState("");
   const [neighborhood, setNeighborhood] = useState("");
 
+  // Email notification
+  const [email, setEmail] = useState("");
+
   const isLoading = isStreaming;
   const canStart = inputMode === "pdf" ? !!file : propertyText.trim().length >= 20;
 
@@ -190,6 +193,7 @@ export default function ValuationPage() {
         if (city.trim()) formData.append("city", city.trim());
         if (neighborhood.trim())
           formData.append("neighborhood", neighborhood.trim());
+        if (email.trim()) formData.append("email", email.trim());
         body = formData;
       } else {
         url = `${API_BASE}/api/evaluate/text/stream`;
@@ -198,6 +202,7 @@ export default function ValuationPage() {
           text: propertyText.trim(),
           city: city.trim() || undefined,
           neighborhood: neighborhood.trim() || undefined,
+          email: email.trim() || undefined,
         });
       }
 
@@ -302,6 +307,7 @@ export default function ValuationPage() {
     setPropertyText("");
     setCity("");
     setNeighborhood("");
+    setEmail("");
     setResult(null);
     setError(null);
     setStages([]);
@@ -400,6 +406,24 @@ export default function ValuationPage() {
               </div>
               <p className="text-xs text-gray-400 mt-2">
                 Ako unesete lokaciju, sustav će je koristiti umjesto AI ekstrakcije iz dokumenta.
+              </p>
+            </div>
+
+            {/* Email Notification */}
+            <div className="rounded-xl bg-white border border-gray-200 p-5">
+              <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                ✉️ Email obavijest
+                <span className="text-xs font-normal text-gray-400">(opcionalno — rezultat na mail)</span>
+              </h4>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="npr. ime@gmail.com"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 placeholder-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              />
+              <p className="text-xs text-gray-400 mt-2">
+                Unesite email adresu ako želite primiti rezultat procjene na mail.
               </p>
             </div>
 

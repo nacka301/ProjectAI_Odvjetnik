@@ -18,6 +18,7 @@ public class EvaluateController : ControllerBase
     private readonly MarketResearchService _marketResearchService;
     private readonly ValuationEngine _valuationEngine;
     private readonly SupabaseService _supabaseService;
+    private readonly EmailService _emailService;
     private readonly ILogger<EvaluateController> _logger;
 
     public EvaluateController(
@@ -26,6 +27,7 @@ public class EvaluateController : ControllerBase
         MarketResearchService marketResearchService,
         ValuationEngine valuationEngine,
         SupabaseService supabaseService,
+        EmailService emailService,
         ILogger<EvaluateController> logger)
     {
         _valuationService = valuationService;
@@ -33,6 +35,7 @@ public class EvaluateController : ControllerBase
         _marketResearchService = marketResearchService;
         _valuationEngine = valuationEngine;
         _supabaseService = supabaseService;
+        _emailService = emailService;
         _logger = logger;
     }
 
@@ -586,7 +589,8 @@ public class EvaluateController : ControllerBase
     public async Task EvaluateStream(
         IFormFile? file,
         [FromForm] string? city = null,
-        [FromForm] string? neighborhood = null)
+        [FromForm] string? neighborhood = null,
+        [FromForm] string? email = null)
     {
         SetupSSEHeaders();
 
@@ -619,7 +623,7 @@ public class EvaluateController : ControllerBase
             await SendProgress("reading", "done", "PDF pročitan",
                 $"{property.Description}, {property.SizeM2} m², {property.Location}");
 
-            await RunStreamingPipelineAsync(property, pdfText);
+            await RunStreamingPipelineAsync(property, pdfText, email);
         }
         catch (Exception ex)
         {
@@ -661,7 +665,7 @@ public class EvaluateController : ControllerBase
             await SendProgress("reading", "done", "Tekst analiziran",
                 $"{property.Description}, {property.SizeM2} m², {property.Location}");
 
-            await RunStreamingPipelineAsync(property, request.Text);
+            await RunStreamingPipelineAsync(property, request.Text, request.Email);
         }
         catch (Exception ex)
         {
@@ -672,7 +676,7 @@ public class EvaluateController : ControllerBase
     /// <summary>
     /// Shared streaming pipeline: Stage 2 through result.
     /// </summary>
-    private async Task RunStreamingPipelineAsync(ExtractedPropertyInfo property, string pdfText)
+    private async Task RunStreamingPipelineAsync(ExtractedPropertyInfo property, string pdfText, string? email = null)
     {
         // ── Stage 2: Market research ──
         await SendProgress("searching", "active", "Pretražujem Njuškalo i tržište nekretnina...");
@@ -833,6 +837,22 @@ public class EvaluateController : ControllerBase
             await SendProgress("saving", "skipped", "Spremanje preskočeno", "Supabase nedostupan");
         }
 
+        // ── Send email notification ──
+        if (!string.IsNullOrWhiteSpace(email))
+        {
+            try
+            {
+                var sent = await _emailService.SendValuationResultAsync(
+                    email, response, $"{property.Description}, {property.SizeM2} m², {property.Location}");
+                if (sent)
+                    _logger.LogInformation("Email sent to {Email}", email);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to send email to {Email}", email);
+            }
+        }
+
         // ── Final result ──
         await SendResult(response);
     }
@@ -843,4 +863,5 @@ public class TextEvaluationRequest
     public string Text { get; set; } = "";
     public string? City { get; set; }
     public string? Neighborhood { get; set; }
+    public string? Email { get; set; }
 }
