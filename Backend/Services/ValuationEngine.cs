@@ -319,8 +319,9 @@ public class ValuationEngine
             }
         }
 
-        // ── 4b. Neighborhood Drift Penalty ──
+        // ── 4b. Neighborhood Drift Penalty + Exact-Match Tagging ──
         // Same city but different neighborhood → -20% on comp price
+        // Also tag each comp with IsExactNeighborhoodMatch for weight boosting & sanity check
         if (cleanPrices.Count > 0)
         {
             var locParts = property.Location.ToLowerInvariant()
@@ -334,12 +335,17 @@ public class ValuationEngine
                 string neighborhood = locParts[0]; // Most specific (kvart)
                 string city = locParts[^1];         // Broadest (grad)
                 int drifted = 0;
+                int exactMatches = 0;
 
                 foreach (var p in cleanPrices)
                 {
                     string compText = $"{p.SourceTitle} {p.SourceUrl}".ToLowerInvariant();
                     bool inCity = compText.Contains(city);
                     bool inNeighborhood = compText.Contains(neighborhood);
+
+                    // Tag exact neighborhood match
+                    p.IsExactNeighborhoodMatch = inNeighborhood;
+                    if (inNeighborhood) exactMatches++;
 
                     if (inCity && !inNeighborhood)
                     {
@@ -355,6 +361,8 @@ public class ValuationEngine
 
                 if (drifted > 0)
                     pipeline.Add($"Neighborhood drift: {drifted} comps penalized -20% (not in {neighborhood})");
+                if (exactMatches > 0)
+                    pipeline.Add($"Exact neighborhood match: {exactMatches} comps tagged for '{neighborhood}'");
             }
         }
 
@@ -421,19 +429,52 @@ public class ValuationEngine
 
         if (cleanPrices.Count >= 2)
         {
-            // Build weight-value pairs
+            // Build weight-value pairs (3x boost for exact neighborhood match)
             var weightedPairs = cleanPrices.Select(p =>
             {
                 var match = compDetails
                     .FirstOrDefault(c => c.Url == p.SourceUrl && !c.IsOutlier);
                 double sim = match?.SimilarityScore ?? 0.5;
                 double weight = Math.Max(sim, 0.1); // minimum weight
+
+                // V7: 300% weight boost for exact neighborhood match
+                if (p.IsExactNeighborhoodMatch)
+                    weight *= 3.0;
+
                 return (Value: p.PricePerM2, Weight: weight);
             }).ToList();
 
             basePricePerM2 = WeightedMedian(weightedPairs);
             priceSource = $"Weighted Median ({cleanPrices.Count} comparables)";
             pipeline.Add($"Weighted Median = {basePricePerM2:F0} EUR/m2");
+
+            // ── 5b. Sanity Check: exact-match anchor ──
+            // If final price >40% above lowest exact-match comp, re-evaluate using only exact-match comps.
+            var exactMatchComps = cleanPrices.Where(p => p.IsExactNeighborhoodMatch).ToList();
+            if (exactMatchComps.Count >= 2)
+            {
+                double lowestExactMatch = exactMatchComps.Min(p => p.PricePerM2);
+                double sanityThreshold = lowestExactMatch * 1.40;
+
+                if (basePricePerM2 > sanityThreshold)
+                {
+                    // Re-run weighted median using ONLY exact-match comps
+                    var exactPairs = exactMatchComps.Select(p =>
+                    {
+                        var m = compDetails.FirstOrDefault(c => c.Url == p.SourceUrl && !c.IsOutlier);
+                        double s = m?.SimilarityScore ?? 0.5;
+                        double w = Math.Max(s, 0.1) * 3.0; // keep the 3x boost
+                        return (Value: p.PricePerM2, Weight: w);
+                    }).ToList();
+
+                    double corrected = WeightedMedian(exactPairs);
+                    pipeline.Add(
+                        $"SANITY CHECK: WM {basePricePerM2:F0} > {sanityThreshold:F0} (140% of lowest exact-match {lowestExactMatch:F0}) " +
+                        $"-> re-evaluated using {exactMatchComps.Count} exact-match comps: {corrected:F0} EUR/m2");
+                    basePricePerM2 = corrected;
+                    priceSource = $"Sanity-Corrected WM ({exactMatchComps.Count} exact-match comps)";
+                }
+            }
         }
         else if (cleanPrices.Count == 1)
         {
@@ -1294,10 +1335,11 @@ public class ValuationEngine
     }
 
     /// <summary>
-    /// Universal Condition Matrix — flat adjustment, works for ALL cities.
-    /// Subject worse than comp → -25% (comp price too high for our condition).
+    /// V7 Per-Rank Condition Adjustment.
+    /// Subject worse than comp → -15% per rank difference (comp price too high for us).
     /// Same condition → 0%.
-    /// Subject better than comp → +15% (comp price understates our value).
+    /// Subject better than comp → +10% per rank difference (comp understates our value).
+    /// Scale: NeedsWork=0, Original=1, Good=2, Renovated=3, New=4 (5 ranks).
     /// </summary>
     private static double ConditionAdjustmentFactor(
         PropertyCondition targetState, PropertyCondition compState)
@@ -1308,9 +1350,12 @@ public class ValuationEngine
 
         int targetRank = StateRank(targetState);
         int compRank = StateRank(compState);
+        int diff = Math.Abs(targetRank - compRank);
 
-        // Universal: flat penalty/bonus regardless of rank distance
-        return targetRank < compRank ? -0.25 : 0.15;
+        // Per-rank: -15% when target worse, +10% when target better
+        return targetRank < compRank
+            ? -0.15 * diff   // e.g. Original(1) vs Renovated(3) → -30%
+            :  0.10 * diff;  // e.g. Renovated(3) vs Original(1) → +20%
     }
 
     private static int StateRank(PropertyCondition c) => c switch
@@ -1393,6 +1438,9 @@ public class ExtractedPrice
     // V5: Condition & yard data extracted from listing text
     public PropertyCondition DetectedCondition { get; set; } = PropertyCondition.Unknown;
     public double DetectedYardM2 { get; set; }
+
+    // V7: Exact neighborhood match flag for weighting & sanity check
+    public bool IsExactNeighborhoodMatch { get; set; }
 }
 
 /// <summary>Property condition states for adjustment logic.</summary>
