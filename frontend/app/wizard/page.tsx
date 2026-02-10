@@ -20,6 +20,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
+import { saveEvaluation } from "@/lib/supabase";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5078";
 
@@ -241,6 +242,8 @@ export default function WizardPage() {
     setStages(INITIAL_STAGES.map((s) => ({ ...s })));
     setIsStreaming(true);
 
+    let streamedResult: ValuationResult | null = null;
+
     try {
       // Send the description as text to the text/stream endpoint
       const url = `${API_BASE}/api/evaluate/text/stream`;
@@ -289,12 +292,24 @@ export default function WizardPage() {
               );
               setError(message);
             } else if (evt.type === "result") {
+              streamedResult = evt.data;
               setResult(evt.data);
             }
           } catch { /* skip */ }
         }
       }
       setIsStreaming(false);
+
+      // Save to Supabase (fire-and-forget)
+      if (streamedResult) {
+        saveEvaluation({
+          property_type: propertyType || "nekretnina",
+          location: `${location.city}, ${location.district}`,
+          estimated_value: streamedResult.estimated_value_eur,
+          pdf_url: null,
+          raw_json_output: streamedResult as unknown as Record<string, unknown>,
+        }).catch((e) => console.warn("Failed to save evaluation:", e));
+      }
     } catch {
       setIsStreaming(false);
       setError("Server ne odgovara. Pokušajte ponovno za minutu.");

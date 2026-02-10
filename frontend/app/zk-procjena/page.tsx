@@ -242,6 +242,8 @@ export default function ZkProcjenaPage() {
     // Upload PDF to Supabase Storage (non-blocking)
     const pdfUrlPromise = uploadPdfToStorage(file);
 
+    let streamedUnifiedResult: UnifiedResult | null = null;
+
     try {
       const url = `${API_BASE}/api/zk/stream`;
       const formData = new FormData();
@@ -297,6 +299,7 @@ export default function ZkProcjenaPage() {
               setZkAnalysis(evt.data);
             } else if (evt.type === "complete") {
               // Final unified result
+              streamedUnifiedResult = evt.data;
               setUnifiedResult(evt.data);
               if (evt.data.zk_analysis) setZkAnalysis(evt.data.zk_analysis);
             }
@@ -309,14 +312,14 @@ export default function ZkProcjenaPage() {
       setIsStreaming(false);
 
       // Save to Supabase (fire-and-forget)
-      if (unifiedResult?.valuation) {
+      if (streamedUnifiedResult?.valuation) {
         const pdfUrl = await pdfUrlPromise;
         saveEvaluation({
-          property_type: unifiedResult.zk_analysis.property_type || "nekretnina",
-          location: unifiedResult.zk_analysis.location || "nepoznato",
-          estimated_value: unifiedResult.valuation.estimated_value_eur,
+          property_type: streamedUnifiedResult.zk_analysis.property_type || "nekretnina",
+          location: streamedUnifiedResult.zk_analysis.location || "nepoznato",
+          estimated_value: streamedUnifiedResult.valuation.estimated_value_eur,
           pdf_url: pdfUrl,
-          raw_json_output: unifiedResult as unknown as Record<string, unknown>,
+          raw_json_output: streamedUnifiedResult as unknown as Record<string, unknown>,
         }).catch((e) => console.warn("Failed to save evaluation:", e));
       }
     } catch {
