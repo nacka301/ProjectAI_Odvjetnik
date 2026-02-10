@@ -15,6 +15,7 @@ public class MarketResearchService
     private readonly HttpClient _httpClient;
     private readonly string _apiKey;
     private readonly ILogger<MarketResearchService> _logger;
+    private readonly NjuskaloScraperService _scraper;
 
     private const string TavilySearchUrl = "https://api.tavily.com/search";
     private const string TavilyExtractUrl = "https://api.tavily.com/extract";
@@ -171,9 +172,10 @@ public class MarketResearchService
 
     private static readonly int[] StaleYears = [2018, 2019, 2020, 2021, 2022];
 
-    public MarketResearchService(HttpClient httpClient, IConfiguration config, ILogger<MarketResearchService> logger)
+    public MarketResearchService(HttpClient httpClient, IConfiguration config, ILogger<MarketResearchService> logger, NjuskaloScraperService scraper)
     {
         _httpClient = httpClient;
+        _scraper = scraper;
         _apiKey = config["Tavily:ApiKey"]
             ?? Environment.GetEnvironmentVariable("Tavily__ApiKey")
             ?? Environment.GetEnvironmentVariable("TAVILY_API_KEY")
@@ -504,9 +506,8 @@ public class MarketResearchService
     // ══════════════════════════════════════════════════════════
 
     /// <summary>
-    /// Constructs the Njuškalo search URL, uses Tavily Extract API to fetch
-    /// the page content (bypassing ShieldSquare CAPTCHA via Tavily's browser infra),
-    /// then parses listings from the extracted text.
+    /// Constructs the Njuškalo search URL, tries Playwright scraper first
+    /// (full scroll + DOM capture), falls back to Tavily Extract on failure.
     /// </summary>
     private async Task<List<ComparableSearchResult>> FetchNjuskaloDirectListings(
         string detectedType, string regionName)
@@ -521,18 +522,36 @@ public class MarketResearchService
                 return [];
             }
 
-            _logger.LogInformation("Phase0: Extracting {Url}", njuskaloUrl);
+            // ── PRIMARY: Playwright scraper (scrolls page, captures full DOM) ──
+            _logger.LogInformation("Phase0: Playwright scraper → {Url}", njuskaloUrl);
+            var scraped = await _scraper.ScrapeListingsAsync(njuskaloUrl);
 
+            if (scraped.Count > 0)
+            {
+                var converted = scraped.Select(s => new ComparableSearchResult
+                {
+                    Url = s.Url,
+                    Title = s.Title,
+                    Content = BuildScrapedContent(s)
+                }).ToList();
+
+                _logger.LogInformation(
+                    "Phase0: Playwright captured {Count} organic listings", converted.Count);
+                return converted;
+            }
+
+            _logger.LogWarning("Phase0: Playwright returned 0 listings — falling back to Tavily Extract");
+
+            // ── FALLBACK: Tavily Extract API ──
             var extractedText = await ExecuteTavilyExtract(njuskaloUrl);
             if (string.IsNullOrWhiteSpace(extractedText))
             {
-                _logger.LogWarning("Phase0: Tavily Extract returned empty for {Url}", njuskaloUrl);
+                _logger.LogWarning("Phase0: Tavily Extract also returned empty for {Url}", njuskaloUrl);
                 return [];
             }
 
             var listings = ParseNjuskaloExtractedText(extractedText);
-
-            _logger.LogInformation("Phase0: Parsed {Count} listings from Njuškalo direct page", listings.Count);
+            _logger.LogInformation("Phase0: Tavily fallback parsed {Count} listings", listings.Count);
             return listings;
         }
         catch (Exception ex)
@@ -540,6 +559,28 @@ public class MarketResearchService
             _logger.LogWarning(ex, "Phase0: Njuškalo direct extraction failed");
             return [];
         }
+    }
+
+    /// <summary>
+    /// Build the Content string from a ScrapedListing for the downstream pipeline.
+    /// </summary>
+    private static string BuildScrapedContent(ScrapedListing s)
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(s.Title))
+            parts.Add(s.Title);
+        if (!string.IsNullOrWhiteSpace(s.Location))
+            parts.Add($"Lokacija: {s.Location}");
+        if (!string.IsNullOrWhiteSpace(s.PriceText))
+            parts.Add($"Cijena: {s.PriceText}");
+        if (!string.IsNullOrWhiteSpace(s.Description))
+            parts.Add(s.Description);
+
+        // If structured parts are sparse, include the raw fullText
+        if (parts.Count < 2 && !string.IsNullOrWhiteSpace(s.FullText))
+            parts.Add(s.FullText);
+
+        return string.Join(". ", parts);
     }
 
     /// <summary>
