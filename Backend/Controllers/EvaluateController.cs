@@ -44,7 +44,10 @@ public class EvaluateController : ControllerBase
     /// </summary>
     [HttpPost]
     [RequestSizeLimit(10 * 1024 * 1024)]
-    public async Task<IActionResult> Evaluate(IFormFile file)
+    public async Task<IActionResult> Evaluate(
+        IFormFile file,
+        [FromForm] string? city = null,
+        [FromForm] string? neighborhood = null)
     {
         if (file is null || file.Length == 0)
             return BadRequest(new { error = "Nije učitana datoteka." });
@@ -79,6 +82,10 @@ public class EvaluateController : ControllerBase
             _logger.LogInformation(
                 "Stage 1 done: {Desc}, {Size} m², {Location}",
                 property.Description, property.SizeM2, property.Location);
+
+            // LOCATION OVERRIDE: If frontend sent structured location fields,
+            // use those instead of the AI-extracted location from the PDF.
+            ApplyLocationOverride(property, city, neighborhood);
 
             // ────────────────────────────────────────────────────
             // STAGE 2: Market research (Njuškalo stealth search)
@@ -294,6 +301,31 @@ public class EvaluateController : ControllerBase
     }
 
     // ══════════════════════════════════════════════════════════
+    //  LOCATION OVERRIDE — use frontend-supplied city/neighborhood
+    //  instead of AI-guessed location from the PDF/text.
+    // ══════════════════════════════════════════════════════════
+    private void ApplyLocationOverride(
+        ExtractedPropertyInfo property, string? city, string? neighborhood)
+    {
+        if (string.IsNullOrWhiteSpace(city) && string.IsNullOrWhiteSpace(neighborhood))
+            return; // No override — keep AI-extracted location
+
+        string overrideLocation;
+        if (!string.IsNullOrWhiteSpace(neighborhood) && !string.IsNullOrWhiteSpace(city))
+            overrideLocation = $"{neighborhood.Trim()}, {city.Trim()}";
+        else if (!string.IsNullOrWhiteSpace(neighborhood))
+            overrideLocation = neighborhood.Trim();
+        else
+            overrideLocation = city!.Trim();
+
+        _logger.LogInformation(
+            "LOCATION OVERRIDE: AI extracted \"{AiLocation}\" → user specified \"{Override}\"",
+            property.Location, overrideLocation);
+
+        property.Location = overrideLocation;
+    }
+
+    // ══════════════════════════════════════════════════════════
     //  PATCH REASONING — replace the AI's wrong final value
     //  with the engine's authoritative value in the text body
     // ══════════════════════════════════════════════════════════
@@ -369,6 +401,9 @@ public class EvaluateController : ControllerBase
             _logger.LogInformation(
                 "Stage 1 done (text): {Desc}, {Size} m2, {Location}",
                 property.Description, property.SizeM2, property.Location);
+
+            // LOCATION OVERRIDE from structured fields
+            ApplyLocationOverride(property, request.City, request.Neighborhood);
 
             // STAGE 2: Market research
             MarketResearchResult marketData;
@@ -512,4 +547,6 @@ public class EvaluateController : ControllerBase
 public class TextEvaluationRequest
 {
     public string Text { get; set; } = "";
+    public string? City { get; set; }
+    public string? Neighborhood { get; set; }
 }

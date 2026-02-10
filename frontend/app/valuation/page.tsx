@@ -114,6 +114,10 @@ export default function ValuationPage() {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // Structured location fields
+  const [city, setCity] = useState("");
+  const [neighborhood, setNeighborhood] = useState("");
+
   const isLoading = phase !== "idle" && phase !== "done";
   const canStart = inputMode === "pdf" ? !!file : propertyText.trim().length >= 20;
 
@@ -170,6 +174,8 @@ export default function ValuationPage() {
       if (inputMode === "pdf" && file) {
         const formData = new FormData();
         formData.append("file", file);
+        if (city.trim()) formData.append("city", city.trim());
+        if (neighborhood.trim()) formData.append("neighborhood", neighborhood.trim());
         res = await axios.post<AutoValuationResult>(
           `${API_BASE}/api/evaluate`,
           formData
@@ -177,7 +183,11 @@ export default function ValuationPage() {
       } else {
         res = await axios.post<AutoValuationResult>(
           `${API_BASE}/api/evaluate/text`,
-          { text: propertyText.trim() }
+          {
+            text: propertyText.trim(),
+            city: city.trim() || undefined,
+            neighborhood: neighborhood.trim() || undefined,
+          }
         );
       }
       clearTimeout(phaseTimer1);
@@ -247,6 +257,8 @@ export default function ValuationPage() {
   const reset = () => {
     setFile(null);
     setPropertyText("");
+    setCity("");
+    setNeighborhood("");
     setResult(null);
     setError(null);
     setPhase("idle");
@@ -312,6 +324,39 @@ export default function ValuationPage() {
                 <FileText className="h-4 w-4" />
                 Ručni unos teksta
               </button>
+            </div>
+
+            {/* Location Fields */}
+            <div className="rounded-xl bg-white border border-gray-200 p-5">
+              <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                📍 Lokacija nekretnine
+                <span className="text-xs font-normal text-gray-400">(preporučeno za bolju preciznost)</span>
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Grad</label>
+                  <input
+                    type="text"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    placeholder="npr. Osijek, Split, Zagreb..."
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 placeholder-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Kvart / Naselje</label>
+                  <input
+                    type="text"
+                    value={neighborhood}
+                    onChange={(e) => setNeighborhood(e.target.value)}
+                    placeholder="npr. Retfala, Spinut, Maksimir..."
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 placeholder-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-gray-400 mt-2">
+                Ako unesete lokaciju, sustav će je koristiti umjesto AI ekstrakcije iz dokumenta.
+              </p>
             </div>
 
             {/* PDF Drop Zone */}
