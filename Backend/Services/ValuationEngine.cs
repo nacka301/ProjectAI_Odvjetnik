@@ -73,6 +73,22 @@ public class ValuationEngine
     private static readonly string[] GoodKeywords =
         ["odr\u017eavan", "odrzavan", "uredno", "dobro stanje", "useljiv"];
 
+    // ══════════════════════════════════════════════════════════
+    //  FEATURE KEYWORDS — detect value-adding features from listing text
+    // ══════════════════════════════════════════════════════════
+    private static readonly string[] GarageKeywords =
+        ["gara\u017ea", "garaza", "gara\u017eno", "garazno", "gara\u017eno mjesto",
+         "garazno mjesto", "garage", "parking mjesto", "parkirno mjesto"];
+
+    private static readonly string[] RenovationKeywords =
+        ["nova fasada", "novi krov", "termoizolacija", "energetska obnova",
+         "potpuno renoviran", "kompletno renoviran", "novoure\u0111en",
+         "novouredjen", "kompletno ure\u0111", "kompletno uredj",
+         "zamijenjeni prozor", "novi prozor", "nova stolarija"];
+
+    private static readonly string[] YardKeywords =
+        ["dvori\u0161te", "dvoriste", "oku\u0107nica", "okucnica", "vrt", "ba\u0161ta", "basta"];
+
     private static readonly Regex YardRegex = new(
         @"(?:oku\u0107nica|okucnica|dvori\u0161te|dvoriste|vrt|ba\u0161ta|basta|\bparcela\b)[:\s]*(?:od\s+)?(?:cca\.?\s+)?(?:ca\.?\s+)?(?:oko\s+)?(\d[\d.,]*)\s*m[\u00b22]",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
@@ -316,6 +332,100 @@ public class ValuationEngine
             if (adjusted > 0)
             {
                 pipeline.Add($"Condition adj: {adjusted} comps adjusted (target={targetState})");
+            }
+        }
+
+        // ── 4a+. FEATURE-BASED PRICE ADJUSTMENTS ──
+        // Garage, renovation, yard — adjust comp price to Subject's level
+        if (cleanPrices.Count > 0)
+        {
+            bool isApartment = marketData.DetectedPropertyType.Contains("stan", StringComparison.OrdinalIgnoreCase)
+                            || marketData.DetectedPropertyType.Contains("apartman", StringComparison.OrdinalIgnoreCase);
+            bool subjectHasGarage = DetectFeature(
+                $"{property.Description} {property.Condition} {property.RawText}", GarageKeywords);
+            bool subjectHasReno = targetState == PropertyCondition.Renovated
+                              || targetState == PropertyCondition.New
+                              || DetectFeature(
+                                  $"{property.Description} {property.Condition} {property.RawText}", RenovationKeywords);
+            bool subjectHasYard = property.YardAreaM2 > 0
+                              || DetectFeature(
+                                  $"{property.Description} {property.Condition} {property.RawText}", YardKeywords);
+
+            int featureAdjCount = 0;
+            var featureLog = new List<string>();
+
+            foreach (var p in cleanPrices)
+            {
+                double originalPrice = p.PricePerM2;
+                var reasons = new List<string>();
+
+                // ── GARAGE ──
+                if (subjectHasGarage && !p.HasGarage)
+                {
+                    // Subject has garage, comp doesn't → comp is cheaper than it should be
+                    // Add garage value: +5% for apartments, flat EUR 15k/sizeM2 for houses
+                    double garageBoost = isApartment
+                        ? 0.05
+                        : (property.SizeM2 > 0 ? 15_000.0 / (originalPrice * property.SizeM2) : 0.05);
+                    garageBoost = Math.Min(garageBoost, 0.10); // cap at 10%
+                    p.PricePerM2 *= (1 + garageBoost);
+                    reasons.Add($"+{garageBoost * 100:F0}% (nema gara\u017eu)");
+                }
+                else if (!subjectHasGarage && p.HasGarage)
+                {
+                    // Comp has garage, subject doesn't → comp price includes garage premium
+                    double garagePenalty = isApartment
+                        ? 0.05
+                        : (property.SizeM2 > 0 ? 15_000.0 / (originalPrice * property.SizeM2) : 0.05);
+                    garagePenalty = Math.Min(garagePenalty, 0.10);
+                    p.PricePerM2 *= (1 - garagePenalty);
+                    reasons.Add($"-{garagePenalty * 100:F0}% (ima gara\u017eu)");
+                }
+
+                // ── RENOVATION ──
+                if (!subjectHasReno && p.HasRenovation)
+                {
+                    // Comp is renovated, subject needs work → heavy penalty
+                    p.PricePerM2 *= 0.80; // -20%
+                    reasons.Add("-20% (comp renoviran, subjekt nije)");
+                }
+                else if (subjectHasReno && !p.HasRenovation
+                         && p.DetectedCondition != PropertyCondition.Renovated
+                         && p.DetectedCondition != PropertyCondition.New)
+                {
+                    // Subject renovated, comp old → bonus
+                    p.PricePerM2 *= 1.15; // +15%
+                    reasons.Add("+15% (subjekt renoviran, comp star)");
+                }
+
+                // ── YARD (houses only) ──
+                if (!isApartment && property.YardAreaM2 > 0 && p.DetectedYardM2 > 0)
+                {
+                    double yardDiff = property.YardAreaM2 - p.DetectedYardM2;
+                    if (Math.Abs(yardDiff) > 200)
+                    {
+                        // +7% per 200m\u00b2 of extra land subject has (or -7% if less)
+                        double yardAdj = (yardDiff / 200.0) * 0.07;
+                        yardAdj = Math.Clamp(yardAdj, -0.25, 0.25); // cap \u00b125%
+                        p.PricePerM2 *= (1 + yardAdj);
+                        reasons.Add($"{yardAdj * 100:+0;-0}% (oku\u0107nica razlika {yardDiff:+0;-0}m\u00b2)");
+                    }
+                }
+
+                if (reasons.Count > 0)
+                {
+                    featureAdjCount++;
+                    string label = p.SourceTitle.Length > 35 ? p.SourceTitle[..35] : p.SourceTitle;
+                    featureLog.Add(
+                        $"Comp '{label}': {originalPrice:F0}\u2192{p.PricePerM2:F0} EUR/m\u00b2 [{string.Join(", ", reasons)}]");
+                }
+            }
+
+            if (featureAdjCount > 0)
+            {
+                pipeline.Add($"Feature adj: {featureAdjCount} comps adjusted (garage/renovation/yard)");
+                foreach (var log in featureLog)
+                    pipeline.Add($"  \u2192 {log}");
             }
         }
 
@@ -1209,7 +1319,10 @@ public class ValuationEngine
                         SourceTitle = listing.Title,
                         SourceUrl = listing.Url,
                         DetectedCondition = DetectConditionFromText(text),
-                        DetectedYardM2 = ExtractYardArea(text)
+                        DetectedYardM2 = ExtractYardArea(text),
+                        HasGarage = DetectFeature(text, GarageKeywords),
+                        HasRenovation = DetectFeature(text, RenovationKeywords),
+                        HasYard = DetectFeature(text, YardKeywords)
                     });
                     continue;
                 }
@@ -1255,7 +1368,10 @@ public class ValuationEngine
                             SourceTitle = listing.Title,
                             SourceUrl = listing.Url,
                             DetectedCondition = DetectConditionFromText(text),
-                            DetectedYardM2 = ExtractYardArea(text)
+                            DetectedYardM2 = ExtractYardArea(text),
+                            HasGarage = DetectFeature(text, GarageKeywords),
+                            HasRenovation = DetectFeature(text, RenovationKeywords),
+                            HasYard = DetectFeature(text, YardKeywords)
                         });
                         break; // One price per listing
                     }
@@ -1395,6 +1511,17 @@ public class ValuationEngine
     }
 
     /// <summary>
+    /// Detect if a listing contains ANY keyword from the given set.
+    /// </summary>
+    private static bool DetectFeature(string text, string[] keywords)
+    {
+        var lower = text.ToLowerInvariant();
+        foreach (var kw in keywords)
+            if (lower.Contains(kw)) return true;
+        return false;
+    }
+
+    /// <summary>
     /// V7 Per-Rank Condition Adjustment.
     /// Subject worse than comp → -15% per rank difference (comp price too high for us).
     /// Same condition → 0%.
@@ -1501,6 +1628,11 @@ public class ExtractedPrice
 
     // V7: Exact neighborhood match flag for weighting & sanity check
     public bool IsExactNeighborhoodMatch { get; set; }
+
+    // V8.1: Feature booleans — detected from listing text
+    public bool HasGarage { get; set; }
+    public bool HasRenovation { get; set; }
+    public bool HasYard { get; set; }
 }
 
 /// <summary>Property condition states for adjustment logic.</summary>
