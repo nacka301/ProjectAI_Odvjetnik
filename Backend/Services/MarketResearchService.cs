@@ -1292,15 +1292,23 @@ public class MarketResearchService
     ];
 
     // ── Wrong-type keywords — used by Type Gate ──
+    // V13: HARD EXCLUSION — stan ≠ kuća ≠ zemljište ≠ poslovni. NIKAD ne uspoređivati.
     private static readonly Dictionary<string, string[]> WrongTypeKeywords = new()
     {
         ["građevinsko zemljište"] = ["stan", "apartman", "garsonijera", "soba",
             "kuća", "kuca", "vila", "vikendica", "etaža", "etaza",
             "poslovni prostor", "ured", "lokal"],
         ["stan"]                  = ["građevinsko zemljište", "parcela", "oranica",
-            "pašnjak", "livada", "šuma"],
-        ["kuća"]                  = ["građevinsko zemljište", "parcela", "oranica"],
-        ["poslovni prostor"]      = ["parcela", "oranica", "livada"],
+            "pašnjak", "livada", "šuma",
+            "kuća", "kuca", "vila", "vikendica", "obiteljska kuća",
+            "dvojna kuća", "poslovni prostor", "ured", "lokal"],
+        ["kuća"]                  = ["građevinsko zemljište", "parcela", "oranica",
+            "pašnjak", "livada", "šuma",
+            "stan", "apartman", "garsonijera", "jednosoban", "dvosoban", "trosoban",
+            "poslovni prostor", "ured", "lokal"],
+        ["poslovni prostor"]      = ["parcela", "oranica", "livada",
+            "stan", "apartman", "garsonijera",
+            "kuća", "kuca", "vila", "vikendica"],
     };
 
     private static readonly string[] RentalKeywords =

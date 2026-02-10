@@ -632,17 +632,19 @@ public class ValuationEngine
             }
         }
 
-        // ── 4b++. V13: CROSS-TYPE PENALTY ──
-        // If subject is "House" but comp is "Apartment" (or vice versa, even in same city),
-        // apply automatic 25% penalty to the comp's price before it enters the weighted median.
+        // ── 4b++. V13: CROSS-TYPE HARD EXCLUSION ──
+        // Stan ≠ Kuća ≠ Zemljište — NIKAD ne uspoređivati različite tipove.
+        // If subject is House, ALL apartment comps are EXCLUDED (and vice versa).
+        // This is a hard block, not a penalty.
         {
             string subjectType = marketData.DetectedPropertyType.ToLowerInvariant();
             bool subjectIsHouse = subjectType.Contains("kuć") || subjectType.Contains("kuc")
                                || subjectType.Contains("vila") || subjectType.Contains("vikend");
             bool subjectIsApt   = subjectType.Contains("stan") || subjectType.Contains("apartman")
                                || subjectType.Contains("garsonije");
+            bool subjectIsLand  = MarketResearchService.IsLandType(subjectType);
 
-            int crossTypePenalized = 0;
+            var toExclude = new List<ExtractedPrice>();
             foreach (var p in cleanPrices)
             {
                 string compText = $"{p.SourceTitle} {p.SourceUrl}".ToLowerInvariant();
@@ -650,23 +652,37 @@ public class ValuationEngine
                                 || compText.Contains("vila") || compText.Contains("vikend");
                 bool compIsApt   = compText.Contains("stan") || compText.Contains("apartman")
                                 || compText.Contains("garsonije");
+                bool compIsLand  = compText.Contains("zemljišt") || compText.Contains("zemljist")
+                                || compText.Contains("parcela") || compText.Contains("oranica");
 
-                // Cross-type: subject is House, comp is Apartment (or reverse)
+                bool mismatch = false;
+                string reason = "";
+
+                // House vs Apartment — FORBIDDEN
                 if ((subjectIsHouse && compIsApt) || (subjectIsApt && compIsHouse))
+                { mismatch = true; reason = subjectIsHouse ? "kuća vs stan" : "stan vs kuća"; }
+                // House vs Land — FORBIDDEN
+                else if ((subjectIsHouse && compIsLand) || (subjectIsLand && compIsHouse))
+                { mismatch = true; reason = subjectIsHouse ? "kuća vs zemljište" : "zemljište vs kuća"; }
+                // Apartment vs Land — FORBIDDEN
+                else if ((subjectIsApt && compIsLand) || (subjectIsLand && compIsApt))
+                { mismatch = true; reason = subjectIsApt ? "stan vs zemljište" : "zemljište vs stan"; }
+
+                if (mismatch)
                 {
-                    double original = p.PricePerM2;
-                    p.PricePerM2 *= 0.75; // 25% cross-type penalty
-                    crossTypePenalized++;
-                    _logger.LogDebug(
-                        "Cross-type penalty: {Title} {Old:F0}->{New:F0} EUR/m2 (-25%, {SubjType} vs {CompType})",
-                        p.SourceTitle.Length > 40 ? p.SourceTitle[..40] : p.SourceTitle,
-                        original, p.PricePerM2,
-                        subjectIsHouse ? "kuća" : "stan",
-                        compIsHouse ? "kuća" : "stan");
+                    toExclude.Add(p);
+                    _logger.LogInformation(
+                        "CROSS-TYPE EXCLUDED: {Title} ({Reason})",
+                        p.SourceTitle.Length > 40 ? p.SourceTitle[..40] : p.SourceTitle, reason);
                 }
             }
-            if (crossTypePenalized > 0)
-                pipeline.Add($"V13 Cross-Type Penalty: {crossTypePenalized} comps penalized -25% (house↔apartment mismatch)");
+
+            if (toExclude.Count > 0)
+            {
+                var excludeUrls = new HashSet<string>(toExclude.Select(e => e.SourceUrl), StringComparer.OrdinalIgnoreCase);
+                cleanPrices = cleanPrices.Where(p => !excludeUrls.Contains(p.SourceUrl)).ToList();
+                pipeline.Add($"V13 Cross-Type EXCLUSION: {toExclude.Count} comps REMOVED (different property type — hard block)");
+            }
         }
 
         // ── 4c. Similarity Scoring ──
