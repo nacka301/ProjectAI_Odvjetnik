@@ -254,6 +254,93 @@ public class ValuationService
                 Procjena se temelji na dostupnim regionalnim tržišnim podacima za [Location]."
 
         ═══════════════════════════════════════════
+        PROPERTY TYPE INTELLIGENCE — "SHERLOCK" RULES (Phase 4):
+        ═══════════════════════════════════════════
+
+        14. IDENTITY LOCK — Property Type Must Match:
+            - If the SubjectProperty is a "Kuća" (House), you MUST find other "Kuća" comparables
+              in the dataset. Do NOT use bare Land (zemljište) prices as House prices.
+            - How to detect Land-only comps: the listing mentions LandAreaM2 but has NO
+              LivingAreaM2, no "stambena površina", no "korisna površina", no room count.
+              Keywords indicating land-only: "građevinsko zemljište", "parcela", "oranica".
+            - IF the dataset ONLY contains Land comparables for a House subject:
+              STOP using the Comparative method for the building.
+              SWITCH to Troškovna metoda (Replacement Cost Method) for the structure:
+              * Value = (Value of Land from comps) + (Replacement Cost of Construction) − Depreciation
+              * Replacement Cost estimation for continental Croatia:
+                - New construction: 800–1.200 EUR/m² (depending on quality)
+                - 1950s–1970s house in GOOD condition: minimum 400–600 EUR/m² replacement value
+                - 1980s–2000s house in GOOD condition: minimum 500–800 EUR/m²
+              * Depreciation: 1–2% per year of building age, maximum 60–70%
+              * Example: 1960s house, 120 m², good condition, land worth 15.000 EUR
+                → Replacement: 120 × 500 = 60.000 EUR
+                → Depreciation: 60 years × 1.5% = 90% → capped at 65% → 60.000 × 0.35 = 21.000 EUR
+                → Total: 15.000 (land) + 21.000 (structure) = 36.000 EUR
+            - Clearly state in reasoning: "Usporedive nekretnine sadrže samo zemljište bez
+              objekata. Primijenjena troškovna metoda za procjenu vrijednosti građevine."
+
+        15. REGIONAL WEIGHTING — Secondary Market Discount:
+            - Properties in secondary/tertiary markets (e.g., Daruvar, Markovac, Grubišno Polje,
+              Pakrac, Garešnica) have LOWER values than nearby larger towns (e.g., Bjelovar).
+            - IF you use comparables from a LARGER nearby town for a SMALLER town subject:
+              * Apply a -15% to -25% LOCATION DISCOUNT, but ONLY to the LAND portion of the value.
+              * The BUILDING/STRUCTURE value is NOT discounted (construction costs are similar everywhere).
+              * Example: Bjelovar land = 50 EUR/m², applying -20% for Daruvar → 40 EUR/m².
+                But the house structure value stays the same regardless of location.
+            - Known secondary market pairs (subject → larger reference town):
+              * Daruvar/Markovac → Bjelovar (-20% land discount)
+              * Pakrac → Požega (-15% land discount)
+              * Grubišno Polje → Bjelovar (-25% land discount)
+              * Garešnica → Bjelovar (-20% land discount)
+            - State in reasoning: "Primijenjen lokacijski diskont od -X% na zemljišnu
+              komponentu jer je [Subject Location] sekundarno tržište u odnosu na [Comp Location]."
+
+        16. COMPONENT ANALYSIS — Detect Mixed-Use Listings:
+            - When analyzing comparable listings, search for these Croatian keywords that indicate
+              the listing includes MORE than just the house/apartment:
+              * "voćnjak" (orchard), "vinograd" (vineyard), "maslinik" (olive grove)
+              * "garaža" (garage), "garažno mjesto" (parking spot)
+              * "pomoćna zgrada" (auxiliary building), "gospodarski objekt" (farm building)
+              * "šupa" (shed), "spremište" (storage)
+            - IF a comparable's price includes these components but the Subject does NOT have them,
+              you must SUBTRACT the estimated value of those extras from the comparable's price:
+              * Garage: −5.000 EUR (detached) or −3.000 EUR (integral/small)
+              * Vineyard/Orchard (voćnjak/vinograd): −3.000 to −5.000 EUR depending on size
+              * Olive grove (maslinik): −2.000 to −5.000 EUR depending on size
+              * Auxiliary building (pomoćna zgrada): −2.000 to −4.000 EUR
+              * Swimming pool (bazen): −8.000 to −15.000 EUR
+            - Conversely, if the Subject HAS a garage/orchard but the comp does NOT:
+              ADD the estimated value to reach an apples-to-apples comparison.
+            - IF a comparable is clearly "Clean Land" (no structures) but is priced as if it
+              includes structures, examine the listing text carefully and adjust.
+            - State each component adjustment in reasoning: "Korigirano za garažu (−5.000 EUR)
+              jer usporediva nekretnina sadrži garažu koju predmet procjene nema."
+
+        17. REALITY CHECK FLOOR — Minimum Value Sanity:
+            - A HABITABLE multi-story house (katnica/dvokatnica) in ANY Croatian town
+              CANNOT realistically cost less than 30.000 EUR.
+            - Specific floors by region:
+              * Continental Croatia (Slavonija, Podravina, Moslavina):
+                - Habitable house, good condition: minimum 35.000–40.000 EUR
+                - Habitable house, needs work: minimum 15.000–25.000 EUR
+              * Coastal Croatia (Dalmacija, Istra, Kvarner):
+                - Habitable house, good condition: minimum 80.000 EUR
+                - Habitable house, needs work: minimum 40.000 EUR
+              * Zagreb metro area:
+                - Habitable house, good condition: minimum 100.000 EUR
+            - IF your calculated value falls BELOW the regional minimum floor:
+              * FLAG it: "UPOZORENJE: Izračunata vrijednost (X EUR) je ispod regionalnog
+                minimuma za useljivu kuću. Tržište nema dovoljno podataka ili su podaci
+                iskrivljeni (npr. samo zemljišne cijene)."
+              * USE the regional floor as the minimum estimate, OR
+              * Search for "Stare kuće u [County] županiji" regional average and use that.
+              * Set confidence to "Low" and note: "Nedostatak podataka / Niska likvidnost tržišta"
+            - This rule does NOT apply to:
+              * Ruins (ruševina) — these can be below the floor
+              * Land only — land has different pricing
+              * Properties explicitly marked as "neuseljivo" (uninhabitable)
+
+        ═══════════════════════════════════════════
 
         Instructions:
         - Write in formal Croatian legal/technical language.
