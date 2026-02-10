@@ -316,11 +316,11 @@ public class EvaluateController : ControllerBase
 
         string overrideLocation;
         if (!string.IsNullOrWhiteSpace(neighborhood) && !string.IsNullOrWhiteSpace(city))
-            overrideLocation = $"{neighborhood.Trim()}, {city.Trim()}";
-        else if (!string.IsNullOrWhiteSpace(neighborhood))
-            overrideLocation = neighborhood.Trim();
+            overrideLocation = $"{city.Trim()}, {neighborhood.Trim()}";
+        else if (!string.IsNullOrWhiteSpace(city))
+            overrideLocation = city.Trim();
         else
-            overrideLocation = city!.Trim();
+            overrideLocation = neighborhood!.Trim();
 
         _logger.LogInformation(
             "LOCATION OVERRIDE: AI extracted \"{AiLocation}\" → user specified \"{Override}\"",
