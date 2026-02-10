@@ -51,6 +51,10 @@ public static class PropertyDescriptionGenerator
         if (a.TotalFloors > 0)
             sb.Append($" od {a.TotalFloors}");
 
+        // Year built
+        if (a.YearBuilt.HasValue && a.YearBuilt.Value > 0)
+            sb.Append($", godina izgradnje {a.YearBuilt.Value}");
+
         // Features
         var features = new List<string>();
         if (a.HasElevator) features.Add("lift");
@@ -63,6 +67,10 @@ public static class PropertyDescriptionGenerator
 
         // Condition
         sb.Append($". Stanje: {FormatCondition(a.Condition)}.");
+
+        // Distance to sea
+        if (a.DistanceToSeaM.HasValue && a.DistanceToSeaM.Value > 0)
+            sb.Append($" Udaljenost od mora: {a.DistanceToSeaM.Value} m.");
 
         return sb.ToString();
     }
@@ -83,6 +91,10 @@ public static class PropertyDescriptionGenerator
         sb.Append($", stambena površina {h.LivingAreaM2:0.#} m²");
         sb.Append($", okućnica {h.LandAreaM2:0.#} m²");
 
+        // Year built
+        if (h.YearBuilt.HasValue && h.YearBuilt.Value > 0)
+            sb.Append($", godina izgradnje {h.YearBuilt.Value}");
+
         // Features
         var features = new List<string>();
         if (h.HasGarage) features.Add("garaža");
@@ -94,6 +106,10 @@ public static class PropertyDescriptionGenerator
             sb.Append($", {string.Join(", ", features)}");
 
         sb.Append($". Stanje: {FormatCondition(h.Condition)}.");
+
+        // Distance to sea
+        if (h.DistanceToSeaM.HasValue && h.DistanceToSeaM.Value > 0)
+            sb.Append($" Udaljenost od mora: {h.DistanceToSeaM.Value} m.");
 
         return sb.ToString();
     }
@@ -123,6 +139,14 @@ public static class PropertyDescriptionGenerator
             sb.Append($", {string.Join(", ", features)}");
 
         sb.Append('.');
+
+        // Legalization
+        if (!l.IsLegalized)
+            sb.Append(" NAPOMENA: Objekt nije legaliziran — potrebna legalizacija.");
+
+        // Distance to sea
+        if (l.DistanceToSeaM.HasValue && l.DistanceToSeaM.Value > 0)
+            sb.Append($" Udaljenost od mora: {l.DistanceToSeaM.Value} m.");
 
         return sb.ToString();
     }

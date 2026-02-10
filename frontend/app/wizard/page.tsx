@@ -42,6 +42,8 @@ interface ApartmentData {
   floor: number;
   total_floors: number;
   condition: PropertyCondition;
+  year_built?: number;
+  distance_to_sea_m?: number;
   has_elevator: boolean;
   has_parking: boolean;
   has_balcony: boolean;
@@ -53,6 +55,8 @@ interface HouseData {
   land_area_m2: number;
   floors: HouseFloors;
   condition: PropertyCondition;
+  year_built?: number;
+  distance_to_sea_m?: number;
   has_garage: boolean;
   has_pool: boolean;
   first_row_to_sea: boolean;
@@ -62,9 +66,11 @@ interface HouseData {
 interface LandData {
   land_area_m2: number;
   land_use: LandUse;
+  distance_to_sea_m?: number;
   has_access_road: boolean;
   has_infrastructure: boolean;
   first_row_to_sea: boolean;
+  is_legalized: boolean;
 }
 
 interface ValidationError {
@@ -171,7 +177,7 @@ export default function WizardPage() {
   });
   const [land, setLand] = useState<LandData>({
     land_area_m2: 0, land_use: "Construction",
-    has_access_road: false, has_infrastructure: false, first_row_to_sea: false,
+    has_access_road: false, has_infrastructure: false, first_row_to_sea: false, is_legalized: true,
   });
 
   // Draft validation
@@ -466,6 +472,10 @@ export default function WizardPage() {
                     onChange={(v) => setApt({ ...apt, floor: v })} min={-2} max={50} step={1} />
                   <NumberInput label="Ukupno katova *" value={apt.total_floors}
                     onChange={(v) => setApt({ ...apt, total_floors: v })} min={1} max={50} step={1} />
+                  <NumberInput label="Godina izgradnje" value={apt.year_built || 0}
+                    onChange={(v) => setApt({ ...apt, year_built: v || undefined })} min={1900} max={2030} step={1} />
+                  <NumberInput label="Udaljenost od mora (m)" value={apt.distance_to_sea_m || 0}
+                    onChange={(v) => setApt({ ...apt, distance_to_sea_m: v || undefined })} min={0} max={100000} step={10} />
                 </div>
                 <SelectInput label="Stanje *" value={apt.condition}
                   options={Object.entries(CONDITION_LABELS).map(([k, v]) => ({ value: k, label: v }))}
@@ -493,6 +503,10 @@ export default function WizardPage() {
                     onChange={(v) => setHouse({ ...house, living_area_m2: v })} min={20} max={2000} />
                   <NumberInput label="Okućnica (m²) *" value={house.land_area_m2}
                     onChange={(v) => setHouse({ ...house, land_area_m2: v })} min={1} max={100000} />
+                  <NumberInput label="Godina izgradnje" value={house.year_built || 0}
+                    onChange={(v) => setHouse({ ...house, year_built: v || undefined })} min={1900} max={2030} step={1} />
+                  <NumberInput label="Udaljenost od mora (m)" value={house.distance_to_sea_m || 0}
+                    onChange={(v) => setHouse({ ...house, distance_to_sea_m: v || undefined })} min={0} max={100000} step={10} />
                 </div>
                 <SelectInput label="Katnost *" value={house.floors}
                   options={Object.entries(FLOORS_LABELS).map(([k, v]) => ({ value: k, label: v }))}
@@ -513,8 +527,12 @@ export default function WizardPage() {
             {propertyType === "Land" && (
               <div className="rounded-xl bg-white border border-gray-200 p-6 space-y-5">
                 <h3 className="text-sm font-semibold text-gray-700">🌿 Detalji zemljišta</h3>
-                <NumberInput label="Površina (m²) *" value={land.land_area_m2}
-                  onChange={(v) => setLand({ ...land, land_area_m2: v })} min={50} max={1000000} />
+                <div className="grid grid-cols-2 gap-4">
+                  <NumberInput label="Površina (m²) *" value={land.land_area_m2}
+                    onChange={(v) => setLand({ ...land, land_area_m2: v })} min={50} max={1000000} />
+                  <NumberInput label="Udaljenost od mora (m)" value={land.distance_to_sea_m || 0}
+                    onChange={(v) => setLand({ ...land, distance_to_sea_m: v || undefined })} min={0} max={100000} step={10} />
+                </div>
                 <SelectInput label="Namjena *" value={land.land_use}
                   options={Object.entries(LAND_USE_LABELS).map(([k, v]) => ({ value: k, label: v }))}
                   onChange={(v) => setLand({ ...land, land_use: v as LandUse })} />
@@ -522,6 +540,7 @@ export default function WizardPage() {
                   <Toggle label="Pristupni put" checked={land.has_access_road} onChange={(v) => setLand({ ...land, has_access_road: v })} />
                   <Toggle label="Infrastruktura (voda/struja)" checked={land.has_infrastructure} onChange={(v) => setLand({ ...land, has_infrastructure: v })} />
                   <Toggle label="1. red do mora" checked={land.first_row_to_sea} onChange={(v) => setLand({ ...land, first_row_to_sea: v })} />
+                  <Toggle label="Legalizirano" checked={land.is_legalized} onChange={(v) => setLand({ ...land, is_legalized: v })} />
                 </div>
               </div>
             )}

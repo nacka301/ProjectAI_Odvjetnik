@@ -85,6 +85,10 @@ public class ApartmentInput : PropertyInputBase
     public int TotalFloors { get; set; }         // Floors in the building
     public PropertyCondition Condition { get; set; } = PropertyCondition.Good;
 
+    // ── Optional detail ──
+    public int? YearBuilt { get; set; }          // Godina izgradnje
+    public int? DistanceToSeaM { get; set; }     // Udaljenost od mora u metrima
+
     // ── Feature flags ──
     public bool HasElevator { get; set; }
     public bool HasParking { get; set; }
@@ -104,6 +108,10 @@ public class HouseInput : PropertyInputBase
     public HouseFloors Floors { get; set; } = HouseFloors.OneStory;
     public PropertyCondition Condition { get; set; } = PropertyCondition.Good;
 
+    // ── Optional detail ──
+    public int? YearBuilt { get; set; }          // Godina izgradnje
+    public int? DistanceToSeaM { get; set; }     // Udaljenost od mora u metrima
+
     // ── Feature flags ──
     public bool HasGarage { get; set; }
     public bool HasPool { get; set; }
@@ -121,8 +129,12 @@ public class LandInput : PropertyInputBase
     public double LandAreaM2 { get; set; }
     public LandUse LandUse { get; set; } = LandUse.Construction;
 
+    // ── Optional detail ──
+    public int? DistanceToSeaM { get; set; }     // Udaljenost od mora u metrima
+
     // ── Feature flags ──
     public bool HasAccessRoad { get; set; }
     public bool HasInfrastructure { get; set; }  // Voda + struja
     public bool FirstRowToSea { get; set; }
+    public bool IsLegalized { get; set; } = true; // Je li objekt legaliziran
 }
