@@ -247,7 +247,7 @@ public class MarketResearchService
         //   Gets 25+ listings per page vs. 3-5 from search
         // ─────────────────────────────────────────────────────
         {
-            var njuskaloResults = await FetchNjuskaloDirectListings(detectedType, regionName);
+            var njuskaloResults = await FetchNjuskaloDirectListings(detectedType, regionName, sizeM2);
             totalApiCalls += (njuskaloResults.Count > 0 ? 1 : 0);
 
             // Phase 0 location gate: allow both the neighborhood AND parent city.
@@ -568,11 +568,11 @@ public class MarketResearchService
     /// (full scroll + DOM capture), falls back to Tavily Extract on failure.
     /// </summary>
     private async Task<List<ComparableSearchResult>> FetchNjuskaloDirectListings(
-        string detectedType, string regionName)
+        string detectedType, string regionName, double sizeM2 = 0)
     {
         try
         {
-            var njuskaloUrl = BuildNjuskaloSearchUrl(detectedType, regionName);
+            var njuskaloUrl = BuildNjuskaloSearchUrl(detectedType, regionName, sizeM2);
             if (njuskaloUrl is null)
             {
                 _logger.LogWarning("Phase0: Could not build Njuškalo URL for type={Type}, region={Region}",
@@ -838,7 +838,7 @@ public class MarketResearchService
     /// Build the Njuškalo search URL from property type + location.
     /// e.g. "građevinsko zemljište" + "Vir" → "https://www.njuskalo.hr/prodaja-zemljista/vir"
     /// </summary>
-    private static string? BuildNjuskaloSearchUrl(string detectedType, string regionName)
+    private static string? BuildNjuskaloSearchUrl(string detectedType, string regionName, double sizeM2 = 0)
     {
         // Find the correct URL slug for this property type
         string? slug = null;
@@ -877,8 +877,29 @@ public class MarketResearchService
         if (string.IsNullOrWhiteSpace(locSlug))
             return null;
 
-        // Return neighborhood URL if available, otherwise city-level
-        return neighborhoodUrl ?? $"https://www.njuskalo.hr/{slug}/{locSlug}";
+        var baseUrl = neighborhoodUrl ?? $"https://www.njuskalo.hr/{slug}/{locSlug}";
+
+        // ── QUERY PARAMETERS: Size filter (±30%) ──
+        // Njuškalo supports livingArea[min]/[max] for houses & apartments,
+        // plotArea[min]/[max] for land. This dramatically improves result quality.
+        var queryParams = new List<string>();
+
+        if (sizeM2 > 10)
+        {
+            bool isLand = slug.Contains("zemljist");
+            string sizeParam = isLand ? "plotArea" : "livingArea";
+
+            int minSize = (int)(sizeM2 * 0.70);  // -30%
+            int maxSize = (int)(sizeM2 * 1.30);  // +30%
+
+            queryParams.Add($"{sizeParam}%5Bmin%5D={minSize}");
+            queryParams.Add($"{sizeParam}%5Bmax%5D={maxSize}");
+        }
+
+        if (queryParams.Count > 0)
+            baseUrl += "?" + string.Join("&", queryParams);
+
+        return baseUrl;
     }
 
     /// <summary>
