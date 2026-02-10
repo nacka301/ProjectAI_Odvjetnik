@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -19,6 +19,10 @@ import {
   ClipboardCopy,
   ChevronDown,
   ChevronUp,
+  FileSearch,
+  Cpu,
+  Bot,
+  Save,
 } from "lucide-react";
 import { saveEvaluation } from "@/lib/supabase";
 
@@ -155,6 +159,56 @@ const LAND_USE_LABELS: Record<LandUse, string> = {
   Mixed: "Mješovito",
 };
 
+// Stage icons for PROCESSING view
+const STAGE_ICONS: Record<string, React.ReactNode> = {
+  reading: <FileSearch className="h-5 w-5" />,
+  searching: <Search className="h-5 w-5" />,
+  ai_features: <Brain className="h-5 w-5" />,
+  engine: <Cpu className="h-5 w-5" />,
+  ai_opinion: <Bot className="h-5 w-5" />,
+  saving: <Save className="h-5 w-5" />,
+};
+
+// Dynamic micro-copy per stage
+const STAGE_MICROCOPY: Record<string, string[]> = {
+  reading: [
+    "Učitavam parametre nekretnine...",
+    "Provjeravam lokaciju i vrstu...",
+    "Parsiram ključne značajke...",
+    "Pripremam podatke za AI model...",
+  ],
+  searching: [
+    "Spajam se na izvore podataka...",
+    "Pretražujem Njuškalo oglase...",
+    "Skeniram Index nekretnine...",
+    "Filtriram relevantne oglašivače...",
+    "Prikupljam cijene za usporedbu...",
+  ],
+  ai_features: [
+    "Analiziram kvalitetu oglasa...",
+    "Ekstrahiram značajke nekretnina...",
+    "Detektiram renovacije i opremu...",
+    "Klasificiram stanja objekata...",
+  ],
+  engine: [
+    "Računam baznu cijenu po m²...",
+    "Primjenjujem korekcijske faktore...",
+    "Uklanjam statističke outliere...",
+    "Izračunavam diskont tražene cijene...",
+    "Validam pouzdanost procjene...",
+  ],
+  ai_opinion: [
+    "Generiram stručno mišljenje...",
+    "Analiziram tržišne trendove...",
+    "Uspoređujem s lokalnim podacima...",
+    "Formiram završnu ocjenu...",
+  ],
+  saving: [
+    "Spremam rezultate u bazu...",
+    "Finaliziram izvještaj...",
+  ],
+};
+
 const FLOOR_OPTIONS = [
   { value: "Subbasement", label: "Podrum" },
   { value: "SemiBasement", label: "Suteren" },
@@ -216,6 +270,29 @@ export default function WizardPage() {
 
   // View state machine: INPUT → PROCESSING → RESULT
   const [viewState, setViewState] = useState<ViewState>("INPUT");
+
+  // Dynamic micro-copy cycling for active stage
+  const [microCopy, setMicroCopy] = useState("");
+  const microCopyIdx = useRef(0);
+
+  useEffect(() => {
+    if (viewState !== "PROCESSING") return;
+    const activeStage = stages.find((s) => s.status === "active");
+    if (!activeStage) { setMicroCopy(""); return; }
+
+    const copies = STAGE_MICROCOPY[activeStage.id] || [];
+    if (copies.length === 0) { setMicroCopy(""); return; }
+
+    microCopyIdx.current = 0;
+    setMicroCopy(copies[0]);
+
+    const interval = setInterval(() => {
+      microCopyIdx.current = (microCopyIdx.current + 1) % copies.length;
+      setMicroCopy(copies[microCopyIdx.current]);
+    }, 2500);
+
+    return () => clearInterval(interval);
+  }, [viewState, stages]);
 
   // ── Build JSON payload ──
 
@@ -647,57 +724,93 @@ export default function WizardPage() {
           </div>
         )}
 
-        {/* ═══ PROCESSING: Full-screen Pipeline Animation ═══ */}
+        {/* ═══ PROCESSING: Premium Pipeline Animation ═══ */}
         {viewState === "PROCESSING" && (
-          <div className="flex flex-col items-center justify-center py-16">
-            <div className="w-full max-w-lg">
+          <div className="relative flex flex-col items-center justify-center min-h-[70vh] -mx-4 px-4 overflow-hidden">
+            {/* Animated background blobs */}
+            <div className="absolute inset-0 pointer-events-none overflow-hidden">
+              <div className="absolute -top-32 -left-32 h-80 w-80 rounded-full bg-gradient-to-br from-blue-200/40 to-indigo-300/30 blur-3xl animate-float-blob" />
+              <div className="absolute -bottom-24 -right-24 h-72 w-72 rounded-full bg-gradient-to-br from-violet-200/40 to-purple-300/30 blur-3xl animate-float-blob-delayed" />
+              <div className="absolute top-1/2 left-1/3 h-56 w-56 rounded-full bg-gradient-to-br from-cyan-200/30 to-blue-200/20 blur-3xl animate-float-blob-slow" />
+            </div>
+
+            {/* Card container */}
+            <div className="relative z-10 w-full max-w-lg bg-white/80 backdrop-blur-xl rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.08)] border border-white/60 p-8 sm:p-10">
               {/* Header */}
               <div className="text-center mb-10">
-                <div className="relative mx-auto h-16 w-16 mb-4">
-                  <div className="absolute inset-0 rounded-full bg-blue-100 animate-ping opacity-30" />
-                  <div className="relative flex items-center justify-center h-full w-full rounded-full bg-blue-100">
-                    <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                <div className="relative mx-auto h-16 w-16 mb-5">
+                  <div className="absolute inset-0 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 opacity-20 animate-ping" />
+                  <div className="absolute inset-0 rounded-full animate-pulse-glow" />
+                  <div className="relative flex items-center justify-center h-full w-full rounded-full bg-gradient-to-br from-blue-500 to-indigo-600">
+                    <Loader2 className="h-7 w-7 animate-spin text-white" />
                   </div>
                 </div>
-                <h2 className="text-2xl font-bold text-gray-900">Procjena u tijeku</h2>
-                <p className="text-sm text-gray-500 mt-1">Analiziramo tržište nekretnina za vašu lokaciju</p>
+                <h2 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-blue-700 via-indigo-600 to-violet-600 bg-clip-text text-transparent">
+                  AI Procjena u tijeku
+                </h2>
+                <p className="text-sm text-gray-500 mt-2">
+                  Analiziramo tržište nekretnina za vašu lokaciju
+                </p>
               </div>
 
               {/* Vertical Step Pipeline */}
               <div className="relative">
-                {stages.map((s, idx) => (
-                  <div key={s.id} className="flex gap-4 pb-8 last:pb-0">
-                    {/* Circle + connector line */}
-                    <div className="flex flex-col items-center">
-                      <div className={`h-10 w-10 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${
-                        s.status === "done" ? "bg-green-100 border-green-500" :
-                        s.status === "active" ? "bg-blue-100 border-blue-500 shadow-md shadow-blue-200" :
-                        s.status === "error" ? "bg-red-100 border-red-500" :
-                        "bg-gray-50 border-gray-200"
-                      }`}>
-                        {s.status === "active" ? <Loader2 className="h-5 w-5 animate-spin text-blue-600" /> :
-                         s.status === "done" ? <Check className="h-5 w-5 text-green-600" /> :
-                         s.status === "error" ? <AlertTriangle className="h-5 w-5 text-red-600" /> :
-                         <span className="text-sm font-bold text-gray-300">{idx + 1}</span>}
+                {stages.map((s, idx) => {
+                  const icon = STAGE_ICONS[s.id];
+                  const isDone = s.status === "done";
+                  const isActive = s.status === "active";
+                  const isError = s.status === "error";
+
+                  return (
+                    <div key={s.id} className="flex gap-4 pb-7 last:pb-0">
+                      {/* Icon circle + connector line */}
+                      <div className="flex flex-col items-center">
+                        <div className={`relative h-11 w-11 rounded-full flex items-center justify-center border-2 transition-all duration-500 ${
+                          isDone ? "bg-green-50 border-green-400 animate-pop-in" :
+                          isActive ? "bg-gradient-to-br from-blue-50 to-indigo-50 border-indigo-400 animate-pulse-glow" :
+                          isError ? "bg-red-50 border-red-400" :
+                          "bg-gray-50 border-gray-200"
+                        }`}>
+                          {isActive ? (
+                            <span className="text-indigo-600 animate-spin">{icon || <Loader2 className="h-5 w-5" />}</span>
+                          ) : isDone ? (
+                            <Check className="h-5 w-5 text-green-500" />
+                          ) : isError ? (
+                            <AlertTriangle className="h-5 w-5 text-red-500" />
+                          ) : (
+                            <span className="text-gray-300">{icon || <span className="text-sm font-bold">{idx + 1}</span>}</span>
+                          )}
+                        </div>
+                        {idx < stages.length - 1 && (
+                          <div className="relative w-0.5 flex-1 min-h-[1.25rem] bg-gray-200 rounded-full overflow-hidden">
+                            {isDone && (
+                              <div className="absolute inset-0 bg-gradient-to-b from-green-400 to-green-300 animate-line-fill rounded-full" />
+                            )}
+                          </div>
+                        )}
                       </div>
-                      {idx < stages.length - 1 && (
-                        <div className={`w-0.5 flex-1 min-h-[1.5rem] transition-colors duration-300 ${
-                          s.status === "done" ? "bg-green-300" : "bg-gray-200"
-                        }`} />
-                      )}
+
+                      {/* Text content */}
+                      <div className="pt-2.5 flex-1 min-w-0">
+                        <p className={`text-sm font-semibold transition-colors duration-300 ${
+                          isActive ? "text-indigo-700" :
+                          isDone ? "text-green-700" :
+                          isError ? "text-red-700" : "text-gray-400"
+                        }`}>
+                          {s.label}
+                        </p>
+                        {/* Dynamic micro-copy for active stage */}
+                        {isActive && microCopy && (
+                          <p key={microCopy} className="text-xs text-indigo-400 mt-0.5 animate-fade-up">
+                            {microCopy}
+                          </p>
+                        )}
+                        {s.detail && !isActive && <p className="text-xs text-gray-500 mt-0.5">{s.detail}</p>}
+                        {s.error && <p className="text-xs text-red-600 mt-0.5">{s.error}</p>}
+                      </div>
                     </div>
-                    {/* Label */}
-                    <div className="pt-2 flex-1 min-w-0">
-                      <p className={`text-sm font-medium transition-colors duration-300 ${
-                        s.status === "active" ? "text-blue-700" :
-                        s.status === "done" ? "text-green-700" :
-                        s.status === "error" ? "text-red-700" : "text-gray-400"
-                      }`}>{s.label}</p>
-                      {s.detail && <p className="text-xs text-gray-500 mt-0.5">{s.detail}</p>}
-                      {s.error && <p className="text-xs text-red-600 mt-0.5">{s.error}</p>}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Error recovery */}
