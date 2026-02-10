@@ -41,6 +41,32 @@ public enum LandUse
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
+public enum Orientation
+{
+    Unknown,
+    North,
+    NorthEast,
+    East,
+    SouthEast,
+    South,
+    SouthWest,
+    West,
+    NorthWest
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum ViewType
+{
+    Unknown,
+    Street,
+    Courtyard,
+    Park,
+    City,
+    Sea,
+    Panoramic
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum FloorType
 {
     Subbasement = -2,   // Podrum
@@ -129,6 +155,10 @@ public class ApartmentInput : PropertyInputBase
     public int? YearBuilt { get; set; }          // Godina izgradnje
     public int? DistanceToSeaM { get; set; }     // Udaljenost od mora u metrima
 
+    // ── Orientation & view ──
+    public Orientation Orientation { get; set; } = Orientation.Unknown;
+    public ViewType ViewType { get; set; } = ViewType.Unknown;
+
     // ── Feature flags ──
     public bool HasElevator { get; set; }
     public bool HasParking { get; set; }
@@ -151,6 +181,10 @@ public class HouseInput : PropertyInputBase
     // ── Optional detail ──
     public int? YearBuilt { get; set; }          // Godina izgradnje
     public int? DistanceToSeaM { get; set; }     // Udaljenost od mora u metrima
+
+    // ── Orientation & view ──
+    public Orientation Orientation { get; set; } = Orientation.Unknown;
+    public ViewType ViewType { get; set; } = ViewType.Unknown;
 
     // ── Feature flags ──
     public bool HasGarage { get; set; }

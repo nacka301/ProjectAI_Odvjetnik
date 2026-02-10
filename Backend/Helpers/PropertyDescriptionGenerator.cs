@@ -69,6 +69,14 @@ public static class PropertyDescriptionGenerator
         if (a.HasParking) features.Add("parking");
         if (a.SeaView) features.Add("pogled na more");
 
+        // Orientation
+        if (a.Orientation != Orientation.Unknown)
+            features.Add($"orijentacija: {FormatOrientation(a.Orientation)}");
+
+        // View type
+        if (a.ViewType != ViewType.Unknown && a.ViewType != ViewType.Sea) // SeaView already covered above
+            features.Add($"pogled: {FormatViewType(a.ViewType)}");
+
         if (features.Count > 0)
             sb.Append($", {string.Join(", ", features)}");
 
@@ -108,6 +116,14 @@ public static class PropertyDescriptionGenerator
         if (h.HasPool) features.Add("bazen");
         if (h.HasAuxiliaryObject) features.Add("pomoćni objekt");
         if (h.FirstRowToSea) features.Add("1. red do mora");
+
+        // Orientation
+        if (h.Orientation != Orientation.Unknown)
+            features.Add($"orijentacija: {FormatOrientation(h.Orientation)}");
+
+        // View type
+        if (h.ViewType != ViewType.Unknown)
+            features.Add($"pogled: {FormatViewType(h.ViewType)}");
 
         if (features.Count > 0)
             sb.Append($", {string.Join(", ", features)}");
@@ -176,6 +192,30 @@ public static class PropertyDescriptionGenerator
         PropertyCondition.Good => "dobro stanje",
         PropertyCondition.Original => "izvorno stanje",
         PropertyCondition.NeedsWork => "potrebna adaptacija",
+        _ => "nepoznato"
+    };
+
+    private static string FormatOrientation(Orientation o) => o switch
+    {
+        Orientation.North => "sjever",
+        Orientation.NorthEast => "sjeveroistok",
+        Orientation.East => "istok",
+        Orientation.SouthEast => "jugoistok",
+        Orientation.South => "jug",
+        Orientation.SouthWest => "jugozapad",
+        Orientation.West => "zapad",
+        Orientation.NorthWest => "sjeverozapad",
+        _ => "nepoznato"
+    };
+
+    private static string FormatViewType(ViewType v) => v switch
+    {
+        ViewType.Street => "ulica",
+        ViewType.Courtyard => "dvorište",
+        ViewType.Park => "park",
+        ViewType.City => "grad",
+        ViewType.Sea => "more",
+        ViewType.Panoramic => "panoramski",
         _ => "nepoznato"
     };
 }

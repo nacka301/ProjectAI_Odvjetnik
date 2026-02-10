@@ -91,6 +91,49 @@ public class ValuationEngine
     private static readonly string[] YardKeywords =
         ["dvori\u0161te", "dvoriste", "oku\u0107nica", "okucnica", "vrt", "ba\u0161ta", "basta"];
 
+    // ══════════════════════════════════════════════════════════
+    //  V12: ORIENTATION & VIEW KEYWORDS
+    // ══════════════════════════════════════════════════════════
+    private static readonly string[] SeaViewKeywords =
+        ["pogled na more", "sea view", "morski pogled", "pogled more",
+         "panoramski pogled", "panoramic view", "ocean view"];
+
+    private static readonly string[] ParkingKeywords =
+        ["parking", "parkirno", "parkirali\u0161te", "parkiraliste",
+         "parking mjesto", "pm ", "p.m."];
+
+    private static readonly string[] NorthFacingKeywords =
+        ["sjever", "north", "sjeverna strana", "orijentacija sjever",
+         "sjeverna orijentacija"];
+
+    private static readonly string[] SouthFacingKeywords =
+        ["jug", "south", "ju\u017ena strana", "orijentacija jug",
+         "ju\u017ena orijentacija", "ju\u017eno", "jugozapad", "southwest",
+         "zapad", "west", "zapadna strana"];
+
+    // ══════════════════════════════════════════════════════════
+    //  V12: COASTAL CITY LIST
+    // ══════════════════════════════════════════════════════════
+    private static readonly HashSet<string> CoastalCities =
+        new(StringComparer.OrdinalIgnoreCase)
+    {
+        "split", "rijeka", "dubrovnik", "zadar", "šibenik", "sibenik",
+        "pula", "rovinj", "poreč", "porec", "opatija", "makarska",
+        "trogir", "kaštela", "kastela", "solin", "omiš", "omis",
+        "biograd", "vodice", "primošten", "primosten", "senj",
+        "crikvenica", "novi vinodolski", "novalja", "rab",
+        "korčula", "korcula", "hvar", "vis", "bol", "supetar",
+        "baška voda", "baska voda", "brela", "podgora", "gradac",
+        "cavtat", "mlini", "orebić", "orebic"
+    };
+
+    private static readonly HashSet<string> PremiumParkingCities =
+        new(StringComparer.OrdinalIgnoreCase)
+    {
+        "split", "dubrovnik", "rijeka", "zadar", "rovinj",
+        "hvar", "trogir", "šibenik", "sibenik"
+    };
+
     private static readonly Regex YardRegex = new(
         @"(?:oku\u0107nica|okucnica|dvori\u0161te|dvoriste|vrt|ba\u0161ta|basta|\bparcela\b)[:\s]*(?:od\s+)?(?:cca\.?\s+)?(?:ca\.?\s+)?(?:oko\s+)?(\d[\d.,]*)\s*m[\u00b22]",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
@@ -352,21 +395,34 @@ public class ValuationEngine
                 pipeline.Add($"Condition adj: {skippedForReno} comps SKIPPED (renovation cost deduction takes priority — mutual exclusion)");
         }
 
-        // ── 4a+. FEATURE-BASED PRICE ADJUSTMENTS ──
-        // Garage, renovation, yard — adjust comp price to Subject's level
+        // ── 4a+. V12: TWIN COMPARISON — Data-Derived Feature Adjustments ──
+        // Instead of hardcoded %, derive feature values from the dataset.
+        // Phase 1: Detect market context (Coastal/Inland/Rural)
+        // Phase 2: Find "twin pairs" to calculate feature values
+        // Phase 3: Apply derived adjustments to each comparable
         if (cleanPrices.Count > 0)
         {
+            var marketContext = DetectMarketContext(property.Location, marketData.RegionName);
+            var derived = DeriveAdjustmentFactors(cleanPrices, marketContext, property.SizeM2);
+            pipeline.Add($"V12 Twin Comparison: context={marketContext}");
+            foreach (var dl in derived.DerivationLog)
+                pipeline.Add($"  → {dl}");
+
             bool isApartment = marketData.DetectedPropertyType.Contains("stan", StringComparison.OrdinalIgnoreCase)
                             || marketData.DetectedPropertyType.Contains("apartman", StringComparison.OrdinalIgnoreCase);
-            bool subjectHasGarage = DetectFeature(
-                $"{property.Description} {property.Condition} {property.RawText}", GarageKeywords);
+
+            // Detect subject features from description
+            string subjectText = $"{property.Description} {property.Condition} {property.RawText}".ToLowerInvariant();
+            bool subjectHasGarage = DetectFeature(subjectText, GarageKeywords);
+            bool subjectHasParking = subjectHasGarage || DetectFeature(subjectText, ParkingKeywords);
             bool subjectHasReno = targetState == PropertyCondition.Renovated
                               || targetState == PropertyCondition.New
-                              || DetectFeature(
-                                  $"{property.Description} {property.Condition} {property.RawText}", RenovationKeywords);
+                              || DetectFeature(subjectText, RenovationKeywords);
             bool subjectHasYard = property.YardAreaM2 > 0
-                              || DetectFeature(
-                                  $"{property.Description} {property.Condition} {property.RawText}", YardKeywords);
+                              || DetectFeature(subjectText, YardKeywords);
+            bool subjectHasSeaView = DetectFeature(subjectText, SeaViewKeywords);
+            bool subjectIsNorth = DetectFeature(subjectText, NorthFacingKeywords);
+            bool subjectIsSouth = DetectFeature(subjectText, SouthFacingKeywords);
 
             int featureAdjCount = 0;
             var featureLog = new List<string>();
@@ -375,71 +431,112 @@ public class ValuationEngine
             {
                 double originalPrice = p.PricePerM2;
                 var reasons = new List<string>();
+                double compTotalPrice = p.PricePerM2 * (property.SizeM2 > 0 ? property.SizeM2 : 60);
 
-                // ── GARAGE ──
+                // ── GARAGE (flat EUR deduction, derived from dataset) ──
                 if (subjectHasGarage && !p.HasGarage)
                 {
-                    // Subject has garage, comp doesn't → comp is cheaper than it should be
-                    // Add garage value: +5% for apartments, flat EUR 15k/sizeM2 for houses
-                    double garageBoost = isApartment
-                        ? 0.05
-                        : (property.SizeM2 > 0 ? 15_000.0 / (originalPrice * property.SizeM2) : 0.05);
-                    garageBoost = Math.Min(garageBoost, 0.10); // cap at 10%
-                    p.PricePerM2 *= (1 + garageBoost);
-                    reasons.Add($"+{garageBoost * 100:F0}% (nema gara\u017eu)");
+                    double boost = derived.GarageValueEur / compTotalPrice;
+                    boost = Math.Min(boost, 0.15); // cap at 15%
+                    p.PricePerM2 *= (1 + boost);
+                    reasons.Add($"+{boost * 100:F0}% (comp nema garažu, derived={derived.GarageValueEur:N0}€)");
                 }
                 else if (!subjectHasGarage && p.HasGarage)
                 {
-                    // Comp has garage, subject doesn't → comp price includes garage premium
-                    double garagePenalty = isApartment
-                        ? 0.05
-                        : (property.SizeM2 > 0 ? 15_000.0 / (originalPrice * property.SizeM2) : 0.05);
-                    garagePenalty = Math.Min(garagePenalty, 0.10);
-                    p.PricePerM2 *= (1 - garagePenalty);
-                    reasons.Add($"-{garagePenalty * 100:F0}% (ima gara\u017eu)");
+                    double penalty = derived.GarageValueEur / compTotalPrice;
+                    penalty = Math.Min(penalty, 0.15);
+                    p.PricePerM2 *= (1 - penalty);
+                    reasons.Add($"-{penalty * 100:F0}% (comp ima garažu, oduzeto={derived.GarageValueEur:N0}€)");
                 }
 
-                // ── RENOVATION ──
-                // V9: Construction Cost Deduction — if subject needs renovation and comp is renovated,
-                // deduct estimated renovation cost (600 €/m²) from comp's per-m² price.
+                // ── PARKING (flat EUR deduction, derived) ──
+                if (!subjectHasParking && p.HasParking && !p.HasGarage)
+                {
+                    double penalty = derived.ParkingValueEur / compTotalPrice;
+                    penalty = Math.Min(penalty, 0.10);
+                    p.PricePerM2 *= (1 - penalty);
+                    reasons.Add($"-{penalty * 100:F0}% (comp ima parking, oduzeto={derived.ParkingValueEur:N0}€)");
+                }
+                else if (subjectHasParking && !p.HasParking && !subjectHasGarage)
+                {
+                    double boost = derived.ParkingValueEur / compTotalPrice;
+                    boost = Math.Min(boost, 0.10);
+                    p.PricePerM2 *= (1 + boost);
+                    reasons.Add($"+{boost * 100:F0}% (comp nema parking, dodano={derived.ParkingValueEur:N0}€)");
+                }
+
+                // ── RENOVATION (derived % premium) ──
                 bool subjectNeedsWork = targetState == PropertyCondition.NeedsWork
                     || targetState == PropertyCondition.Original;
-                // V11: Distinguish full renovation (condition-based) vs partial (feature-based)
                 bool compIsFullyRenovated = p.DetectedCondition == PropertyCondition.Renovated
                                          || p.DetectedCondition == PropertyCondition.New;
                 bool compHasPartialReno = p.HasRenovation && !compIsFullyRenovated;
 
                 if (subjectNeedsWork && compIsFullyRenovated)
                 {
-                    // V10/V11: Full renovation cost deduction (600 €/m²), capped at 30%
-                    const double RenovationCostPerM2 = 600.0;
-                    double deduction = RenovationCostPerM2 / p.PricePerM2;
-                    deduction = Math.Min(deduction, 0.30);
+                    // Use derived renovation premium, but cap at 30%
+                    double deduction = Math.Min(derived.RenovationPremiumPct, 0.30);
                     p.PricePerM2 *= (1 - deduction);
-                    reasons.Add($"-{deduction * 100:F0}% (trošak adaptacije {RenovationCostPerM2:F0}€/m²)");
+                    reasons.Add($"-{deduction * 100:F0}% (trošak adaptacije, derived reno premium={derived.RenovationPremiumPct * 100:F0}%)");
                 }
                 else if (subjectNeedsWork && compHasPartialReno)
                 {
-                    // V11: Partial renovation (fasada, krov, stolarija) → lighter deduction
-                    const double PartialRenoCostPerM2 = 200.0;
-                    double deduction = PartialRenoCostPerM2 / p.PricePerM2;
-                    deduction = Math.Min(deduction, 0.15); // cap at 15%
+                    double deduction = Math.Min(derived.RenovationPremiumPct * 0.4, 0.15); // 40% of full reno
                     p.PricePerM2 *= (1 - deduction);
-                    reasons.Add($"-{deduction * 100:F0}% (parcijalna reno: fasada/krov/stolarija)");
+                    reasons.Add($"-{deduction * 100:F0}% (parcijalna reno)");
                 }
                 else if (!subjectHasReno && p.HasRenovation)
                 {
-                    // Comp is renovated, subject needs work → heavy penalty
-                    p.PricePerM2 *= 0.80; // -20%
-                    reasons.Add("-20% (comp renoviran, subjekt nije)");
+                    double deduction = Math.Min(derived.RenovationPremiumPct * 0.8, 0.25);
+                    p.PricePerM2 *= (1 - deduction);
+                    reasons.Add($"-{deduction * 100:F0}% (comp renoviran, subjekt nije)");
                 }
                 else if (subjectHasReno && !p.HasRenovation
                          && p.DetectedCondition != PropertyCondition.Renovated
                          && p.DetectedCondition != PropertyCondition.New)
                 {
-                    // Subject renovated, comp old → bonus
-                    p.PricePerM2 *= 1.15; // +15%
-                    reasons.Add("+15% (subjekt renoviran, comp star)");
+                    double boost = Math.Min(derived.RenovationPremiumPct * 0.6, 0.20);
+                    p.PricePerM2 *= (1 + boost);
+                    reasons.Add($"+{boost * 100:F0}% (subjekt renoviran, comp star)");
+                }
+
+                // ── SEA VIEW (derived % premium, coastal only) ──
+                if (marketContext == MarketContext.Coastal)
+                {
+                    if (!subjectHasSeaView && p.HasSeaView)
+                    {
+                        // Comp has sea view, subject doesn't → deduct view premium
+                        double penalty = Math.Min(derived.SeaViewPremiumPct, 0.25);
+                        p.PricePerM2 *= (1 - penalty);
+                        reasons.Add($"-{penalty * 100:F0}% (comp ima pogled na more, subjekt ne)");
+                    }
+                    else if (subjectHasSeaView && !p.HasSeaView)
+                    {
+                        double boost = Math.Min(derived.SeaViewPremiumPct, 0.25);
+                        p.PricePerM2 *= (1 + boost);
+                        reasons.Add($"+{boost * 100:F0}% (subjekt ima pogled na more)");
+                    }
+                }
+
+                // ── ORIENTATION (derived % delta, coastal only) ──
+                // "Sun & Sea" logic: north-facing in coastal city = significant penalty
+                if (marketContext == MarketContext.Coastal)
+                {
+                    if (subjectIsNorth && p.IsSouthFacing)
+                    {
+                        // Subject north, comp south → comp overpriced for us
+                        double penalty = Math.Min(derived.OrientationDeltaPct, 0.20);
+                        p.PricePerM2 *= (1 - penalty);
+                        reasons.Add($"-{penalty * 100:F0}% (subjekt sjever, comp jug/zapad)");
+                    }
+                    else if (subjectIsSouth && p.IsNorthFacing)
+                    {
+                        double boost = Math.Min(derived.OrientationDeltaPct, 0.20);
+                        p.PricePerM2 *= (1 + boost);
+                        reasons.Add($"+{boost * 100:F0}% (subjekt jug/zapad, comp sjever)");
+                    }
+                    // Note: orientation + view penalties STACK
+                    // North apartment without view vs south with view = -12% + -15% = -27%
                 }
 
                 // ── YARD (houses only) ──
@@ -448,11 +545,10 @@ public class ValuationEngine
                     double yardDiff = property.YardAreaM2 - p.DetectedYardM2;
                     if (Math.Abs(yardDiff) > 200)
                     {
-                        // +7% per 200m\u00b2 of extra land subject has (or -7% if less)
                         double yardAdj = (yardDiff / 200.0) * 0.07;
-                        yardAdj = Math.Clamp(yardAdj, -0.25, 0.25); // cap \u00b125%
+                        yardAdj = Math.Clamp(yardAdj, -0.25, 0.25);
                         p.PricePerM2 *= (1 + yardAdj);
-                        reasons.Add($"{yardAdj * 100:+0;-0}% (oku\u0107nica razlika {yardDiff:+0;-0}m\u00b2)");
+                        reasons.Add($"{yardAdj * 100:+0;-0}% (okućnica razlika {yardDiff:+0;-0}m²)");
                     }
                 }
 
@@ -461,15 +557,15 @@ public class ValuationEngine
                     featureAdjCount++;
                     string label = p.SourceTitle.Length > 35 ? p.SourceTitle[..35] : p.SourceTitle;
                     featureLog.Add(
-                        $"Comp '{label}': {originalPrice:F0}\u2192{p.PricePerM2:F0} EUR/m\u00b2 [{string.Join(", ", reasons)}]");
+                        $"Comp '{label}': {originalPrice:F0}→{p.PricePerM2:F0} EUR/m² [{string.Join(", ", reasons)}]");
                 }
             }
 
             if (featureAdjCount > 0)
             {
-                pipeline.Add($"Feature adj: {featureAdjCount} comps adjusted (garage/renovation/yard)");
+                pipeline.Add($"V12 Feature adj: {featureAdjCount} comps adjusted (garage/parking/reno/view/orientation/yard)");
                 foreach (var log in featureLog)
-                    pipeline.Add($"  \u2192 {log}");
+                    pipeline.Add($"  → {log}");
             }
         }
 
@@ -1212,7 +1308,8 @@ public class ValuationEngine
         string allText = $"{property.Description} {property.Location} {property.Condition} {property.RawText}"
             .ToLowerInvariant();
 
-        // V11: Detect target condition to prevent double-dipping with section 4a+
+        // V12: Detect market context for context-aware adjustments
+        var context = DetectMarketContext(property.Location, marketData.RegionName);
         var targetState = ParseTargetState(property);
 
         // ── First row to sea ──
@@ -1254,8 +1351,7 @@ public class ValuationEngine
 
         // ── Needs renovation ──
         // V11: Only apply if subject is NOT NeedsWork/Original — those cases are
-        // already handled by the construction cost deduction in section 4a+.
-        // Adding -20% here would double-dip.
+        // already handled by the Twin Comparison renovation deduction.
         bool conditionAlreadyAdjusted = targetState == PropertyCondition.NeedsWork
                                       || targetState == PropertyCondition.Original;
         if (!conditionAlreadyAdjusted
@@ -1278,6 +1374,47 @@ public class ValuationEngine
                 Description = "Nekretnina je adaptirana/renovirana",
                 Percent = 8.0
             });
+        }
+
+        // ── V12: Orientation penalty (coastal only, complements per-comp adjustment) ──
+        // This is a SUBJECT-LEVEL adjustment, not per-comp. Applied when subject has
+        // unfavorable orientation and the comps are a MIX (not all same orientation).
+        if (context == MarketContext.Coastal)
+        {
+            bool isNorth = allText.Contains("sjever") || allText.Contains("orijentacija: sjever")
+                        || allText.Contains("sjeverna");
+            bool noView = !allText.Contains("pogled na more") && !allText.Contains("sea view")
+                        && !allText.Contains("panoram");
+            bool isStreetView = allText.Contains("pogled na ulicu") || allText.Contains("ulični")
+                             || allText.Contains("bez pogleda") || allText.Contains("dvorište");
+
+            if (isNorth && noView)
+            {
+                adj.Add(new ValuationAdjustment
+                {
+                    Factor = "Sjever bez pogleda",
+                    Description = "Sjeverna orijentacija bez pogleda u obalnom gradu — značajna penalizacija",
+                    Percent = -10.0
+                });
+            }
+            else if (isNorth)
+            {
+                adj.Add(new ValuationAdjustment
+                {
+                    Factor = "Sjeverna orijentacija",
+                    Description = "Sjeverna orijentacija — manje sunca, niža potražnja na obali",
+                    Percent = -6.0
+                });
+            }
+            else if (isStreetView && noView)
+            {
+                adj.Add(new ValuationAdjustment
+                {
+                    Factor = "Bez pogleda",
+                    Description = "Pogled na ulicu/dvorište bez mora — penalizacija u obalnom gradu",
+                    Percent = -5.0
+                });
+            }
         }
 
         // ── Island premium ──
@@ -1338,17 +1475,9 @@ public class ValuationEngine
             });
         }
 
-        // ── Parking / garage ──
-        if (allText.Contains("garaža") || allText.Contains("garaza")
-            || allText.Contains("parking") || allText.Contains("garažno mjesto"))
-        {
-            adj.Add(new ValuationAdjustment
-            {
-                Factor = "Parking/garaža",
-                Description = "Uključen parking ili garaža",
-                Percent = 5.0
-            });
-        }
+        // ── V12: Parking/Garaža — REMOVED from contextual adjustments ──
+        // Garage and parking are now handled per-comp in Twin Comparison (section 4a+).
+        // Adding a blanket +5% here would DOUBLE-DIP with the per-comp flat EUR deduction.
 
         // ── Land — agricultural vs building ──
         if (marketData.DetectedPropertyType.Contains("zemljišt", StringComparison.OrdinalIgnoreCase)
@@ -1415,7 +1544,12 @@ public class ValuationEngine
                         DetectedYardM2 = listing.AiYardAreaM2 > 0 ? listing.AiYardAreaM2.Value : ExtractYardArea(text),
                         HasGarage = listing.HasGarage ?? DetectFeature(text, GarageKeywords),
                         HasRenovation = listing.HasRenovation ?? listing.IsRenovated ?? DetectFeature(text, RenovationKeywords),
-                        HasYard = listing.HasYard ?? DetectFeature(text, YardKeywords)
+                        HasYard = listing.HasYard ?? DetectFeature(text, YardKeywords),
+                        HasParking = DetectFeature(text, ParkingKeywords),
+                        HasSeaView = DetectFeature(text, SeaViewKeywords),
+                        IsNorthFacing = DetectFeature(text, NorthFacingKeywords),
+                        IsSouthFacing = DetectFeature(text, SouthFacingKeywords),
+                        DetectedSizeM2 = listing.AiSizeM2 > 0 ? listing.AiSizeM2.Value : 0
                     });
                     continue;
                 }
@@ -1466,7 +1600,12 @@ public class ValuationEngine
                             DetectedYardM2 = listing.AiYardAreaM2 > 0 ? listing.AiYardAreaM2.Value : ExtractYardArea(text),
                             HasGarage = listing.HasGarage ?? DetectFeature(text, GarageKeywords),
                             HasRenovation = listing.HasRenovation ?? listing.IsRenovated ?? DetectFeature(text, RenovationKeywords),
-                            HasYard = listing.HasYard ?? DetectFeature(text, YardKeywords)
+                            HasYard = listing.HasYard ?? DetectFeature(text, YardKeywords),
+                            HasParking = DetectFeature(text, ParkingKeywords),
+                            HasSeaView = DetectFeature(text, SeaViewKeywords),
+                            IsNorthFacing = DetectFeature(text, NorthFacingKeywords),
+                            IsSouthFacing = DetectFeature(text, SouthFacingKeywords),
+                            DetectedSizeM2 = listing.AiSizeM2 > 0 ? listing.AiSizeM2.Value : extractedSize
                         });
                         break; // One price per listing
                     }
@@ -1713,6 +1852,251 @@ public class ValuationEngine
         PropertyCondition.New => 4,
         _ => 2 // Unknown → treat as Good
     };
+
+    // ══════════════════════════════════════════════════════════
+    //  V12: MARKET CONTEXT DETECTION
+    // ══════════════════════════════════════════════════════════
+    private static MarketContext DetectMarketContext(string location, string regionName)
+    {
+        string combined = $"{location} {regionName}".ToLowerInvariant();
+
+        if (CoastalCities.Any(c => combined.Contains(c.ToLowerInvariant())))
+            return MarketContext.Coastal;
+
+        // Inland major cities
+        string[] inlandCities = ["zagreb", "osijek", "varaždin", "varazdin",
+            "čakovec", "cakovec", "koprivnica", "bjelovar", "sisak",
+            "karlovac", "slavonski brod", "vukovar", "vinkovci",
+            "požega", "pozega", "virovitica", "križevci", "krizevci",
+            "velika gorica", "samobor", "zaprešić", "zapresic"];
+
+        if (inlandCities.Any(c => combined.Contains(c)))
+            return MarketContext.Inland;
+
+        return MarketContext.Rural;
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  V12: TWIN COMPARISON — Derive feature values from dataset
+    // ══════════════════════════════════════════════════════════
+    /// <summary>
+    /// Phase 2: Find "twin pairs" in the dataset — listings similar in
+    /// size/location but differing in one feature — to calculate the
+    /// market value of each feature dynamically.
+    /// </summary>
+    private DerivedFactors DeriveAdjustmentFactors(
+        List<ExtractedPrice> cleanPrices,
+        MarketContext context,
+        double targetSizeM2)
+    {
+        var factors = new DerivedFactors { Context = context };
+        var log = factors.DerivationLog;
+
+        if (cleanPrices.Count < 3)
+        {
+            log.Add("Premalo podataka za Twin Comparison (<3 comps) — koristim fallback faktore");
+            ApplyFallbackFactors(factors, context, targetSizeM2);
+            return factors;
+        }
+
+        // ── 1. GARAGE VALUE (flat EUR) ──
+        var withGarage = cleanPrices.Where(p => p.HasGarage).ToList();
+        var withoutGarage = cleanPrices.Where(p => !p.HasGarage && !p.HasParking).ToList();
+
+        if (withGarage.Count >= 1 && withoutGarage.Count >= 1)
+        {
+            // Use median price/m² from each group, multiply by average size to get flat EUR
+            double medianWith = MedianValue(withGarage.Select(p => p.PricePerM2));
+            double medianWithout = MedianValue(withoutGarage.Select(p => p.PricePerM2));
+            double avgSize = targetSizeM2 > 0 ? targetSizeM2 : 60;
+
+            double garageValuePerM2 = medianWith - medianWithout;
+            double garageValueFlat = Math.Max(garageValuePerM2 * avgSize, 0);
+
+            // Sanity clamp: garage can't be worth more than 60k or less than 0
+            garageValueFlat = Math.Clamp(garageValueFlat, 0, 60_000);
+            factors.GarageValueEur = garageValueFlat;
+            factors.GaragePairCount = Math.Min(withGarage.Count, withoutGarage.Count);
+            log.Add($"Garaža: derived {garageValueFlat:N0} EUR " +
+                $"(median s garažom={medianWith:F0}, bez={medianWithout:F0} EUR/m², " +
+                $"pairs: {factors.GaragePairCount})");
+        }
+        else
+        {
+            // Fallback based on market context
+            factors.GarageValueEur = context == MarketContext.Coastal ? 35_000 : 20_000;
+            factors.GaragePairCount = 0;
+            log.Add($"Garaža: nema parova u datasetu — fallback {factors.GarageValueEur:N0} EUR ({context})");
+        }
+
+        // ── 2. PARKING VALUE (flat EUR) ──
+        var withParking = cleanPrices.Where(p => p.HasParking && !p.HasGarage).ToList();
+        if (withParking.Count >= 1 && withoutGarage.Count >= 1)
+        {
+            double medianP = MedianValue(withParking.Select(p => p.PricePerM2));
+            double medianNone = MedianValue(withoutGarage.Select(p => p.PricePerM2));
+            double avgSize = targetSizeM2 > 0 ? targetSizeM2 : 60;
+            double parkingValue = Math.Clamp((medianP - medianNone) * avgSize, 0, 30_000);
+            factors.ParkingValueEur = parkingValue;
+            factors.ParkingPairCount = Math.Min(withParking.Count, withoutGarage.Count);
+            log.Add($"Parking: derived {parkingValue:N0} EUR (pairs: {factors.ParkingPairCount})");
+        }
+        else
+        {
+            factors.ParkingValueEur = context == MarketContext.Coastal ? 15_000 : 8_000;
+            factors.ParkingPairCount = 0;
+            log.Add($"Parking: nema parova — fallback {factors.ParkingValueEur:N0} EUR ({context})");
+        }
+
+        // ── 3. RENOVATION PREMIUM (%) ──
+        var renovated = cleanPrices.Where(p =>
+            p.DetectedCondition == PropertyCondition.Renovated
+            || p.DetectedCondition == PropertyCondition.New).ToList();
+        var notRenovated = cleanPrices.Where(p =>
+            p.DetectedCondition == PropertyCondition.Original
+            || p.DetectedCondition == PropertyCondition.NeedsWork
+            || p.DetectedCondition == PropertyCondition.Good).ToList();
+
+        if (renovated.Count >= 1 && notRenovated.Count >= 1)
+        {
+            double medianReno = MedianValue(renovated.Select(p => p.PricePerM2));
+            double medianOld = MedianValue(notRenovated.Select(p => p.PricePerM2));
+            double premium = medianOld > 0 ? (medianReno - medianOld) / medianOld : 0;
+            premium = Math.Clamp(premium, 0, 0.50); // Cap at 50%
+            factors.RenovationPremiumPct = premium;
+            factors.RenovationPairCount = Math.Min(renovated.Count, notRenovated.Count);
+            log.Add($"Renovacija: derived {premium * 100:F1}% premium " +
+                $"(reno median={medianReno:F0}, stari={medianOld:F0}, pairs: {factors.RenovationPairCount})");
+        }
+        else
+        {
+            factors.RenovationPremiumPct = 0.25; // 25% default
+            factors.RenovationPairCount = 0;
+            log.Add("Renovacija: nema parova — fallback 25%");
+        }
+
+        // ── 4. SEA VIEW PREMIUM (%) ──
+        if (context == MarketContext.Coastal)
+        {
+            var withView = cleanPrices.Where(p => p.HasSeaView).ToList();
+            var withoutView = cleanPrices.Where(p => !p.HasSeaView).ToList();
+
+            if (withView.Count >= 1 && withoutView.Count >= 1)
+            {
+                double medianView = MedianValue(withView.Select(p => p.PricePerM2));
+                double medianNoView = MedianValue(withoutView.Select(p => p.PricePerM2));
+                double premium = medianNoView > 0 ? (medianView - medianNoView) / medianNoView : 0;
+                premium = Math.Clamp(premium, 0, 0.40); // Cap at 40%
+                factors.SeaViewPremiumPct = premium;
+                factors.SeaViewPairCount = Math.Min(withView.Count, withoutView.Count);
+                log.Add($"Pogled na more: derived {premium * 100:F1}% premium (pairs: {factors.SeaViewPairCount})");
+            }
+            else
+            {
+                factors.SeaViewPremiumPct = 0.15; // 15% default for coastal
+                factors.SeaViewPairCount = 0;
+                log.Add("Pogled na more: nema parova — fallback 15%");
+            }
+        }
+
+        // ── 5. ORIENTATION DELTA (%) ──
+        if (context == MarketContext.Coastal)
+        {
+            var southComps = cleanPrices.Where(p => p.IsSouthFacing).ToList();
+            var northComps = cleanPrices.Where(p => p.IsNorthFacing).ToList();
+
+            if (southComps.Count >= 1 && northComps.Count >= 1)
+            {
+                double medianSouth = MedianValue(southComps.Select(p => p.PricePerM2));
+                double medianNorth = MedianValue(northComps.Select(p => p.PricePerM2));
+                double delta = medianNorth > 0 ? (medianSouth - medianNorth) / medianNorth : 0;
+                delta = Math.Clamp(delta, 0, 0.30); // Cap at 30%
+                factors.OrientationDeltaPct = delta;
+                factors.OrientationPairCount = Math.Min(southComps.Count, northComps.Count);
+                log.Add($"Orijentacija: derived {delta * 100:F1}% jug vs sjever (pairs: {factors.OrientationPairCount})");
+            }
+            else
+            {
+                factors.OrientationDeltaPct = 0.12; // 12% default penalty for north vs south
+                factors.OrientationPairCount = 0;
+                log.Add("Orijentacija: nema parova — fallback 12% (sjever vs jug)");
+            }
+        }
+
+        return factors;
+    }
+
+    /// <summary>
+    /// Fallback factors when not enough data for twin comparison.
+    /// Based on market context (coastal cities have higher garage/view premiums).
+    /// </summary>
+    private static void ApplyFallbackFactors(DerivedFactors factors, MarketContext context, double targetSizeM2)
+    {
+        switch (context)
+        {
+            case MarketContext.Coastal:
+                factors.GarageValueEur = 35_000;
+                factors.ParkingValueEur = 15_000;
+                factors.RenovationPremiumPct = 0.25;
+                factors.SeaViewPremiumPct = 0.15;
+                factors.OrientationDeltaPct = 0.12;
+                factors.DerivationLog.Add("Coastal fallback: garaža=35k, parking=15k, reno=25%, view=15%, orijentacija=12%");
+                break;
+            case MarketContext.Inland:
+                factors.GarageValueEur = 20_000;
+                factors.ParkingValueEur = 8_000;
+                factors.RenovationPremiumPct = 0.20;
+                factors.SeaViewPremiumPct = 0;
+                factors.OrientationDeltaPct = 0.03; // Minimal in inland
+                factors.DerivationLog.Add("Inland fallback: garaža=20k, parking=8k, reno=20%, orijentacija=3%");
+                break;
+            case MarketContext.Rural:
+                factors.GarageValueEur = 10_000;
+                factors.ParkingValueEur = 3_000;
+                factors.RenovationPremiumPct = 0.15;
+                factors.SeaViewPremiumPct = 0;
+                factors.OrientationDeltaPct = 0;
+                factors.DerivationLog.Add("Rural fallback: garaža=10k, parking=3k, reno=15%");
+                break;
+        }
+    }
+
+    private static double MedianValue(IEnumerable<double> values)
+    {
+        var sorted = values.OrderBy(v => v).ToList();
+        if (sorted.Count == 0) return 0;
+        if (sorted.Count == 1) return sorted[0];
+        int mid = sorted.Count / 2;
+        return sorted.Count % 2 == 0
+            ? (sorted[mid - 1] + sorted[mid]) / 2.0
+            : sorted[mid];
+    }
+}
+
+// ══════════════════════════════════════════════════════════
+//  V12: MARKET CONTEXT & DERIVED FACTORS
+// ══════════════════════════════════════════════════════════
+
+public enum MarketContext { Coastal, Inland, Rural }
+
+/// <summary>
+/// Factors derived from "twin comparison" in the dataset.
+/// Each factor has a derived EUR or % value and a pair count (confidence).
+/// </summary>
+public class DerivedFactors
+{
+    public double GarageValueEur { get; set; }       // Flat EUR value of garage in this market
+    public int GaragePairCount { get; set; }
+    public double ParkingValueEur { get; set; }      // Flat EUR value of parking space
+    public int ParkingPairCount { get; set; }
+    public double RenovationPremiumPct { get; set; } // % premium renovated vs original
+    public int RenovationPairCount { get; set; }
+    public double SeaViewPremiumPct { get; set; }    // % premium for sea view
+    public int SeaViewPairCount { get; set; }
+    public double OrientationDeltaPct { get; set; }  // % delta south vs north
+    public int OrientationPairCount { get; set; }
+    public MarketContext Context { get; set; }
+    public List<string> DerivationLog { get; set; } = [];
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1792,6 +2176,13 @@ public class ExtractedPrice
     public bool HasGarage { get; set; }
     public bool HasRenovation { get; set; }
     public bool HasYard { get; set; }
+
+    // V12: Additional feature detection for Twin Comparison
+    public bool HasParking { get; set; }    // parking space (not garage)
+    public bool HasSeaView { get; set; }    // pogled na more
+    public bool IsNorthFacing { get; set; } // north orientation detected
+    public bool IsSouthFacing { get; set; } // south/west orientation detected
+    public double DetectedSizeM2 { get; set; } // extracted main area
 }
 
 /// <summary>Property condition states for adjustment logic.</summary>

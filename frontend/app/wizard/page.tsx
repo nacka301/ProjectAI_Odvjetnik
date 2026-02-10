@@ -34,6 +34,8 @@ type PropertyType = "Apartment" | "House" | "Land";
 type PropertyCondition = "New" | "Renovated" | "Good" | "Original" | "NeedsWork";
 type HouseFloors = "OneStory" | "TwoStory" | "MultiStory";
 type LandUse = "Construction" | "Agricultural" | "Mixed";
+type Orientation = "Unknown" | "North" | "NorthEast" | "East" | "SouthEast" | "South" | "SouthWest" | "West" | "NorthWest";
+type ViewType = "Unknown" | "Street" | "Courtyard" | "Park" | "City" | "Sea" | "Panoramic";
 type ViewState = "INPUT" | "PROCESSING" | "RESULT";
 
 interface LocationInfo {
@@ -49,6 +51,8 @@ interface ApartmentData {
   condition: PropertyCondition;
   year_built?: number;
   distance_to_sea_m?: number;
+  orientation: Orientation;
+  view_type: ViewType;
   has_elevator: boolean;
   has_parking: boolean;
   has_balcony: boolean;
@@ -62,6 +66,8 @@ interface HouseData {
   condition: PropertyCondition;
   year_built?: number;
   distance_to_sea_m?: number;
+  orientation: Orientation;
+  view_type: ViewType;
   has_garage: boolean;
   has_pool: boolean;
   first_row_to_sea: boolean;
@@ -159,6 +165,28 @@ const LAND_USE_LABELS: Record<LandUse, string> = {
   Mixed: "Mješovito",
 };
 
+const ORIENTATION_LABELS: Record<Orientation, string> = {
+  Unknown: "Nepoznato",
+  North: "Sjever",
+  NorthEast: "Sjeveroistok",
+  East: "Istok",
+  SouthEast: "Jugoistok",
+  South: "Jug",
+  SouthWest: "Jugozapad",
+  West: "Zapad",
+  NorthWest: "Sjeverozapad",
+};
+
+const VIEW_TYPE_LABELS: Record<ViewType, string> = {
+  Unknown: "Nepoznato",
+  Street: "Ulica",
+  Courtyard: "Dvorište",
+  Park: "Park",
+  City: "Grad",
+  Sea: "More",
+  Panoramic: "Panoramski",
+};
+
 // Stage icons for PROCESSING view
 const STAGE_ICONS: Record<string, React.ReactNode> = {
   reading: <FileSearch className="h-5 w-5" />,
@@ -242,10 +270,12 @@ export default function WizardPage() {
   // Type-specific data
   const [apt, setApt] = useState<ApartmentData>({
     area_m2: 0, room_count: 2, floor: "Ground", total_floors: 4, condition: "Good",
+    orientation: "Unknown", view_type: "Unknown",
     has_elevator: false, has_parking: false, has_balcony: false, sea_view: false,
   });
   const [house, setHouse] = useState<HouseData>({
     living_area_m2: 0, land_area_m2: 0, floors: "OneStory", condition: "Good",
+    orientation: "Unknown", view_type: "Unknown",
     has_garage: false, has_pool: false, first_row_to_sea: false, has_auxiliary_object: false,
   });
   const [land, setLand] = useState<LandData>({
@@ -770,6 +800,14 @@ export default function WizardPage() {
                 <SelectInput label="Stanje *" value={apt.condition}
                   options={Object.entries(CONDITION_LABELS).map(([k, v]) => ({ value: k, label: v }))}
                   onChange={(v) => setApt({ ...apt, condition: v as PropertyCondition })} />
+                <div className="grid grid-cols-2 gap-4">
+                  <SelectInput label="Orijentacija" value={apt.orientation}
+                    options={Object.entries(ORIENTATION_LABELS).map(([k, v]) => ({ value: k, label: v }))}
+                    onChange={(v) => setApt({ ...apt, orientation: v as Orientation })} />
+                  <SelectInput label="Pogled" value={apt.view_type}
+                    options={Object.entries(VIEW_TYPE_LABELS).map(([k, v]) => ({ value: k, label: v }))}
+                    onChange={(v) => setApt({ ...apt, view_type: v as ViewType })} />
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                   <Toggle label="Lift" checked={apt.has_elevator} onChange={(v) => setApt({ ...apt, has_elevator: v })} />
                   <Toggle label="Parking" checked={apt.has_parking} onChange={(v) => setApt({ ...apt, has_parking: v })} />
@@ -804,6 +842,14 @@ export default function WizardPage() {
                 <SelectInput label="Stanje *" value={house.condition}
                   options={Object.entries(CONDITION_LABELS).map(([k, v]) => ({ value: k, label: v }))}
                   onChange={(v) => setHouse({ ...house, condition: v as PropertyCondition })} />
+                <div className="grid grid-cols-2 gap-4">
+                  <SelectInput label="Orijentacija" value={house.orientation}
+                    options={Object.entries(ORIENTATION_LABELS).map(([k, v]) => ({ value: k, label: v }))}
+                    onChange={(v) => setHouse({ ...house, orientation: v as Orientation })} />
+                  <SelectInput label="Pogled" value={house.view_type}
+                    options={Object.entries(VIEW_TYPE_LABELS).map(([k, v]) => ({ value: k, label: v }))}
+                    onChange={(v) => setHouse({ ...house, view_type: v as ViewType })} />
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                   <Toggle label="Garaža" checked={house.has_garage} onChange={(v) => setHouse({ ...house, has_garage: v })} />
                   <Toggle label="Bazen" checked={house.has_pool} onChange={(v) => setHouse({ ...house, has_pool: v })} />
