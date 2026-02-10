@@ -476,6 +476,25 @@ public class MarketResearchService
             .Take(20)
             .ToList();
 
+        // ─────────────────────────────────────────────────────
+        // DEEP DIVE — visit top 6 listing pages for rich data
+        //   Only for Njuškalo URLs (we have the DOM selectors).
+        //   Enriches Content with full description, attributes,
+        //   equipment list, renovation year, yard size, etc.
+        //   ~30s total (6 pages × ~5s each, sequential to avoid bans).
+        // ─────────────────────────────────────────────────────
+        if (distinctListings.Count > 0)
+        {
+            try
+            {
+                await DeepDiveTopListingsAsync(distinctListings);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Deep Dive failed (non-fatal) — proceeding with search-page data only");
+            }
+        }
+
         var confidence = CalculateConfidence(distinctListings.Count, searchPhase);
         var note = BuildNote(distinctListings.Count, searchPhase, regionName, now.Year);
 
@@ -581,6 +600,132 @@ public class MarketResearchService
             parts.Add(s.FullText);
 
         return string.Join(". ", parts);
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  DEEP DIVE — Visit individual listing pages for rich data
+    // ══════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Price regex for rough-filter scoring (Croatian format: 150.000 €).
+    /// </summary>
+    private static readonly Regex _deepDivePriceRegex = new(
+        @"(\d{1,3}(?:\.\d{3})*(?:,\d+)?)\s*(?:€|EUR)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// Select the top 6 most promising Njuškalo listings, visit each detail page,
+    /// and enrich the ComparableSearchResult with the extracted data.
+    /// </summary>
+    private async Task DeepDiveTopListingsAsync(List<ComparableSearchResult> listings)
+    {
+        // ── Step 1: Only Njuškalo URLs (we have selectors for those) ──
+        var njuskaloListings = listings
+            .Where(l => l.Url.Contains("njuskalo.hr", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (njuskaloListings.Count == 0)
+        {
+            _logger.LogInformation("DeepDive: no Njuškalo URLs to visit");
+            return;
+        }
+
+        // ── Step 2: Rough Filter — score by price presence + content richness ──
+        //    Prioritize listings that have a detectable price (most useful for engine)
+        //    and shorter content (meaning they need enrichment most).
+        var scored = njuskaloListings
+            .Select(l => new
+            {
+                Listing = l,
+                HasPrice = _deepDivePriceRegex.IsMatch(l.Content),
+                ContentLength = l.Content.Length
+            })
+            .OrderByDescending(x => x.HasPrice)    // Price-bearing listings first
+            .ThenBy(x => x.ContentLength)           // Shortest content = needs enrichment most
+            .Take(6)
+            .Select(x => x.Listing)
+            .ToList();
+
+        _logger.LogInformation("DeepDive: selected {Count}/{Total} Njuškalo listings for detail scrape",
+            scored.Count, njuskaloListings.Count);
+
+        // ── Step 3: Visit each listing sequentially (avoid rate-limiting) ──
+        int enriched = 0;
+        foreach (var listing in scored)
+        {
+            try
+            {
+                var details = await _scraper.ScrapeListingDetailsAsync(listing.Url);
+                if (details is null) continue;
+
+                // ── Enrich the listing's Content with detail page data ──
+                var enrichedText = details.ToEnrichedText();
+                if (!string.IsNullOrWhiteSpace(enrichedText))
+                {
+                    listing.Content = $"{listing.Content} [DEEP DIVE] {enrichedText}";
+                }
+
+                // ── Intelligent condition detection ──
+                var descLower = (details.Description ?? "").ToLowerInvariant();
+
+                if (descLower.Contains("potrebna adaptacija") || descLower.Contains("za rušenje") ||
+                    descLower.Contains("zapušteno") || descLower.Contains("dotrajalo") ||
+                    descLower.Contains("vlaga") || descLower.Contains("za adaptaciju"))
+                {
+                    listing.AiCondition ??= "needs_work";
+                }
+                else if (details.YearLastRenovation.HasValue && details.YearLastRenovation >= 2020)
+                {
+                    listing.AiCondition ??= "renovated";
+                }
+                else if (descLower.Contains("novogradnja") || descLower.Contains("novo izgrađen"))
+                {
+                    listing.AiCondition ??= "new";
+                }
+                else if (descLower.Contains("renoviran") || descLower.Contains("adaptiran") ||
+                         descLower.Contains("obnovljen") || descLower.Contains("kompletno uređen"))
+                {
+                    listing.AiCondition ??= "renovated";
+                }
+                else if (descLower.Contains("održavan") || descLower.Contains("useljiv") ||
+                         descLower.Contains("dobro stanje"))
+                {
+                    listing.AiCondition ??= "good";
+                }
+
+                // ── Yard area from detail page ──
+                if (details.YardAreaM2.HasValue && details.YardAreaM2 > 0)
+                    listing.AiYardAreaM2 ??= details.YardAreaM2;
+
+                // ── Size from detail page ──
+                if (details.SizeM2.HasValue && details.SizeM2 > 0)
+                    listing.AiSizeM2 ??= details.SizeM2;
+
+                // ── Equipment-based feature detection ──
+                var equipLower = details.Equipment
+                    .Select(e => e.ToLowerInvariant()).ToList();
+
+                if (equipLower.Any(e => e.Contains("garaž") || e.Contains("garaz") ||
+                                        e.Contains("parking")))
+                    listing.HasGarage ??= true;
+
+                if (equipLower.Any(e => e.Contains("bazen") || e.Contains("pool")))
+                    listing.Content += " [Oprema: Bazen]";
+
+                if (equipLower.Any(e => e.Contains("plinsko") || e.Contains("centralno grijanje")))
+                    listing.Content += $" [Grijanje: {details.HeatingType ?? "plinsko"}]";
+
+                enriched++;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "DeepDive: failed for individual listing {Url}", listing.Url);
+                // Continue with next listing — non-fatal
+            }
+        }
+
+        _logger.LogInformation("DeepDive: enriched {Enriched}/{Selected} listings with detail page data",
+            enriched, scored.Count);
     }
 
     /// <summary>

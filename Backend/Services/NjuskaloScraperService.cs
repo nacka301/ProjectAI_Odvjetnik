@@ -250,6 +250,194 @@ public class NjuskaloScraperService
     }
 
     // ══════════════════════════════════════════════════════════
+    //  DEEP DIVE — Visit a single listing's detail page
+    // ══════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Navigate to an individual Njuškalo listing page, extract the rich
+    /// description, attribute table (year built, energy class, yard size),
+    /// and equipment list that are NOT visible on the search results page.
+    /// </summary>
+    public async Task<ListingDetails?> ScrapeListingDetailsAsync(string url)
+    {
+        _logger.LogInformation("DeepDive: visiting {Url}", url);
+
+        IPlaywright? pw = null;
+        IBrowser? browser = null;
+
+        try
+        {
+            pw = await Playwright.CreateAsync();
+            browser = await pw.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
+            {
+                Headless = true,
+                Args = new[]
+                {
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-gpu",
+                    "--single-process"
+                }
+            });
+
+            var context = await browser.NewContextAsync(new BrowserNewContextOptions
+            {
+                UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                ViewportSize = new ViewportSize { Width = 1920, Height = 1080 },
+                Locale = "hr-HR"
+            });
+
+            var page = await context.NewPageAsync();
+
+            await page.GotoAsync(url, new PageGotoOptions
+            {
+                WaitUntil = WaitUntilState.DOMContentLoaded,
+                Timeout = 20_000
+            });
+
+            // Human-like reading delay (2-4 seconds)
+            int readDelay = _rng.Next(2000, 4001);
+            await page.WaitForTimeoutAsync(readDelay);
+
+            var details = new ListingDetails { Url = url };
+
+            // ── 1. Full description text ──
+            var descEl = await page.QuerySelectorAsync(
+                ".ClassifiedDetail-description, .classified-detail-description, " +
+                "[class*='Description'] .description-text, " +
+                ".oglas-description, .entity-body");
+            if (descEl is not null)
+                details.Description = (await descEl.InnerTextAsync()).Trim();
+
+            // ── 2. Attribute table (key-value pairs) ──
+            //    Njuškalo uses .ClassifiedDetail-attributes or similar tables
+            var attrRows = await page.QuerySelectorAllAsync(
+                ".ClassifiedDetail-attributes li, " +
+                ".ClassifiedDetail-attributes tr, " +
+                ".classified-detail-attributes li, " +
+                ".attribute-list li, " +
+                "table.attributes-table tr, " +
+                ".ClassifiedDetail-extras li");
+
+            foreach (var row in attrRows)
+            {
+                var text = (await row.InnerTextAsync()).Trim();
+                if (string.IsNullOrWhiteSpace(text)) continue;
+
+                // Parse "Key: Value" or "Key\tValue" patterns
+                var pair = ParseAttributePair(text);
+                if (pair is null) continue;
+
+                var (key, value) = pair.Value;
+                details.RawAttributes[key] = value;
+
+                // Intelligent field mapping
+                var lk = key.ToLowerInvariant();
+                if (lk.Contains("godina izgradnje") || lk.Contains("god. izgradnje"))
+                    details.YearBuilt = ParseIntSafe(value);
+                else if (lk.Contains("godina") && lk.Contains("renovac"))
+                    details.YearLastRenovation = ParseIntSafe(value);
+                else if (lk.Contains("energetski razred") || lk.Contains("energetski certifikat"))
+                    details.EnergyClass = value.Trim();
+                else if (lk.Contains("okućnica") || lk.Contains("okucnica") ||
+                         lk.Contains("površina zemljišta") || lk.Contains("površina parcele"))
+                    details.YardAreaM2 = ParseDoubleSafe(value);
+                else if (lk.Contains("stambena površina") || lk.Contains("korisna površina") ||
+                         lk.Contains("površina") && !lk.Contains("parcele") && !lk.Contains("zemljišta"))
+                    details.SizeM2 = ParseDoubleSafe(value);
+                else if (lk.Contains("grijanje") || lk.Contains("heating"))
+                    details.HeatingType = value.Trim();
+                else if (lk.Contains("kat") || lk.Contains("etaža"))
+                    details.Floor = value.Trim();
+            }
+
+            // ── 3. Equipment / features list ──
+            var equipEls = await page.QuerySelectorAllAsync(
+                ".ClassifiedDetail-features li, " +
+                ".classified-detail-features li, " +
+                ".ClassifiedDetail-featuresItem, " +
+                ".features-list li, " +
+                ".equipment-list li");
+
+            foreach (var eq in equipEls)
+            {
+                var txt = (await eq.InnerTextAsync()).Trim();
+                if (!string.IsNullOrWhiteSpace(txt))
+                    details.Equipment.Add(txt);
+            }
+
+            // ── 4. Price from detail page (sometimes more accurate) ──
+            var priceEl = await page.QuerySelectorAsync(
+                ".ClassifiedDetail-price, .classified-detail-price, " +
+                ".entity-price, [class*='price']");
+            if (priceEl is not null)
+                details.PriceText = (await priceEl.InnerTextAsync()).Trim();
+
+            _logger.LogInformation(
+                "DeepDive: extracted {AttrCount} attributes, {EquipCount} equipment items, " +
+                "desc={DescLen} chars from {Url}",
+                details.RawAttributes.Count, details.Equipment.Count,
+                details.Description?.Length ?? 0, url);
+
+            return details;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "DeepDive: failed for {Url}", url);
+            return null;
+        }
+        finally
+        {
+            if (browser is not null)
+                await browser.CloseAsync();
+            pw?.Dispose();
+        }
+    }
+
+    // ── Helpers for attribute parsing ──
+
+    private static (string Key, string Value)? ParseAttributePair(string text)
+    {
+        // Try "Key: Value"
+        var colonIdx = text.IndexOf(':');
+        if (colonIdx > 0 && colonIdx < text.Length - 1)
+            return (text[..colonIdx].Trim(), text[(colonIdx + 1)..].Trim());
+
+        // Try tab-separated
+        var tabIdx = text.IndexOf('\t');
+        if (tabIdx > 0 && tabIdx < text.Length - 1)
+            return (text[..tabIdx].Trim(), text[(tabIdx + 1)..].Trim());
+
+        // Try newline-separated (some layouts)
+        var parts = text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length >= 2)
+            return (parts[0], parts[1]);
+
+        return null;
+    }
+
+    private static int? ParseIntSafe(string s)
+    {
+        // Extract first 4-digit number (year-like)
+        var m = Regex.Match(s, @"(\d{4})");
+        return m.Success && int.TryParse(m.Groups[1].Value, out var v) ? v : null;
+    }
+
+    private static double? ParseDoubleSafe(string s)
+    {
+        // Extract number before "m²" or just the first number
+        var m = Regex.Match(s, @"([\d.,]+)\s*m");
+        if (!m.Success)
+            m = Regex.Match(s, @"([\d.,]+)");
+        if (!m.Success) return null;
+
+        var raw = m.Groups[1].Value.Replace(".", "").Replace(",", ".");
+        return double.TryParse(raw, System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : null;
+    }
+
+    // ══════════════════════════════════════════════════════════
     //  DOM PARSING — extract data from each .EntityList-item
     // ══════════════════════════════════════════════════════════
 
@@ -351,4 +539,60 @@ public class ScrapedListing
     public string Description { get; set; } = "";
     public string FullText { get; set; } = "";
     public bool IsSponsored { get; set; }
+}
+
+/// <summary>
+/// Rich data extracted from an individual Njuškalo listing detail page.
+/// </summary>
+public class ListingDetails
+{
+    public string Url { get; set; } = "";
+    public string? Description { get; set; }
+    public string? PriceText { get; set; }
+    public int? YearBuilt { get; set; }
+    public int? YearLastRenovation { get; set; }
+    public string? EnergyClass { get; set; }
+    public double? YardAreaM2 { get; set; }
+    public double? SizeM2 { get; set; }
+    public string? HeatingType { get; set; }
+    public string? Floor { get; set; }
+    public List<string> Equipment { get; set; } = [];
+    public Dictionary<string, string> RawAttributes { get; set; } = [];
+
+    /// <summary>
+    /// Build a rich text block combining all extracted data for the AI/Engine pipeline.
+    /// </summary>
+    public string ToEnrichedText()
+    {
+        var parts = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(Description))
+            parts.Add($"Opis: {Description}");
+        if (YearBuilt.HasValue)
+            parts.Add($"Godina izgradnje: {YearBuilt}");
+        if (YearLastRenovation.HasValue)
+            parts.Add($"Godina zadnje renovacije: {YearLastRenovation}");
+        if (!string.IsNullOrWhiteSpace(EnergyClass))
+            parts.Add($"Energetski razred: {EnergyClass}");
+        if (YardAreaM2.HasValue && YardAreaM2 > 0)
+            parts.Add($"Površina okućnice: {YardAreaM2:0} m²");
+        if (SizeM2.HasValue && SizeM2 > 0)
+            parts.Add($"Površina: {SizeM2:0} m²");
+        if (!string.IsNullOrWhiteSpace(HeatingType))
+            parts.Add($"Grijanje: {HeatingType}");
+        if (!string.IsNullOrWhiteSpace(Floor))
+            parts.Add($"Kat: {Floor}");
+        if (Equipment.Count > 0)
+            parts.Add($"Oprema: {string.Join(", ", Equipment)}");
+
+        // Append any remaining attributes not already captured
+        foreach (var kv in RawAttributes)
+        {
+            var already = parts.Any(p => p.Contains(kv.Value, StringComparison.OrdinalIgnoreCase));
+            if (!already)
+                parts.Add($"{kv.Key}: {kv.Value}");
+        }
+
+        return string.Join(". ", parts);
+    }
 }
