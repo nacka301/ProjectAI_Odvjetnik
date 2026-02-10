@@ -11,26 +11,61 @@ public class ValuationService
 
     private const string PropertyExtractionPrompt =
         """
-        You are a document analysis assistant. Extract property information from this Croatian Land Registry Extract (Zemljisnjoknjizni izvadak) or property description.
+        You are a Croatian land registry and property document analysis expert.
+        Extract property information from this document (Zemljišnoknjižni izvadak,
+        Procjembeni elaborat, or property description).
 
-        Return a JSON object with:
-        - "description": string (type of property, e.g. "Stan", "Kuca", "Zemljiste", include katastarska cestica if found)
-        - "size_m2": number (size in square meters if found, 0 if not found)
-        - "location": string (address, municipality, or cadastral municipality)
-        - "condition": string (any info about condition, or "Nije navedeno" if not found)
-        - "property_state": string (one of: "new", "renovated", "good", "original", "needs_adaptation")
+        CRITICAL SIZE EXTRACTION RULES:
+        ─────────────────────────────────
+        "size_m2" MUST be the LIVING/USABLE AREA (stambena površina, korisna površina,
+        neto površina, bruto površina zgrade) — NOT the land/plot area.
+
+        • For houses (kuća): living area is typically 50–300 m². If you see a number
+          like 500+ m² it is almost certainly the PLOT (čestica) area, not the house itself.
+          Land registry shows plot area (e.g. "k.č. 1234, oranica, 787 m²") — do NOT
+          use that as size_m2. Instead look for building footprint or "zgrada" area.
+          If the document ONLY shows plot area and no building area → set size_m2 = 0
+          and note it in "condition".
+        • For apartments (stan): living area is typically 20–200 m².
+        • For land (zemljište): size_m2 = total plot area in m² (convert from ha/čhv if needed).
+          1 ha = 10000 m², 1 čhv = 3.6 m².
+
+        EXTRACT THE FOLLOWING FIELDS:
+        ─────────────────────────────────
+        - "description": string — Property type and details.
+          Include: "Stan", "Kuća", "Građevinsko zemljište", "Poslovni prostor".
+          Include katastarska čestica number if found (e.g. "k.č. 1234/5").
+          Include etažni udio if found (e.g. "E-3, suvlasništvo 3/100").
+        - "size_m2": number — LIVING/USABLE area in m² for buildings, or PLOT area for land.
+          If only plot area found for a building → set to 0.
+          Convert from čhv or ha if needed.
+        - "location": string — Full location: address, settlement, municipality, cadastral municipality.
+          Format: "Ime naselja, Općina/Grad" or as found in the document.
+          ALWAYS include the settlement/village name and the municipality.
+          If document says "k.o. Kukunjevac" → location should include "Kukunjevac".
+        - "condition": string — Any info about condition, building year, renovations.
+          "Nije navedeno" if not found. If only land area found, note:
+          "Površina zgrade nije navedena, navedena je samo površina čestice: XXX m²"
+        - "property_state": string — One of: "new", "renovated", "good", "original", "needs_adaptation"
           Detection rules:
-          * "new" = novogradnja, novo izgradjeno, nova zgrada
-          * "renovated" = renovirano, adaptirano, obnovljeno, novoureaeno
-          * "good" = odrzavano, uredno, dobro stanje
-          * "original" = izvorno stanje, originalno, nije renovirano
-          * "needs_adaptation" = potrebna adaptacija, rusevina, zapusteno, treba obnovu,
-            vlazno, stara stolarija, dotrajalo, plijesan, prokisnjavanje, curenje,
-            oronulo, neuseljivo, napuknuto, budj, probija vlaga
-          If no info → use "good" as default.
-        - "yard_area_m2": number (size of okucnica/yard/garden in m2 if found, 0 if not found or not applicable)
-          Look for: okucnica, dvoriste, vrt, zemljiste uz kucu, parcela uz objekt.
-          If the text says "okucnica 500 m2" → 500. If no mention → 0.
+          * "new" = novogradnja, novo izgrađeno, nova zgrada, godina izgradnje nakon 2020
+          * "renovated" = renovirano, adaptirano, obnovljeno, novouređeno
+          * "good" = održavano, uredno, dobro stanje (DEFAULT if no info)
+          * "original" = izvorno stanje, originalno, nije renovirano, starija gradnja
+          * "needs_adaptation" = potrebna adaptacija, ruševina, zapušteno, treba obnovu,
+            vlažno, stara stolarija, dotrajalo, plijesan, prokišnjavanje, curenje,
+            oronulo, neuseljivo, napuknuto, buđ, probija vlaga
+        - "yard_area_m2": number — Size of okućnica/yard/garden in m² if found, 0 if not.
+          For houses: look for "okućnica", "dvorište", "vrt", "parcela uz objekt".
+          For land: this is 0 (the plot IS the property).
+
+        DOCUMENT FORMAT HINTS:
+        ─────────────────────────────────
+        The text may contain pipe separators (|) from table columns.
+        Land registry extracts have three sheets:
+        A — Posjedovnica (what: parcels, areas, land use)
+        B — Vlastovnica (who: owners, shares)
+        C — Teretovnica (encumbrances: mortgages, liens, disputes)
 
         Return ONLY the raw JSON object, no markdown fences, no extra text.
         """;
