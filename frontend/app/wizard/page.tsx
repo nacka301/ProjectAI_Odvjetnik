@@ -585,12 +585,12 @@ export default function WizardPage() {
             borderRadius: "1.25rem",
             boxShadow: "0 12px 48px rgba(0,0,0,0.08), 0 2px 12px rgba(0,0,0,0.04)",
             border: "1px solid rgba(255,255,255,0.6)",
-            padding: "2.5rem 2rem",
+            padding: "1.75rem 1.5rem",
           }}
         >
           {/* Header */}
-          <div className="text-center mb-8">
-            <div className="relative mx-auto h-16 w-16 mb-5">
+          <div className="text-center mb-5">
+            <div className="relative mx-auto h-12 w-12 mb-3">
               <div
                 className="absolute inset-0 rounded-full"
                 style={{
@@ -602,11 +602,11 @@ export default function WizardPage() {
                 className="relative flex items-center justify-center h-full w-full rounded-full"
                 style={{ background: "linear-gradient(135deg, #3b82f6, #6366f1)" }}
               >
-                <Loader2 className="h-7 w-7 animate-spin text-white" />
+                <Loader2 className="h-5 w-5 animate-spin text-white" />
               </div>
             </div>
             <h2
-              className="text-2xl sm:text-3xl font-bold"
+              className="text-xl sm:text-2xl font-bold"
               style={{
                 background: "linear-gradient(135deg, #1e40af, #4f46e5, #7c3aed)",
                 WebkitBackgroundClip: "text",
@@ -614,9 +614,9 @@ export default function WizardPage() {
                 backgroundClip: "text",
               }}
             >
-              AI Procjena u tijeku
+              Procjena u tijeku
             </h2>
-            <p className="text-sm text-gray-500 mt-2">
+            <p className="text-xs text-gray-500 mt-1">
               Analiziramo tržište nekretnina za vašu lokaciju
             </p>
           </div>
@@ -630,11 +630,11 @@ export default function WizardPage() {
               const isError = s.status === "error";
 
               return (
-                <div key={s.id} className="flex gap-4" style={{ paddingBottom: idx < stages.length - 1 ? "1.5rem" : 0 }}>
+                <div key={s.id} className="flex gap-3" style={{ paddingBottom: idx < stages.length - 1 ? "0.75rem" : 0 }}>
                   {/* Icon circle + connector line */}
                   <div className="flex flex-col items-center">
                     <div
-                      className="relative h-11 w-11 rounded-full flex items-center justify-center border-2 transition-all duration-500"
+                      className="relative h-9 w-9 rounded-full flex items-center justify-center border-2 transition-all duration-500"
                       style={{
                         ...(isDone ? {
                           background: "#f0fdf4", borderColor: "#4ade80",
@@ -651,11 +651,11 @@ export default function WizardPage() {
                       }}
                     >
                       {isActive ? (
-                        <span className="text-indigo-600 animate-spin">{icon || <Loader2 className="h-5 w-5" />}</span>
+                        <span className="text-indigo-600 animate-spin">{icon || <Loader2 className="h-4 w-4" />}</span>
                       ) : isDone ? (
-                        <Check className="h-5 w-5 text-green-500" />
+                        <Check className="h-4 w-4 text-green-500" />
                       ) : isError ? (
-                        <AlertTriangle className="h-5 w-5 text-red-500" />
+                        <AlertTriangle className="h-4 w-4 text-red-500" />
                       ) : (
                         <span className="text-gray-300">{icon || <span className="text-sm font-bold">{idx + 1}</span>}</span>
                       )}
@@ -677,7 +677,7 @@ export default function WizardPage() {
                   </div>
 
                   {/* Text content */}
-                  <div className="pt-2.5 flex-1 min-w-0">
+                  <div className="pt-1 flex-1 min-w-0">
                     <p className={`text-sm font-semibold transition-colors duration-300 ${
                       isActive ? "text-indigo-700" :
                       isDone ? "text-green-700" :
@@ -704,7 +704,7 @@ export default function WizardPage() {
 
           {/* Error recovery */}
           {error && !isStreaming && (
-            <div className="mt-8 text-center space-y-3">
+            <div className="mt-5 text-center space-y-2">
               <div className="rounded-lg border border-red-300 bg-red-50 p-4">
                 <p className="text-sm text-red-700">{error}</p>
               </div>
