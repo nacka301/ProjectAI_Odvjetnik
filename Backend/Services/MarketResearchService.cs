@@ -361,7 +361,7 @@ public class MarketResearchService
 
             return new MarketResearchResult
             {
-                ActiveListings = allVerified.DistinctBy(x => x.Url).Take(12).ToList(),
+                ActiveListings = allVerified.DistinctBy(x => x.Url).Take(20).ToList(),
                 RegionalData = [],
                 RegionName = regionName,
                 DetectedPropertyType = detectedType,
@@ -473,7 +473,7 @@ public class MarketResearchService
         // ─────────────────────────────────────────────────────
         var distinctListings = allVerified
             .DistinctBy(x => x.Url)
-            .Take(12)
+            .Take(20)
             .ToList();
 
         var confidence = CalculateConfidence(distinctListings.Count, searchPhase);
