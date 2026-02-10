@@ -59,7 +59,9 @@ public class ValuationEngine
     private static readonly string[] NewKeywords =
         ["novogradnja", "novo izgrad", "nova zgrada", "novoizgrad"];
     private static readonly string[] RenovatedKeywords =
-        ["renoviran", "adaptiran", "obnovljen", "novoure\u0111", "novoured", "kompletno ure\u0111"];
+        ["renoviran", "adaptiran", "novoure\u0111", "novoured", "kompletno ure\u0111",
+         "potpuno obnovljen", "kompletno obnovljen", "u potpunosti obnovljen"];
+    // NOTE V11: Removed bare "obnovljen" — it false-matches "potrebna obnova" → wrong condition.
     private static readonly string[] NeedsWorkKeywords =
         ["potrebna adaptac", "potrebna obnov", "ru\u0161evin", "rusevin",
          "zapu\u0161ten", "zapusten", "treba obnov", "devastiran",
@@ -402,20 +404,28 @@ public class ValuationEngine
                 // deduct estimated renovation cost (600 €/m²) from comp's per-m² price.
                 bool subjectNeedsWork = targetState == PropertyCondition.NeedsWork
                     || targetState == PropertyCondition.Original;
-                bool compIsRenovated = p.HasRenovation
-                    || p.DetectedCondition == PropertyCondition.Renovated
-                    || p.DetectedCondition == PropertyCondition.New;
+                // V11: Distinguish full renovation (condition-based) vs partial (feature-based)
+                bool compIsFullyRenovated = p.DetectedCondition == PropertyCondition.Renovated
+                                         || p.DetectedCondition == PropertyCondition.New;
+                bool compHasPartialReno = p.HasRenovation && !compIsFullyRenovated;
 
-                if (subjectNeedsWork && compIsRenovated)
+                if (subjectNeedsWork && compIsFullyRenovated)
                 {
-                    // V10: Construction cost deduction uses SUBJECT's context.
-                    // Renovation cost per m² is a fixed estimate; deduction is capped
-                    // at 30% of comp value (you don't deduct 60k reno on a 100k property).
+                    // V10/V11: Full renovation cost deduction (600 €/m²), capped at 30%
                     const double RenovationCostPerM2 = 600.0;
                     double deduction = RenovationCostPerM2 / p.PricePerM2;
-                    deduction = Math.Min(deduction, 0.30); // cap at -30% (V10: was 40%)
+                    deduction = Math.Min(deduction, 0.30);
                     p.PricePerM2 *= (1 - deduction);
                     reasons.Add($"-{deduction * 100:F0}% (trošak adaptacije {RenovationCostPerM2:F0}€/m²)");
+                }
+                else if (subjectNeedsWork && compHasPartialReno)
+                {
+                    // V11: Partial renovation (fasada, krov, stolarija) → lighter deduction
+                    const double PartialRenoCostPerM2 = 200.0;
+                    double deduction = PartialRenoCostPerM2 / p.PricePerM2;
+                    deduction = Math.Min(deduction, 0.15); // cap at 15%
+                    p.PricePerM2 *= (1 - deduction);
+                    reasons.Add($"-{deduction * 100:F0}% (parcijalna reno: fasada/krov/stolarija)");
                 }
                 else if (!subjectHasReno && p.HasRenovation)
                 {
@@ -491,20 +501,18 @@ public class ValuationEngine
                     p.IsExactNeighborhoodMatch = inNeighborhood;
                     if (inNeighborhood) exactMatches++;
 
+                    // V11: Removed -20% price drift penalty.
+                    // Location mismatch is already handled by:
+                    //   - SimilarityScore (0.12 vs 0.30 for location component)
+                    //   - 3x weight boost for exact-match in weighted median
+                    //   - Neighborhood purge (≥3 exact → discard rest)
+                    // Stacking a -20% price cut on top caused triple-penalty.
                     if (inCity && !inNeighborhood)
-                    {
-                        double original = p.PricePerM2;
-                        p.PricePerM2 *= 0.80; // -20% location drift
                         drifted++;
-                        _logger.LogDebug(
-                            "Neighborhood drift: {Title} {Old:F0}->{New:F0} EUR/m2 (city={City}, hood={Hood} missing)",
-                            p.SourceTitle.Length > 40 ? p.SourceTitle[..40] : p.SourceTitle,
-                            original, p.PricePerM2, city, neighborhood);
-                    }
                 }
 
                 if (drifted > 0)
-                    pipeline.Add($"Neighborhood drift: {drifted} comps penalized -20% (not in {neighborhood})");
+                    pipeline.Add($"Neighborhood drift: {drifted} comps from other neighborhoods in {city} (handled via similarity scoring)");
                 if (exactMatches > 0)
                     pipeline.Add($"Exact neighborhood match: {exactMatches} comps tagged for '{neighborhood}'");
 
@@ -752,12 +760,13 @@ public class ValuationEngine
         double sizeM2 = property.SizeM2 > 0 ? property.SizeM2 : EstimateSizeFromContext(property);
         int finalValue = (int)Math.Round(adjustedPricePerM2 * sizeM2);
 
-        // ── 9b. V10: SAFETY FLOOR — prevent algorithmic underflow ──
-        // Final valuation cannot be lower than 65% of the average comparable asking price.
-        if (cleanPrices.Count >= 2)
+        // ── 9b. V11: SAFETY FLOOR — prevent algorithmic underflow ──
+        // Final valuation cannot be lower than 65% of the average RAW comparable price.
+        // Uses rawPrices (pre-adjustment) so adjustments can't crater below a sane floor.
+        if (rawPrices.Count >= 2)
         {
-            double averageCompPricePerM2 = cleanPrices.Average(c => c.PricePerM2);
-            double averageCompTotal = averageCompPricePerM2 * sizeM2;
+            double rawAvgPricePerM2 = rawPrices.Average(c => c.PricePerM2);
+            double averageCompTotal = rawAvgPricePerM2 * sizeM2;
             double floorPrice = averageCompTotal * 0.65;
             if (finalValue < floorPrice)
             {
@@ -1203,6 +1212,9 @@ public class ValuationEngine
         string allText = $"{property.Description} {property.Location} {property.Condition} {property.RawText}"
             .ToLowerInvariant();
 
+        // V11: Detect target condition to prevent double-dipping with section 4a+
+        var targetState = ParseTargetState(property);
+
         // ── First row to sea ──
         if (FirstRowKeywords.Any(kw => allText.Contains(kw, StringComparison.OrdinalIgnoreCase)))
         {
@@ -1241,14 +1253,20 @@ public class ValuationEngine
         }
 
         // ── Needs renovation ──
-        if (allText.Contains("potrebna adaptac") || allText.Contains("potrebna obnova")
-            || allText.Contains("ruševin") || allText.Contains("zapušten"))
+        // V11: Only apply if subject is NOT NeedsWork/Original — those cases are
+        // already handled by the construction cost deduction in section 4a+.
+        // Adding -20% here would double-dip.
+        bool conditionAlreadyAdjusted = targetState == PropertyCondition.NeedsWork
+                                      || targetState == PropertyCondition.Original;
+        if (!conditionAlreadyAdjusted
+            && (allText.Contains("potrebna adaptac") || allText.Contains("potrebna obnova")
+                || allText.Contains("ruševin") || allText.Contains("zapušten")))
         {
             adj.Add(new ValuationAdjustment
             {
                 Factor = "Potrebna adaptacija",
                 Description = "Nekretnina zahtijeva značajnu adaptaciju",
-                Percent = -20.0
+                Percent = -15.0
             });
         }
         else if (allText.Contains("adaptiran") || allText.Contains("renoviran")
@@ -1405,16 +1423,18 @@ public class ValuationEngine
 
             // Try absolute price + size → calculate per m²
             var priceMatches = PriceRegex.Matches(text);
-            var sizeMatch = SizeRegex.Match(text);
+
+            // V11: Smart size extraction — skip garage/parking/terrace sizes.
+            // Find the LARGEST plausible m² in the text (the main living area),
+            // not the first one (which could be "garaža 15 m²").
+            double extractedSize = ExtractMainSize(text);
 
             foreach (Match pm in priceMatches)
             {
                 double price = ParseCroatianNumber(pm.Groups[1].Value);
 
                 // Determine size
-                double size = 0;
-                if (sizeMatch.Success)
-                    size = ParseCroatianNumber(sizeMatch.Groups[1].Value);
+                double size = extractedSize;
                 if (size <= 0 && targetSizeM2 > 0)
                     size = targetSizeM2;
 
@@ -1531,6 +1551,50 @@ public class ValuationEngine
         return 0;
     }
 
+    /// <summary>
+    /// V11: Smart size extraction — finds the MAIN living area from listing text,
+    /// skipping garage/parking/terrace/balcony sizes that often appear first.
+    /// Strategy: collect ALL m² numbers, discard those preceded by garage/parking keywords,
+    /// then return the LARGEST plausible one (the main property area).
+    /// </summary>
+    private static readonly Regex SizeContextRegex = new(
+        @"(?<prefix>.{0,40}?)(\d{1,6}(?:[,\.]\d+)?)\s*m[²2]",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly string[] GarageSizePrefixes =
+        ["garaž", "garaz", "parking", "pm ", "p.m.", "gpm", "garsonj",
+         "terasa", "balkon", "lođa", "lodja", "spremišt", "spremist",
+         "podrum", "tavan"];
+
+    private double ExtractMainSize(string text)
+    {
+        var matches = SizeContextRegex.Matches(text);
+        double bestSize = 0;
+
+        foreach (Match m in matches)
+        {
+            string prefix = m.Groups["prefix"].Value.ToLowerInvariant();
+            double size = ParseCroatianNumber(m.Groups[2].Value);
+
+            // Skip sizes that are clearly not the main property area
+            if (size <= 0 || size > 50_000) continue;
+
+            // Skip if prefix mentions garage/parking/terrace/etc.
+            bool isAncillary = GarageSizePrefixes.Any(kw => prefix.Contains(kw));
+            if (isAncillary && size < 100) continue; // Only skip if small (<100m²)
+
+            // Take the largest non-ancillary size (the main living area)
+            if (size > bestSize)
+                bestSize = size;
+        }
+
+        // Fallback: if nothing found with context, use simple first match
+        if (bestSize <= 0)
+            bestSize = ExtractSize(text);
+
+        return bestSize;
+    }
+
     private double EstimateSizeFromContext(ExtractedPropertyInfo property)
     {
         string text = $"{property.Description} {property.RawText}";
@@ -1632,10 +1696,12 @@ public class ValuationEngine
         int compRank = StateRank(compState);
         int diff = Math.Abs(targetRank - compRank);
 
-        // Per-rank: -15% when target worse, +10% when target better
+        // V11: -10% per rank when target worse, +7% when better (was -15/+10 — too aggressive)
+        // e.g. Good(2) vs New(4) = -20%, NeedsWork(0) vs Renovated(3) = -30% (but this path
+        // is skipped via mutual exclusion when renovation deduction applies in 4a+)
         return targetRank < compRank
-            ? -0.15 * diff   // e.g. Original(1) vs Renovated(3) → -30%
-            :  0.10 * diff;  // e.g. Renovated(3) vs Original(1) → +20%
+            ? -0.10 * diff   // e.g. Original(1) vs Renovated(3) → -20%
+            :  0.07 * diff;  // e.g. Renovated(3) vs Original(1) → +14%
     }
 
     private static int StateRank(PropertyCondition c) => c switch
