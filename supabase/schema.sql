@@ -25,6 +25,36 @@ CREATE INDEX IF NOT EXISTS idx_evaluations_location ON evaluations (location);
 CREATE INDEX IF NOT EXISTS idx_evaluations_created_at ON evaluations (created_at DESC);
 
 -- ========================================
+-- ZK Analysis table — stores parsed ZK izvadak data
+-- Run in Supabase SQL Editor after evaluations table
+-- ========================================
+
+CREATE TABLE IF NOT EXISTS zk_analyses (
+    id                      UUID            DEFAULT uuid_generate_v4() PRIMARY KEY,
+    created_at              TIMESTAMPTZ     DEFAULT now() NOT NULL,
+    property_id             TEXT            NOT NULL,           -- k.o. + čestica
+    cadastral_municipality  TEXT,
+    parcel_number           TEXT,
+    property_type           TEXT,                               -- stan, kuća, zemljište, poslovni_prostor
+    location                TEXT            NOT NULL,
+    land_area_m2            NUMERIC(10, 2),
+    building_area_m2        NUMERIC(10, 2),
+    risk_score              TEXT            NOT NULL,           -- LOW, MEDIUM, HIGH
+    owners                  JSONB           NOT NULL DEFAULT '[]'::jsonb,
+    mortgages               JSONB           NOT NULL DEFAULT '[]'::jsonb,
+    disputes                JSONB           NOT NULL DEFAULT '[]'::jsonb,
+    encumbrances            JSONB           NOT NULL DEFAULT '[]'::jsonb,
+    lawyer_comment          TEXT,
+    evaluation_id           UUID            REFERENCES evaluations(id),  -- linked valuation
+    raw_json_output         JSONB           NOT NULL DEFAULT '{}'::jsonb,
+    pdf_url                 TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_zk_analyses_property_id ON zk_analyses (property_id);
+CREATE INDEX IF NOT EXISTS idx_zk_analyses_location ON zk_analyses (location);
+CREATE INDEX IF NOT EXISTS idx_zk_analyses_created_at ON zk_analyses (created_at DESC);
+
+-- ========================================
 -- Supabase Storage: create bucket for PDFs
 -- Run in Supabase Dashboard → Storage → New Bucket
 -- Name: zk-izvadci

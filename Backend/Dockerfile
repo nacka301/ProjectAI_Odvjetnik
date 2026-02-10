@@ -24,10 +24,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=build /app/publish .
 
-# Render provides PORT env var; ASP.NET reads ASPNETCORE_URLS
-ENV ASPNETCORE_URLS=http://+:${PORT:-8080}
+# Render provides PORT env var at runtime (typically 10000).
+# Do NOT set ASPNETCORE_URLS here — Program.cs reads PORT and binds dynamically.
+# Setting it here would hardcode 8080 at build time and conflict with Render's runtime PORT.
 ENV ASPNETCORE_ENVIRONMENT=Production
 
-EXPOSE 8080
+EXPOSE 10000
 
 ENTRYPOINT ["dotnet", "Backend.dll"]

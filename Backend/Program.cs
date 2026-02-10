@@ -82,6 +82,7 @@ builder.Services.AddScoped<PdfService>();
 builder.Services.AddScoped<DocumentService>();
 builder.Services.AddScoped<ValuationService>();
 builder.Services.AddScoped<ValuationEngine>();
+builder.Services.AddScoped<ZkParsingService>();
 builder.Services.AddHttpClient<EmailService>();
 builder.Services.AddHttpClient<MarketResearchService>();
 builder.Services.AddHttpClient<SupabaseService>();
