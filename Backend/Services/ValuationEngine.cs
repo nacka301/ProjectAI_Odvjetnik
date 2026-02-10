@@ -309,12 +309,27 @@ public class ValuationEngine
 
         // ── 4a. Condition-Based Price Adjustment ──
         // Adjust each comparable's price based on condition difference vs target
+        // V10: MUTUALLY EXCLUSIVE with renovation cost deduction in 4a+.
+        //   IF renovation cost (fixed amount) will be applied → OldBuildPenalty (%) = 0.
+        //   You cannot subtract renovation cost AND penalize for building age simultaneously.
         var targetState = ParseTargetState(property);
+        bool subjectNeedsWorkFlag = targetState == PropertyCondition.NeedsWork
+                                 || targetState == PropertyCondition.Original;
         if (targetState != PropertyCondition.Unknown && cleanPrices.Count > 0)
         {
             int adjusted = 0;
+            int skippedForReno = 0;
             foreach (var p in cleanPrices)
             {
+                // V10: If renovation cost deduction will apply in 4a+, skip condition penalty
+                bool compIsRenovatedOrNew = p.DetectedCondition == PropertyCondition.Renovated
+                                         || p.DetectedCondition == PropertyCondition.New;
+                if (subjectNeedsWorkFlag && compIsRenovatedOrNew)
+                {
+                    skippedForReno++;
+                    continue; // Renovation cost deduction in 4a+ takes priority
+                }
+
                 double factor = ConditionAdjustmentFactor(targetState, p.DetectedCondition);
                 if (Math.Abs(factor) > 0.001)
                 {
@@ -330,9 +345,9 @@ public class ValuationEngine
                 }
             }
             if (adjusted > 0)
-            {
                 pipeline.Add($"Condition adj: {adjusted} comps adjusted (target={targetState})");
-            }
+            if (skippedForReno > 0)
+                pipeline.Add($"Condition adj: {skippedForReno} comps SKIPPED (renovation cost deduction takes priority — mutual exclusion)");
         }
 
         // ── 4a+. FEATURE-BASED PRICE ADJUSTMENTS ──
@@ -393,10 +408,12 @@ public class ValuationEngine
 
                 if (subjectNeedsWork && compIsRenovated)
                 {
-                    // Construction cost deduction: 600 €/m² renovation cost
+                    // V10: Construction cost deduction uses SUBJECT's context.
+                    // Renovation cost per m² is a fixed estimate; deduction is capped
+                    // at 30% of comp value (you don't deduct 60k reno on a 100k property).
                     const double RenovationCostPerM2 = 600.0;
                     double deduction = RenovationCostPerM2 / p.PricePerM2;
-                    deduction = Math.Min(deduction, 0.40); // cap at -40%
+                    deduction = Math.Min(deduction, 0.30); // cap at -30% (V10: was 40%)
                     p.PricePerM2 *= (1 - deduction);
                     reasons.Add($"-{deduction * 100:F0}% (trošak adaptacije {RenovationCostPerM2:F0}€/m²)");
                 }
@@ -734,6 +751,25 @@ public class ValuationEngine
         // ── 9. Final Value ──
         double sizeM2 = property.SizeM2 > 0 ? property.SizeM2 : EstimateSizeFromContext(property);
         int finalValue = (int)Math.Round(adjustedPricePerM2 * sizeM2);
+
+        // ── 9b. V10: SAFETY FLOOR — prevent algorithmic underflow ──
+        // Final valuation cannot be lower than 65% of the average comparable asking price.
+        if (cleanPrices.Count >= 2)
+        {
+            double averageCompPricePerM2 = cleanPrices.Average(c => c.PricePerM2);
+            double averageCompTotal = averageCompPricePerM2 * sizeM2;
+            double floorPrice = averageCompTotal * 0.65;
+            if (finalValue < floorPrice)
+            {
+                int oldValue = finalValue;
+                finalValue = (int)Math.Round(floorPrice);
+                pipeline.Add($"SAFETY FLOOR: {oldValue:N0} EUR < 65% of avg comp ({averageCompTotal:N0} EUR) " +
+                    $"→ clamped to {finalValue:N0} EUR");
+                _logger.LogWarning(
+                    "Safety floor activated: {Old:N0} -> {New:N0} EUR (65% of avg comp {Avg:N0})",
+                    oldValue, finalValue, averageCompTotal);
+            }
+        }
 
         result.EstimatedValueEur = finalValue;
         result.PriceSource = priceSource;

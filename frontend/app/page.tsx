@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Scale, FileSearch, ArrowRight, BookOpen } from "lucide-react";
+import { Scale, FileSearch, ArrowRight, BookOpen, ClipboardList } from "lucide-react";
 
 export default function Home() {
   return (
@@ -15,6 +15,24 @@ export default function Home() {
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Wizard – structured input */}
+          <Link
+            href="/wizard"
+            className="group flex flex-col items-center gap-4 rounded-xl border-2 border-blue-200 bg-white p-8 shadow-sm transition hover:shadow-md hover:border-blue-400 md:col-span-3"
+          >
+            <ClipboardList className="h-12 w-12 text-blue-600" />
+            <h2 className="text-xl font-semibold text-gray-900">
+              Wizard — Unos nekretnine
+            </h2>
+            <p className="text-sm text-gray-500 leading-relaxed max-w-lg">
+              Korak-po-korak unesite tip, lokaciju i detalje nekretnine.
+              Sustav validira podatke, generira opis i pokreće tržišnu procjenu.
+            </p>
+            <span className="flex items-center gap-1 text-sm font-medium text-blue-600 group-hover:underline">
+              Pokreni <ArrowRight className="h-4 w-4" />
+            </span>
+          </Link>
+
           {/* NEW: Unified ZK → Valuation Card */}
           <Link
             href="/zk-procjena"
