@@ -515,11 +515,12 @@ public class MarketResearchService
             .ToList();
 
         // ─────────────────────────────────────────────────────
-        // DEEP DIVE — visit top 6 listing pages for rich data
+        // DEEP DIVE — visit top 12 listing pages for rich data
         //   Only for Njuškalo URLs (we have the DOM selectors).
         //   Enriches Content with full description, attributes,
         //   equipment list, renovation year, yard size, etc.
-        //   ~30s total (6 pages × ~5s each, sequential to avoid bans).
+        //   Discards vanknjižno, reclassifies partial-floor sales.
+        //   ~60s total (12 pages × ~5s each, sequential to avoid bans).
         // ─────────────────────────────────────────────────────
         if (distinctListings.Count > 0)
         {
@@ -652,8 +653,10 @@ public class MarketResearchService
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     /// <summary>
-    /// Select the top 6 most promising Njuškalo listings, visit each detail page,
+    /// Select the top 12 most promising Njuškalo listings, visit each detail page,
     /// and enrich the ComparableSearchResult with the extracted data.
+    /// Discards listings with "vanknjižno vlasništvo" and reclassifies
+    /// "prodaje se samo gornji kat" as apartment.
     /// </summary>
     private async Task DeepDiveTopListingsAsync(List<ComparableSearchResult> listings)
     {
@@ -680,7 +683,7 @@ public class MarketResearchService
             })
             .OrderByDescending(x => x.HasPrice)    // Price-bearing listings first
             .ThenBy(x => x.ContentLength)           // Shortest content = needs enrichment most
-            .Take(6)
+            .Take(12)
             .Select(x => x.Listing)
             .ToList();
 
@@ -689,12 +692,34 @@ public class MarketResearchService
 
         // ── Step 3: Visit each listing sequentially (avoid rate-limiting) ──
         int enriched = 0;
+        var toDiscard = new List<ComparableSearchResult>();
+
         foreach (var listing in scored)
         {
             try
             {
                 var details = await _scraper.ScrapeListingDetailsAsync(listing.Url);
                 if (details is null) continue;
+
+                var descLower = (details.Description ?? "").ToLowerInvariant();
+
+                // ── DISCARD: "vanknjižno vlasništvo" — unreliable property rights ──
+                if (descLower.Contains("vanknjižno vlasništvo") || descLower.Contains("vanknjižno"))
+                {
+                    _logger.LogInformation("DeepDive: DISCARDING {Url} — vanknjižno vlasništvo", listing.Url);
+                    toDiscard.Add(listing);
+                    continue;
+                }
+
+                // ── RECLASSIFY: "prodaje se samo gornji kat" → Apartment ──
+                if (descLower.Contains("prodaje se samo gornji kat") ||
+                    descLower.Contains("prodaje se gornji kat") ||
+                    descLower.Contains("samo kat") ||
+                    descLower.Contains("prodaje se jedan kat"))
+                {
+                    listing.AiPropertyType = "stan";
+                    _logger.LogInformation("DeepDive: reclassified {Url} as APARTMENT (gornji kat)", listing.Url);
+                }
 
                 // ── Enrich the listing's Content with detail page data ──
                 var enrichedText = details.ToEnrichedText();
@@ -704,32 +729,59 @@ public class MarketResearchService
                 }
 
                 // ── Intelligent condition detection ──
-                var descLower = (details.Description ?? "").ToLowerInvariant();
-
                 if (descLower.Contains("potrebna adaptacija") || descLower.Contains("za rušenje") ||
                     descLower.Contains("zapušteno") || descLower.Contains("dotrajalo") ||
-                    descLower.Contains("vlaga") || descLower.Contains("za adaptaciju"))
+                    descLower.Contains("vlaga") || descLower.Contains("za adaptaciju") ||
+                    descLower.Contains("izvorno stanje") || descLower.Contains("roh-bau") ||
+                    descLower.Contains("roh bau"))
                 {
                     listing.AiCondition ??= "needs_work";
+                    listing.NeedsRenovation = true;
+                    listing.IsRenovated = false;
                 }
                 else if (details.YearLastRenovation.HasValue && details.YearLastRenovation >= 2020)
                 {
                     listing.AiCondition ??= "renovated";
+                    listing.IsRenovated = true;
+                    listing.NeedsRenovation = false;
                 }
                 else if (descLower.Contains("novogradnja") || descLower.Contains("novo izgrađen"))
                 {
                     listing.AiCondition ??= "new";
+                    listing.IsRenovated = true;
+                    listing.NeedsRenovation = false;
                 }
                 else if (descLower.Contains("renoviran") || descLower.Contains("adaptiran") ||
-                         descLower.Contains("obnovljen") || descLower.Contains("kompletno uređen"))
+                         descLower.Contains("obnovljen") || descLower.Contains("kompletno uređen") ||
+                         descLower.Contains("novi krov"))
                 {
+                    listing.AiCondition ??= "renovated";
+                    listing.IsRenovated = true;
+                    listing.NeedsRenovation = false;
+                }
+                else if (details.YearLastRenovation.HasValue && details.YearLastRenovation >= 2015)
+                {
+                    listing.IsRenovated = true;
+                    listing.NeedsRenovation = false;
                     listing.AiCondition ??= "renovated";
                 }
                 else if (descLower.Contains("održavan") || descLower.Contains("useljiv") ||
                          descLower.Contains("dobro stanje"))
                 {
                     listing.AiCondition ??= "good";
+                    listing.IsRenovated = false;
+                    listing.NeedsRenovation = false;
                 }
+                else
+                {
+                    // Default: can't determine from description
+                    listing.IsRenovated ??= false;
+                    listing.NeedsRenovation ??= false;
+                }
+
+                // ── Store renovation year ──
+                if (details.YearLastRenovation.HasValue)
+                    listing.YearLastRenovation = details.YearLastRenovation;
 
                 // ── Yard area from detail page ──
                 if (details.YardAreaM2.HasValue && details.YardAreaM2 > 0)
@@ -760,6 +812,14 @@ public class MarketResearchService
                 _logger.LogWarning(ex, "DeepDive: failed for individual listing {Url}", listing.Url);
                 // Continue with next listing — non-fatal
             }
+        }
+
+        // ── Remove discarded listings from the main list ──
+        if (toDiscard.Count > 0)
+        {
+            foreach (var bad in toDiscard)
+                listings.Remove(bad);
+            _logger.LogInformation("DeepDive: discarded {Count} listings (vanknjižno/invalid)", toDiscard.Count);
         }
 
         _logger.LogInformation("DeepDive: enriched {Enriched}/{Selected} listings with detail page data",
@@ -1540,6 +1600,11 @@ public class ComparableSearchResult
     public double? AiYardAreaM2 { get; set; }      // AI-detected yard area
     public double? AiSizeM2 { get; set; }          // AI-detected property size
     public string? AiPropertyType { get; set; }    // AI-detected type
+
+    // V9 Deep Scraping: enrichment booleans
+    public bool? IsRenovated { get; set; }          // True if renovated/new (YearReno>2015 or description)
+    public bool? NeedsRenovation { get; set; }      // True if "za adaptaciju", "izvorno stanje", etc.
+    public int? YearLastRenovation { get; set; }     // Parsed from detail page attributes
 }
 
 public class MarketResearchResult

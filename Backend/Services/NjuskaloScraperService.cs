@@ -25,12 +25,13 @@ public class NjuskaloScraperService
     private const string SponsoredSelector = ".EntityList-item--VauVau, .EntityList-item--Adsense, .EntityList-item--Banner, [class*='sponsored'], [class*='Sponsored'], [class*='adsense'], [class*='Adsense']";
 
     // ── Scroll tuning ──
-    private const int MinScrollPx = 400;
-    private const int MaxScrollPx = 600;
-    private const int MinDelayMs  = 200;
-    private const int MaxDelayMs  = 500;
+    private const int MinScrollPx = 600;
+    private const int MaxScrollPx = 1000;
+    private const int MinDelayMs  = 300;
+    private const int MaxDelayMs  = 700;
     private const int MaxListings = 80;
-    private const int MaxPages    = 2;
+    private const int MaxPages    = 3;
+    private const int MinItemsTarget = 40;
 
     // ── Price extraction ──
     private static readonly Regex PriceRegex = new(
@@ -210,13 +211,13 @@ public class NjuskaloScraperService
     // ══════════════════════════════════════════════════════════
 
     /// <summary>
-    /// Scrolls down in 400-600px increments with random delays (200-500ms)
+    /// Scrolls down in 600-1000px increments with random delays (300-700ms)
     /// to mimic human behavior and trigger lazy loading.
-    /// Stops when: bottom reached, or MaxListings items detected, or 60 scrolls done.
+    /// Stops when: bottom reached, or MaxListings items detected, or 80 scrolls done.
     /// </summary>
     private async Task SmoothScrollAsync(IPage page)
     {
-        const int maxScrollAttempts = 60;
+        const int maxScrollAttempts = 80;
         int scrollCount = 0;
         double previousHeight = 0;
         int staleCount = 0;
@@ -253,9 +254,17 @@ public class NjuskaloScraperService
             if (Math.Abs(currentHeight - previousHeight) < 10)
             {
                 staleCount++;
-                if (staleCount >= 3)
+                // Only stop on stale if we have enough items or truly stuck (5 cycles)
+                if (staleCount >= 3 && itemCount >= MinItemsTarget)
                 {
-                    _logger.LogDebug("SmoothScroll: page height stable for 3 cycles — bottom reached");
+                    _logger.LogDebug("SmoothScroll: page height stable + {Count} items \u2265 {Target} \u2014 done",
+                        itemCount, MinItemsTarget);
+                    break;
+                }
+                if (staleCount >= 5)
+                {
+                    _logger.LogDebug("SmoothScroll: page height stable for 5 cycles \u2014 bottom reached ({Count} items)",
+                        itemCount);
                     break;
                 }
             }

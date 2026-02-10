@@ -383,7 +383,24 @@ public class ValuationEngine
                 }
 
                 // ── RENOVATION ──
-                if (!subjectHasReno && p.HasRenovation)
+                // V9: Construction Cost Deduction — if subject needs renovation and comp is renovated,
+                // deduct estimated renovation cost (600 €/m²) from comp's per-m² price.
+                bool subjectNeedsWork = targetState == PropertyCondition.NeedsWork
+                    || targetState == PropertyCondition.Original;
+                bool compIsRenovated = p.HasRenovation
+                    || p.DetectedCondition == PropertyCondition.Renovated
+                    || p.DetectedCondition == PropertyCondition.New;
+
+                if (subjectNeedsWork && compIsRenovated)
+                {
+                    // Construction cost deduction: 600 €/m² renovation cost
+                    const double RenovationCostPerM2 = 600.0;
+                    double deduction = RenovationCostPerM2 / p.PricePerM2;
+                    deduction = Math.Min(deduction, 0.40); // cap at -40%
+                    p.PricePerM2 *= (1 - deduction);
+                    reasons.Add($"-{deduction * 100:F0}% (trošak adaptacije {RenovationCostPerM2:F0}€/m²)");
+                }
+                else if (!subjectHasReno && p.HasRenovation)
                 {
                     // Comp is renovated, subject needs work → heavy penalty
                     p.PricePerM2 *= 0.80; // -20%
@@ -1343,7 +1360,7 @@ public class ValuationEngine
                         DetectedCondition = ParseAiCondition(listing.AiCondition) ?? DetectConditionFromText(text),
                         DetectedYardM2 = listing.AiYardAreaM2 > 0 ? listing.AiYardAreaM2.Value : ExtractYardArea(text),
                         HasGarage = listing.HasGarage ?? DetectFeature(text, GarageKeywords),
-                        HasRenovation = listing.HasRenovation ?? DetectFeature(text, RenovationKeywords),
+                        HasRenovation = listing.HasRenovation ?? listing.IsRenovated ?? DetectFeature(text, RenovationKeywords),
                         HasYard = listing.HasYard ?? DetectFeature(text, YardKeywords)
                     });
                     continue;
@@ -1392,7 +1409,7 @@ public class ValuationEngine
                             DetectedCondition = ParseAiCondition(listing.AiCondition) ?? DetectConditionFromText(text),
                             DetectedYardM2 = listing.AiYardAreaM2 > 0 ? listing.AiYardAreaM2.Value : ExtractYardArea(text),
                             HasGarage = listing.HasGarage ?? DetectFeature(text, GarageKeywords),
-                            HasRenovation = listing.HasRenovation ?? DetectFeature(text, RenovationKeywords),
+                            HasRenovation = listing.HasRenovation ?? listing.IsRenovated ?? DetectFeature(text, RenovationKeywords),
                             HasYard = listing.HasYard ?? DetectFeature(text, YardKeywords)
                         });
                         break; // One price per listing
