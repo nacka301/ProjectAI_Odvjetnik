@@ -984,15 +984,10 @@ public class ValuationEngine
         string detectedType,
         string regionName)
     {
+        // V14: Simplified weights — Location 70%, Size 20%, Condition 10%
+        // Type matching is now a HARD BLOCK (step 4b++) not a soft score.
         double score = 0;
-        double maxScore = 0;
-        bool isHouseOrLand = detectedType.Contains("kuć", StringComparison.OrdinalIgnoreCase)
-                          || detectedType.Contains("kuc", StringComparison.OrdinalIgnoreCase)
-                          || detectedType.Contains("vila", StringComparison.OrdinalIgnoreCase)
-                          || MarketResearchService.IsLandType(detectedType);
 
-        // ── Location (max 0.70) — 70% of total ──
-        maxScore += 0.70;
         string compText = $"{comp.SourceTitle} {comp.SourceUrl}".ToLowerInvariant();
         string targetLoc = target.Location.ToLowerInvariant().Trim();
 
@@ -1001,9 +996,9 @@ public class ValuationEngine
             .Where(s => s.Length > 2)
             .ToList();
 
-        // V8: Check if comp is in the exact neighborhood (first loc part)
+        // ── Location (max 0.70) — 70% of total ──
         bool isExactNeighborhood = locParts.Count >= 2
-            && compText.Contains(locParts[0]); // e.g. "retfala"
+            && compText.Contains(locParts[0]);
 
         if (locParts.Count >= 2 && compText.Contains(locParts[^1]) && compText.Contains(locParts[0]))
         {
@@ -1015,8 +1010,7 @@ public class ValuationEngine
         }
         else if (locParts.Any(part => compText.Contains(part)))
         {
-            // V13: Same city but WRONG neighborhood → hard cap at 0.25 (was 0.12 on 0.30 scale)
-            score += 0.25;
+            score += 0.25; // Same city but WRONG neighborhood
         }
         else if (!string.IsNullOrEmpty(regionName) && compText.Contains(regionName.ToLowerInvariant()))
         {
@@ -1027,24 +1021,7 @@ public class ValuationEngine
             score += 0.03; // Unknown location — near-zero
         }
 
-        // ── Property Type (max 0.10) — 10% of total ──
-        maxScore += 0.10;
-        string type = detectedType.ToLowerInvariant();
-        if (compText.Contains(type))
-        {
-            score += 0.10;
-        }
-        else if (IsSimilarType(type, compText))
-        {
-            score += 0.07;
-        }
-        else
-        {
-            score += 0.02;
-        }
-
-        // ── Size Proximity (max 0.10) — 10% of total ──
-        maxScore += 0.10;
+        // ── Size Proximity (max 0.20) — 20% of total ──
         if (target.SizeM2 > 0)
         {
             double compSize = ExtractSize(compText);
@@ -1054,21 +1031,19 @@ public class ValuationEngine
                     ? compSize / target.SizeM2
                     : target.SizeM2 / compSize;
 
-                double sizeScore = Math.Max(0, sizeRatio);
-                score += 0.10 * sizeScore;
+                score += 0.20 * Math.Max(0, sizeRatio);
             }
             else
             {
-                score += 0.04;
+                score += 0.08; // Unknown size — neutral
             }
         }
         else
         {
-            score += 0.05;
+            score += 0.10; // No target size — neutral
         }
 
-        // ── Condition Match (max 0.05) — 5% of total ──
-        maxScore += 0.05;
+        // ── Condition Match (max 0.10) — 10% of total ──
         var targetCond = ParseTargetState(target);
         var compCond = comp.DetectedCondition;
 
@@ -1077,50 +1052,20 @@ public class ValuationEngine
             int rankDiff = Math.Abs(StateRank(targetCond) - StateRank(compCond));
             double condScore = rankDiff switch
             {
-                0 => 0.05,   // Perfect match
-                1 => 0.03,   // Close
-                2 => 0.01,   // Different
-                _ => 0.00    // Very different
+                0 => 0.10,   // Perfect match
+                1 => 0.07,   // Close
+                2 => 0.03,   // Different
+                _ => 0.01    // Very different
             };
             score += condScore;
         }
         else
         {
-            score += 0.025; // Unknown — neutral
+            score += 0.05; // Unknown — neutral
         }
 
-        // ── Yard Area Proximity (max 0.05) — only for houses/land ──
-        maxScore += 0.05;
-        if (isHouseOrLand && target.YardAreaM2 > 0 && comp.DetectedYardM2 > 0)
-        {
-            double yardRatio = target.YardAreaM2 > comp.DetectedYardM2
-                ? comp.DetectedYardM2 / target.YardAreaM2
-                : target.YardAreaM2 / comp.DetectedYardM2;
-
-            if (yardRatio >= 0.80)
-            {
-                score += 0.05;
-            }
-            else if (yardRatio >= 0.40)
-            {
-                score += 0.05 * yardRatio;
-            }
-            else
-            {
-                score += 0.005;
-            }
-        }
-        else if (isHouseOrLand && target.YardAreaM2 > 0 && comp.DetectedYardM2 <= 0)
-        {
-            score += 0.015; // Can't compare — slight penalty
-        }
-        else
-        {
-            score += 0.025; // Not a house/no yard info — distribute neutrally
-        }
-
-        // Normalize to 0.0–1.0
-        return maxScore > 0 ? Math.Clamp(score / maxScore, 0.0, 1.0) : 0.5;
+        // Total max = 0.70 + 0.20 + 0.10 = 1.00
+        return Math.Clamp(score, 0.0, 1.0);
     }
 
     private bool IsSimilarType(string targetType, string compText)

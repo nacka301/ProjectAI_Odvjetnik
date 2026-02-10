@@ -56,6 +56,8 @@ public class MarketResearchService
         ["stan"]                  = "prodaja-stanova",
         ["kuća"]                  = "prodaja-kuca",
         ["kuca"]                  = "prodaja-kuca",
+        ["vikendica"]             = "prodaja-vikendica",
+        ["vila"]                  = "prodaja-kuca",
         ["građevinsko zemljište"] = "prodaja-zemljista",
         ["gradjevinsko zemljiste"] = "prodaja-zemljista",
         ["poslovni prostor"]      = "prodaja-poslovnih-prostora",
@@ -408,35 +410,48 @@ public class MarketResearchService
 
         // ─────────────────────────────────────────────────────
         // PHASE 1: Tavily search — exact neighborhood in quotes
-        //   Fires 3 parallel queries using "exact quotes" for neighborhood
+        //   V14: ALWAYS runs (even if Phase 0 found some) for maximum coverage.
+        //   Fires 4-6 parallel queries using "exact quotes" for neighborhood.
+        //   For kuća: also targets vikendica/vila categories.
         //   For villages, also includes fallback town queries.
         //   Location gate: STRICT for cities, relaxed for villages.
-        // ─────────────────────────────────────────────────────
-        if (allVerified.Count < 5)
+        // ─────────────────────────────────────────────────────────────
+        if (allVerified.Count < 12)
         {
             // Determine if we have a village fallback — add extra queries for the town
             string searchLoc = regionName;
             bool isVillage = VillageFallback.TryGetValue(regionName, out var villageFallbackTown1);
 
+            // V14: Build broad multi-category queries
+            bool isHouseType = detectedType.Contains("kuć", StringComparison.OrdinalIgnoreCase)
+                            || detectedType.Contains("kuc", StringComparison.OrdinalIgnoreCase)
+                            || detectedType.Contains("vila", StringComparison.OrdinalIgnoreCase);
+            string orClause = isHouseType
+                ? "(kuća OR vikendica OR vila OR obiteljska kuća)"
+                : detectedType;
+
             var queries = new List<string>
             {
-                // Q1: Exact neighborhood/village in quotes
+                // Q1: Exact neighborhood + type
                 $"site:njuskalo.hr prodaja {detectedType} \"{searchLoc}\" cijena € {now.Year}",
-                // Q2: Synonym variation with exact location
+                // Q2: Synonym variation
                 $"site:njuskalo.hr {synonyms.ElementAtOrDefault(1) ?? detectedType} \"{searchLoc}\" € {now.Year}",
-                // Q3: Include m² if known
+                // Q3: Size-based or generic
                 sizeM2 > 0
                     ? $"site:njuskalo.hr {detectedType} \"{searchLoc}\" {sizeM2:0}m2 €"
                     : $"site:njuskalo.hr nekretnina \"{searchLoc}\" prodaja € {now.Year}",
+                // Q4 (V14): Multi-category OR query for broader coverage
+                $"site:njuskalo.hr \"{searchLoc}\" {orClause} prodaja € {now.Year}",
             };
 
             // For villages: also search the fallback town explicitly
             if (isVillage)
             {
                 queries.Add($"site:njuskalo.hr prodaja {detectedType} \"{villageFallbackTown1}\" cijena € {now.Year}");
+                queries.Add($"site:njuskalo.hr \"{villageFallbackTown1}\" {orClause} prodaja €");
             }
 
-            var phase1Results = await FireParallelSearches(queries, 7, "Phase1");
+            var phase1Results = await FireParallelSearches(queries, 20, "Phase1");
             totalApiCalls += queries.Count;
             // STRICT for city neighborhoods — but for villages, also accept
             // the fallback town (Tavily results rarely mention tiny villages by name).
@@ -454,7 +469,7 @@ public class MarketResearchService
         // PHASE 2: Multi-portal spread — same location, different portals
         //   Fires 3 parallel queries (only if <5 results)
         // ─────────────────────────────────────────────────────
-        if (allVerified.Count < 5)
+        if (allVerified.Count < 8)
         {
             searchPhase = SearchPhase.MultiPortal;
 
@@ -465,7 +480,7 @@ public class MarketResearchService
                 $"site:nekretnine.hr {detectedType} \"{regionName}\" cijena €",
             };
 
-            var phase2Results = await FireParallelSearches(queries, 5, "Phase2-Portals");
+            var phase2Results = await FireParallelSearches(queries, 15, "Phase2-Portals");
             totalApiCalls += queries.Count;
             // For villages, also accept the fallback town.
             var phase2Locs = new List<string> { regionName };
@@ -484,7 +499,7 @@ public class MarketResearchService
         //   If no peers defined, falls back to BroaderRegion as before.
         //   Fires 1 query per peer (max 4) — only if <3 results
         // ─────────────────────────────────────────────────────
-        if (allVerified.Count < 3)
+        if (allVerified.Count < 6)
         {
             searchPhase = SearchPhase.WiderRegion;
 
@@ -497,7 +512,7 @@ public class MarketResearchService
                     .Select(peer => $"site:njuskalo.hr prodaja {detectedType} \"{peer}\" cijena € {now.Year}")
                     .ToList();
 
-                var peerResults = await FireParallelSearches(queries, 5, "Phase3-Peers");
+                var peerResults = await FireParallelSearches(queries, 15, "Phase3-Peers");
                 totalApiCalls += queries.Count;
 
                 // Only allow listings from the peer neighborhoods (or regionName itself)
@@ -521,7 +536,7 @@ public class MarketResearchService
                         .Select(sd => $"site:njuskalo.hr prodaja {detectedType} \"{sd}\" cijena € {now.Year}")
                         .ToList();
 
-                    var subResults = await FireParallelSearches(subQueries, 5, "Phase3-SubDistricts");
+                    var subResults = await FireParallelSearches(subQueries, 15, "Phase3-SubDistricts");
                     totalApiCalls += subQueries.Count;
 
                     // Allow listings from sub-districts + regionName itself
@@ -536,7 +551,7 @@ public class MarketResearchService
                 }
 
                 // If still <3 after sub-districts, try broader region (but City Integrity blocks forbidden cities)
-                if (allVerified.Count < 3)
+                if (allVerified.Count < 5)
                 {
                     var widerRegion = GetBroaderRegion(regionName);
 
@@ -548,7 +563,7 @@ public class MarketResearchService
                         $"site:njuskalo.hr {detectedType} \"{widerRegion}\" {now.Year}",
                     };
 
-                    var phase3Results = await FireParallelSearches(queries, 6, "Phase3-Wider");
+                    var phase3Results = await FireParallelSearches(queries, 15, "Phase3-Wider");
                     totalApiCalls += queries.Count;
                     var filtered = PriceFirstFilter(phase3Results, "Phase3", [regionName, widerRegion]);
                     MergeInto(allVerified, filtered);
@@ -603,7 +618,7 @@ public class MarketResearchService
         //   Fires up to 4 parallel queries (only if <3 results)
         //   Location gate: regionName + peers (if any) — NEVER generic city
         // ─────────────────────────────────────────────────────
-        if (allVerified.Count < 3)
+        if (allVerified.Count < 5)
         {
             searchPhase = SearchPhase.SynonymBlitz;
 
@@ -619,7 +634,7 @@ public class MarketResearchService
 
             if (queries.Count > 0)
             {
-                var phase4Results = await FireParallelSearches(queries, 5, "Phase4-Synonyms");
+                var phase4Results = await FireParallelSearches(queries, 15, "Phase4-Synonyms");
                 totalApiCalls += queries.Count;
 
                 // Location gate: regionName + peers if defined, else regionName + broader
@@ -641,7 +656,7 @@ public class MarketResearchService
         //   "Vir, Torovi, k.o. Vir" → try "Torovi", "Vir Torovi"
         //   Fires 1 query per sub-location (only if <2 results)
         // ─────────────────────────────────────────────────────
-        if (allVerified.Count < 2 && subLocations.Count > 1)
+        if (allVerified.Count < 3 && subLocations.Count > 1)
         {
             searchPhase = SearchPhase.SubLocationDrill;
 
@@ -653,7 +668,7 @@ public class MarketResearchService
 
             if (queries.Count > 0)
             {
-                var phase5Results = await FireParallelSearches(queries, 5, "Phase5-SubLoc");
+                var phase5Results = await FireParallelSearches(queries, 10, "Phase5-SubLoc");
                 totalApiCalls += queries.Count;
                 var filtered = PriceFirstFilter(phase5Results, "Phase5", subLocations);
                 MergeInto(allVerified, filtered);
@@ -754,6 +769,7 @@ public class MarketResearchService
 
     /// <summary>
     /// Constructs the Njuškalo search URL and extracts listings via Tavily Extract API.
+    /// V14: For house types, also scrapes "prodaja-vikendica" category for broader coverage.
     /// </summary>
     private async Task<List<ComparableSearchResult>> FetchNjuskaloDirectListings(
         string detectedType, string regionName, double sizeM2 = 0)
@@ -769,6 +785,21 @@ public class MarketResearchService
             }
 
             var results = await TryScrapeSingleUrl(njuskaloUrl);
+
+            // V14: MULTI-CATEGORY — for kuća, also scrape vikendica category
+            bool isHouseType = detectedType.Contains("kuć", StringComparison.OrdinalIgnoreCase)
+                            || detectedType.Contains("kuc", StringComparison.OrdinalIgnoreCase)
+                            || detectedType.Contains("vila", StringComparison.OrdinalIgnoreCase);
+            if (isHouseType)
+            {
+                var vikendUrl = BuildNjuskaloSearchUrl("vikendica", regionName, sizeM2);
+                if (vikendUrl != null && vikendUrl != njuskaloUrl)
+                {
+                    _logger.LogInformation("Phase0: Multi-category → also scraping vikendice: {Url}", vikendUrl);
+                    var vikendResults = await TryScrapeSingleUrl(vikendUrl);
+                    results.AddRange(vikendResults);
+                }
+            }
 
             // ── CITY-LEVEL FALLBACK: if neighborhood/village URL returned empty,
             //    try the parent city URL directly (e.g. /prodaja-kuca/pakrac). ──
@@ -1271,7 +1302,7 @@ public class MarketResearchService
 
     // ── Sales-only gatekeeper constants ──
     // Dynamic: land has much lower floors (30-150 €/m² is normal)
-    private const double MinSalePriceEur_Building = 35_000;
+    private const double MinSalePriceEur_Building = 15_000;   // V14: lowered from 35k to avoid data starvation
     private const double MinSalePriceEur_Land     =  5_000;
     private const double MinPricePerM2_Building    =    800;
     private const double MinPricePerM2_Land        =     15;  // Land can be 20-150 €/m²
