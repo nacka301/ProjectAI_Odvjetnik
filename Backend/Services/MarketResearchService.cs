@@ -70,6 +70,45 @@ public class MarketResearchService
         RegexOptions.Compiled);
 
     // ══════════════════════════════════════════════════════════
+    //  PRESTIGE PEERS — neighborhood-level fallback groups
+    //  If <3 results in the exact neighborhood, search ONLY these
+    //  peer neighborhoods. NEVER expand to the whole city.
+    // ══════════════════════════════════════════════════════════
+    private static readonly Dictionary<string, string[]> PrestigePeers =
+        new(StringComparer.OrdinalIgnoreCase)
+    {
+        // Zagreb — elite residential
+        { "Srebrnjak",   ["Pantovčak", "Tuškanac", "Šalata", "Jurjevska"] },
+        { "Pantovčak",   ["Srebrnjak", "Tuškanac", "Šalata", "Jurjevska"] },
+        { "Tuškanac",    ["Srebrnjak", "Pantovčak", "Šalata", "Jurjevska"] },
+        { "Šalata",      ["Srebrnjak", "Pantovčak", "Tuškanac", "Jurjevska"] },
+        { "Jurjevska",   ["Srebrnjak", "Pantovčak", "Tuškanac", "Šalata"] },
+        // Zagreb — upper middle
+        { "Maksimir",    ["Ravnice", "Bukovac", "Šalata", "Srebrnjak"] },
+        { "Ravnice",     ["Maksimir", "Bukovac", "Šalata"] },
+        { "Bukovac",     ["Maksimir", "Ravnice", "Srebrnjak"] },
+        // Zagreb — central
+        { "Centar",      ["Donji grad", "Gornji grad", "Tuškanac", "Šalata"] },
+        { "Donji grad",  ["Centar", "Gornji grad", "Vlaška", "Tuškanac"] },
+        { "Gornji grad", ["Centar", "Donji grad", "Tuškanac", "Pantovčak"] },
+        { "Vlaška",      ["Donji grad", "Centar", "Šalata", "Maksimir"] },
+        // Zagreb — south/east residential
+        { "Trnje",       ["Savica", "Martinovka", "Siget"] },
+        { "Savica",      ["Trnje", "Martinovka", "Borovje"] },
+        // Split — neighborhoods
+        { "Spinut",      ["Firule", "Bačvice", "Meje", "Trstenik"] },
+        { "Firule",      ["Spinut", "Bačvice", "Trstenik", "Meje"] },
+        { "Bačvice",     ["Firule", "Spinut", "Trstenik"] },
+        { "Meje",        ["Spinut", "Firule", "Bačvice", "Manuš"] },
+        { "Manuš",       ["Meje", "Spinut", "Varoš"] },
+        { "Varoš",       ["Manuš", "Meje", "Spinut"] },
+        // Rijeka — neighborhoods
+        { "Kantrida",    ["Kostabela", "Pećine", "Martinkovac"] },
+        { "Kostabela",   ["Kantrida", "Pećine"] },
+        { "Pećine",      ["Kantrida", "Kostabela"] },
+    };
+
+    // ══════════════════════════════════════════════════════════
     //  LOCATION HIERARCHY MAPPING (broader region for islands/suburbs)
     // ══════════════════════════════════════════════════════════
     private static readonly Dictionary<string, string> BroaderRegion =
@@ -186,25 +225,27 @@ public class MarketResearchService
         }
 
         // ─────────────────────────────────────────────────────
-        // PHASE 1: Tavily search fallback — only if Phase 0 got <5
-        //   Fires 3 parallel queries via Tavily Search
+        // PHASE 1: Tavily search — exact neighborhood in quotes
+        //   Fires 3 parallel queries using "exact quotes" for neighborhood
+        //   Location gate: STRICT — only regionName allowed
         // ─────────────────────────────────────────────────────
         if (allVerified.Count < 5)
         {
             var queries = new List<string>
             {
-                // Q1: Main type, exact location, Njuškalo
-                $"site:njuskalo.hr prodaja {detectedType} {regionName} cijena € {now.Year}",
-                // Q2: Synonym variation
-                $"site:njuskalo.hr {synonyms.ElementAtOrDefault(1) ?? detectedType} {regionName} € {now.Year}",
+                // Q1: Exact neighborhood in quotes
+                $"site:njuskalo.hr prodaja {detectedType} \"{regionName}\" cijena € {now.Year}",
+                // Q2: Synonym variation with exact location
+                $"site:njuskalo.hr {synonyms.ElementAtOrDefault(1) ?? detectedType} \"{regionName}\" € {now.Year}",
                 // Q3: Include m² if known
                 sizeM2 > 0
-                    ? $"site:njuskalo.hr {detectedType} {regionName} {sizeM2:0}m2 €"
-                    : $"site:njuskalo.hr nekretnina {regionName} prodaja € {now.Year}",
+                    ? $"site:njuskalo.hr {detectedType} \"{regionName}\" {sizeM2:0}m2 €"
+                    : $"site:njuskalo.hr nekretnina \"{regionName}\" prodaja € {now.Year}",
             };
 
             var phase1Results = await FireParallelSearches(queries, 7, "Phase1");
             totalApiCalls += queries.Count;
+            // STRICT: only exact regionName allowed — no broader fallback
             var filtered = PriceFirstFilter(phase1Results, "Phase1", [regionName]);
             MergeInto(allVerified, filtered);
 
@@ -222,9 +263,9 @@ public class MarketResearchService
 
             var queries = new List<string>
             {
-                $"site:index.hr/oglasi prodaja {detectedType} {regionName} €",
-                $"site:crozilla.com {detectedType} {regionName} prodaja €",
-                $"site:nekretnine.hr {detectedType} {regionName} cijena €",
+                $"site:index.hr/oglasi prodaja {detectedType} \"{regionName}\" €",
+                $"site:crozilla.com {detectedType} \"{regionName}\" prodaja €",
+                $"site:nekretnine.hr {detectedType} \"{regionName}\" cijena €",
             };
 
             var phase2Results = await FireParallelSearches(queries, 5, "Phase2-Portals");
@@ -237,57 +278,130 @@ public class MarketResearchService
         }
 
         // ─────────────────────────────────────────────────────
-        // PHASE 3: Wider region — go from Murter → Šibenik, Vir → Zadar, etc.
-        //   Fires 4 parallel queries (only if <3 results)
+        // PHASE 3: PRESTIGE PEERS — search only peer neighborhoods
+        //   e.g. Srebrnjak → [Pantovčak, Tuškanac, Šalata, Jurjevska]
+        //   If no peers defined, falls back to BroaderRegion as before.
+        //   Fires 1 query per peer (max 4) — only if <3 results
         // ─────────────────────────────────────────────────────
         if (allVerified.Count < 3)
         {
             searchPhase = SearchPhase.WiderRegion;
 
-            // Get the broader region (island → nearest city)
-            var widerRegion = GetBroaderRegion(regionName);
+            var hasPeers = PrestigePeers.TryGetValue(regionName, out var peers);
 
-            var queries = new List<string>
+            if (hasPeers && peers is { Length: > 0 })
             {
-                $"site:njuskalo.hr prodaja {detectedType} {widerRegion} cijena € {now.Year}",
-                $"site:njuskalo.hr {synonyms.ElementAtOrDefault(1) ?? detectedType} {widerRegion} €",
-                $"prodaja {detectedType} {widerRegion} cijena € site:njuskalo.hr OR site:index.hr/oglasi",
-                $"site:njuskalo.hr {detectedType} {widerRegion} {now.Year} €/m²",
-            };
+                // Search each peer neighborhood individually (exact quotes)
+                var queries = peers.Take(4)
+                    .Select(peer => $"site:njuskalo.hr prodaja {detectedType} \"{peer}\" cijena € {now.Year}")
+                    .ToList();
 
-            var phase3Results = await FireParallelSearches(queries, 6, "Phase3-Wider");
-            totalApiCalls += queries.Count;
-            var filtered = PriceFirstFilter(phase3Results, "Phase3", [regionName, widerRegion]);
-            MergeInto(allVerified, filtered);
+                var peerResults = await FireParallelSearches(queries, 5, "Phase3-Peers");
+                totalApiCalls += queries.Count;
 
-            _logger.LogInformation("Phase 3 (wider: {Region}→{Wider}): +{New} → total={Total}",
-                regionName, widerRegion, filtered.Count, allVerified.Count);
+                // Only allow listings from the peer neighborhoods (or regionName itself)
+                var allowedLocs = new List<string> { regionName };
+                allowedLocs.AddRange(peers);
+                var filtered = PriceFirstFilter(peerResults, "Phase3-Peers", allowedLocs);
+                MergeInto(allVerified, filtered);
+
+                _logger.LogInformation(
+                    "Phase 3 (peers of {Region}: [{Peers}]): +{New} → total={Total}",
+                    regionName, string.Join(", ", peers), filtered.Count, allVerified.Count);
+            }
+            else
+            {
+                // No peer list → fall back to broader region (islands/suburbs)
+                var widerRegion = GetBroaderRegion(regionName);
+
+                var queries = new List<string>
+                {
+                    $"site:njuskalo.hr prodaja {detectedType} \"{widerRegion}\" cijena € {now.Year}",
+                    $"site:njuskalo.hr {synonyms.ElementAtOrDefault(1) ?? detectedType} \"{widerRegion}\" €",
+                    $"prodaja {detectedType} \"{widerRegion}\" cijena € site:njuskalo.hr OR site:index.hr/oglasi",
+                    $"site:njuskalo.hr {detectedType} \"{widerRegion}\" {now.Year}",
+                };
+
+                var phase3Results = await FireParallelSearches(queries, 6, "Phase3-Wider");
+                totalApiCalls += queries.Count;
+                var filtered = PriceFirstFilter(phase3Results, "Phase3", [regionName, widerRegion]);
+                MergeInto(allVerified, filtered);
+
+                _logger.LogInformation("Phase 3 (wider: {Region}->{Wider}): +{New} → total={Total}",
+                    regionName, widerRegion, filtered.Count, allVerified.Count);
+            }
         }
 
         // ─────────────────────────────────────────────────────
-        // PHASE 4: Synonym blitz — try ALL synonyms across all portals
+        // KILL SWITCH — if neighborhood has prestige peers defined
+        //   and we STILL have <3 listings after searching exact +
+        //   peers, do NOT expand further. Return Insufficient_Data.
+        // ─────────────────────────────────────────────────────
+        bool hasPrestigePeers = PrestigePeers.ContainsKey(regionName);
+        if (hasPrestigePeers && allVerified.Count < 3)
+        {
+            _logger.LogWarning(
+                "KILL SWITCH: {Region} has prestige peers but only {Count} listings found. " +
+                "Refusing to expand to generic city areas.",
+                regionName, allVerified.Count);
+
+            var killNote = "Nema dovoljno slicnih elitnih lokacija za preciznu usporedbu.";
+            var killConfidence = new ConfidenceScore
+            {
+                Level = "Insufficient_Data",
+                Score = Math.Max(5, allVerified.Count * 10),
+                Explanation = $"Pretrazene su lokacije {regionName} i peer kvartovi " +
+                              $"({string.Join(", ", PrestigePeers[regionName])}), " +
+                              $"ali pronadjeno je samo {allVerified.Count} oglas(a). " +
+                              "Pretraga NIJE prosirena na sire gradsko podrucje radi ocuvanja preciznosti.",
+                Color = "red"
+            };
+
+            return new MarketResearchResult
+            {
+                ActiveListings = allVerified.DistinctBy(x => x.Url).Take(12).ToList(),
+                RegionalData = [],
+                RegionName = regionName,
+                DetectedPropertyType = detectedType,
+                TargetSizeM2 = sizeM2,
+                Note = killNote,
+                Confidence = killConfidence,
+                SearchPhaseUsed = "Insufficient_Data",
+                TotalApiCalls = totalApiCalls,
+            };
+        }
+
+        // ─────────────────────────────────────────────────────
+        // PHASE 4: Synonym blitz — try ALL synonyms across portals
         //   Fires up to 4 parallel queries (only if <3 results)
+        //   Location gate: regionName + peers (if any) — NEVER generic city
         // ─────────────────────────────────────────────────────
         if (allVerified.Count < 3)
         {
             searchPhase = SearchPhase.SynonymBlitz;
 
-            var widerRegion = GetBroaderRegion(regionName);
             var queries = new List<string>();
 
-            // Build queries from remaining synonyms
+            // Build queries from remaining synonyms — exact location
             foreach (var syn in synonyms.Skip(1).Take(3))
             {
-                queries.Add($"site:njuskalo.hr prodaja {syn} {regionName} € {now.Year}");
+                queries.Add($"site:njuskalo.hr prodaja {syn} \"{regionName}\" € {now.Year}");
             }
             // Also try with "nekretnina" generic + all portals
-            queries.Add($"prodaja nekretnina {regionName} cijena € {now.Year} site:njuskalo.hr OR site:crozilla.com");
+            queries.Add($"prodaja nekretnina \"{regionName}\" cijena € {now.Year} site:njuskalo.hr OR site:crozilla.com");
 
             if (queries.Count > 0)
             {
                 var phase4Results = await FireParallelSearches(queries, 5, "Phase4-Synonyms");
                 totalApiCalls += queries.Count;
-                var filtered = PriceFirstFilter(phase4Results, "Phase4", [regionName, GetBroaderRegion(regionName)]);
+
+                // Location gate: regionName + peers if defined, else regionName + broader
+                var allowedLocs = new List<string> { regionName };
+                if (PrestigePeers.TryGetValue(regionName, out var p4peers))
+                    allowedLocs.AddRange(p4peers);
+                else
+                    allowedLocs.Add(GetBroaderRegion(regionName));
+                var filtered = PriceFirstFilter(phase4Results, "Phase4", allowedLocs);
                 MergeInto(allVerified, filtered);
 
                 _logger.LogInformation("Phase 4 (synonym blitz): +{New} → total={Total}",
