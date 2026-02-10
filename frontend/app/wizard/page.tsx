@@ -34,7 +34,6 @@ type LandUse = "Construction" | "Agricultural" | "Mixed";
 interface LocationInfo {
   city: string;
   district: string;
-  zip?: string;
 }
 
 interface ApartmentData {
@@ -416,7 +415,7 @@ export default function WizardPage() {
               <>
                 <div className="rounded-xl bg-white border border-gray-200 p-6">
                   <h3 className="text-sm font-semibold text-gray-700 mb-4">📍 Lokacija</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-gray-500 mb-1">Grad *</label>
                       <input type="text" value={location.city}
@@ -428,12 +427,6 @@ export default function WizardPage() {
                       <input type="text" value={location.district}
                         onChange={(e) => setLocation({ ...location, district: e.target.value })}
                         placeholder="npr. Plokite" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">Poštanski broj</label>
-                      <input type="text" value={location.zip || ""}
-                        onChange={(e) => setLocation({ ...location, zip: e.target.value || undefined })}
-                        placeholder="21000" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
                     </div>
                   </div>
                 </div>
