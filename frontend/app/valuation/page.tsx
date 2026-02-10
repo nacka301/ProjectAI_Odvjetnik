@@ -6,7 +6,6 @@ import {
   type DragEvent,
   type ChangeEvent,
 } from "react";
-import axios from "axios";
 import Link from "next/link";
 import {
   Upload,
@@ -92,13 +91,22 @@ interface AdjustmentV4 {
   percent: number;
 }
 
-type LoadingPhase = "idle" | "reading" | "searching" | "generating" | "done";
+interface StreamStage {
+  id: string;
+  label: string;
+  status: "pending" | "active" | "done" | "skipped" | "error";
+  detail?: string;
+  error?: string;
+}
 
-const PHASE_LABELS: Record<Exclude<LoadingPhase, "idle" | "done">, string> = {
-  reading: "Čitam PDF i ekstrahiram podatke o nekretnini...",
-  searching: "Pretražujem Njuškalo i Index Oglase...",
-  generating: "Generiram stručnu procjenu vrijednosti...",
-};
+const INITIAL_STAGES: StreamStage[] = [
+  { id: "reading", label: "Čitam i ekstrahiram podatke o nekretnini...", status: "pending" },
+  { id: "searching", label: "Pretražujem Njuškalo i tržište nekretnina...", status: "pending" },
+  { id: "ai_features", label: "AI analizira značajke oglasa...", status: "pending" },
+  { id: "engine", label: "Engine izračunava tržišnu vrijednost...", status: "pending" },
+  { id: "ai_opinion", label: "AI generira stručno mišljenje...", status: "pending" },
+  { id: "saving", label: "Spremam rezultate...", status: "pending" },
+];
 
 // --- Component ---
 
@@ -109,7 +117,8 @@ export default function ValuationPage() {
   const [file, setFile] = useState<File | null>(null);
   const [propertyText, setPropertyText] = useState("");
   const [dragOver, setDragOver] = useState(false);
-  const [phase, setPhase] = useState<LoadingPhase>("idle");
+  const [stages, setStages] = useState<StreamStage[]>([]);
+  const [isStreaming, setIsStreaming] = useState(false);
   const [result, setResult] = useState<AutoValuationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -118,7 +127,7 @@ export default function ValuationPage() {
   const [city, setCity] = useState("");
   const [neighborhood, setNeighborhood] = useState("");
 
-  const isLoading = phase !== "idle" && phase !== "done";
+  const isLoading = isStreaming;
   const canStart = inputMode === "pdf" ? !!file : propertyText.trim().length >= 20;
 
   // --- File Handling ---
@@ -128,7 +137,6 @@ export default function ValuationPage() {
       setFile(f);
       setError(null);
       setResult(null);
-      setPhase("idle");
     } else if (f) {
       setError("Molimo uploadajte PDF datoteku.");
     }
@@ -159,76 +167,111 @@ export default function ValuationPage() {
 
     setError(null);
     setResult(null);
-
-    setPhase("reading");
-    const phaseTimer1 = setTimeout(() => setPhase("searching"), 3000);
-    const phaseTimer2 = setTimeout(() => setPhase("generating"), 8000);
+    setStages(INITIAL_STAGES.map((s) => ({ ...s })));
+    setIsStreaming(true);
 
     // Upload PDF to Supabase Storage (non-blocking, only for PDF mode)
-    const pdfUrlPromise = inputMode === "pdf" && file
-      ? uploadPdfToStorage(file)
-      : Promise.resolve(null);
+    const pdfUrlPromise =
+      inputMode === "pdf" && file
+        ? uploadPdfToStorage(file)
+        : Promise.resolve(null);
+
+    let streamedResult: AutoValuationResult | null = null;
 
     try {
-      let res;
+      let url: string;
+      let body: BodyInit;
+      const headers: Record<string, string> = {};
+
       if (inputMode === "pdf" && file) {
+        url = `${API_BASE}/api/evaluate/stream`;
         const formData = new FormData();
         formData.append("file", file);
         if (city.trim()) formData.append("city", city.trim());
-        if (neighborhood.trim()) formData.append("neighborhood", neighborhood.trim());
-        res = await axios.post<AutoValuationResult>(
-          `${API_BASE}/api/evaluate`,
-          formData
-        );
+        if (neighborhood.trim())
+          formData.append("neighborhood", neighborhood.trim());
+        body = formData;
       } else {
-        res = await axios.post<AutoValuationResult>(
-          `${API_BASE}/api/evaluate/text`,
-          {
-            text: propertyText.trim(),
-            city: city.trim() || undefined,
-            neighborhood: neighborhood.trim() || undefined,
-          }
-        );
+        url = `${API_BASE}/api/evaluate/text/stream`;
+        headers["Content-Type"] = "application/json";
+        body = JSON.stringify({
+          text: propertyText.trim(),
+          city: city.trim() || undefined,
+          neighborhood: neighborhood.trim() || undefined,
+        });
       }
-      clearTimeout(phaseTimer1);
-      clearTimeout(phaseTimer2);
-      setResult(res.data);
-      setPhase("done");
 
-      // Save evaluation to Supabase (fire-and-forget)
-      const pdfUrl = await pdfUrlPromise;
-      saveEvaluation({
-        property_type: res.data.target_property_summary?.split(",")[0] || "nekretnina",
-        location: res.data.target_property_summary || "nepoznato",
-        estimated_value: res.data.estimated_value_eur,
-        pdf_url: pdfUrl,
-        raw_json_output: res.data as unknown as Record<string, unknown>,
-      }).catch((e) => console.warn("Failed to save evaluation:", e));
-    } catch (err: unknown) {
-      clearTimeout(phaseTimer1);
-      clearTimeout(phaseTimer2);
-      setPhase("idle");
-      if (axios.isAxiosError(err)) {
-        if (err.response) {
-          // Server responded with error
-          const serverMsg = err.response.data?.error;
-          const status = err.response.status;
-          setError(
-            serverMsg
-              ? `[${status}] ${serverMsg}`
-              : `Greška ${status} od servera. Pokušajte ponovno.`
-          );
-        } else if (err.request) {
-          // No response — server down or CORS
-          setError(
-            "Server ne odgovara. Moguće da se Render restartira (~30s). Pokušajte ponovno za minutu."
-          );
-        } else {
-          setError("Greška pri slanju zahtjeva.");
-        }
-      } else {
-        setError("Neočekivana greška.");
+      const response = await fetch(url, { method: "POST", body, headers });
+
+      if (!response.ok || !response.body) {
+        throw new Error(`HTTP ${response.status}`);
       }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop()!;
+
+        for (const part of parts) {
+          const line = part.trim();
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const evt = JSON.parse(line.slice(6));
+
+            if (evt.type === "progress") {
+              const { stage, status, label, detail } = evt.data;
+              setStages((prev) =>
+                prev.map((s) =>
+                  s.id === stage
+                    ? { ...s, status, label: label || s.label, detail: detail ?? s.detail }
+                    : s
+                )
+              );
+            } else if (evt.type === "error") {
+              const { stage, message } = evt.data;
+              setStages((prev) =>
+                prev.map((s) =>
+                  s.id === stage
+                    ? { ...s, status: "error", error: message }
+                    : s
+                )
+              );
+              setError(message);
+            } else if (evt.type === "result") {
+              streamedResult = evt.data;
+              setResult(evt.data);
+            }
+          } catch {
+            // skip malformed SSE lines
+          }
+        }
+      }
+
+      setIsStreaming(false);
+
+      // Save to Supabase (fire-and-forget)
+      if (streamedResult) {
+        const pdfUrl = await pdfUrlPromise;
+        saveEvaluation({
+          property_type:
+            streamedResult.target_property_summary?.split(",")[0] || "nekretnina",
+          location: streamedResult.target_property_summary || "nepoznato",
+          estimated_value: streamedResult.estimated_value_eur,
+          pdf_url: pdfUrl,
+          raw_json_output: streamedResult as unknown as Record<string, unknown>,
+        }).catch((e) => console.warn("Failed to save evaluation:", e));
+      }
+    } catch {
+      setIsStreaming(false);
+      setError(
+        "Server ne odgovara. Moguće da se Render restartira (~30s). Pokušajte ponovno za minutu."
+      );
     }
   };
 
@@ -261,7 +304,8 @@ export default function ValuationPage() {
     setNeighborhood("");
     setResult(null);
     setError(null);
-    setPhase("idle");
+    setStages([]);
+    setIsStreaming(false);
     setCopied(false);
   };
 
@@ -298,7 +342,7 @@ export default function ValuationPage() {
         )}
 
         {/* ===================== UPLOAD ===================== */}
-        {phase === "idle" && !result && (
+        {!isLoading && !result && (
           <div className="space-y-6">
             {/* Mode tabs */}
             <div className="flex rounded-lg bg-gray-100 p-1">
@@ -496,61 +540,76 @@ export default function ValuationPage() {
         {isLoading && (
           <div className="space-y-6">
             <div className="rounded-xl bg-white border border-gray-200 p-8">
-              <div className="space-y-4">
-                {(["reading", "searching", "generating"] as const).map(
-                  (p, i) => {
-                    const phases: LoadingPhase[] = [
-                      "reading",
-                      "searching",
-                      "generating",
-                    ];
-                    const currentIndex = phases.indexOf(phase);
-                    const stepIndex = i;
-                    const isActive = stepIndex === currentIndex;
-                    const isDone = stepIndex < currentIndex;
-
-                    return (
-                      <div
-                        key={p}
-                        className={`flex items-center gap-4 rounded-lg p-4 transition-all ${
-                          isActive
-                            ? "bg-blue-50 border border-blue-200"
-                            : isDone
-                            ? "bg-green-50 border border-green-200"
-                            : "bg-gray-50 border border-gray-100"
+              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-5 flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Pipeline — trenutni status
+              </h3>
+              <div className="space-y-3">
+                {stages.map((s) => (
+                  <div
+                    key={s.id}
+                    className={`flex items-start gap-4 rounded-lg p-4 transition-all duration-300 ${
+                      s.status === "active"
+                        ? "bg-blue-50 border border-blue-200"
+                        : s.status === "done"
+                        ? "bg-green-50 border border-green-200"
+                        : s.status === "error"
+                        ? "bg-red-50 border border-red-200"
+                        : s.status === "skipped"
+                        ? "bg-yellow-50 border border-yellow-200"
+                        : "bg-gray-50 border border-gray-100"
+                    }`}
+                  >
+                    <div className="flex-shrink-0 mt-0.5">
+                      {s.status === "active" ? (
+                        <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+                      ) : s.status === "done" ? (
+                        <Check className="h-5 w-5 text-green-600" />
+                      ) : s.status === "error" ? (
+                        <AlertTriangle className="h-5 w-5 text-red-500" />
+                      ) : s.status === "skipped" ? (
+                        <AlertTriangle className="h-5 w-5 text-yellow-500" />
+                      ) : (
+                        <div className="h-5 w-5 rounded-full border-2 border-gray-300" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p
+                        className={`text-sm font-medium ${
+                          s.status === "active"
+                            ? "text-blue-800"
+                            : s.status === "done"
+                            ? "text-green-800"
+                            : s.status === "error"
+                            ? "text-red-700"
+                            : s.status === "skipped"
+                            ? "text-yellow-700"
+                            : "text-gray-400"
                         }`}
                       >
-                        <div className="flex-shrink-0">
-                          {isActive ? (
-                            <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
-                          ) : isDone ? (
-                            <Check className="h-5 w-5 text-green-600" />
-                          ) : (
-                            <div className="h-5 w-5 rounded-full border-2 border-gray-300" />
-                          )}
-                        </div>
-                        <p
-                          className={`text-sm font-medium ${
-                            isActive
-                              ? "text-blue-800"
-                              : isDone
-                              ? "text-green-800"
-                              : "text-gray-400"
-                          }`}
-                        >
-                          {PHASE_LABELS[p]}
+                        {s.label}
+                      </p>
+                      {s.detail && s.status === "done" && (
+                        <p className="text-xs text-green-600 mt-1 truncate">
+                          {s.detail}
                         </p>
-                      </div>
-                    );
-                  }
-                )}
+                      )}
+                      {s.detail && s.status === "skipped" && (
+                        <p className="text-xs text-yellow-600 mt-1">{s.detail}</p>
+                      )}
+                      {s.error && (
+                        <p className="text-xs text-red-500 mt-1">{s.error}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
         )}
 
         {/* ===================== RESULTS ===================== */}
-        {phase === "done" && result && (
+        {!isLoading && result && (
           <div className="space-y-6">
             {/* Value Card */}
             <div className="rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 p-8 text-center text-white shadow-lg">

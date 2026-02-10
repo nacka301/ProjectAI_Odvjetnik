@@ -1,6 +1,7 @@
 using Backend.Models;
 using Backend.Services;
 using Microsoft.AspNetCore.Mvc;
+using System.Text.Json;
 
 namespace Backend.Controllers;
 
@@ -541,6 +542,299 @@ public class EvaluateController : ControllerBase
             _logger.LogError(ex, "Error in text evaluation pipeline.");
             return StatusCode(500, new { error = "Greška pri evaluaciji nekretnine." });
         }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  SSE STREAMING ENDPOINTS — real-time progress to frontend
+    // ══════════════════════════════════════════════════════════
+
+    private static readonly JsonSerializerOptions _sseJson = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+    };
+
+    private async Task SendSSE(string type, object? payload)
+    {
+        var json = JsonSerializer.Serialize(new { type, data = payload }, _sseJson);
+        await Response.WriteAsync($"data: {json}\n\n");
+        await Response.Body.FlushAsync();
+    }
+
+    private Task SendProgress(string stage, string status, string label, string? detail = null)
+        => SendSSE("progress", new { stage, status, label, detail });
+
+    private Task SendError(string stage, string message)
+        => SendSSE("error", new { stage, message });
+
+    private Task SendResult(FullEvaluationResult result)
+        => SendSSE("result", result);
+
+    private void SetupSSEHeaders()
+    {
+        Response.ContentType = "text/event-stream";
+        Response.Headers.Append("Cache-Control", "no-cache");
+        Response.Headers.Append("Connection", "keep-alive");
+        Response.Headers.Append("X-Accel-Buffering", "no");
+    }
+
+    /// <summary>
+    /// SSE streaming PDF evaluation — sends real-time stage progress.
+    /// </summary>
+    [HttpPost("stream")]
+    [RequestSizeLimit(10 * 1024 * 1024)]
+    public async Task EvaluateStream(
+        IFormFile? file,
+        [FromForm] string? city = null,
+        [FromForm] string? neighborhood = null)
+    {
+        SetupSSEHeaders();
+
+        if (file is null || file.Length == 0)
+        {
+            await SendError("validation", "Nije učitana datoteka.");
+            return;
+        }
+
+        try
+        {
+            // ── Stage 1: PDF extraction ──
+            await SendProgress("reading", "active", "Čitam PDF i ekstrahiram podatke...");
+
+            string pdfText;
+            ExtractedPropertyInfo property;
+            try
+            {
+                pdfText = _pdfService.ExtractText(file);
+                property = await _valuationService.ExtractPropertyInfoAsync(pdfText);
+                ApplyLocationOverride(property, city, neighborhood);
+            }
+            catch (Exception ex)
+            {
+                await SendProgress("reading", "error", "Čitanje PDF-a", ex.Message);
+                await SendError("reading", $"Greška: {ex.Message}");
+                return;
+            }
+
+            await SendProgress("reading", "done", "PDF pročitan",
+                $"{property.Description}, {property.SizeM2} m², {property.Location}");
+
+            await RunStreamingPipelineAsync(property, pdfText);
+        }
+        catch (Exception ex)
+        {
+            await SendError("unknown", $"Neočekivana greška: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// SSE streaming text evaluation — sends real-time stage progress.
+    /// </summary>
+    [HttpPost("text/stream")]
+    public async Task EvaluateTextStream([FromBody] TextEvaluationRequest request)
+    {
+        SetupSSEHeaders();
+
+        if (string.IsNullOrWhiteSpace(request?.Text))
+        {
+            await SendError("validation", "Tekst nekretnine je prazan.");
+            return;
+        }
+
+        try
+        {
+            await SendProgress("reading", "active", "Analiziram uneseni tekst...");
+
+            ExtractedPropertyInfo property;
+            try
+            {
+                property = await _valuationService.ExtractPropertyInfoAsync(request.Text);
+                ApplyLocationOverride(property, request.City, request.Neighborhood);
+            }
+            catch (Exception ex)
+            {
+                await SendProgress("reading", "error", "Analiza teksta", ex.Message);
+                await SendError("reading", $"Greška: {ex.Message}");
+                return;
+            }
+
+            await SendProgress("reading", "done", "Tekst analiziran",
+                $"{property.Description}, {property.SizeM2} m², {property.Location}");
+
+            await RunStreamingPipelineAsync(property, request.Text);
+        }
+        catch (Exception ex)
+        {
+            await SendError("unknown", $"Neočekivana greška: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Shared streaming pipeline: Stage 2 through result.
+    /// </summary>
+    private async Task RunStreamingPipelineAsync(ExtractedPropertyInfo property, string pdfText)
+    {
+        // ── Stage 2: Market research ──
+        await SendProgress("searching", "active", "Pretražujem Njuškalo i tržište nekretnina...");
+
+        MarketResearchResult marketData;
+        try
+        {
+            marketData = await _marketResearchService
+                .SearchComparables(property.Location, property.SizeM2, pdfText);
+        }
+        catch (Exception ex)
+        {
+            await SendProgress("searching", "error", "Pretraga tržišta", ex.Message);
+            await SendError("searching", $"Greška pretrage: {ex.Message}");
+            return;
+        }
+
+        var searchDetail = $"{marketData.ActiveListings.Count} oglasa pronađeno";
+        if (!string.IsNullOrEmpty(marketData.SearchPhaseUsed))
+            searchDetail += $" • Faza: {marketData.SearchPhaseUsed}";
+        if (marketData.Confidence.Score > 0)
+            searchDetail += $" • Pouzdanost: {marketData.Confidence.Score}/100";
+
+        await SendProgress("searching", "done", "Pretraga završena", searchDetail);
+
+        // ── Stage 2.5: AI feature extraction ──
+        await SendProgress("ai_features", "active", "AI analizira značajke oglasa...");
+        try
+        {
+            await _valuationService.ExtractListingFeaturesAsync(marketData.ActiveListings);
+
+            int withGarage = marketData.ActiveListings.Count(l => l.HasGarage == true);
+            int withReno = marketData.ActiveListings.Count(l => l.HasRenovation == true);
+            int withYard = marketData.ActiveListings.Count(l => l.HasYard == true);
+
+            await SendProgress("ai_features", "done", "AI značajke ekstrahirane",
+                $"Garaža: {withGarage}, Renovirano: {withReno}, Dvorište: {withYard} od {marketData.ActiveListings.Count}");
+        }
+        catch
+        {
+            await SendProgress("ai_features", "skipped", "AI ekstrakcija preskočena",
+                "Engine koristi keyword fallback");
+        }
+
+        // ── Stage 3A: Engine ──
+        await SendProgress("engine", "active", "Engine izračunava tržišnu vrijednost...");
+
+        DeterministicValuation engineResult;
+        try
+        {
+            engineResult = _valuationEngine.Calculate(property, marketData);
+        }
+        catch (Exception ex)
+        {
+            await SendProgress("engine", "error", "Engine izračun", ex.Message);
+            await SendError("engine", $"Greška engine-a: {ex.Message}");
+            return;
+        }
+
+        await SendProgress("engine", "done", "Engine izračun gotov",
+            $"{engineResult.UsablePricePoints} korištenih • {engineResult.CalculatedPricePerM2:N0} €/m² • Conf: {engineResult.ConfidenceLevel}");
+
+        // ── Sync filter ──
+        if (engineResult.FinalUsedUrls.Count > 0)
+        {
+            var filtered = marketData.ActiveListings
+                .Where(l => engineResult.FinalUsedUrls.Contains(l.Url)).ToList();
+            if (filtered.Count > 0)
+                marketData.ActiveListings = filtered;
+        }
+
+        // ── Stage 3B: AI opinion ──
+        await SendProgress("ai_opinion", "active", "AI generira stručno mišljenje...");
+
+        AutoValuationResult aiResult;
+        try
+        {
+            aiResult = await _valuationService.GenerateAutoValuationAsync(property, marketData, engineResult);
+        }
+        catch (Exception ex)
+        {
+            await SendProgress("ai_opinion", "error", "AI mišljenje", ex.Message);
+            await SendError("ai_opinion", $"Greška AI procjene: {ex.Message}");
+            return;
+        }
+
+        await SendProgress("ai_opinion", "done", "AI mišljenje generirano",
+            $"AI procjena: {aiResult.EstimatedValueEur:N0} €");
+
+        // ── Merge ──
+        int finalValue = engineResult.EstimatedValueEur;
+        string finalReasoning = aiResult.ValuationReasoning;
+        if (aiResult.EstimatedValueEur > 0 && engineResult.EstimatedValueEur > 0)
+        {
+            double deviation = Math.Abs(aiResult.EstimatedValueEur - engineResult.EstimatedValueEur)
+                / (double)engineResult.EstimatedValueEur;
+            if (deviation <= 0.40)
+                finalValue = (int)Math.Round(
+                    (aiResult.EstimatedValueEur + engineResult.EstimatedValueEur) / 2.0);
+            else
+                finalReasoning = PatchReasoningValue(
+                    aiResult.ValuationReasoning, aiResult.EstimatedValueEur, engineResult.EstimatedValueEur);
+        }
+
+        // ── Build response ──
+        var response = new FullEvaluationResult
+        {
+            TargetPropertySummary = aiResult.TargetPropertySummary,
+            SelectedComparables = aiResult.SelectedComparables,
+            EstimatedValueEur = finalValue,
+            ValueDrivers = aiResult.ValueDrivers,
+            ValuationReasoning = finalReasoning,
+            ConfidenceLevel = engineResult.ConfidenceLevel,
+            MarketAverageAsking = engineResult.MarketAverageAsking,
+            CalculatedPricePerM2 = engineResult.CalculatedPricePerM2,
+            RealizationDiscountPercent = engineResult.RealizationDiscountPercent,
+            TotalListingsFound = engineResult.TotalListingsFound,
+            UsablePricePoints = engineResult.UsablePricePoints,
+            OutliersRemoved = engineResult.OutliersRemoved,
+            PriceSource = engineResult.PriceSource,
+            RegionName = engineResult.RegionName,
+            Note = string.IsNullOrEmpty(marketData.Note) ? null : marketData.Note,
+            StdDevPerM2 = engineResult.StdDevPerM2,
+            CoefficientOfVariation = engineResult.CoefficientOfVariation,
+            OutlierMethod = engineResult.OutlierMethod,
+            OutlierLog = engineResult.OutlierLog,
+            TotalAdjustmentPercent = engineResult.TotalAdjustmentPercent,
+            RealizationGapReasoning = engineResult.RealizationGapReasoning,
+            UsedComparables = engineResult.UsedComparables,
+            Adjustments = engineResult.Adjustments,
+            Pipeline = engineResult.Pipeline,
+            MathConfidenceScore = engineResult.MathConfidenceScore,
+            MathConfidenceLevel = engineResult.MathConfidenceLevel,
+            MathConfidenceExplanation = engineResult.MathConfidenceExplanation,
+            ConfidenceScore = marketData.Confidence.Score,
+            ConfidenceExplanation = marketData.Confidence.Explanation,
+            ConfidenceColor = marketData.Confidence.Color,
+            SearchPhaseUsed = marketData.SearchPhaseUsed
+        };
+
+        // ── Save to Supabase ──
+        await SendProgress("saving", "active", "Spremam rezultate...");
+        try
+        {
+            var evaluationId = await _supabaseService.SaveEvaluationAsync(new EvaluationRecord
+            {
+                PropertyType = marketData.DetectedPropertyType,
+                Location = property.Location,
+                SizeM2 = property.SizeM2 > 0 ? property.SizeM2 : null,
+                EstimatedValue = finalValue,
+                RawJsonOutput = response
+            });
+            response.EvaluationId = evaluationId;
+            await SendProgress("saving", "done", "Rezultati spremljeni", $"ID: {evaluationId}");
+        }
+        catch
+        {
+            await SendProgress("saving", "skipped", "Spremanje preskočeno", "Supabase nedostupan");
+        }
+
+        // ── Final result ──
+        await SendResult(response);
     }
 }
 
