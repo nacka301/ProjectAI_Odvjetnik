@@ -40,11 +40,12 @@ public static class PropertyDescriptionGenerator
         // Floor
         string floorText = a.Floor switch
         {
-            -2 => "podrum",
-            -1 => "suteren",
-            0 => "prizemlje",
-            1 => "1. kat",
-            _ => $"{a.Floor}. kat"
+            FloorType.Subbasement => "podrum",
+            FloorType.SemiBasement => "suteren",
+            FloorType.Ground => "prizemlje",
+            FloorType.Attic => "potkrovlje",
+            FloorType.Penthouse => "penthouse",
+            _ => $"{(int)a.Floor}. kat"
         };
         sb.Append($", {floorText}");
 

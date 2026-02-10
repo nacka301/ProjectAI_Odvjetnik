@@ -30,6 +30,7 @@ type PropertyType = "Apartment" | "House" | "Land";
 type PropertyCondition = "New" | "Renovated" | "Good" | "Original" | "NeedsWork";
 type HouseFloors = "OneStory" | "TwoStory" | "MultiStory";
 type LandUse = "Construction" | "Agricultural" | "Mixed";
+type ViewState = "INPUT" | "PROCESSING" | "RESULT";
 
 interface LocationInfo {
   city: string;
@@ -39,7 +40,7 @@ interface LocationInfo {
 interface ApartmentData {
   area_m2: number;
   room_count: number;
-  floor: number;
+  floor: string;
   total_floors: number;
   condition: PropertyCondition;
   year_built?: number;
@@ -154,6 +155,24 @@ const LAND_USE_LABELS: Record<LandUse, string> = {
   Mixed: "Mješovito",
 };
 
+const FLOOR_OPTIONS = [
+  { value: "Subbasement", label: "Podrum" },
+  { value: "SemiBasement", label: "Suteren" },
+  { value: "Ground", label: "Prizemlje" },
+  ...Array.from({ length: 30 }, (_, i) => ({
+    value: `Floor${i + 1}`,
+    label: `${i + 1}. kat`,
+  })),
+  { value: "Attic", label: "Potkrovlje" },
+  { value: "Penthouse", label: "Penthouse" },
+];
+
+const floorNumericValue = (f: string): number => {
+  const m = f.match(/^Floor(\d+)$/);
+  if (m) return parseInt(m[1]);
+  return ({ Subbasement: -2, SemiBasement: -1, Ground: 0, Attic: 100, Penthouse: 101 } as Record<string, number>)[f] ?? 0;
+};
+
 // ═══════════════════════════════════════════
 //  MAIN COMPONENT
 // ═══════════════════════════════════════════
@@ -168,7 +187,7 @@ export default function WizardPage() {
 
   // Type-specific data
   const [apt, setApt] = useState<ApartmentData>({
-    area_m2: 0, room_count: 2, floor: 1, total_floors: 4, condition: "Good",
+    area_m2: 0, room_count: 2, floor: "Ground", total_floors: 4, condition: "Good",
     has_elevator: false, has_parking: false, has_balcony: false, sea_view: false,
   });
   const [house, setHouse] = useState<HouseData>({
@@ -193,6 +212,9 @@ export default function WizardPage() {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [email, setEmail] = useState("");
+
+  // View state machine: INPUT → PROCESSING → RESULT
+  const [viewState, setViewState] = useState<ViewState>("INPUT");
 
   // ── Build JSON payload ──
 
@@ -246,6 +268,7 @@ export default function WizardPage() {
     setResult(null);
     setStages(INITIAL_STAGES.map((s) => ({ ...s })));
     setIsStreaming(true);
+    setViewState("PROCESSING");
 
     let streamedResult: ValuationResult | null = null;
 
@@ -304,6 +327,7 @@ export default function WizardPage() {
         }
       }
       setIsStreaming(false);
+      if (streamedResult) setViewState("RESULT");
 
       // Save to Supabase (fire-and-forget)
       if (streamedResult) {
@@ -337,6 +361,7 @@ export default function WizardPage() {
   // ── Reset ──
 
   const reset = () => {
+    setViewState("INPUT");
     setStep(1);
     setPropertyType(null);
     setDraftResult(null);
@@ -361,29 +386,33 @@ export default function WizardPage() {
           <ArrowLeft className="h-4 w-4" /> Natrag
         </Link>
 
-        <div className="text-center mb-10">
-          <h1 className="text-3xl font-bold text-gray-900">
-            🏠 Wizard — Unos nekretnine
-          </h1>
-          <p className="mt-2 text-gray-500">
-            Unesite podatke korak po korak — sustav automatski procjenjuje tržišnu vrijednost
-          </p>
-        </div>
-
-        {/* Step indicator */}
-        <div className="flex items-center justify-center gap-2 mb-8">
-          {[1, 2, 3].map((s) => (
-            <div key={s} className="flex items-center gap-2">
-              <div className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                step >= s ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-500"
-              }`}>{s}</div>
-              {s < 3 && <div className={`w-12 h-0.5 ${step > s ? "bg-blue-600" : "bg-gray-200"}`} />}
+        {/* Header + Step indicator — INPUT only */}
+        {viewState === "INPUT" && (
+          <>
+            <div className="text-center mb-10">
+              <h1 className="text-3xl font-bold text-gray-900">
+                🏠 Wizard — Unos nekretnine
+              </h1>
+              <p className="mt-2 text-gray-500">
+                Unesite podatke korak po korak — sustav automatski procjenjuje tržišnu vrijednost
+              </p>
             </div>
-          ))}
-        </div>
 
-        {/* Error */}
-        {error && (
+            <div className="flex items-center justify-center gap-2 mb-8">
+              {[1, 2, 3].map((s) => (
+                <div key={s} className="flex items-center gap-2">
+                  <div className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                    step >= s ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-500"
+                  }`}>{s}</div>
+                  {s < 3 && <div className={`w-12 h-0.5 ${step > s ? "bg-blue-600" : "bg-gray-200"}`} />}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* Error — INPUT only */}
+        {viewState === "INPUT" && error && (
           <div className="mb-6 flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 p-4 text-red-700">
             <AlertTriangle className="h-5 w-5 flex-shrink-0" />
             <span className="text-sm">{error}</span>
@@ -391,7 +420,7 @@ export default function WizardPage() {
         )}
 
         {/* ═══ STEP 1: Choose type + Location ═══ */}
-        {step === 1 && !isStreaming && !result && (
+        {viewState === "INPUT" && step === 1 && (
           <div className="space-y-6">
             <div className="rounded-xl bg-white border border-gray-200 p-6">
               <h3 className="text-sm font-semibold text-gray-700 mb-4">Tip nekretnine</h3>
@@ -453,7 +482,7 @@ export default function WizardPage() {
         )}
 
         {/* ═══ STEP 2: Type-specific details ═══ */}
-        {step === 2 && !isStreaming && !result && propertyType && (
+        {viewState === "INPUT" && step === 2 && propertyType && (
           <div className="space-y-6">
             <button onClick={() => setStep(1)} className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1">
               <ArrowLeft className="h-4 w-4" /> Natrag na korak 1
@@ -468,8 +497,8 @@ export default function WizardPage() {
                     onChange={(v) => setApt({ ...apt, area_m2: v })} min={10} max={300} />
                   <NumberInput label="Broj soba *" value={apt.room_count}
                     onChange={(v) => setApt({ ...apt, room_count: v })} min={1} max={10} step={1} />
-                  <NumberInput label="Kat *" value={apt.floor}
-                    onChange={(v) => setApt({ ...apt, floor: v })} min={-2} max={50} step={1} />
+                  <FloorSelect value={apt.floor}
+                    onChange={(v) => setApt({ ...apt, floor: v })} />
                   <NumberInput label="Ukupno katova *" value={apt.total_floors}
                     onChange={(v) => setApt({ ...apt, total_floors: v })} min={1} max={50} step={1} />
                   <NumberInput label="Godina izgradnje" value={apt.year_built || 0}
@@ -486,9 +515,9 @@ export default function WizardPage() {
                   <Toggle label="Balkon" checked={apt.has_balcony} onChange={(v) => setApt({ ...apt, has_balcony: v })} />
                   <Toggle label="Pogled na more" checked={apt.sea_view} onChange={(v) => setApt({ ...apt, sea_view: v })} />
                 </div>
-                {apt.floor >= 2 && !apt.has_elevator && (
+                {floorNumericValue(apt.floor) >= 2 && !apt.has_elevator && (
                   <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-3 text-sm text-yellow-800">
-                    ⚠️ Stan je na {apt.floor}. katu bez lifta — to utječe na vrijednost.
+                    ⚠️ Stan je na visokom katu bez lifta — to utječe na vrijednost.
                   </div>
                 )}
               </div>
@@ -578,7 +607,7 @@ export default function WizardPage() {
         )}
 
         {/* ═══ STEP 3: Confirmation + Valuation ═══ */}
-        {step === 3 && !isStreaming && !result && draftResult && (
+        {viewState === "INPUT" && step === 3 && draftResult && (
           <div className="space-y-6">
             <button onClick={() => setStep(2)} className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1">
               <ArrowLeft className="h-4 w-4" /> Natrag na korak 2
@@ -605,38 +634,76 @@ export default function WizardPage() {
           </div>
         )}
 
-        {/* ═══ STREAMING PROGRESS ═══ */}
-        {stages.length > 0 && (isStreaming || result) && (
-          <div className="mb-8 rounded-xl bg-white border border-gray-200 p-6">
-            <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-              <Loader2 className={`h-4 w-4 ${isStreaming ? "animate-spin text-blue-600" : "text-green-600"}`} />
-              {isStreaming ? "Pipeline u tijeku..." : "Pipeline završen"}
-            </h3>
-            <div className="space-y-3">
-              {stages.map((s) => (
-                <div key={s.id} className="flex items-start gap-3">
-                  <div className="flex-shrink-0 mt-0.5">
-                    {s.status === "active" ? <Loader2 className="h-5 w-5 animate-spin text-blue-600" /> :
-                     s.status === "done" ? <Check className="h-5 w-5 text-green-600" /> :
-                     s.status === "error" ? <AlertTriangle className="h-5 w-5 text-red-600" /> :
-                     <div className="h-5 w-5 rounded-full border-2 border-gray-300" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-sm font-medium ${
-                      s.status === "active" ? "text-blue-700" :
-                      s.status === "done" ? "text-green-700" :
-                      s.status === "error" ? "text-red-700" : "text-gray-400"
-                    }`}>{s.label}</p>
-                    {s.detail && <p className="text-xs text-gray-500 mt-0.5">{s.detail}</p>}
+        {/* ═══ PROCESSING: Full-screen Pipeline Animation ═══ */}
+        {viewState === "PROCESSING" && (
+          <div className="flex flex-col items-center justify-center py-16">
+            <div className="w-full max-w-lg">
+              {/* Header */}
+              <div className="text-center mb-10">
+                <div className="relative mx-auto h-16 w-16 mb-4">
+                  <div className="absolute inset-0 rounded-full bg-blue-100 animate-ping opacity-30" />
+                  <div className="relative flex items-center justify-center h-full w-full rounded-full bg-blue-100">
+                    <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
                   </div>
                 </div>
-              ))}
+                <h2 className="text-2xl font-bold text-gray-900">Procjena u tijeku</h2>
+                <p className="text-sm text-gray-500 mt-1">Analiziramo tržište nekretnina za vašu lokaciju</p>
+              </div>
+
+              {/* Vertical Step Pipeline */}
+              <div className="relative">
+                {stages.map((s, idx) => (
+                  <div key={s.id} className="flex gap-4 pb-8 last:pb-0">
+                    {/* Circle + connector line */}
+                    <div className="flex flex-col items-center">
+                      <div className={`h-10 w-10 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${
+                        s.status === "done" ? "bg-green-100 border-green-500" :
+                        s.status === "active" ? "bg-blue-100 border-blue-500 shadow-md shadow-blue-200" :
+                        s.status === "error" ? "bg-red-100 border-red-500" :
+                        "bg-gray-50 border-gray-200"
+                      }`}>
+                        {s.status === "active" ? <Loader2 className="h-5 w-5 animate-spin text-blue-600" /> :
+                         s.status === "done" ? <Check className="h-5 w-5 text-green-600" /> :
+                         s.status === "error" ? <AlertTriangle className="h-5 w-5 text-red-600" /> :
+                         <span className="text-sm font-bold text-gray-300">{idx + 1}</span>}
+                      </div>
+                      {idx < stages.length - 1 && (
+                        <div className={`w-0.5 flex-1 min-h-[1.5rem] transition-colors duration-300 ${
+                          s.status === "done" ? "bg-green-300" : "bg-gray-200"
+                        }`} />
+                      )}
+                    </div>
+                    {/* Label */}
+                    <div className="pt-2 flex-1 min-w-0">
+                      <p className={`text-sm font-medium transition-colors duration-300 ${
+                        s.status === "active" ? "text-blue-700" :
+                        s.status === "done" ? "text-green-700" :
+                        s.status === "error" ? "text-red-700" : "text-gray-400"
+                      }`}>{s.label}</p>
+                      {s.detail && <p className="text-xs text-gray-500 mt-0.5">{s.detail}</p>}
+                      {s.error && <p className="text-xs text-red-600 mt-0.5">{s.error}</p>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Error recovery */}
+              {error && !isStreaming && (
+                <div className="mt-8 text-center space-y-3">
+                  <div className="rounded-lg border border-red-300 bg-red-50 p-4">
+                    <p className="text-sm text-red-700">{error}</p>
+                  </div>
+                  <button onClick={reset} className="rounded-lg bg-gray-100 px-5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 transition">
+                    ← Pokušaj ponovno
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
 
         {/* ═══ VALUATION RESULT ═══ */}
-        {result && (
+        {viewState === "RESULT" && result && (
           <div className="space-y-6">
             {/* Main Value */}
             <div className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-700 p-8 text-white text-center">
@@ -792,6 +859,29 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
     <div className="rounded-lg bg-white border border-gray-200 p-4 text-center">
       <p className="text-2xl font-bold text-gray-900">{value}</p>
       <p className="text-xs text-gray-500 mt-1">{label}</p>
+    </div>
+  );
+}
+
+function FloorSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-gray-500 mb-1">Kat *</label>
+      <select value={value} onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white">
+        <optgroup label="Posebne etaže">
+          <option value="Subbasement">Podrum</option>
+          <option value="SemiBasement">Suteren</option>
+          <option value="Ground">Prizemlje</option>
+          <option value="Attic">Potkrovlje</option>
+          <option value="Penthouse">Penthouse</option>
+        </optgroup>
+        <optgroup label="Katovi">
+          {Array.from({ length: 30 }, (_, i) => (
+            <option key={i + 1} value={`Floor${i + 1}`}>{i + 1}. kat</option>
+          ))}
+        </optgroup>
+      </select>
     </div>
   );
 }

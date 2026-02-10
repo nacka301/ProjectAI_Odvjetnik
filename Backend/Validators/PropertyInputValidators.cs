@@ -44,24 +44,24 @@ public class ApartmentInputValidator : AbstractValidator<ApartmentInput>
             .WithMessage("Broj soba mora biti između 1 i 10.");
 
         RuleFor(x => x.Floor)
-            .InclusiveBetween(-2, 50)
-            .WithMessage("Kat mora biti između -2 (suteren) i 50.");
+            .IsInEnum()
+            .WithMessage("Nepoznata vrijednost za kat.");
 
         RuleFor(x => x.TotalFloors)
             .InclusiveBetween(1, 50)
             .WithMessage("Ukupan broj katova mora biti između 1 i 50.");
 
         RuleFor(x => x.TotalFloors)
-            .GreaterThanOrEqualTo(x => x.Floor)
-            .When(x => x.Floor >= 0)
+            .GreaterThanOrEqualTo(x => (int)x.Floor)
+            .When(x => (int)x.Floor >= 0 && (int)x.Floor <= 30)
             .WithMessage("Ukupan broj katova ne može biti manji od kata stana.");
 
         // Warning: No elevator on floor >= 2 (Severity.Warning → passes, but flags it)
         RuleFor(x => x.HasElevator)
             .Must(hasElevator => hasElevator)
-            .When(x => x.Floor >= 2)
+            .When(x => (int)x.Floor >= 2)
             .WithSeverity(Severity.Warning)
-            .WithMessage("Stan je na {PropertyValue}. katu bez lifta — to utječe na vrijednost.");
+            .WithMessage("Stan je na visokom katu bez lifta — to utječe na vrijednost.");
 
         RuleFor(x => x.Condition).IsInEnum();
     }
