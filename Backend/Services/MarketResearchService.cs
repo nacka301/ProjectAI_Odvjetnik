@@ -181,6 +181,96 @@ public class MarketResearchService
     };
 
     // ══════════════════════════════════════════════════════════
+    //  VILLAGE / SMALL MUNICIPALITY → NEAREST LARGER TOWN
+    //  Unlike BroaderRegion (neighborhoods of a city), these are
+    //  independent small places that Njuškalo does NOT have a
+    //  dedicated sub-page for. We search the nearest town instead.
+    // ══════════════════════════════════════════════════════════
+    private static readonly Dictionary<string, string> VillageFallback =
+        new(StringComparer.OrdinalIgnoreCase)
+    {
+        // ── Požeško-slavonska županija ──
+        { "Kukunjevac", "Pakrac" }, { "Lipik", "Pakrac" },
+        { "Badljevina", "Pakrac" }, { "Prekopakra", "Pakrac" },
+        { "Pleternica", "Požega" }, { "Kutjevo", "Požega" },
+        { "Brestovac", "Požega" }, { "Kaptol", "Požega" },
+        { "Velika", "Požega" }, { "Jakšić", "Požega" }, { "Jaksic", "Požega" },
+        // ── Brodsko-posavska županija ──
+        { "Sibinj", "Slavonski Brod" }, { "Bebrina", "Slavonski Brod" },
+        { "Oprisavci", "Slavonski Brod" }, { "Podcrkavlje", "Slavonski Brod" },
+        { "Gornja Vrba", "Slavonski Brod" }, { "Bukovlje", "Slavonski Brod" },
+        { "Cernik", "Nova Gradiška" }, { "Okučani", "Nova Gradiška" },
+        { "Okucani", "Nova Gradiška" }, { "Staro Petrovo Selo", "Nova Gradiška" },
+        { "Nova Gradiška", "Slavonski Brod" }, { "Nova Gradiska", "Slavonski Brod" },
+        // ── Virovitičko-podravska županija ──
+        { "Slatina", "Virovitica" }, { "Orahovica", "Virovitica" },
+        { "Pitomača", "Virovitica" }, { "Pitomaca", "Virovitica" },
+        { "Čačinci", "Virovitica" }, { "Cacinci", "Virovitica" },
+        { "Suhopolje", "Virovitica" }, { "Špišić Bukovica", "Virovitica" },
+        // ── Bjelovarsko-bilogorska županija ──
+        { "Čazma", "Bjelovar" }, { "Cazma", "Bjelovar" },
+        { "Garešnica", "Bjelovar" }, { "Garesnica", "Bjelovar" },
+        { "Grubišno Polje", "Bjelovar" }, { "Grubisno Polje", "Bjelovar" },
+        { "Daruvar", "Bjelovar" }, { "Hercegovac", "Bjelovar" },
+        // ── Koprivničko-križevačka županija ──
+        { "Đurđevac", "Koprivnica" }, { "Durdevac", "Koprivnica" },
+        { "Križevci", "Koprivnica" }, { "Krizevci", "Koprivnica" },
+        { "Virje", "Koprivnica" }, { "Novigrad Podravski", "Koprivnica" },
+        // ── Sisačko-moslavačka županija ──
+        { "Petrinja", "Sisak" }, { "Kutina", "Sisak" },
+        { "Novska", "Sisak" }, { "Glina", "Sisak" },
+        { "Popovača", "Sisak" }, { "Popovaca", "Sisak" },
+        { "Sunja", "Sisak" }, { "Hrvatska Kostajnica", "Sisak" },
+        { "Dvor", "Sisak" }, { "Topusko", "Sisak" },
+        // ── Vukovarsko-srijemska županija ──
+        { "Županja", "Vinkovci" }, { "Zupanja", "Vinkovci" },
+        { "Ilok", "Vukovar" }, { "Tovarnik", "Vukovar" },
+        { "Nuštar", "Vukovar" }, { "Nustar", "Vukovar" },
+        { "Cerna", "Vinkovci" }, { "Stari Jankovci", "Vinkovci" },
+        { "Drenovci", "Vinkovci" }, { "Gunja", "Vinkovci" },
+        // ── Osječko-baranjska (smaller municipalities) ──
+        { "Đakovo", "Osijek" }, { "Dakovo", "Osijek" },
+        { "Belišće", "Osijek" }, { "Belisce", "Osijek" },
+        { "Valpovo", "Osijek" }, { "Donji Miholjac", "Osijek" },
+        { "Našice", "Osijek" }, { "Nasice", "Osijek" },
+        { "Beli Manastir", "Osijek" },
+        // ── Karlovačka županija ──
+        { "Duga Resa", "Karlovac" }, { "Ozalj", "Karlovac" },
+        { "Slunj", "Karlovac" }, { "Ogulin", "Karlovac" },
+        { "Vojnić", "Karlovac" }, { "Vojnic", "Karlovac" },
+        // ── Krapinsko-zagorska županija ──
+        { "Krapina", "Zabok" }, { "Pregrada", "Zabok" },
+        { "Klanjec", "Zabok" }, { "Zlatar", "Zabok" },
+        { "Zabok", "Zagreb" }, { "Oroslavje", "Zabok" },
+        // ── Varaždinska županija (smaller) ──
+        { "Ivanec", "Varaždin" }, { "Ludbreg", "Varaždin" },
+        { "Novi Marof", "Varaždin" }, { "Lepoglava", "Varaždin" },
+        // ── Međimurska županija ──
+        { "Mursko Središće", "Čakovec" }, { "Mursko Sredisce", "Čakovec" },
+        { "Prelog", "Čakovec" },
+        // ── Ličko-senjska županija ──
+        { "Otočac", "Gospić" }, { "Otocac", "Gospić" },
+        { "Senj", "Rijeka" }, { "Novalja", "Zadar" },
+        { "Gospić", "Zadar" }, { "Gospic", "Zadar" },
+        // ── Zadarska (inland/small) ──
+        { "Benkovac", "Zadar" }, { "Obrovac", "Zadar" },
+        { "Biograd na Moru", "Zadar" }, { "Gračac", "Zadar" }, { "Gracac", "Zadar" },
+        // ── Šibensko-kninska (inland) ──
+        { "Knin", "Šibenik" }, { "Drniš", "Šibenik" }, { "Drnis", "Šibenik" },
+        // ── Splitsko-dalmatinska (inland/small) ──
+        { "Sinj", "Split" }, { "Imotski", "Split" },
+        { "Vrgorac", "Split" }, { "Trilj", "Split" },
+        { "Bol", "Split" },
+        // ── Dubrovačko-neretvanska (inland/small) ──
+        { "Metković", "Dubrovnik" }, { "Metkovic", "Dubrovnik" },
+        { "Ploče", "Dubrovnik" }, { "Ploce", "Dubrovnik" },
+        { "Opuzen", "Dubrovnik" },
+        // ── Istarska (inland/small) ──
+        { "Pazin", "Pula" }, { "Buje", "Pula" },
+        { "Vodnjan", "Pula" }, { "Višnjan", "Pula" }, { "Visnjan", "Pula" },
+    };
+
+    // ══════════════════════════════════════════════════════════
     //  NOTE: Regional benchmarks REMOVED.
     //  Engine works ONLY with real search data from Tavily.
     // ══════════════════════════════════════════════════════════
@@ -240,6 +330,13 @@ public class MarketResearchService
             detectedType, string.Join(", ", synonyms), regionName,
             string.Join(" → ", subLocations));
 
+        // Log village fallback and size cap decisions
+        if (VillageFallback.TryGetValue(regionName, out var logFallback))
+            _logger.LogInformation("Village detected: {Village} → fallback town: {Town}", regionName, logFallback);
+        if (!isLand && sizeM2 > 300)
+            _logger.LogWarning("Size {Size:0}m² too large for living area ({Type}) — skipping livingArea filter (likely plot area)",
+                sizeM2, detectedType);
+
         // ─────────────────────────────────────────────────────
         // PHASE 0: Njuškalo DIRECT — extract the actual search page
         //   Constructs njuskalo.hr/prodaja-zemljista/vir URL
@@ -253,9 +350,12 @@ public class MarketResearchService
             // Phase 0 location gate: allow both the neighborhood AND parent city.
             // When searching city-level URL (e.g. /prodaja-kuca/osijek for Retfala),
             // listings say "Osijek" not "Retfala" — must accept both.
+            // For villages, also accept the fallback town (e.g. Kukunjevac → Pakrac).
             var phase0Locs = new List<string> { regionName };
             if (BroaderRegion.TryGetValue(regionName, out var parentCity))
                 phase0Locs.Add(parentCity);
+            else if (VillageFallback.TryGetValue(regionName, out var fallbackTown0))
+                phase0Locs.Add(fallbackTown0);
 
             var filtered = PriceFirstFilter(njuskaloResults, "Phase0-NjuskaloDirect", phase0Locs);
             MergeInto(allVerified, filtered);
@@ -267,26 +367,41 @@ public class MarketResearchService
         // ─────────────────────────────────────────────────────
         // PHASE 1: Tavily search — exact neighborhood in quotes
         //   Fires 3 parallel queries using "exact quotes" for neighborhood
-        //   Location gate: STRICT — only regionName allowed
+        //   For villages, also includes fallback town queries.
+        //   Location gate: STRICT for cities, relaxed for villages.
         // ─────────────────────────────────────────────────────
         if (allVerified.Count < 5)
         {
+            // Determine if we have a village fallback — add extra queries for the town
+            string searchLoc = regionName;
+            bool isVillage = VillageFallback.TryGetValue(regionName, out var villageFallbackTown1);
+
             var queries = new List<string>
             {
-                // Q1: Exact neighborhood in quotes
-                $"site:njuskalo.hr prodaja {detectedType} \"{regionName}\" cijena € {now.Year}",
+                // Q1: Exact neighborhood/village in quotes
+                $"site:njuskalo.hr prodaja {detectedType} \"{searchLoc}\" cijena € {now.Year}",
                 // Q2: Synonym variation with exact location
-                $"site:njuskalo.hr {synonyms.ElementAtOrDefault(1) ?? detectedType} \"{regionName}\" € {now.Year}",
+                $"site:njuskalo.hr {synonyms.ElementAtOrDefault(1) ?? detectedType} \"{searchLoc}\" € {now.Year}",
                 // Q3: Include m² if known
                 sizeM2 > 0
-                    ? $"site:njuskalo.hr {detectedType} \"{regionName}\" {sizeM2:0}m2 €"
-                    : $"site:njuskalo.hr nekretnina \"{regionName}\" prodaja € {now.Year}",
+                    ? $"site:njuskalo.hr {detectedType} \"{searchLoc}\" {sizeM2:0}m2 €"
+                    : $"site:njuskalo.hr nekretnina \"{searchLoc}\" prodaja € {now.Year}",
             };
+
+            // For villages: also search the fallback town explicitly
+            if (isVillage)
+            {
+                queries.Add($"site:njuskalo.hr prodaja {detectedType} \"{villageFallbackTown1}\" cijena € {now.Year}");
+            }
 
             var phase1Results = await FireParallelSearches(queries, 7, "Phase1");
             totalApiCalls += queries.Count;
-            // STRICT: only exact regionName allowed — no broader fallback
-            var filtered = PriceFirstFilter(phase1Results, "Phase1", [regionName]);
+            // STRICT for city neighborhoods — but for villages, also accept
+            // the fallback town (Tavily results rarely mention tiny villages by name).
+            var phase1Locs = new List<string> { regionName };
+            if (isVillage)
+                phase1Locs.Add(villageFallbackTown1!);
+            var filtered = PriceFirstFilter(phase1Results, "Phase1", phase1Locs);
             MergeInto(allVerified, filtered);
 
             _logger.LogInformation("Phase 1: {New}/{Raw} passed → total={Total}",
@@ -310,7 +425,11 @@ public class MarketResearchService
 
             var phase2Results = await FireParallelSearches(queries, 5, "Phase2-Portals");
             totalApiCalls += queries.Count;
-            var filtered = PriceFirstFilter(phase2Results, "Phase2", [regionName]);
+            // For villages, also accept the fallback town.
+            var phase2Locs = new List<string> { regionName };
+            if (VillageFallback.TryGetValue(regionName, out var fallbackTown2))
+                phase2Locs.Add(fallbackTown2);
+            var filtered = PriceFirstFilter(phase2Results, "Phase2", phase2Locs);
             MergeInto(allVerified, filtered);
 
             _logger.LogInformation("Phase 2 (multi-portal): +{New} → total={Total}",
@@ -580,43 +699,75 @@ public class MarketResearchService
                 return [];
             }
 
-            // ── PRIMARY: Playwright scraper (scrolls page, captures full DOM) ──
-            _logger.LogInformation("Phase0: Playwright scraper → {Url}", njuskaloUrl);
-            var scraped = await _scraper.ScrapeListingsAsync(njuskaloUrl);
+            var results = await TryScrapeSingleUrl(njuskaloUrl);
 
-            if (scraped.Count > 0)
+            // ── CITY-LEVEL FALLBACK: if neighborhood/village URL returned empty,
+            //    try the parent city URL directly (e.g. /prodaja-kuca/pakrac). ──
+            if (results.Count == 0)
             {
-                var converted = scraped.Select(s => new ComparableSearchResult
+                string? parentCityName = null;
+                if (BroaderRegion.TryGetValue(regionName, out var pc))
+                    parentCityName = pc;
+                else if (VillageFallback.TryGetValue(regionName, out var ft))
+                    parentCityName = ft;
+
+                if (parentCityName != null)
                 {
-                    Url = s.Url,
-                    Title = s.Title,
-                    Content = BuildScrapedContent(s)
-                }).ToList();
-
-                _logger.LogInformation(
-                    "Phase0: Playwright captured {Count} organic listings", converted.Count);
-                return converted;
+                    var cityUrl = BuildNjuskaloSearchUrl(detectedType, parentCityName, sizeM2);
+                    if (cityUrl != null && cityUrl != njuskaloUrl)
+                    {
+                        _logger.LogInformation(
+                            "Phase0: Primary URL empty → trying city-level: {Url}", cityUrl);
+                        results = await TryScrapeSingleUrl(cityUrl);
+                    }
+                }
             }
 
-            _logger.LogWarning("Phase0: Playwright returned 0 listings — falling back to Tavily Extract");
-
-            // ── FALLBACK: Tavily Extract API ──
-            var extractedText = await ExecuteTavilyExtract(njuskaloUrl);
-            if (string.IsNullOrWhiteSpace(extractedText))
-            {
-                _logger.LogWarning("Phase0: Tavily Extract also returned empty for {Url}", njuskaloUrl);
-                return [];
-            }
-
-            var listings = ParseNjuskaloExtractedText(extractedText);
-            _logger.LogInformation("Phase0: Tavily fallback parsed {Count} listings", listings.Count);
-            return listings;
+            return results;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Phase0: Njuškalo direct extraction failed");
             return [];
         }
+    }
+
+    /// <summary>
+    /// Attempt to scrape a single Njuškalo URL via Playwright, falling back to Tavily Extract.
+    /// </summary>
+    private async Task<List<ComparableSearchResult>> TryScrapeSingleUrl(string njuskaloUrl)
+    {
+        // ── PRIMARY: Playwright scraper (scrolls page, captures full DOM) ──
+        _logger.LogInformation("Phase0: Playwright scraper → {Url}", njuskaloUrl);
+        var scraped = await _scraper.ScrapeListingsAsync(njuskaloUrl);
+
+        if (scraped.Count > 0)
+        {
+            var converted = scraped.Select(s => new ComparableSearchResult
+            {
+                Url = s.Url,
+                Title = s.Title,
+                Content = BuildScrapedContent(s)
+            }).ToList();
+
+            _logger.LogInformation(
+                "Phase0: Playwright captured {Count} organic listings", converted.Count);
+            return converted;
+        }
+
+        _logger.LogWarning("Phase0: Playwright returned 0 listings — falling back to Tavily Extract");
+
+        // ── FALLBACK: Tavily Extract API ──
+        var extractedText = await ExecuteTavilyExtract(njuskaloUrl);
+        if (string.IsNullOrWhiteSpace(extractedText))
+        {
+            _logger.LogWarning("Phase0: Tavily Extract also returned empty for {Url}", njuskaloUrl);
+            return [];
+        }
+
+        var listings = ParseNjuskaloExtractedText(extractedText);
+        _logger.LogInformation("Phase0: Tavily fallback parsed {Count} listings", listings.Count);
+        return listings;
     }
 
     /// <summary>
@@ -872,6 +1023,12 @@ public class MarketResearchService
             neighborhoodUrl = $"https://www.njuskalo.hr/{slug}/{citySlug}-{neighborhoodSlug}";
             urlRegion = parentCity; // fallback to city-level
         }
+        else if (VillageFallback.TryGetValue(regionName, out var fallbackTown))
+        {
+            // Village/small municipality → search the nearest larger town directly.
+            // Njuškalo won't have a sub-page for small villages.
+            urlRegion = fallbackTown;
+        }
 
         var locSlug = NormalizeLocationSlug(urlRegion);
         if (string.IsNullOrWhiteSpace(locSlug))
@@ -887,13 +1044,23 @@ public class MarketResearchService
         if (sizeM2 > 10)
         {
             bool isLand = slug.Contains("zemljist");
-            string sizeParam = isLand ? "plotArea" : "livingArea";
 
-            int minSize = (int)(sizeM2 * 0.70);  // -30%
-            int maxSize = (int)(sizeM2 * 1.30);  // +30%
+            if (!isLand && sizeM2 > 300)
+            {
+                // Houses/apartments NEVER have 300+ m² living area.
+                // If sizeM2 > 300, the AI likely confused plot area with living area.
+                // Skip size filter entirely — downstream similarity scoring will handle it.
+            }
+            else
+            {
+                string sizeParam = isLand ? "plotArea" : "livingArea";
 
-            queryParams.Add($"{sizeParam}%5Bmin%5D={minSize}");
-            queryParams.Add($"{sizeParam}%5Bmax%5D={maxSize}");
+                int minSize = (int)(sizeM2 * 0.70);  // -30%
+                int maxSize = (int)(sizeM2 * 1.30);  // +30%
+
+                queryParams.Add($"{sizeParam}%5Bmin%5D={minSize}");
+                queryParams.Add($"{sizeParam}%5Bmax%5D={maxSize}");
+            }
         }
 
         if (queryParams.Count > 0)
@@ -1364,13 +1531,18 @@ public class MarketResearchService
 
         result.AddRange(parts);
 
-        // Add broader region if known
+        // Add broader region if known (neighborhoods + villages)
         foreach (var part in parts)
         {
             if (BroaderRegion.TryGetValue(part, out var broader) &&
                 !result.Contains(broader, StringComparer.OrdinalIgnoreCase))
             {
                 result.Add(broader);
+            }
+            else if (VillageFallback.TryGetValue(part, out var fallback) &&
+                     !result.Contains(fallback, StringComparer.OrdinalIgnoreCase))
+            {
+                result.Add(fallback);
             }
         }
 
@@ -1392,13 +1564,17 @@ public class MarketResearchService
         return string.IsNullOrWhiteSpace(firstPart) ? "Hrvatska" : firstPart;
     }
 
-    /// <summary>Get the next broader region for an island/suburb.</summary>
+    /// <summary>Get the next broader region for an island/suburb/village.</summary>
     private static string GetBroaderRegion(string regionName)
     {
         if (BroaderRegion.TryGetValue(regionName, out var broader))
             return broader;
 
-        // Try word-level match
+        // Village / small municipality fallback
+        if (VillageFallback.TryGetValue(regionName, out var fallback))
+            return fallback;
+
+        // Try word-level match in BroaderRegion
         foreach (var (key, value) in BroaderRegion)
         {
             if (regionName.Contains(key, StringComparison.OrdinalIgnoreCase))
