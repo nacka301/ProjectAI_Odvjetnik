@@ -262,6 +262,115 @@ public class ValuationService
         _logger = logger;
     }
 
+    // ══════════════════════════════════════════════════════════
+    //  V8.2: BATCH AI FEATURE EXTRACTION FOR COMPARABLES
+    // ══════════════════════════════════════════════════════════
+
+    private const string ListingFeatureExtractionPrompt =
+        """
+        You are a property listing analyzer. You receive multiple Croatian real estate listing snippets.
+        For EACH listing, extract these features from the text:
+
+        - "has_garage": boolean — Does this listing mention a garage, parking space, or garažno mjesto?
+        - "has_renovation": boolean — Is there evidence of renovation? Look for: nova fasada, novi krov,
+          termoizolacija, energetska obnova, potpuno renovirano, kompletno uređen, novi prozori, nova stolarija.
+        - "has_yard": boolean — Does it mention a yard, garden, or okućnica? (dvorište, okućnica, vrt, bašta, parcela uz kuću)
+        - "condition": string — One of: "new", "renovated", "good", "original", "needs_work", "unknown".
+          * "new" = novogradnja, novo izgrađeno
+          * "renovated" = renovirano, adaptirano, obnovljeno, kompletno uređeno
+          * "good" = održavano, uredno, dobro stanje, useljivo
+          * "original" = izvorno stanje, nije renovirano
+          * "needs_work" = potrebna adaptacija, rušević, zapušteno, dotrajalo, vlažno, neuseljivo
+          * "unknown" = no info available
+        - "yard_area_m2": number — Yard/okućnica size in m² if mentioned, 0 if not mentioned.
+        - "size_m2": number — Property size in m² if detected, 0 if not clear.
+        - "property_type": string — "stan", "kuća", "zemljište", "poslovni prostor", or "unknown".
+
+        Return a JSON object with a single key "listings" containing an array.
+        Each array element has an "index" (matching the input listing number, 0-based) and the extracted fields.
+        If you cannot determine a field, use the default (false for booleans, "unknown" for strings, 0 for numbers).
+
+        Return ONLY the raw JSON object, no markdown fences.
+        Example:
+        {"listings": [{"index": 0, "has_garage": true, "has_renovation": false, "has_yard": true, "condition": "renovated", "yard_area_m2": 500, "size_m2": 85, "property_type": "kuća"}, ...]}
+        """;
+
+    /// <summary>
+    /// Send ALL comparable listings to GPT in one batch call.
+    /// Returns extracted features for each listing, which get stored on ComparableSearchResult.
+    /// </summary>
+    public async Task ExtractListingFeaturesAsync(List<ComparableSearchResult> listings)
+    {
+        if (listings.Count == 0) return;
+
+        // Build a single prompt with all listings
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"Analyze these {listings.Count} Croatian real estate listings:\n");
+
+        for (int i = 0; i < listings.Count; i++)
+        {
+            var l = listings[i];
+            // Truncate content to keep tokens reasonable
+            string content = l.Content.Length > 600 ? l.Content[..600] : l.Content;
+            sb.AppendLine($"--- Listing {i} ---");
+            sb.AppendLine($"Title: {l.Title}");
+            sb.AppendLine($"Content: {content}");
+            sb.AppendLine();
+        }
+
+        try
+        {
+            var messages = new List<ChatMessage>
+            {
+                new SystemChatMessage(ListingFeatureExtractionPrompt),
+                new UserChatMessage(sb.ToString())
+            };
+
+            var options = new ChatCompletionOptions
+            {
+                Temperature = 0.1f,
+                ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
+            };
+
+            ChatCompletion completion = await _chatClient.CompleteChatAsync(messages, options);
+            var json = completion.Content[0].Text;
+
+            _logger.LogInformation("AI feature extraction completed for {Count} listings", listings.Count);
+
+            // Parse the response
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("listings", out var listingsArr))
+            {
+                foreach (var item in listingsArr.EnumerateArray())
+                {
+                    int idx = item.TryGetProperty("index", out var idxProp) ? idxProp.GetInt32() : -1;
+                    if (idx < 0 || idx >= listings.Count) continue;
+
+                    var target = listings[idx];
+                    target.HasGarage = item.TryGetProperty("has_garage", out var g) ? g.GetBoolean() : false;
+                    target.HasRenovation = item.TryGetProperty("has_renovation", out var r) ? r.GetBoolean() : false;
+                    target.HasYard = item.TryGetProperty("has_yard", out var y) ? y.GetBoolean() : false;
+                    target.AiCondition = item.TryGetProperty("condition", out var c) ? c.GetString() : "unknown";
+                    target.AiYardAreaM2 = item.TryGetProperty("yard_area_m2", out var ya) ? ya.GetDouble() : 0;
+                    target.AiSizeM2 = item.TryGetProperty("size_m2", out var sz) ? sz.GetDouble() : 0;
+                    target.AiPropertyType = item.TryGetProperty("property_type", out var pt) ? pt.GetString() : "unknown";
+                }
+
+                int populated = listings.Count(l => l.HasGarage.HasValue);
+                _logger.LogInformation("AI features populated for {Count}/{Total} listings", populated, listings.Count);
+            }
+            else
+            {
+                _logger.LogWarning("AI feature response missing 'listings' key");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "AI feature extraction failed — engine will use keyword fallback");
+            // Non-fatal: engine falls back to keyword detection
+        }
+    }
+
     /// <summary>
     /// Extract property details from PDF text using AI.
     /// </summary>

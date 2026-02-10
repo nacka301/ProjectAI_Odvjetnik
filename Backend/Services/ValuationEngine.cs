@@ -1318,11 +1318,11 @@ public class ValuationEngine
                         PricePerM2 = ppm2,
                         SourceTitle = listing.Title,
                         SourceUrl = listing.Url,
-                        DetectedCondition = DetectConditionFromText(text),
-                        DetectedYardM2 = ExtractYardArea(text),
-                        HasGarage = DetectFeature(text, GarageKeywords),
-                        HasRenovation = DetectFeature(text, RenovationKeywords),
-                        HasYard = DetectFeature(text, YardKeywords)
+                        DetectedCondition = ParseAiCondition(listing.AiCondition) ?? DetectConditionFromText(text),
+                        DetectedYardM2 = listing.AiYardAreaM2 > 0 ? listing.AiYardAreaM2.Value : ExtractYardArea(text),
+                        HasGarage = listing.HasGarage ?? DetectFeature(text, GarageKeywords),
+                        HasRenovation = listing.HasRenovation ?? DetectFeature(text, RenovationKeywords),
+                        HasYard = listing.HasYard ?? DetectFeature(text, YardKeywords)
                     });
                     continue;
                 }
@@ -1367,11 +1367,11 @@ public class ValuationEngine
                             PricePerM2 = ppm2,
                             SourceTitle = listing.Title,
                             SourceUrl = listing.Url,
-                            DetectedCondition = DetectConditionFromText(text),
-                            DetectedYardM2 = ExtractYardArea(text),
-                            HasGarage = DetectFeature(text, GarageKeywords),
-                            HasRenovation = DetectFeature(text, RenovationKeywords),
-                            HasYard = DetectFeature(text, YardKeywords)
+                            DetectedCondition = ParseAiCondition(listing.AiCondition) ?? DetectConditionFromText(text),
+                            DetectedYardM2 = listing.AiYardAreaM2 > 0 ? listing.AiYardAreaM2.Value : ExtractYardArea(text),
+                            HasGarage = listing.HasGarage ?? DetectFeature(text, GarageKeywords),
+                            HasRenovation = listing.HasRenovation ?? DetectFeature(text, RenovationKeywords),
+                            HasYard = listing.HasYard ?? DetectFeature(text, YardKeywords)
                         });
                         break; // One price per listing
                     }
@@ -1481,6 +1481,24 @@ public class ValuationEngine
         if (NeedsWorkKeywords.Any(kw => lower.Contains(kw))) return PropertyCondition.NeedsWork;
         if (GoodKeywords.Any(kw => lower.Contains(kw))) return PropertyCondition.Good;
         return PropertyCondition.Unknown;
+    }
+
+    /// <summary>
+    /// Convert AI-extracted condition string to PropertyCondition enum.
+    /// Returns null if the string is unrecognized so the caller can fall back.
+    /// </summary>
+    private static PropertyCondition? ParseAiCondition(string? aiCondition)
+    {
+        if (string.IsNullOrWhiteSpace(aiCondition)) return null;
+        return aiCondition.Trim().ToLowerInvariant() switch
+        {
+            "new"        => PropertyCondition.New,
+            "renovated"  => PropertyCondition.Renovated,
+            "good"       => PropertyCondition.Good,
+            "original"   => PropertyCondition.Original,
+            "needs_work" => PropertyCondition.NeedsWork,
+            _            => null
+        };
     }
 
     private static PropertyCondition ParseTargetState(ExtractedPropertyInfo property)

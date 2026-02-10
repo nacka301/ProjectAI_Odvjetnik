@@ -1339,6 +1339,15 @@ public class ComparableSearchResult
     public string Url { get; set; } = "";
     public string Title { get; set; } = "";
     public string Content { get; set; } = "";
+
+    // V8.2: AI-extracted features (populated by ValuationService batch call)
+    public bool? HasGarage { get; set; }
+    public bool? HasRenovation { get; set; }
+    public bool? HasYard { get; set; }
+    public string? AiCondition { get; set; }      // "new", "renovated", "good", "original", "needs_work"
+    public double? AiYardAreaM2 { get; set; }      // AI-detected yard area
+    public double? AiSizeM2 { get; set; }          // AI-detected property size
+    public string? AiPropertyType { get; set; }    // AI-detected type
 }
 
 public class MarketResearchResult

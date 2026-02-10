@@ -101,6 +101,22 @@ public class EvaluateController : ControllerBase
                 marketData.RegionName);
 
             // ────────────────────────────────────────────────────
+            // STAGE 2.5: AI Feature Extraction (batch GPT call)
+            // Populates HasGarage, HasRenovation, HasYard, etc.
+            // on each ComparableSearchResult BEFORE the engine.
+            // ────────────────────────────────────────────────────
+            try
+            {
+                await _valuationService.ExtractListingFeaturesAsync(marketData.ActiveListings);
+                _logger.LogInformation("Stage 2.5 done: AI features extracted for {Count} listings",
+                    marketData.ActiveListings.Count);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Stage 2.5 non-fatal: AI feature extraction failed — engine will use keyword fallback");
+            }
+
+            // ────────────────────────────────────────────────────
             // STAGE 3A: Deterministic engine (server-side math)
             // ────────────────────────────────────────────────────
             DeterministicValuation engineResult;
@@ -365,6 +381,16 @@ public class EvaluateController : ControllerBase
             {
                 _logger.LogError(ex, "Stage 2 FAILED: Market research.");
                 return StatusCode(500, new { error = $"Stage 2 greška (pretraga tržišta): {ex.Message}" });
+            }
+
+            // STAGE 2.5: AI Feature Extraction
+            try
+            {
+                await _valuationService.ExtractListingFeaturesAsync(marketData.ActiveListings);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Stage 2.5 non-fatal: AI feature extraction failed");
             }
 
             // STAGE 3A: Deterministic engine
