@@ -1,33 +1,37 @@
 using Backend.Models;
-using MailKit.Net.Smtp;
-using MailKit.Security;
-using MimeKit;
 using System.Globalization;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
 
 namespace Backend.Services;
 
 /// <summary>
-/// Sends valuation result emails via Gmail SMTP.
-/// Requires GMAIL_USER and GMAIL_APP_PASSWORD environment variables.
-/// Generate App Password at: https://myaccount.google.com/apppasswords
+/// Sends valuation result emails via Brevo (Sendinblue) transactional API.
+/// Requires BREVO_API_KEY environment variable.
+/// Get your key at: https://app.brevo.com/settings/keys/api
 /// </summary>
 public class EmailService
 {
     private readonly ILogger<EmailService> _logger;
-    private readonly string? _gmailUser;
-    private readonly string? _gmailAppPassword;
+    private readonly HttpClient _http;
+    private readonly string? _brevoApiKey;
+    private readonly string _senderEmail;
+    private readonly string _senderName;
 
-    public EmailService(ILogger<EmailService> logger, IConfiguration config)
+    public EmailService(HttpClient http, ILogger<EmailService> logger, IConfiguration config)
     {
+        _http = http;
         _logger = logger;
-        _gmailUser = config["Gmail:User"]
-            ?? Environment.GetEnvironmentVariable("GMAIL_USER");
-        _gmailAppPassword = config["Gmail:AppPassword"]
-            ?? Environment.GetEnvironmentVariable("GMAIL_APP_PASSWORD");
+        _brevoApiKey = config["Brevo:ApiKey"]
+            ?? Environment.GetEnvironmentVariable("BREVO_API_KEY");
+        _senderEmail = config["Brevo:SenderEmail"]
+            ?? Environment.GetEnvironmentVariable("BREVO_SENDER_EMAIL")
+            ?? "ai-procjenitelj@procjena.hr";
+        _senderName = "AI Procjenitelj";
     }
 
-    public bool IsConfigured =>
-        !string.IsNullOrWhiteSpace(_gmailUser) && !string.IsNullOrWhiteSpace(_gmailAppPassword);
+    public bool IsConfigured => !string.IsNullOrWhiteSpace(_brevoApiKey);
 
     /// <summary>
     /// Send valuation result to the specified email address.
@@ -39,7 +43,7 @@ public class EmailService
     {
         if (!IsConfigured)
         {
-            _logger.LogWarning("EmailService: Gmail credentials not configured — skipping.");
+            _logger.LogWarning("EmailService: Brevo API key not configured — skipping.");
             return false;
         }
 
@@ -51,23 +55,37 @@ public class EmailService
 
         try
         {
-            var message = new MimeMessage();
-            message.From.Add(new MailboxAddress("AI Procjenitelj", _gmailUser));
-            message.To.Add(MailboxAddress.Parse(recipientEmail));
-            message.Subject = $"Procjena nekretnine — {FormatEur(result.EstimatedValueEur)} €";
-
+            var subject = $"Procjena nekretnine — {FormatEur(result.EstimatedValueEur)} €";
             var html = BuildEmailHtml(result, propertyDescription);
-            var bodyBuilder = new BodyBuilder { HtmlBody = html };
-            message.Body = bodyBuilder.ToMessageBody();
 
-            using var smtp = new SmtpClient();
-            await smtp.ConnectAsync("smtp.gmail.com", 587, SecureSocketOptions.StartTls);
-            await smtp.AuthenticateAsync(_gmailUser, _gmailAppPassword);
-            await smtp.SendAsync(message);
-            await smtp.DisconnectAsync(true);
+            var payload = new
+            {
+                sender = new { name = _senderName, email = _senderEmail },
+                to = new[] { new { email = recipientEmail } },
+                subject,
+                htmlContent = html
+            };
 
-            _logger.LogInformation("EmailService: Sent valuation result to {Email}", recipientEmail);
-            return true;
+            var json = JsonSerializer.Serialize(payload);
+            var request = new HttpRequestMessage(HttpMethod.Post, "https://api.brevo.com/v3/smtp/email")
+            {
+                Content = new StringContent(json, Encoding.UTF8, "application/json")
+            };
+            request.Headers.Add("api-key", _brevoApiKey);
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+            var response = await _http.SendAsync(request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                _logger.LogInformation("EmailService: Sent valuation result to {Email} via Brevo", recipientEmail);
+                return true;
+            }
+
+            var errorBody = await response.Content.ReadAsStringAsync();
+            _logger.LogError("EmailService: Brevo API returned {Status}: {Body}",
+                response.StatusCode, errorBody);
+            return false;
         }
         catch (Exception ex)
         {

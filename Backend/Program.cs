@@ -75,7 +75,7 @@ builder.Services.AddScoped<DocumentService>();
 builder.Services.AddScoped<ValuationService>();
 builder.Services.AddScoped<ValuationEngine>();
 builder.Services.AddSingleton<NjuskaloScraperService>();
-builder.Services.AddSingleton<EmailService>();
+builder.Services.AddHttpClient<EmailService>();
 builder.Services.AddHttpClient<MarketResearchService>();
 builder.Services.AddHttpClient<SupabaseService>();
 
