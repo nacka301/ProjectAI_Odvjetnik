@@ -459,6 +459,188 @@ export default function WizardPage() {
   // ═══════════════════════════════════════════
 
   return (
+    <>
+    {/* ═══ PROCESSING: Fixed Full-Screen Pipeline ═══ */}
+    {viewState === "PROCESSING" && (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden"
+        style={{ background: "linear-gradient(135deg, #f0f4ff 0%, #e8ecf8 50%, #f5f0ff 100%)" }}
+      >
+        {/* Animated background blobs — inline styles so Tailwind doesn't purge */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <div
+            className="absolute rounded-full"
+            style={{
+              top: "-8rem", left: "-8rem", width: "22rem", height: "22rem",
+              background: "radial-gradient(circle, rgba(99,102,241,0.2) 0%, rgba(59,130,246,0.08) 70%, transparent 100%)",
+              filter: "blur(60px)",
+              animation: "float-blob 8s ease-in-out infinite",
+            }}
+          />
+          <div
+            className="absolute rounded-full"
+            style={{
+              bottom: "-6rem", right: "-6rem", width: "20rem", height: "20rem",
+              background: "radial-gradient(circle, rgba(139,92,246,0.2) 0%, rgba(124,58,237,0.08) 70%, transparent 100%)",
+              filter: "blur(60px)",
+              animation: "float-blob 10s ease-in-out 2s infinite",
+            }}
+          />
+          <div
+            className="absolute rounded-full"
+            style={{
+              top: "40%", left: "25%", width: "16rem", height: "16rem",
+              background: "radial-gradient(circle, rgba(6,182,212,0.15) 0%, rgba(59,130,246,0.06) 70%, transparent 100%)",
+              filter: "blur(60px)",
+              animation: "float-blob 12s ease-in-out 4s infinite",
+            }}
+          />
+        </div>
+
+        {/* Card */}
+        <div
+          className="relative z-10 w-full max-w-lg mx-4"
+          style={{
+            background: "rgba(255,255,255,0.85)",
+            backdropFilter: "blur(24px)",
+            WebkitBackdropFilter: "blur(24px)",
+            borderRadius: "1.25rem",
+            boxShadow: "0 12px 48px rgba(0,0,0,0.08), 0 2px 12px rgba(0,0,0,0.04)",
+            border: "1px solid rgba(255,255,255,0.6)",
+            padding: "2.5rem 2rem",
+          }}
+        >
+          {/* Header */}
+          <div className="text-center mb-8">
+            <div className="relative mx-auto h-16 w-16 mb-5">
+              <div
+                className="absolute inset-0 rounded-full"
+                style={{
+                  background: "linear-gradient(135deg, rgba(59,130,246,0.3), rgba(99,102,241,0.3))",
+                  animation: "pulse-glow 2s ease-in-out infinite",
+                }}
+              />
+              <div
+                className="relative flex items-center justify-center h-full w-full rounded-full"
+                style={{ background: "linear-gradient(135deg, #3b82f6, #6366f1)" }}
+              >
+                <Loader2 className="h-7 w-7 animate-spin text-white" />
+              </div>
+            </div>
+            <h2
+              className="text-2xl sm:text-3xl font-bold"
+              style={{
+                background: "linear-gradient(135deg, #1e40af, #4f46e5, #7c3aed)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                backgroundClip: "text",
+              }}
+            >
+              AI Procjena u tijeku
+            </h2>
+            <p className="text-sm text-gray-500 mt-2">
+              Analiziramo tržište nekretnina za vašu lokaciju
+            </p>
+          </div>
+
+          {/* Vertical Step Pipeline */}
+          <div className="relative">
+            {stages.map((s, idx) => {
+              const icon = STAGE_ICONS[s.id];
+              const isDone = s.status === "done";
+              const isActive = s.status === "active";
+              const isError = s.status === "error";
+
+              return (
+                <div key={s.id} className="flex gap-4" style={{ paddingBottom: idx < stages.length - 1 ? "1.5rem" : 0 }}>
+                  {/* Icon circle + connector line */}
+                  <div className="flex flex-col items-center">
+                    <div
+                      className="relative h-11 w-11 rounded-full flex items-center justify-center border-2 transition-all duration-500"
+                      style={{
+                        ...(isDone ? {
+                          background: "#f0fdf4", borderColor: "#4ade80",
+                          animation: "pop-in 0.4s cubic-bezier(0.34,1.56,0.64,1) forwards",
+                        } : isActive ? {
+                          background: "linear-gradient(135deg, #eff6ff, #eef2ff)",
+                          borderColor: "#818cf8",
+                          animation: "pulse-glow 2s ease-in-out infinite",
+                        } : isError ? {
+                          background: "#fef2f2", borderColor: "#f87171",
+                        } : {
+                          background: "#f9fafb", borderColor: "#e5e7eb",
+                        }),
+                      }}
+                    >
+                      {isActive ? (
+                        <span className="text-indigo-600 animate-spin">{icon || <Loader2 className="h-5 w-5" />}</span>
+                      ) : isDone ? (
+                        <Check className="h-5 w-5 text-green-500" />
+                      ) : isError ? (
+                        <AlertTriangle className="h-5 w-5 text-red-500" />
+                      ) : (
+                        <span className="text-gray-300">{icon || <span className="text-sm font-bold">{idx + 1}</span>}</span>
+                      )}
+                    </div>
+                    {idx < stages.length - 1 && (
+                      <div className="relative w-0.5 flex-1 bg-gray-200 rounded-full overflow-hidden" style={{ minHeight: "1rem" }}>
+                        {isDone && (
+                          <div
+                            className="absolute inset-0 rounded-full"
+                            style={{
+                              background: "linear-gradient(to bottom, #4ade80, #86efac)",
+                              animation: "line-fill 0.5s ease-out forwards",
+                              transformOrigin: "top",
+                            }}
+                          />
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Text content */}
+                  <div className="pt-2.5 flex-1 min-w-0">
+                    <p className={`text-sm font-semibold transition-colors duration-300 ${
+                      isActive ? "text-indigo-700" :
+                      isDone ? "text-green-700" :
+                      isError ? "text-red-700" : "text-gray-400"
+                    }`}>
+                      {s.label}
+                    </p>
+                    {isActive && microCopy && (
+                      <p
+                        key={microCopy}
+                        className="text-xs text-indigo-400 mt-0.5"
+                        style={{ animation: "fade-up 0.3s ease-out forwards" }}
+                      >
+                        {microCopy}
+                      </p>
+                    )}
+                    {s.detail && !isActive && <p className="text-xs text-gray-500 mt-0.5">{s.detail}</p>}
+                    {s.error && <p className="text-xs text-red-600 mt-0.5">{s.error}</p>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Error recovery */}
+          {error && !isStreaming && (
+            <div className="mt-8 text-center space-y-3">
+              <div className="rounded-lg border border-red-300 bg-red-50 p-4">
+                <p className="text-sm text-red-700">{error}</p>
+              </div>
+              <button onClick={reset} className="rounded-lg bg-gray-100 px-5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 transition">
+                ← Pokušaj ponovno
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    )}
+
+    {/* Normal page wrapper — hidden during PROCESSING */}
+    {viewState !== "PROCESSING" && (
     <div className="min-h-screen bg-gray-50 py-12 px-4 font-sans">
       <div className="mx-auto max-w-3xl">
         <Link href="/" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mb-6">
@@ -724,110 +906,6 @@ export default function WizardPage() {
           </div>
         )}
 
-        {/* ═══ PROCESSING: Premium Pipeline Animation ═══ */}
-        {viewState === "PROCESSING" && (
-          <div className="relative flex flex-col items-center justify-center min-h-[70vh] -mx-4 px-4 overflow-hidden">
-            {/* Animated background blobs */}
-            <div className="absolute inset-0 pointer-events-none overflow-hidden">
-              <div className="absolute -top-32 -left-32 h-80 w-80 rounded-full bg-gradient-to-br from-blue-200/40 to-indigo-300/30 blur-3xl animate-float-blob" />
-              <div className="absolute -bottom-24 -right-24 h-72 w-72 rounded-full bg-gradient-to-br from-violet-200/40 to-purple-300/30 blur-3xl animate-float-blob-delayed" />
-              <div className="absolute top-1/2 left-1/3 h-56 w-56 rounded-full bg-gradient-to-br from-cyan-200/30 to-blue-200/20 blur-3xl animate-float-blob-slow" />
-            </div>
-
-            {/* Card container */}
-            <div className="relative z-10 w-full max-w-lg bg-white/80 backdrop-blur-xl rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.08)] border border-white/60 p-8 sm:p-10">
-              {/* Header */}
-              <div className="text-center mb-10">
-                <div className="relative mx-auto h-16 w-16 mb-5">
-                  <div className="absolute inset-0 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 opacity-20 animate-ping" />
-                  <div className="absolute inset-0 rounded-full animate-pulse-glow" />
-                  <div className="relative flex items-center justify-center h-full w-full rounded-full bg-gradient-to-br from-blue-500 to-indigo-600">
-                    <Loader2 className="h-7 w-7 animate-spin text-white" />
-                  </div>
-                </div>
-                <h2 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-blue-700 via-indigo-600 to-violet-600 bg-clip-text text-transparent">
-                  AI Procjena u tijeku
-                </h2>
-                <p className="text-sm text-gray-500 mt-2">
-                  Analiziramo tržište nekretnina za vašu lokaciju
-                </p>
-              </div>
-
-              {/* Vertical Step Pipeline */}
-              <div className="relative">
-                {stages.map((s, idx) => {
-                  const icon = STAGE_ICONS[s.id];
-                  const isDone = s.status === "done";
-                  const isActive = s.status === "active";
-                  const isError = s.status === "error";
-
-                  return (
-                    <div key={s.id} className="flex gap-4 pb-7 last:pb-0">
-                      {/* Icon circle + connector line */}
-                      <div className="flex flex-col items-center">
-                        <div className={`relative h-11 w-11 rounded-full flex items-center justify-center border-2 transition-all duration-500 ${
-                          isDone ? "bg-green-50 border-green-400 animate-pop-in" :
-                          isActive ? "bg-gradient-to-br from-blue-50 to-indigo-50 border-indigo-400 animate-pulse-glow" :
-                          isError ? "bg-red-50 border-red-400" :
-                          "bg-gray-50 border-gray-200"
-                        }`}>
-                          {isActive ? (
-                            <span className="text-indigo-600 animate-spin">{icon || <Loader2 className="h-5 w-5" />}</span>
-                          ) : isDone ? (
-                            <Check className="h-5 w-5 text-green-500" />
-                          ) : isError ? (
-                            <AlertTriangle className="h-5 w-5 text-red-500" />
-                          ) : (
-                            <span className="text-gray-300">{icon || <span className="text-sm font-bold">{idx + 1}</span>}</span>
-                          )}
-                        </div>
-                        {idx < stages.length - 1 && (
-                          <div className="relative w-0.5 flex-1 min-h-[1.25rem] bg-gray-200 rounded-full overflow-hidden">
-                            {isDone && (
-                              <div className="absolute inset-0 bg-gradient-to-b from-green-400 to-green-300 animate-line-fill rounded-full" />
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Text content */}
-                      <div className="pt-2.5 flex-1 min-w-0">
-                        <p className={`text-sm font-semibold transition-colors duration-300 ${
-                          isActive ? "text-indigo-700" :
-                          isDone ? "text-green-700" :
-                          isError ? "text-red-700" : "text-gray-400"
-                        }`}>
-                          {s.label}
-                        </p>
-                        {/* Dynamic micro-copy for active stage */}
-                        {isActive && microCopy && (
-                          <p key={microCopy} className="text-xs text-indigo-400 mt-0.5 animate-fade-up">
-                            {microCopy}
-                          </p>
-                        )}
-                        {s.detail && !isActive && <p className="text-xs text-gray-500 mt-0.5">{s.detail}</p>}
-                        {s.error && <p className="text-xs text-red-600 mt-0.5">{s.error}</p>}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Error recovery */}
-              {error && !isStreaming && (
-                <div className="mt-8 text-center space-y-3">
-                  <div className="rounded-lg border border-red-300 bg-red-50 p-4">
-                    <p className="text-sm text-red-700">{error}</p>
-                  </div>
-                  <button onClick={reset} className="rounded-lg bg-gray-100 px-5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 transition">
-                    ← Pokušaj ponovno
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
         {/* ═══ VALUATION RESULT ═══ */}
         {viewState === "RESULT" && result && (
           <div className="space-y-6">
@@ -936,6 +1014,8 @@ export default function WizardPage() {
         )}
       </div>
     </div>
+    )}
+    </>
   );
 }
 
