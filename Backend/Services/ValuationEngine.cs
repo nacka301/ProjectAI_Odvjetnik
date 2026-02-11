@@ -8,14 +8,14 @@ namespace Backend.Services;
 /// 
 /// Statistical overhaul:
 ///   1. IQR outlier detection (fallback ±80% median)
-///   2. SimilarityScore per comparable (0.0–1.0)
+///   2. SimilarityScore per comparable (AI-scored, math fallback)
 ///   3. Weighted Median (by SimilarityScore)
 ///   4. Adaptive Realization Gap (based on StdDev + search phase)
 ///   5. Mathematical Confidence (0–100, penalty system)
 ///   6. Hard cap ±40% on total adjustments
 ///   7. Full explainability JSON
 ///
-/// Zero AI — pure deterministic math.
+/// AI provides similarity scores; math engine handles everything else deterministically.
 /// </summary>
 public class ValuationEngine
 {
@@ -685,11 +685,29 @@ public class ValuationEngine
             }
         }
 
-        // ── 4c. Similarity Scoring ──
+        // ── 4c. Similarity Scoring (AI-first, math fallback) ──
+        // Build URL→AiSimilarityScore lookup from market data
+        var aiScoreLookup = marketData.ActiveListings
+            .Where(l => l.AiSimilarityScore.HasValue && !string.IsNullOrEmpty(l.Url))
+            .ToDictionary(l => l.Url, l => l.AiSimilarityScore!.Value, StringComparer.OrdinalIgnoreCase);
+        int aiScored = 0, mathFallbackScored = 0;
+
         foreach (var price in cleanPrices)
         {
-            double simScore = CalculateSimilarityScore(
-                price, property, marketData.DetectedPropertyType, marketData.RegionName);
+            double simScore;
+            if (aiScoreLookup.TryGetValue(price.SourceUrl, out var aiScore))
+            {
+                simScore = Math.Clamp(aiScore, 0.0, 1.0);
+                aiScored++;
+            }
+            else
+            {
+                // Fallback: math-based scoring if AI didn't provide a score
+                simScore = CalculateSimilarityScore(
+                    price, property, marketData.DetectedPropertyType, marketData.RegionName);
+                mathFallbackScored++;
+            }
+
             compDetails.Add(new UsedComparable
             {
                 Title = price.SourceTitle,
@@ -699,6 +717,8 @@ public class ValuationEngine
                 IsOutlier = false
             });
         }
+
+        pipeline.Add($"Similarity: {aiScored} AI-scored, {mathFallbackScored} math-fallback");
 
         // Also log the removed outliers
         var outlierPrices = rawPrices.Except(cleanPrices);
@@ -713,8 +733,6 @@ public class ValuationEngine
                 IsOutlier = true
             });
         }
-
-        pipeline.Add($"Scored {cleanPrices.Count} comparables with SimilarityScore");
 
         // ── 4c½. SIMILARITY FLOOR ──
         // Remove any comparable below 50% similarity — too dissimilar to be useful.

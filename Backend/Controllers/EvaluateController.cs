@@ -118,8 +118,8 @@ public class EvaluateController : ControllerBase
             // ────────────────────────────────────────────────────
             try
             {
-                await _valuationService.ExtractListingFeaturesAsync(marketData.ActiveListings);
-                _logger.LogInformation("Stage 2.5 done: AI features extracted for {Count} listings",
+                await _valuationService.ExtractListingFeaturesAsync(marketData.ActiveListings, property);
+                _logger.LogInformation("Stage 2.5 done: AI features + similarity extracted for {Count} listings",
                     marketData.ActiveListings.Count);
             }
             catch (Exception ex)

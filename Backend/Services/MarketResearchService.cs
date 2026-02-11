@@ -382,30 +382,72 @@ public class MarketResearchService
                 sizeM2, detectedType);
 
         // ─────────────────────────────────────────────────────
-        // PHASE 0: Njuškalo DIRECT — extract the actual search page
-        //   Constructs njuskalo.hr/prodaja-zemljista/vir URL
+        // PHASE 0A: Njuškalo DIRECT — ALL params (type + location + SIZE)
+        //   Constructs njuskalo.hr/prodaja-zemljista/vir?livingArea[min]=X&[max]=Y
         //   Uses Tavily Extract API (their browser infra bypasses CAPTCHA)
         //   Gets 25+ listings per page vs. 3-5 from search
         // ─────────────────────────────────────────────────────
+        // Location gate: allow both the neighborhood AND parent city.
+        var phase0Locs = new List<string> { regionName };
+        if (BroaderRegion.TryGetValue(regionName, out var parentCity))
+            phase0Locs.Add(parentCity);
+        else if (VillageFallback.TryGetValue(regionName, out var fallbackTown0))
+            phase0Locs.Add(fallbackTown0);
+
         {
             var njuskaloResults = await FetchNjuskaloDirectListings(detectedType, regionName, sizeM2);
             totalApiCalls += (njuskaloResults.Count > 0 ? 1 : 0);
 
-            // Phase 0 location gate: allow both the neighborhood AND parent city.
-            // When searching city-level URL (e.g. /prodaja-kuca/osijek for Retfala),
-            // listings say "Osijek" not "Retfala" — must accept both.
-            // For villages, also accept the fallback town (e.g. Kukunjevac → Pakrac).
-            var phase0Locs = new List<string> { regionName };
-            if (BroaderRegion.TryGetValue(regionName, out var parentCity))
-                phase0Locs.Add(parentCity);
-            else if (VillageFallback.TryGetValue(regionName, out var fallbackTown0))
-                phase0Locs.Add(fallbackTown0);
-
-            var filtered = PriceFirstFilter(njuskaloResults, "Phase0-NjuskaloDirect", phase0Locs);
+            var filtered = PriceFirstFilter(njuskaloResults, "Phase0A-Full", phase0Locs);
             MergeInto(allVerified, filtered);
 
-            _logger.LogInformation("Phase 0 (Njuškalo Direct): {New}/{Raw} passed → total={Total}",
+            _logger.LogInformation("Phase 0A (Njuškalo Full: type+loc+size): {New}/{Raw} passed → total={Total}",
                 filtered.Count, njuskaloResults.Count, allVerified.Count);
+        }
+
+        // ─────────────────────────────────────────────────────
+        // PHASE 0B: Njuškalo DIRECT — SIMPLIFIED (type + location, NO size)
+        //   If Phase 0A didn't find enough, re-search WITHOUT size filter.
+        //   Njuškalo always has listings when you drop size constraints.
+        // ─────────────────────────────────────────────────────
+        if (allVerified.Count < 5)
+        {
+            var njuskaloResults = await FetchNjuskaloDirectListings(detectedType, regionName, 0);
+            totalApiCalls += (njuskaloResults.Count > 0 ? 1 : 0);
+
+            var filtered = PriceFirstFilter(njuskaloResults, "Phase0B-NoSize", phase0Locs);
+            MergeInto(allVerified, filtered);
+
+            _logger.LogInformation("Phase 0B (Njuškalo NoSize: type+loc): {New}/{Raw} passed → total={Total}",
+                filtered.Count, njuskaloResults.Count, allVerified.Count);
+        }
+
+        // ─────────────────────────────────────────────────────
+        // PHASE 0C: Njuškalo DIRECT — MINIMAL (type + city only)
+        //   If still not enough, search broader city URL (no neighborhood).
+        //   E.g. /prodaja-stanova/zagreb instead of /prodaja-stanova/zagreb-srebrnjak
+        // ─────────────────────────────────────────────────────
+        if (allVerified.Count < 5)
+        {
+            string? cityForMinimal = null;
+            if (BroaderRegion.TryGetValue(regionName, out var pc))
+                cityForMinimal = pc;
+            else if (VillageFallback.TryGetValue(regionName, out var ft))
+                cityForMinimal = ft;
+
+            if (cityForMinimal != null)
+            {
+                var njuskaloResults = await FetchNjuskaloDirectListings(detectedType, cityForMinimal, 0);
+                totalApiCalls += (njuskaloResults.Count > 0 ? 1 : 0);
+
+                // Accept listings from the whole city — relaxed location gate
+                var minimalLocs = new List<string>(phase0Locs) { cityForMinimal };
+                var filtered = PriceFirstFilter(njuskaloResults, "Phase0C-CityOnly", minimalLocs);
+                MergeInto(allVerified, filtered);
+
+                _logger.LogInformation("Phase 0C (Njuškalo Minimal: type+city={City}): {New}/{Raw} passed → total={Total}",
+                    cityForMinimal, filtered.Count, njuskaloResults.Count, allVerified.Count);
+            }
         }
 
         // ─────────────────────────────────────────────────────
@@ -575,42 +617,32 @@ public class MarketResearchService
         }
 
         // ─────────────────────────────────────────────────────
-        // KILL SWITCH — if neighborhood has prestige peers defined
-        //   and we STILL have <3 listings after searching exact +
-        //   peers, do NOT expand further. Return Insufficient_Data.
+        // LAST RESORT RETRY — if prestige neighborhood with <3 listings,
+        //   do one more Njuškalo scrape with MINIMAL params (type + city).
+        //   Njuškalo always has listings at city level.
         // ─────────────────────────────────────────────────────
         bool hasPrestigePeers = PrestigePeers.ContainsKey(regionName);
         if (hasPrestigePeers && allVerified.Count < 3)
         {
             _logger.LogWarning(
-                "KILL SWITCH: {Region} has prestige peers but only {Count} listings found. " +
-                "Refusing to expand to generic city areas.",
+                "LAST RESORT: {Region} has prestige peers but only {Count} listings. " +
+                "Doing final Njuškalo city-level scrape.",
                 regionName, allVerified.Count);
 
-            var killNote = "Nema dovoljno slicnih elitnih lokacija za preciznu usporedbu.";
-            var killConfidence = new ConfidenceScore
-            {
-                Level = "Insufficient_Data",
-                Score = Math.Max(5, allVerified.Count * 10),
-                Explanation = $"Pretrazene su lokacije {regionName} i peer kvartovi " +
-                              $"({string.Join(", ", PrestigePeers[regionName])}), " +
-                              $"ali pronadjeno je samo {allVerified.Count} oglas(a). " +
-                              "Pretraga NIJE prosirena na sire gradsko podrucje radi ocuvanja preciznosti.",
-                Color = "red"
-            };
+            // Find the parent city for this prestige neighborhood
+            string retryCity = BroaderRegion.TryGetValue(regionName, out var rc) ? rc : regionName;
 
-            return new MarketResearchResult
-            {
-                ActiveListings = allVerified.DistinctBy(x => x.Url).Take(20).ToList(),
-                RegionalData = [],
-                RegionName = regionName,
-                DetectedPropertyType = detectedType,
-                TargetSizeM2 = sizeM2,
-                Note = killNote,
-                Confidence = killConfidence,
-                SearchPhaseUsed = "Insufficient_Data",
-                TotalApiCalls = totalApiCalls,
-            };
+            var retryResults = await FetchNjuskaloDirectListings(detectedType, retryCity, 0);
+            totalApiCalls += (retryResults.Count > 0 ? 1 : 0);
+
+            var retryLocs = new List<string> { regionName, retryCity };
+            if (PrestigePeers.TryGetValue(regionName, out var retryPeers))
+                retryLocs.AddRange(retryPeers);
+            var retryFiltered = PriceFirstFilter(retryResults, "LastResort-CityLevel", retryLocs);
+            MergeInto(allVerified, retryFiltered);
+
+            _logger.LogInformation("Last Resort (city={City}): +{New}/{Raw} → total={Total}",
+                retryCity, retryFiltered.Count, retryResults.Count, allVerified.Count);
         }
 
         // ─────────────────────────────────────────────────────
@@ -1960,6 +1992,7 @@ public class ComparableSearchResult
     public double? AiYardAreaM2 { get; set; }      // AI-detected yard area
     public double? AiSizeM2 { get; set; }          // AI-detected property size
     public string? AiPropertyType { get; set; }    // AI-detected type
+    public double? AiSimilarityScore { get; set; }  // AI-scored similarity to target (0.0–1.0)
 
     // V9 Deep Scraping: enrichment booleans
     public bool? IsRenovated { get; set; }          // True if renovated/new (YearReno>2015 or description)

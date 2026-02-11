@@ -390,44 +390,68 @@ public class ValuationService
 
     private const string ListingFeatureExtractionPrompt =
         """
-        You are a property listing analyzer. You receive multiple Croatian real estate listing snippets.
-        For EACH listing, extract these features from the text:
+        You are a Croatian real estate valuation expert (Sudski vještak za procjenu nekretnina).
+        You receive a TARGET PROPERTY description and multiple listing snippets from Croatian portals.
 
-        - "has_garage": boolean — Does this listing mention a garage, parking space, or garažno mjesto?
-        - "has_renovation": boolean — Is there evidence of renovation? Look for: nova fasada, novi krov,
-          termoizolacija, energetska obnova, potpuno renovirano, kompletno uređen, novi prozori, nova stolarija.
-        - "has_yard": boolean — Does it mention a yard, garden, or okućnica? (dvorište, okućnica, vrt, bašta, parcela uz kuću)
-        - "condition": string — One of: "new", "renovated", "good", "original", "needs_work", "unknown".
-          * "new" = novogradnja, novo izgrađeno
-          * "renovated" = renovirano, adaptirano, obnovljeno, kompletno uređeno
-          * "good" = održavano, uredno, dobro stanje, useljivo
-          * "original" = izvorno stanje, nije renovirano
-          * "needs_work" = potrebna adaptacija, rušević, zapušteno, dotrajalo, vlažno, neuseljivo
-          * "unknown" = no info available
-        - "yard_area_m2": number — Yard/okućnica size in m² if mentioned, 0 if not mentioned.
-        - "size_m2": number — Property size in m² if detected, 0 if not clear.
-        - "property_type": string — "stan", "kuća", "zemljište", "poslovni prostor", or "unknown".
+        For EACH listing, you must:
+        A) Extract features from the listing text.
+        B) Score how SIMILAR this listing is to the TARGET PROPERTY (0.0 to 1.0).
 
-        Return a JSON object with a single key "listings" containing an array.
-        Each array element has an "index" (matching the input listing number, 0-based) and the extracted fields.
-        If you cannot determine a field, use the default (false for booleans, "unknown" for strings, 0 for numbers).
+        === FEATURE EXTRACTION ===
+        - "has_garage": boolean — garage, parking space, or garažno mjesto?
+        - "has_renovation": boolean — evidence of renovation? (nova fasada, novi krov,
+          termoizolacija, energetska obnova, potpuno renovirano, kompletno uređen, novi prozori, nova stolarija)
+        - "has_yard": boolean — yard, garden, or okućnica? (dvorište, okućnica, vrt, bašta, parcela uz kuću)
+        - "condition": string — "new", "renovated", "good", "original", "needs_work", "unknown"
+        - "yard_area_m2": number — Yard size in m² if mentioned, 0 if not
+        - "size_m2": number — Property size in m² if detected, 0 if not clear
+        - "property_type": string — "stan", "kuća", "zemljište", "poslovni prostor", or "unknown"
 
+        === SIMILARITY SCORING (0.0 – 1.0) ===
+        Score how comparable this listing is to the TARGET for valuation purposes:
+        - 0.90–1.00: Nearly identical (same neighborhood, same type, similar size ±10%, similar condition)
+        - 0.70–0.89: Very similar (same city area, same type, size ±25%, comparable condition)
+        - 0.50–0.69: Moderately similar (same city, same type, different size or condition)
+        - 0.30–0.49: Weakly similar (different area or slightly different type)
+        - 0.00–0.29: Not comparable (wrong city, wrong type, or completely different property)
+
+        SCORING PRIORITIES (in order of importance):
+        1. LOCATION (50%): Same neighborhood > same city zone > same city > different city
+        2. PROPERTY TYPE (25%): Must be same type (stan≠kuća≠zemljište). Different type = max 0.30
+        3. SIZE (15%): Closer size = higher score. ±10% is excellent, ±50% is poor
+        4. CONDITION (10%): Similar condition/age = bonus
+
+        Return JSON: {"listings": [{"index": 0, "has_garage": true, ..., "similarity_score": 0.75}, ...]}
         Return ONLY the raw JSON object, no markdown fences.
-        Example:
-        {"listings": [{"index": 0, "has_garage": true, "has_renovation": false, "has_yard": true, "condition": "renovated", "yard_area_m2": 500, "size_m2": 85, "property_type": "kuća"}, ...]}
         """;
 
     /// <summary>
-    /// Send ALL comparable listings to GPT in one batch call.
-    /// Returns extracted features for each listing, which get stored on ComparableSearchResult.
+    /// Send ALL comparable listings + TARGET property to GPT in one batch call.
+    /// Returns extracted features AND similarity scores for each listing.
     /// </summary>
-    public async Task ExtractListingFeaturesAsync(List<ComparableSearchResult> listings)
+    public async Task ExtractListingFeaturesAsync(
+        List<ComparableSearchResult> listings,
+        ExtractedPropertyInfo? subjectProperty = null)
     {
         if (listings.Count == 0) return;
 
-        // Build a single prompt with all listings
+        // Build a single prompt with target property + all listings
         var sb = new System.Text.StringBuilder();
-        sb.AppendLine($"Analyze these {listings.Count} Croatian real estate listings:\n");
+
+        // Include target property context so AI can score similarity
+        if (subjectProperty != null)
+        {
+            sb.AppendLine("=== TARGET PROPERTY (the one being valued) ===");
+            sb.AppendLine($"Description: {subjectProperty.Description}");
+            sb.AppendLine($"Location: {subjectProperty.Location}");
+            sb.AppendLine($"Size: {subjectProperty.SizeM2} m²");
+            sb.AppendLine($"Condition: {subjectProperty.Condition}");
+            if (subjectProperty.YardAreaM2 > 0)
+                sb.AppendLine($"Yard: {subjectProperty.YardAreaM2} m²");
+            sb.AppendLine();
+        }
+
+        sb.AppendLine($"=== COMPARABLE LISTINGS ({listings.Count} total) ===\n");
 
         for (int i = 0; i < listings.Count; i++)
         {
@@ -476,10 +500,13 @@ public class ValuationService
                     target.AiYardAreaM2 = item.TryGetProperty("yard_area_m2", out var ya) ? ya.GetDouble() : 0;
                     target.AiSizeM2 = item.TryGetProperty("size_m2", out var sz) ? sz.GetDouble() : 0;
                     target.AiPropertyType = item.TryGetProperty("property_type", out var pt) ? pt.GetString() : "unknown";
+                    target.AiSimilarityScore = item.TryGetProperty("similarity_score", out var ss) ? ss.GetDouble() : null;
                 }
 
                 int populated = listings.Count(l => l.HasGarage.HasValue);
-                _logger.LogInformation("AI features populated for {Count}/{Total} listings", populated, listings.Count);
+                int withSimilarity = listings.Count(l => l.AiSimilarityScore.HasValue);
+                _logger.LogInformation("AI features populated for {Count}/{Total} listings, {Sim} with similarity scores",
+                    populated, listings.Count, withSimilarity);
             }
             else
             {
