@@ -83,6 +83,18 @@ interface UsedComparableV4 {
   price_per_m2: number;
   similarity_score: number;
   is_outlier: boolean;
+  // BrightData-enriched fields
+  total_price?: number;
+  area_m2?: number;
+  rooms?: number;
+  floor?: string;
+  year_built?: number;
+  condition?: string;
+  energy_class?: string;
+  heating?: string;
+  location?: string;
+  has_garage?: boolean;
+  has_parking?: boolean;
 }
 
 interface AdjustmentV4 {
@@ -809,9 +821,27 @@ export default function ValuationPage() {
                             ) : (
                               <span className="text-xs text-gray-600 truncate block max-w-[250px]">{c.title}</span>
                             )}
+                            {/* Enriched feature pills */}
+                            {(c.area_m2 || c.rooms || c.year_built || c.condition || c.energy_class) && (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {c.area_m2 && <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">{c.area_m2} m²</span>}
+                                {c.rooms && <span className="text-[10px] bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded">{c.rooms} soba</span>}
+                                {c.floor && <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded">Kat {c.floor}</span>}
+                                {c.year_built && <span className="text-[10px] bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded">{c.year_built}</span>}
+                                {c.condition && <span className="text-[10px] bg-green-50 text-green-600 px-1.5 py-0.5 rounded capitalize">{c.condition}</span>}
+                                {c.energy_class && <span className="text-[10px] bg-teal-50 text-teal-600 px-1.5 py-0.5 rounded">E: {c.energy_class}</span>}
+                                {c.heating && <span className="text-[10px] bg-orange-50 text-orange-600 px-1.5 py-0.5 rounded">{c.heating}</span>}
+                                {c.has_garage && <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">Garaža</span>}
+                              </div>
+                            )}
                           </td>
                           <td className={`px-4 py-2 text-right font-mono text-xs ${c.is_outlier ? "text-red-400 line-through" : ""}`}>
                             {c.price_per_m2.toLocaleString("hr-HR")} €
+                            {c.total_price && (
+                              <div className="text-[10px] text-gray-400 font-normal">
+                                ({c.total_price.toLocaleString("hr-HR")} € uk.)
+                              </div>
+                            )}
                           </td>
                           <td className="px-4 py-2 text-right">
                             <div className="flex items-center justify-end gap-1">

@@ -105,6 +105,18 @@ interface UsedComparableV4 {
   price_per_m2: number;
   similarity_score: number;
   is_outlier: boolean;
+  // BrightData-enriched fields
+  total_price?: number;
+  area_m2?: number;
+  rooms?: number;
+  floor?: string;
+  year_built?: number;
+  condition?: string;
+  energy_class?: string;
+  heating?: string;
+  location?: string;
+  has_garage?: boolean;
+  has_parking?: boolean;
 }
 
 interface AdjustmentV4 {
@@ -826,6 +838,66 @@ export default function ZkProcjenaPage() {
                             )}
                           </div>
                           <p className="text-xs text-gray-500 mt-2 leading-relaxed">{c.reason_for_selection}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Engine Comparables (used_comparables) */}
+                {valuation.used_comparables && valuation.used_comparables.length > 0 && (
+                  <div className="rounded-xl bg-white border border-gray-200 p-6">
+                    <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4 flex items-center gap-2">
+                      🧮 Engine usporedbe ({valuation.used_comparables.filter(c => !c.is_outlier).length} korištenih)
+                    </h3>
+                    <div className="space-y-3">
+                      {[...valuation.used_comparables]
+                        .sort((a, b) => {
+                          if (a.is_outlier !== b.is_outlier) return a.is_outlier ? 1 : -1;
+                          return b.similarity_score - a.similarity_score;
+                        })
+                        .map((c, i) => (
+                        <div key={i} className={`p-4 rounded-lg border transition ${c.is_outlier ? "border-red-200 bg-red-50/50 opacity-60" : "border-gray-100 bg-gray-50 hover:border-blue-200 hover:bg-blue-50/30"}`}>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h4 className="text-sm font-semibold text-gray-900 truncate">{c.title}</h4>
+                                {c.is_outlier && (
+                                  <span className="text-[10px] font-bold uppercase tracking-wider bg-red-100 text-red-700 px-2 py-0.5 rounded-full">Outlier</span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-3 mt-1">
+                                <span className="text-sm font-bold text-blue-700">{c.price_per_m2.toLocaleString("hr-HR")} €/m²</span>
+                                {c.total_price && <span className="text-xs text-gray-500">({c.total_price.toLocaleString("hr-HR")} €)</span>}
+                                <span className={`text-xs font-semibold ${c.similarity_score >= 0.7 ? "text-green-600" : c.similarity_score >= 0.4 ? "text-yellow-600" : "text-red-600"}`}>
+                                  {(c.similarity_score * 100).toFixed(0)}%
+                                </span>
+                              </div>
+                              {/* Enriched feature pills */}
+                              {(c.area_m2 || c.rooms || c.year_built || c.condition || c.energy_class) && (
+                                <div className="flex flex-wrap gap-1 mt-2">
+                                  {c.area_m2 && <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">{c.area_m2} m²</span>}
+                                  {c.rooms && <span className="text-[10px] bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded">{c.rooms} soba</span>}
+                                  {c.floor && <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded">Kat {c.floor}</span>}
+                                  {c.year_built && <span className="text-[10px] bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded">{c.year_built}</span>}
+                                  {c.condition && <span className="text-[10px] bg-green-50 text-green-600 px-1.5 py-0.5 rounded capitalize">{c.condition}</span>}
+                                  {c.energy_class && <span className="text-[10px] bg-teal-50 text-teal-600 px-1.5 py-0.5 rounded">E: {c.energy_class}</span>}
+                                  {c.heating && <span className="text-[10px] bg-orange-50 text-orange-600 px-1.5 py-0.5 rounded">{c.heating}</span>}
+                                  {c.has_garage && <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">Garaža</span>}
+                                </div>
+                              )}
+                            </div>
+                            {c.url && (
+                              <a href={c.url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-700 shrink-0">
+                                <ExternalLink className="h-4 w-4" />
+                              </a>
+                            )}
+                          </div>
+                          {/* Similarity bar */}
+                          <div className="mt-2 h-1 bg-gray-200 rounded-full overflow-hidden">
+                            <div className={`h-full rounded-full ${c.is_outlier ? "bg-red-300" : c.similarity_score >= 0.7 ? "bg-green-500" : c.similarity_score >= 0.4 ? "bg-yellow-500" : "bg-red-500"}`}
+                              style={{ width: `${Math.max(c.similarity_score * 100, 5)}%` }} />
+                          </div>
                         </div>
                       ))}
                     </div>

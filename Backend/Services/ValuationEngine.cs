@@ -690,6 +690,13 @@ public class ValuationEngine
         var aiScoreLookup = marketData.ActiveListings
             .Where(l => l.AiSimilarityScore.HasValue && !string.IsNullOrEmpty(l.Url))
             .ToDictionary(l => l.Url, l => l.AiSimilarityScore!.Value, StringComparer.OrdinalIgnoreCase);
+
+        // Build URL→ComparableSearchResult lookup for enriched fields
+        var listingLookup = marketData.ActiveListings
+            .Where(l => !string.IsNullOrEmpty(l.Url))
+            .GroupBy(l => l.Url, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
         int aiScored = 0, mathFallbackScored = 0;
 
         foreach (var price in cleanPrices)
@@ -708,13 +715,29 @@ public class ValuationEngine
                 mathFallbackScored++;
             }
 
+            // Lookup enriched data from BrightData/AI for this listing
+            listingLookup.TryGetValue(price.SourceUrl, out var listing);
+
             compDetails.Add(new UsedComparable
             {
                 Title = price.SourceTitle,
                 Url = price.SourceUrl,
                 PricePerM2 = Math.Round(price.PricePerM2, 0),
                 SimilarityScore = Math.Round(simScore, 2),
-                IsOutlier = false
+                IsOutlier = false,
+                // Enriched fields from BrightData / AI extraction
+                AreaM2 = listing?.AiSizeM2 ?? (price.DetectedSizeM2 > 0 ? price.DetectedSizeM2 : null),
+                TotalPrice = listing?.AiSizeM2 > 0
+                    ? Math.Round(price.PricePerM2 * listing.AiSizeM2!.Value, 0)
+                    : price.DetectedSizeM2 > 0 ? Math.Round(price.PricePerM2 * price.DetectedSizeM2, 0) : null,
+                Rooms = listing?.AiRooms,
+                Floor = listing?.AiFloor,
+                YearBuilt = listing?.AiYearBuilt,
+                Condition = listing?.AiCondition,
+                EnergyClass = listing?.AiEnergyClass,
+                Heating = listing?.AiHeating,
+                HasGarage = listing?.HasGarage ?? (price.HasGarage ? true : null),
+                HasParking = price.HasParking ? true : null,
             });
         }
 
@@ -724,13 +747,22 @@ public class ValuationEngine
         var outlierPrices = rawPrices.Except(cleanPrices);
         foreach (var price in outlierPrices)
         {
+            listingLookup.TryGetValue(price.SourceUrl, out var olisting);
+
             compDetails.Add(new UsedComparable
             {
                 Title = price.SourceTitle,
                 Url = price.SourceUrl,
                 PricePerM2 = Math.Round(price.PricePerM2, 0),
                 SimilarityScore = 0,
-                IsOutlier = true
+                IsOutlier = true,
+                AreaM2 = olisting?.AiSizeM2 ?? (price.DetectedSizeM2 > 0 ? price.DetectedSizeM2 : null),
+                Rooms = olisting?.AiRooms,
+                Floor = olisting?.AiFloor,
+                YearBuilt = olisting?.AiYearBuilt,
+                Condition = olisting?.AiCondition,
+                EnergyClass = olisting?.AiEnergyClass,
+                Heating = olisting?.AiHeating,
             });
         }
 
@@ -2224,6 +2256,19 @@ public class UsedComparable
     public double PricePerM2 { get; set; }
     public double SimilarityScore { get; set; }
     public bool IsOutlier { get; set; }
+
+    // V10: BrightData-enriched fields for frontend display
+    public double? TotalPrice { get; set; }
+    public double? AreaM2 { get; set; }
+    public int? Rooms { get; set; }
+    public string? Floor { get; set; }
+    public int? YearBuilt { get; set; }
+    public string? Condition { get; set; }
+    public string? EnergyClass { get; set; }
+    public string? Heating { get; set; }
+    public string? Location { get; set; }
+    public bool? HasGarage { get; set; }
+    public bool? HasParking { get; set; }
 }
 
 public class ValuationAdjustment

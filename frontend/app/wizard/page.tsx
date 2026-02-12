@@ -137,6 +137,18 @@ interface UsedComparable {
   price_per_m2: number;
   similarity_score: number;
   is_outlier: boolean;
+  // BrightData-enriched fields
+  total_price?: number;
+  area_m2?: number;
+  rooms?: number;
+  floor?: string;
+  year_built?: number;
+  condition?: string;
+  energy_class?: string;
+  heating?: string;
+  location?: string;
+  has_garage?: boolean;
+  has_parking?: boolean;
 }
 
 interface ValuationAdjustment {
@@ -1169,8 +1181,23 @@ export default function WizardPage() {
                               </div>
                               <div className="flex items-center gap-4 mt-1.5">
                                 <span className="text-sm font-bold text-blue-700">{formatPrice(Math.round(c.price_per_m2))} €/m²</span>
+                                {c.total_price && <span className="text-xs text-gray-500">({formatPrice(Math.round(c.total_price))} €)</span>}
                                 <SimilarityBadge score={c.similarity_score} />
                               </div>
+                              {/* Enriched feature pills from BrightData */}
+                              {(c.area_m2 || c.rooms || c.year_built || c.condition || c.floor || c.energy_class || c.heating || c.has_garage) && (
+                                <div className="flex flex-wrap gap-1.5 mt-2">
+                                  {c.area_m2 && <span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">{c.area_m2} m²</span>}
+                                  {c.rooms && <span className="text-[10px] bg-purple-50 text-purple-700 px-2 py-0.5 rounded-full">{c.rooms} soba</span>}
+                                  {c.floor && <span className="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full">Kat {c.floor}</span>}
+                                  {c.year_built && <span className="text-[10px] bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full">God. {c.year_built}</span>}
+                                  {c.condition && <span className="text-[10px] bg-green-50 text-green-700 px-2 py-0.5 rounded-full capitalize">{c.condition}</span>}
+                                  {c.energy_class && <span className="text-[10px] bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full">Energ. {c.energy_class}</span>}
+                                  {c.heating && <span className="text-[10px] bg-orange-50 text-orange-700 px-2 py-0.5 rounded-full">{c.heating}</span>}
+                                  {c.has_garage && <span className="text-[10px] bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full">🅿️ Garaža</span>}
+                                  {c.has_parking && !c.has_garage && <span className="text-[10px] bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full">🅿️ Parking</span>}
+                                </div>
+                              )}
                             </div>
                             {c.url && (
                               <a href={c.url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-700 shrink-0">
