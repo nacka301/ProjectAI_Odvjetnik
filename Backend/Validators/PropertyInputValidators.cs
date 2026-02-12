@@ -16,7 +16,6 @@ public class LocationValidator : AbstractValidator<LocationInfo>
             .MaximumLength(100);
 
         RuleFor(x => x.District)
-            .NotEmpty().WithMessage("Kvart / naselje je obavezno.")
             .MaximumLength(100);
 
         RuleFor(x => x.Zip)
