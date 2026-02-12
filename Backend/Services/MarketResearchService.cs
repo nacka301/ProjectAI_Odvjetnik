@@ -805,12 +805,12 @@ public class MarketResearchService
             .ToList();
 
         // ─────────────────────────────────────────────────────
-        // DEEP DIVE — visit top 12 listing pages for rich data
+        // DEEP DIVE — visit top 16 listing pages for rich data
         //   Only for Njuškalo URLs (we have the DOM selectors).
         //   Enriches Content with full description, attributes,
         //   equipment list, renovation year, yard size, etc.
         //   Discards vanknjižno, reclassifies partial-floor sales.
-        //   ~60s total (12 pages × ~5s each, sequential to avoid bans).
+        //   ~80s total (16 pages × ~5s each, sequential to avoid bans).
         // ─────────────────────────────────────────────────────
         if (distinctListings.Count > 0)
         {
@@ -956,7 +956,7 @@ public class MarketResearchService
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     /// <summary>
-    /// Select the top 12 most promising Njuškalo listings, visit each detail page,
+    /// Select the top 16 most promising Njuškalo listings, visit each detail page,
     /// and enrich the ComparableSearchResult with the extracted data.
     /// Discards listings with "vanknjižno vlasništvo" and reclassifies
     /// "prodaje se samo gornji kat" as apartment.
@@ -994,7 +994,7 @@ public class MarketResearchService
             .OrderByDescending(x => x.MatchesNeighborhood)  // Neighborhood matches first!
             .ThenByDescending(x => x.HasPrice)
             .ThenBy(x => x.ContentLength)
-            .Take(12)
+            .Take(16)
             .Select(x => x.Listing)
             .ToList();
 
@@ -1464,6 +1464,124 @@ public class MarketResearchService
 
         _logger.LogInformation("DeepDive: enriched {Enriched}/{Selected} listings with detail page data",
             enriched, scored.Count);
+
+        // ── V19: Title-based enrichment for ALL listings that lack structured data ──
+        // Many listings have informative titles like "Kuća: Daruvar, 2 stana, dupla garaža, dvorište!"
+        // Extract features from title + content for listings that didn't get deep-dived or got cookie wall.
+        EnrichFromTitleAndSnippet(listings);
+    }
+
+    /// <summary>
+    /// V19: Pre-AI enrichment from listing titles and snippets.
+    /// Many Njuškalo titles contain structured info like "Kuća: Daruvar, 2 stana, garaža, dvorište, 127 m²"
+    /// For listings that didn't get full deep-dive data, we extract what we can from title+content
+    /// and prepend a [TITLE-ENRICHED] prefix so the AI has more to work with.
+    /// </summary>
+    private void EnrichFromTitleAndSnippet(List<ComparableSearchResult> listings)
+    {
+        int enriched = 0;
+        foreach (var listing in listings)
+        {
+            // Skip listings that already have [STRUCTURED] or [DEEP DIVE] data
+            if (listing.Content.Contains("[STRUCTURED]") || listing.Content.Contains("[DEEP DIVE]"))
+                continue;
+
+            var titleLower = listing.Title.ToLowerInvariant();
+            var combinedText = $"{listing.Title} {listing.Content}";
+            var combinedLower = combinedText.ToLowerInvariant();
+            var titleExtracted = new List<string>();
+
+            // ── Size from title: "127 m²" or "(120 m²)" ──
+            var titleSizeMatch = Regex.Match(combinedText,
+                @"(\d{1,6}(?:\.\d{3})*(?:,\d+)?)\s*m[²2]",
+                RegexOptions.IgnoreCase);
+            if (titleSizeMatch.Success)
+            {
+                double sz = ValuationEngine.ParseCroatianNumber(titleSizeMatch.Groups[1].Value);
+                if (sz > 0)
+                    titleExtracted.Add($"Površina: {titleSizeMatch.Groups[1].Value} m²");
+            }
+
+            // ── Rooms from title: "2 stana", "3 sobe", "4-sobni" ──
+            var roomsMatch = Regex.Match(combinedText,
+                @"(\d+)\s*(?:sob[aei]|stan[ao]?|room|soba\b)", RegexOptions.IgnoreCase);
+            if (roomsMatch.Success)
+                titleExtracted.Add($"Broj soba: {roomsMatch.Groups[1].Value}");
+
+            // ── Garage from title ──
+            if (combinedLower.Contains("garaž") || combinedLower.Contains("garaz"))
+            {
+                titleExtracted.Add("Parking: Da (garaža)");
+                listing.HasGarage ??= true;
+            }
+
+            // ── Yard / dvorište from title ──
+            if (combinedLower.Contains("dvori") || combinedLower.Contains("dvoris") ||
+                combinedLower.Contains("okućnic") || combinedLower.Contains("okucnic") ||
+                combinedLower.Contains("dvor,") || combinedLower.Contains("dvor!") || combinedLower.Contains("dvor "))
+            {
+                titleExtracted.Add("Okućnica: Da");
+                listing.HasYard ??= true;
+            }
+
+            // ── Location from title: "Kuća: Daruvar" or after comma ──
+            // Njuškalo titles often have format "Type: City, features"
+            var locMatch = Regex.Match(listing.Title,
+                @"(?:Kuća|Stan|Zemlji[šs]te|Apartman|Poslovni\s+prostor)[:\s]+([A-ZČĆŽŠĐ][a-zčćžšđ]+(?:\s+[A-ZČĆŽŠĐ][a-zčćžšđ]+)*)",
+                RegexOptions.None);
+            if (locMatch.Success)
+                titleExtracted.Add($"Lokacija: {locMatch.Groups[1].Value.Trim()}");
+
+            // ── Property type indicators ──
+            if (titleLower.Contains("kuća") || titleLower.Contains("kuca"))
+                titleExtracted.Add("Tip: kuća");
+            else if (titleLower.Contains("stan") && !titleLower.Contains("stana"))
+                titleExtracted.Add("Tip: stan");
+            else if (titleLower.Contains("zemlji"))
+                titleExtracted.Add("Tip: zemljište");
+
+            // ── Year from title: "(1985)" or "god. 2010" ──
+            var yearMatch = Regex.Match(combinedText,
+                @"(?:god(?:ina)?\.?\s*|izgrađen[ao]?\s+)(\d{4})\b");
+            if (!yearMatch.Success)
+                yearMatch = Regex.Match(listing.Title, @"\((\d{4})\)");
+            if (yearMatch.Success)
+            {
+                int yr = int.Parse(yearMatch.Groups[1].Value);
+                if (yr >= 1900 && yr <= 2030)
+                    titleExtracted.Add($"Godina izgradnje: {yr}");
+            }
+
+            // ── Hectares to m² ──
+            var hectareMatch = Regex.Match(combinedText,
+                @"(\d+(?:[,.]\d+)?)\s*hektar", RegexOptions.IgnoreCase);
+            if (hectareMatch.Success)
+            {
+                double ha = ValuationEngine.ParseCroatianNumber(hectareMatch.Groups[1].Value);
+                if (ha > 0)
+                    titleExtracted.Add($"Površina: {(int)(ha * 10000)} m²");
+            }
+
+            // ── Condition hints from title ──
+            if (combinedLower.Contains("novogradnja") || combinedLower.Contains("novo izgrađ"))
+                titleExtracted.Add("Stanje: novogradnja");
+            else if (combinedLower.Contains("renoviran") || combinedLower.Contains("adaptiran") || combinedLower.Contains("uređen"))
+                titleExtracted.Add("Stanje: renovirano");
+            else if (combinedLower.Contains("za adaptac") || combinedLower.Contains("za rušenj") || combinedLower.Contains("zapušten"))
+                titleExtracted.Add("Stanje: potrebna adaptacija");
+
+            // ── Prepend extracted data to content ──
+            if (titleExtracted.Count > 0)
+            {
+                var prefix = $"[TITLE-ENRICHED] {string.Join(" | ", titleExtracted)} ";
+                listing.Content = $"{prefix}{listing.Content}";
+                enriched++;
+            }
+        }
+
+        if (enriched > 0)
+            _logger.LogInformation("V19 TitleEnrich: enriched {Count}/{Total} listings from title/snippet",
+                enriched, listings.Count);
     }
 
     /// <summary>

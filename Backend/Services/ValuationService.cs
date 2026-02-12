@@ -503,8 +503,8 @@ public class ValuationService
         {
             var l = listings[i];
             // Include enough content for AI to see structured data from BrightData/DeepDive
-            // Structured prefix alone can be 300-500 chars, so 600 was cutting off key data
-            string content = l.Content.Length > 1500 ? l.Content[..1500] : l.Content;
+            // V19: Increased from 1500→2500 to capture more from structured prefix + deep dive text
+            string content = l.Content.Length > 2500 ? l.Content[..2500] : l.Content;
             sb.AppendLine($"--- Listing {i} ---");
             sb.AppendLine($"URL: {l.Url}");
             sb.AppendLine($"Title: {l.Title}");
