@@ -4,6 +4,7 @@ using Backend.Models;
 using Backend.Services;
 using Backend.Validators;
 using FluentValidation;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 using OpenAI.Chat;
 
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions
@@ -11,6 +12,16 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
     Args = args,
     // Disable file watchers in production (causes segfault on Render/Docker)
     ContentRootPath = AppContext.BaseDirectory
+});
+
+// V20d: Configure Kestrel for long-running SSE connections (deep dive can take 60-120s)
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(10);
+    options.Limits.RequestHeadersTimeout = TimeSpan.FromMinutes(5);
+    // Disable minimum data rate — SSE streams have long pauses during deep dive
+    options.Limits.MinResponseDataRate = null;
+    options.Limits.MinRequestBodyDataRate = null;
 });
 
 // Disable config reload — Render doesn't support file watchers
@@ -91,7 +102,11 @@ builder.Services.AddScoped<ValuationService>();
 builder.Services.AddScoped<ValuationEngine>();
 builder.Services.AddScoped<ZkParsingService>();
 builder.Services.AddHttpClient<EmailService>();
-builder.Services.AddHttpClient<MarketResearchService>();
+builder.Services.AddHttpClient<MarketResearchService>(client =>
+{
+    // V20d: Increased timeout — deep dive of 20+ listings can take 60-120s total
+    client.Timeout = TimeSpan.FromMinutes(5);
+});
 builder.Services.AddHttpClient<SupabaseService>();
 
 var app = builder.Build();

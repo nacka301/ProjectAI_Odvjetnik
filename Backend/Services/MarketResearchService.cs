@@ -1031,41 +1031,105 @@ public class MarketResearchService
             .Select(x => x.Listing)
             .ToList();
 
-        _logger.LogInformation("DeepDive V20: deep-diving ALL {Count} Njuškalo listings (+ {Other} non-Njuškalo attempted)",
+        // V20d: Safety cap — max 25 Njuškalo listings (prevents runaway deep dives)
+        if (scored.Count > 25)
+        {
+            _logger.LogInformation("DeepDive V20d: capping from {All} to 25 Njuškalo listings", scored.Count);
+            // Mark the rest as not deep-dived
+            foreach (var overflow in scored.Skip(25))
+                overflow.DeepDiveStatus = $"⚠ Preskočen — limit 25 deep dive-ova ({scored.Count} ukupno)";
+            scored = scored.Take(25).ToList();
+        }
+
+        _logger.LogInformation("DeepDive V20: deep-diving {Count} Njuškalo listings in parallel (+ {Other} non-Njuškalo attempted)",
             scored.Count, otherListings.Count);
 
-        // ── Step 3: Visit each listing (sequential to avoid rate-limiting) ──
+        // ── Step 3: Visit listings in PARALLEL (V20d — 4 concurrent BrightData scrapes) ──
         // For Njuškalo URLs: use BrightData FIRST (Tavily Extract always hits cookie wall).
         // For other portals: use Tavily Extract as before.
-        int enriched = 0;
-        var toDiscard = new List<ComparableSearchResult>();
+        var toDiscard = new System.Collections.Concurrent.ConcurrentBag<ComparableSearchResult>();
+        var semaphore = new SemaphoreSlim(4); // Max 4 concurrent BrightData connections
 
-        foreach (var listing in scored)
+        var tasks = scored.Select(listing => Task.Run(async () =>
         {
+            await semaphore.WaitAsync();
             try
             {
-                bool isNjuskalo = listing.Url.Contains("njuskalo.hr", StringComparison.OrdinalIgnoreCase);
-                string rawText = "";
+                return await DeepDiveOneListingAsync(listing, toDiscard);
+            }
+            finally
+            {
+                semaphore.Release();
+            }
+        }));
 
-                // ── NJUŠKALO: Try BrightData FIRST (Tavily always hits cookie wall) ──
-                if (isNjuskalo && _brightDataWsEndpoint != null)
+        var results = await Task.WhenAll(tasks);
+        int enriched = results.Count(r => r);
+
+        semaphore.Dispose();
+
+        // ── Remove discarded listings from the main list ──
+        if (!toDiscard.IsEmpty)
+        {
+            foreach (var bad in toDiscard)
+                listings.Remove(bad);
+            _logger.LogInformation("DeepDive: discarded {Count} listings (vanknjižno/invalid)", toDiscard.Count);
+        }
+
+        _logger.LogInformation("DeepDive V20: enriched {Enriched}/{Total} Njuškalo + {Other} non-Njuškalo listings",
+            enriched, scored.Count, otherListings.Count);
+
+        // ── V20: Ensure every listing has a DeepDiveStatus ──
+        foreach (var listing in listings)
+        {
+            listing.DeepDiveStatus ??= "⚠ Nije obrađen — nema status";
+        }
+
+        // ── V19: Title-based enrichment for ALL listings that lack structured data ──
+        // Many listings have informative titles like "Kuća: Daruvar, 2 stana, dupla garaža, dvorište!"
+        // Extract features from title + content for listings that didn't get deep-dived or got cookie wall.
+        EnrichFromTitleAndSnippet(listings);
+    }
+
+    /// <summary>
+    /// V20d: Deep-dive a single listing — extracted from the loop for parallel execution.
+    /// Each listing gets BrightData → Tavily Extract → Tavily Search fallback chain.
+    /// Thread-safe: only modifies its own listing; uses ConcurrentBag for discard list.
+    /// </summary>
+    private async Task<bool> DeepDiveOneListingAsync(
+        ComparableSearchResult listing,
+        System.Collections.Concurrent.ConcurrentBag<ComparableSearchResult> toDiscard)
+    {
+        try
+        {
+            bool isNjuskalo = listing.Url.Contains("njuskalo.hr", StringComparison.OrdinalIgnoreCase);
+            string rawText = "";
+            bool hasRawText = false;
+
+            // ── NJUŠKALO: Try BrightData FIRST (Tavily always hits cookie wall) ──
+            if (isNjuskalo && _brightDataWsEndpoint != null)
+            {
+                rawText = await BrightDataScrape(listing.Url);
+                if (!string.IsNullOrWhiteSpace(rawText) && rawText.Length > 300)
                 {
-                    rawText = await BrightDataScrape(listing.Url);
-                    if (!string.IsNullOrWhiteSpace(rawText) && rawText.Length > 300)
-                    {
-                        listing.DeepDiveStatus = $"✓ BrightData OK ({rawText.Length:N0} znakova)";
-                        _logger.LogInformation("DeepDive: BRIGHT DATA OK for {Url} — {Len} chars",
-                            listing.Url, rawText.Length);
-                        goto ProcessRawText;
-                    }
+                    listing.DeepDiveStatus = $"✓ BrightData OK ({rawText.Length:N0} znakova)";
+                    _logger.LogInformation("DeepDive: BRIGHT DATA OK for {Url} — {Len} chars",
+                        listing.Url, rawText.Length);
+                    hasRawText = true;
+                }
+                else
+                {
                     _logger.LogInformation("DeepDive: BrightData failed for {Url}, trying Tavily Extract",
                         listing.Url);
                 }
-                else if (isNjuskalo && _brightDataWsEndpoint == null)
-                {
-                    _logger.LogInformation("DeepDive: BrightData not configured, trying Tavily for {Url}", listing.Url);
-                }
+            }
+            else if (isNjuskalo && _brightDataWsEndpoint == null)
+            {
+                _logger.LogInformation("DeepDive: BrightData not configured, trying Tavily for {Url}", listing.Url);
+            }
 
+            if (!hasRawText)
+            {
                 // ── Tavily Extract (works for non-Njuškalo, or as Njuškalo fallback) ──
                 rawText = await ExecuteTavilyExtract(listing.Url);
                 if (string.IsNullOrWhiteSpace(rawText))
@@ -1073,7 +1137,7 @@ public class MarketResearchService
                     listing.DeepDiveStatus = _brightDataWsEndpoint != null
                         ? "✗ BrightData neuspješan + Tavily Extract prazan"
                         : "✗ BrightData nije konfiguriran + Tavily Extract prazan";
-                    continue;
+                    return false;
                 }
 
                 // ── DETECT: Cookie consent wall — Njuškalo blocks Tavily scraper ──
@@ -1095,440 +1159,337 @@ public class MarketResearchService
                             rawText = bdText;
                             _logger.LogInformation("DeepDive: BRIGHT DATA OK for {Url} — {Len} chars",
                                 listing.Url, rawText.Length);
-                            goto ProcessRawText;
+                            hasRawText = true;
                         }
-                        _logger.LogInformation("DeepDive: BrightData failed for {Url}, falling back to Tavily Search",
-                            listing.Url);
+                        else
+                        {
+                            _logger.LogInformation("DeepDive: BrightData failed for {Url}, falling back to Tavily Search",
+                                listing.Url);
+                        }
                     }
 
-                    // ── Fallback 2: use Tavily Search to get a snippet about the listing ──
-                    // This often returns enough text to detect land subtype, condition, etc.
-                    string fallbackSnippet = "";
-                    try
+                    if (!hasRawText)
                     {
-                        var fallbackResults = await ExecuteTavilySearch($"site:njuskalo.hr {listing.Url}", 1);
-                        if (fallbackResults.Count > 0)
+                        // ── Fallback 2: use Tavily Search to get a snippet about the listing ──
+                        string fallbackSnippet = "";
+                        try
                         {
-                            fallbackSnippet = fallbackResults[0].Content ?? "";
-                            if (fallbackSnippet.Length > 50)
+                            var fallbackResults = await ExecuteTavilySearch($"site:njuskalo.hr {listing.Url}", 1);
+                            if (fallbackResults.Count > 0)
                             {
-                                _logger.LogInformation("DeepDive: SEARCH FALLBACK enriched {Url} ({Len} chars)",
-                                    listing.Url, fallbackSnippet.Length);
+                                fallbackSnippet = fallbackResults[0].Content ?? "";
+                                if (fallbackSnippet.Length > 50)
+                                {
+                                    _logger.LogInformation("DeepDive: SEARCH FALLBACK enriched {Url} ({Len} chars)",
+                                        listing.Url, fallbackSnippet.Length);
+                                }
                             }
                         }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "DeepDive: search fallback failed for {Url}", listing.Url);
-                    }
-
-                    // ── Structured extraction from fallback + URL (even on cookie wall) ──
-                    var fallbackStructured = new List<string>();
-
-                    // === Land type detection: structured snippet > text keywords > URL ===
-                    // CRITICAL: "Tip zemljišta:" from snippet is MOST RELIABLE source.
-                    // URL categories are UNRELIABLE (e.g. /zemljista/gradjevinsko/ for agricultural land).
-                    string? fbDetectedLandType = null;
-
-                    // Priority 1: Structured "Tip zemljišta:" from snippet
-                    if (!string.IsNullOrEmpty(fallbackSnippet))
-                    {
-                        var fbLandType = Regex.Match(fallbackSnippet,
-                            @"Tip\s+zemlji[šs]ta[:\s]+([^\n\r,]{3,40})", RegexOptions.IgnoreCase);
-                        if (fbLandType.Success)
+                        catch (Exception ex)
                         {
-                            var ltVal = fbLandType.Groups[1].Value.Trim();
-                            fallbackStructured.Add($"Tip zemljišta: {ltVal}");
-                            var ltLower = ltVal.ToLowerInvariant();
-                            if (ltLower.Contains("poljoprivredno") || ltLower.Contains("oranica") ||
-                                ltLower.Contains("šuma") || ltLower.Contains("pašnjak") || ltLower.Contains("vinograd"))
+                            _logger.LogWarning(ex, "DeepDive: search fallback failed for {Url}", listing.Url);
+                        }
+
+                        // ── Structured extraction from fallback + URL (even on cookie wall) ──
+                        var fallbackStructured = new List<string>();
+                        string? fbDetectedLandType = null;
+
+                        if (!string.IsNullOrEmpty(fallbackSnippet))
+                        {
+                            var fbLandType = Regex.Match(fallbackSnippet,
+                                @"Tip\s+zemlji[šs]ta[:\s]+([^\n\r,]{3,40})", RegexOptions.IgnoreCase);
+                            if (fbLandType.Success)
+                            {
+                                var ltVal = fbLandType.Groups[1].Value.Trim();
+                                fallbackStructured.Add($"Tip zemljišta: {ltVal}");
+                                var ltLower = ltVal.ToLowerInvariant();
+                                if (ltLower.Contains("poljoprivredno") || ltLower.Contains("oranica") ||
+                                    ltLower.Contains("šuma") || ltLower.Contains("pašnjak") || ltLower.Contains("vinograd"))
+                                    fbDetectedLandType = "poljoprivredno zemljište";
+                                else if (ltLower.Contains("građevinsko") || ltLower.Contains("gradevinsko"))
+                                    fbDetectedLandType = "građevinsko zemljište";
+                            }
+                        }
+
+                        if (fbDetectedLandType == null)
+                        {
+                            var textOnly = $"{listing.Title} {listing.Content} {fallbackSnippet}".ToLowerInvariant();
+                            if (textOnly.Contains("poljoprivredno") || textOnly.Contains("oranica") ||
+                                textOnly.Contains("pašnjak") || textOnly.Contains("vinograd"))
                                 fbDetectedLandType = "poljoprivredno zemljište";
-                            else if (ltLower.Contains("građevinsko") || ltLower.Contains("gradevinsko"))
+                            else if (textOnly.Contains("građevinsko") || textOnly.Contains("gradevinsko"))
                                 fbDetectedLandType = "građevinsko zemljište";
                         }
+
+                        if (fbDetectedLandType == null)
+                        {
+                            var urlLower = listing.Url.ToLowerInvariant();
+                            if (urlLower.Contains("poljoprivredno"))
+                                fbDetectedLandType = "poljoprivredno zemljište";
+                            else if (urlLower.Contains("građevinsko") || urlLower.Contains("gradevinsko"))
+                                fbDetectedLandType = "građevinsko zemljište";
+                        }
+
+                        if (fbDetectedLandType != null)
+                            fallbackStructured.Add($"DetectedLandType: {fbDetectedLandType}");
+
+                        if (!string.IsNullOrEmpty(fallbackSnippet))
+                        {
+                            var fbLokacija = Regex.Match(fallbackSnippet, @"Lokacija[:\s]+([^\n\r]{5,80})", RegexOptions.IgnoreCase);
+                            if (fbLokacija.Success) fallbackStructured.Add($"Lokacija: {fbLokacija.Groups[1].Value.Trim()}");
+
+                            var fbPovrsina = Regex.Match(fallbackSnippet, @"(?:Površina|Stambena površina|Korisna površina)[:\s]+([^\n\r]{3,30})", RegexOptions.IgnoreCase);
+                            if (fbPovrsina.Success) fallbackStructured.Add($"Površina: {fbPovrsina.Groups[1].Value.Trim()}");
+
+                            var fbSobe = Regex.Match(fallbackSnippet, @"(?:Broj\s+soba|Sobe)[:\s]+([^\n\r,]{1,15})", RegexOptions.IgnoreCase);
+                            if (fbSobe.Success) fallbackStructured.Add($"Broj soba: {fbSobe.Groups[1].Value.Trim()}");
+
+                            var fbStanje = Regex.Match(fallbackSnippet, @"Stanje[:\s]+([^\n\r,]{3,40})", RegexOptions.IgnoreCase);
+                            if (fbStanje.Success) fallbackStructured.Add($"Stanje: {fbStanje.Groups[1].Value.Trim()}");
+
+                            var fbGodina = Regex.Match(fallbackSnippet, @"Godina\s+(?:izgradnje|gradnje)[:\s]+(\d{4})", RegexOptions.IgnoreCase);
+                            if (fbGodina.Success) fallbackStructured.Add($"Godina izgradnje: {fbGodina.Groups[1].Value}");
+
+                            var fbKat = Regex.Match(fallbackSnippet, @"(?:Kat|Eta[žz]a)[:\s]+([^\n\r,]{2,20})", RegexOptions.IgnoreCase);
+                            if (fbKat.Success) fallbackStructured.Add($"Kat: {fbKat.Groups[1].Value.Trim()}");
+                        }
+
+                        string fbPrefix = fallbackStructured.Count > 0
+                            ? $"[STRUCTURED] {string.Join(" | ", fallbackStructured)} "
+                            : "";
+                        if (fallbackStructured.Count > 0)
+                            _logger.LogInformation("DeepDive: fallback structured data for {Url}: {Data}",
+                                listing.Url, string.Join(" | ", fallbackStructured));
+
+                        listing.Content = $"{fbPrefix}[SEARCH-FALLBACK] {fallbackSnippet} [ORIGINAL] {listing.Content}";
+                        if (fallbackStructured.Count > 0 || fallbackSnippet.Length > 50)
+                            listing.DeepDiveStatus = $"⚠ Cookie wall → Tavily Search fallback ({fallbackSnippet.Length} znakova, {fallbackStructured.Count} polja)";
+                        else
+                            listing.DeepDiveStatus = "✗ Cookie wall → svi fallbackovi neuspješni — samo osnovni snippet";
+                        return false;
                     }
-
-                    // Priority 2: Keywords from title + content + snippet (NOT URL — URLs have misleading categories)
-                    if (fbDetectedLandType == null)
-                    {
-                        var textOnly = $"{listing.Title} {listing.Content} {fallbackSnippet}".ToLowerInvariant();
-                        // Check agricultural FIRST — "poljoprivredno" is more specific and must win over "građevinsko"
-                        if (textOnly.Contains("poljoprivredno") || textOnly.Contains("oranica") ||
-                            textOnly.Contains("pašnjak") || textOnly.Contains("vinograd"))
-                            fbDetectedLandType = "poljoprivredno zemljište";
-                        else if (textOnly.Contains("građevinsko") || textOnly.Contains("gradevinsko"))
-                            fbDetectedLandType = "građevinsko zemljište";
-                    }
-
-                    // Priority 3: URL as LAST RESORT only (agricultural keywords first)
-                    if (fbDetectedLandType == null)
-                    {
-                        var urlLower = listing.Url.ToLowerInvariant();
-                        if (urlLower.Contains("poljoprivredno"))
-                            fbDetectedLandType = "poljoprivredno zemljište";
-                        else if (urlLower.Contains("građevinsko") || urlLower.Contains("gradevinsko"))
-                            fbDetectedLandType = "građevinsko zemljište";
-                    }
-
-                    if (fbDetectedLandType != null)
-                        fallbackStructured.Add($"DetectedLandType: {fbDetectedLandType}");
-
-                    // Try remaining structured fields from snippet
-                    if (!string.IsNullOrEmpty(fallbackSnippet))
-                    {
-
-                        var fbLokacija = Regex.Match(fallbackSnippet,
-                            @"Lokacija[:\s]+([^\n\r]{5,80})", RegexOptions.IgnoreCase);
-                        if (fbLokacija.Success)
-                            fallbackStructured.Add($"Lokacija: {fbLokacija.Groups[1].Value.Trim()}");
-
-                        var fbPovrsina = Regex.Match(fallbackSnippet,
-                            @"(?:Površina|Stambena površina|Korisna površina)[:\s]+([^\n\r]{3,30})",
-                            RegexOptions.IgnoreCase);
-                        if (fbPovrsina.Success)
-                            fallbackStructured.Add($"Površina: {fbPovrsina.Groups[1].Value.Trim()}");
-
-                        var fbSobe = Regex.Match(fallbackSnippet,
-                            @"(?:Broj\s+soba|Sobe)[:\s]+([^\n\r,]{1,15})", RegexOptions.IgnoreCase);
-                        if (fbSobe.Success)
-                            fallbackStructured.Add($"Broj soba: {fbSobe.Groups[1].Value.Trim()}");
-
-                        var fbStanje = Regex.Match(fallbackSnippet,
-                            @"Stanje[:\s]+([^\n\r,]{3,40})", RegexOptions.IgnoreCase);
-                        if (fbStanje.Success)
-                            fallbackStructured.Add($"Stanje: {fbStanje.Groups[1].Value.Trim()}");
-
-                        var fbGodina = Regex.Match(fallbackSnippet,
-                            @"Godina\s+(?:izgradnje|gradnje)[:\s]+(\d{4})", RegexOptions.IgnoreCase);
-                        if (fbGodina.Success)
-                            fallbackStructured.Add($"Godina izgradnje: {fbGodina.Groups[1].Value}");
-
-                        var fbKat = Regex.Match(fallbackSnippet,
-                            @"(?:Kat|Eta[žz]a)[:\s]+([^\n\r,]{2,20})", RegexOptions.IgnoreCase);
-                        if (fbKat.Success)
-                            fallbackStructured.Add($"Kat: {fbKat.Groups[1].Value.Trim()}");
-                    }
-
-                    string fbPrefix = fallbackStructured.Count > 0
-                        ? $"[STRUCTURED] {string.Join(" | ", fallbackStructured)} "
-                        : "";
-                    if (fallbackStructured.Count > 0)
-                        _logger.LogInformation("DeepDive: fallback structured data for {Url}: {Data}",
-                            listing.Url, string.Join(" | ", fallbackStructured));
-
-                    listing.Content = $"{fbPrefix}[SEARCH-FALLBACK] {fallbackSnippet} [ORIGINAL] {listing.Content}";
-                    // V20: Track cookie wall status
-                    if (fallbackStructured.Count > 0 || fallbackSnippet.Length > 50)
-                        listing.DeepDiveStatus = $"⚠ Cookie wall → Tavily Search fallback ({fallbackSnippet.Length} znakova, {fallbackStructured.Count} polja)";
-                    else
-                        listing.DeepDiveStatus = "✗ Cookie wall → svi fallbackovi neuspješni — samo osnovni snippet";
-                    continue;
-                }
-
-                // ── Tavily Extract succeeded (no cookie wall) ──
-                listing.DeepDiveStatus = $"✓ Tavily Extract OK ({rawText.Length:N0} znakova)";
-
-                ProcessRawText:
-                var descLower = rawText.ToLowerInvariant();
-
-                // ── DISCARD: "vanknjižno vlasništvo" — unreliable property rights ──
-                if (descLower.Contains("vanknjižno vlasništvo") || descLower.Contains("vanknjižno"))
-                {
-                    _logger.LogInformation("DeepDive: DISCARDING {Url} — vanknjižno vlasništvo", listing.Url);
-                    listing.DeepDiveStatus = "✗ Odbačeno — vanknjižno vlasništvo";
-                    toDiscard.Add(listing);
-                    continue;
-                }
-
-                // ── RECLASSIFY: "prodaje se samo gornji kat" → Apartment ──
-                if (descLower.Contains("prodaje se samo gornji kat") ||
-                    descLower.Contains("prodaje se gornji kat") ||
-                    descLower.Contains("samo kat") ||
-                    descLower.Contains("prodaje se jedan kat"))
-                {
-                    listing.AiPropertyType = "stan";
-                    _logger.LogInformation("DeepDive: reclassified {Url} as APARTMENT (gornji kat)", listing.Url);
-                }
-
-                // ── Extract structured data from FULL raw text BEFORE truncation ──
-                // Njuškalo listing pages have structured key-value data that may be
-                // cut off by the 3000-char truncation. Scan full text first.
-                var structuredInfo = new List<string>();
-
-                // ── UNIVERSAL FIELDS (all property types) ──
-
-                // Lokacija
-                var lokacijaMatch = Regex.Match(rawText,
-                    @"Lokacija[:\s]+([^\n\r]{5,80})", RegexOptions.IgnoreCase);
-                if (lokacijaMatch.Success)
-                    structuredInfo.Add($"Lokacija: {lokacijaMatch.Groups[1].Value.Trim()}");
-
-                // Površina / Stambena površina / Korisna površina
-                var povrsinaMatch = Regex.Match(rawText,
-                    @"(?:Površina|Stambena površina|Korisna površina|Ukupna površina)[:\s]+([^\n\r]{3,30})",
-                    RegexOptions.IgnoreCase);
-                if (povrsinaMatch.Success)
-                    structuredInfo.Add($"Površina: {povrsinaMatch.Groups[1].Value.Trim()}");
-
-                // Stanje
-                var stanjeMatch = Regex.Match(rawText,
-                    @"Stanje[:\s]+([^\n\r,]{3,40})", RegexOptions.IgnoreCase);
-                if (stanjeMatch.Success)
-                    structuredInfo.Add($"Stanje: {stanjeMatch.Groups[1].Value.Trim()}");
-
-                // Namjena
-                var namjenaMatch = Regex.Match(rawText,
-                    @"Namjena[:\s]+([^\n\r,]{3,40})", RegexOptions.IgnoreCase);
-                if (namjenaMatch.Success)
-                    structuredInfo.Add($"Namjena: {namjenaMatch.Groups[1].Value.Trim()}");
-
-                // Godina izgradnje
-                var godinaMatch = Regex.Match(rawText,
-                    @"Godina\s+(?:izgradnje|gradnje)[:\s]+(\d{4})", RegexOptions.IgnoreCase);
-                if (godinaMatch.Success)
-                    structuredInfo.Add($"Godina izgradnje: {godinaMatch.Groups[1].Value}");
-
-                // Energetski razred
-                var energyMatch = Regex.Match(rawText,
-                    @"Energetski\s+(?:razred|certifikat)[:\s]+([A-G][+]?)", RegexOptions.IgnoreCase);
-                if (energyMatch.Success)
-                    structuredInfo.Add($"Energetski razred: {energyMatch.Groups[1].Value}");
-
-                // Kat / Etaža
-                var katMatch = Regex.Match(rawText,
-                    @"(?:Kat|Eta[žz]a)[:\s]+([^\n\r,]{2,20})", RegexOptions.IgnoreCase);
-                if (katMatch.Success)
-                    structuredInfo.Add($"Kat: {katMatch.Groups[1].Value.Trim()}");
-
-                // Broj soba
-                var sobeMatch = Regex.Match(rawText,
-                    @"(?:Broj\s+soba|Sobe)[:\s]+([^\n\r,]{1,15})", RegexOptions.IgnoreCase);
-                if (sobeMatch.Success)
-                    structuredInfo.Add($"Broj soba: {sobeMatch.Groups[1].Value.Trim()}");
-
-                // Grijanje
-                var grijanjeMatch = Regex.Match(rawText,
-                    @"Grijanje[:\s]+([^\n\r,]{3,40})", RegexOptions.IgnoreCase);
-                if (grijanjeMatch.Success)
-                    structuredInfo.Add($"Grijanje: {grijanjeMatch.Groups[1].Value.Trim()}");
-
-                // Parking / Garaža
-                var parkingMatch = Regex.Match(rawText,
-                    @"(?:Parking|Gara[žz]a|Garažno mjesto)[:\s]+([^\n\r,]{2,30})", RegexOptions.IgnoreCase);
-                if (parkingMatch.Success)
-                    structuredInfo.Add($"Parking: {parkingMatch.Groups[1].Value.Trim()}");
-
-                // Okućnica / Dvorište / Parcela (za kuće)
-                var okucnicaMatch = Regex.Match(rawText,
-                    @"(?:Okućnica|Dvorišt|Površina\s+(?:parcele|zemljišta|okućnice))[:\s]+([^\n\r,]{3,30})",
-                    RegexOptions.IgnoreCase);
-                if (okucnicaMatch.Success)
-                    structuredInfo.Add($"Okućnica: {okucnicaMatch.Groups[1].Value.Trim()}");
-
-                // Broj katova (kuće)
-                var katoviMatch = Regex.Match(rawText,
-                    @"Broj\s+katova[:\s]+([^\n\r,]{1,10})", RegexOptions.IgnoreCase);
-                if (katoviMatch.Success)
-                    structuredInfo.Add($"Broj katova: {katoviMatch.Groups[1].Value.Trim()}");
-
-                // ── LAND-SPECIFIC FIELDS ──
-
-                // Tip zemljišta: građevinsko/poljoprivredno/šuma/...
-                var landTypeMatch = Regex.Match(rawText,
-                    @"Tip\s+zemlji[šs]ta[:\s]+([^\n\r,]{3,40})", RegexOptions.IgnoreCase);
-                if (landTypeMatch.Success)
-                    structuredInfo.Add($"Tip zemljišta: {landTypeMatch.Groups[1].Value.Trim()}");
-
-                // Explicit land type in text — check "Tip zemljišta:" structured field FIRST,
-                // then keywords with AGRICULTURAL FIRST (more specific, must win over "građevinsko").
-                string? deepDetectedLandType = null;
-
-                // Priority 1: Already-extracted "Tip zemljišta:" structured field
-                var tipZemljistaEntry = structuredInfo.FirstOrDefault(s => s.StartsWith("Tip zemljišta:"));
-                if (tipZemljistaEntry != null)
-                {
-                    var tzLower = tipZemljistaEntry.ToLowerInvariant();
-                    if (tzLower.Contains("poljoprivredno") || tzLower.Contains("oranica") ||
-                        tzLower.Contains("šuma") || tzLower.Contains("pašnjak") || tzLower.Contains("vinograd"))
-                        deepDetectedLandType = "poljoprivredno zemljište";
-                    else if (tzLower.Contains("građevinsko") || tzLower.Contains("gradevinsko"))
-                        deepDetectedLandType = "građevinsko zemljište";
-                }
-
-                // Priority 2: Keywords — AGRICULTURAL FIRST
-                if (deepDetectedLandType == null)
-                {
-                    if (descLower.Contains("poljoprivredno zemljište") || descLower.Contains("poljoprivredno zemljiste") ||
-                        descLower.Contains("poljoprivredno zeml"))
-                        deepDetectedLandType = "poljoprivredno zemljište";
-                    else if (descLower.Contains("građevinsko zemljište") || descLower.Contains("gradevinsko zemljiste") ||
-                             descLower.Contains("građevinsko zeml") || descLower.Contains("gradevinsko zeml"))
-                        deepDetectedLandType = "građevinsko zemljište";
-                }
-
-                if (deepDetectedLandType != null)
-                    structuredInfo.Add($"DetectedLandType: {deepDetectedLandType}");
-
-                // ── OPIS OGLASA (first 500 chars — all types) ──
-                var opisMatch = Regex.Match(rawText,
-                    @"Opis\s+oglasa[:\s]*\n?([\s\S]{10,500}?)(?:\n\n|\r\n\r\n|$)",
-                    RegexOptions.IgnoreCase);
-                if (opisMatch.Success)
-                    structuredInfo.Add($"Opis: {opisMatch.Groups[1].Value.Trim()}");
-
-                string structuredPrefix = structuredInfo.Count > 0
-                    ? $"[STRUCTURED] {string.Join(" | ", structuredInfo)} "
-                    : "";
-
-                if (structuredInfo.Count > 0)
-                    _logger.LogInformation("DeepDive: structured data for {Url}: {Data}",
-                        listing.Url, string.Join(" | ", structuredInfo));
-
-                // ── Enrich the listing's Content with detail page text ──
-                // STRUCTURED data goes FIRST so AI similarity scoring always sees it
-                // (AI truncates to 1500 chars — structured fields must be at the front)
-                var enrichedText = rawText.Length > 3000 ? rawText[..3000] : rawText;
-                listing.Content = $"{structuredPrefix}[DEEP DIVE] {enrichedText} [ORIGINAL] {listing.Content}";
-
-                // ── Extract renovation year from raw text ──
-                int? yearRenovation = null;
-                var renovYearMatch = Regex.Match(rawText,
-                    @"(?:renovir|adaptir|obnovljen|zadnja?\s*(?:renovacija|adaptacija))[^\d]{0,30}(\d{4})",
-                    RegexOptions.IgnoreCase);
-                if (renovYearMatch.Success && int.TryParse(renovYearMatch.Groups[1].Value, out var ry) && ry >= 1990 && ry <= 2030)
-                    yearRenovation = ry;
-
-                // Also try "Godina zadnje renovacije: YYYY" format
-                if (!yearRenovation.HasValue)
-                {
-                    var yearKvMatch = Regex.Match(rawText, @"(?:godina\s+(?:zadnje\s+)?renovacije|godina\s+adaptacije)[:\s]+(\d{4})", RegexOptions.IgnoreCase);
-                    if (yearKvMatch.Success && int.TryParse(yearKvMatch.Groups[1].Value, out var ry2) && ry2 >= 1990 && ry2 <= 2030)
-                        yearRenovation = ry2;
-                }
-
-                // ── Intelligent condition detection ──
-                if (descLower.Contains("potrebna adaptacija") || descLower.Contains("za rušenje") ||
-                    descLower.Contains("zapušteno") || descLower.Contains("dotrajalo") ||
-                    descLower.Contains("vlaga") || descLower.Contains("za adaptaciju") ||
-                    descLower.Contains("izvorno stanje") || descLower.Contains("roh-bau") ||
-                    descLower.Contains("roh bau"))
-                {
-                    listing.AiCondition ??= "needs_work";
-                    listing.NeedsRenovation = true;
-                    listing.IsRenovated = false;
-                }
-                else if (yearRenovation.HasValue && yearRenovation >= 2020)
-                {
-                    listing.AiCondition ??= "renovated";
-                    listing.IsRenovated = true;
-                    listing.NeedsRenovation = false;
-                }
-                else if (descLower.Contains("novogradnja") || descLower.Contains("novo izgrađen"))
-                {
-                    listing.AiCondition ??= "new";
-                    listing.IsRenovated = true;
-                    listing.NeedsRenovation = false;
-                }
-                else if (descLower.Contains("renoviran") || descLower.Contains("adaptiran") ||
-                         descLower.Contains("obnovljen") || descLower.Contains("kompletno uređen") ||
-                         descLower.Contains("novi krov"))
-                {
-                    listing.AiCondition ??= "renovated";
-                    listing.IsRenovated = true;
-                    listing.NeedsRenovation = false;
-                }
-                else if (yearRenovation.HasValue && yearRenovation >= 2015)
-                {
-                    listing.IsRenovated = true;
-                    listing.NeedsRenovation = false;
-                    listing.AiCondition ??= "renovated";
-                }
-                else if (descLower.Contains("održavan") || descLower.Contains("useljiv") ||
-                         descLower.Contains("dobro stanje"))
-                {
-                    listing.AiCondition ??= "good";
-                    listing.IsRenovated = false;
-                    listing.NeedsRenovation = false;
                 }
                 else
                 {
-                    // Default: can't determine from description
-                    listing.IsRenovated ??= false;
-                    listing.NeedsRenovation ??= false;
+                    // ── Tavily Extract succeeded (no cookie wall) ──
+                    listing.DeepDiveStatus = $"✓ Tavily Extract OK ({rawText.Length:N0} znakova)";
+                    hasRawText = true;
                 }
-
-                // ── Store renovation year ──
-                if (yearRenovation.HasValue)
-                    listing.YearLastRenovation = yearRenovation;
-
-                // ── Extract yard area from text (okućnica / dvorište / zemljište) ──
-                // V17: Croatian thousands-separator support (e.g. "4.327,00 m²")
-                var yardMatch = Regex.Match(rawText,
-                    @"(?:okućnica|dvorišt|zemljišt|parcela)[^\d]{0,20}(\d{1,6}(?:\.\d{3})*(?:,\d+)?)\s*m",
-                    RegexOptions.IgnoreCase);
-                if (yardMatch.Success)
-                {
-                    double yardArea = ValuationEngine.ParseCroatianNumber(yardMatch.Groups[1].Value);
-                    if (yardArea > 0)
-                        listing.AiYardAreaM2 ??= yardArea;
-                }
-
-                // ── Extract size from text (površina / stambena) ──
-                // V17: Croatian thousands-separator support (e.g. "4.327,00 m²")
-                var sizeMatch = Regex.Match(rawText,
-                    @"(?:površina|stambena|korisna)[^\d]{0,20}(\d{1,6}(?:\.\d{3})*(?:,\d+)?)\s*m",
-                    RegexOptions.IgnoreCase);
-                if (sizeMatch.Success)
-                {
-                    double sizeVal = ValuationEngine.ParseCroatianNumber(sizeMatch.Groups[1].Value);
-                    if (sizeVal > 0)
-                        listing.AiSizeM2 ??= sizeVal;
-                }
-
-                // ── Equipment-based feature detection ──
-                if (descLower.Contains("garaž") || descLower.Contains("garaz") || descLower.Contains("parking"))
-                    listing.HasGarage ??= true;
-
-                if (descLower.Contains("bazen") || descLower.Contains("pool"))
-                    listing.Content += " [Oprema: Bazen]";
-
-                if (descLower.Contains("plinsko grijanje") || descLower.Contains("centralno grijanje"))
-                {
-                    var heatingMatch = Regex.Match(rawText, @"(?:grijanje)[:\s]+([^\n,.]{3,30})", RegexOptions.IgnoreCase);
-                    listing.Content += $" [Grijanje: {(heatingMatch.Success ? heatingMatch.Groups[1].Value.Trim() : "plinsko")}]";
-                }
-
-                enriched++;
             }
-            catch (Exception ex)
+
+            // ── Process the raw text (from BrightData or Tavily Extract) ──
+            var descLower = rawText.ToLowerInvariant();
+
+            // ── DISCARD: "vanknjižno vlasništvo" — unreliable property rights ──
+            if (descLower.Contains("vanknjižno vlasništvo") || descLower.Contains("vanknjižno"))
             {
-                _logger.LogWarning(ex, "DeepDive: failed for individual listing {Url}", listing.Url);
-                listing.DeepDiveStatus ??= $"✗ Iznimka: {ex.Message[..Math.Min(ex.Message.Length, 80)]}";
-                // Continue with next listing — non-fatal
+                _logger.LogInformation("DeepDive: DISCARDING {Url} — vanknjižno vlasništvo", listing.Url);
+                listing.DeepDiveStatus = "✗ Odbačeno — vanknjižno vlasništvo";
+                toDiscard.Add(listing);
+                return false;
             }
-        }
 
-        // ── Remove discarded listings from the main list ──
-        if (toDiscard.Count > 0)
+            // ── RECLASSIFY: "prodaje se samo gornji kat" → Apartment ──
+            if (descLower.Contains("prodaje se samo gornji kat") ||
+                descLower.Contains("prodaje se gornji kat") ||
+                descLower.Contains("samo kat") ||
+                descLower.Contains("prodaje se jedan kat"))
+            {
+                listing.AiPropertyType = "stan";
+                _logger.LogInformation("DeepDive: reclassified {Url} as APARTMENT (gornji kat)", listing.Url);
+            }
+
+            // ── Extract structured data from FULL raw text BEFORE truncation ──
+            var structuredInfo = new List<string>();
+
+            var lokacijaMatch = Regex.Match(rawText, @"Lokacija[:\s]+([^\n\r]{5,80})", RegexOptions.IgnoreCase);
+            if (lokacijaMatch.Success) structuredInfo.Add($"Lokacija: {lokacijaMatch.Groups[1].Value.Trim()}");
+
+            var povrsinaMatch = Regex.Match(rawText, @"(?:Površina|Stambena površina|Korisna površina|Ukupna površina)[:\s]+([^\n\r]{3,30})", RegexOptions.IgnoreCase);
+            if (povrsinaMatch.Success) structuredInfo.Add($"Površina: {povrsinaMatch.Groups[1].Value.Trim()}");
+
+            var stanjeMatch = Regex.Match(rawText, @"Stanje[:\s]+([^\n\r,]{3,40})", RegexOptions.IgnoreCase);
+            if (stanjeMatch.Success) structuredInfo.Add($"Stanje: {stanjeMatch.Groups[1].Value.Trim()}");
+
+            var namjenaMatch = Regex.Match(rawText, @"Namjena[:\s]+([^\n\r,]{3,40})", RegexOptions.IgnoreCase);
+            if (namjenaMatch.Success) structuredInfo.Add($"Namjena: {namjenaMatch.Groups[1].Value.Trim()}");
+
+            var godinaMatch = Regex.Match(rawText, @"Godina\s+(?:izgradnje|gradnje)[:\s]+(\d{4})", RegexOptions.IgnoreCase);
+            if (godinaMatch.Success) structuredInfo.Add($"Godina izgradnje: {godinaMatch.Groups[1].Value}");
+
+            var energyMatch = Regex.Match(rawText, @"Energetski\s+(?:razred|certifikat)[:\s]+([A-G][+]?)", RegexOptions.IgnoreCase);
+            if (energyMatch.Success) structuredInfo.Add($"Energetski razred: {energyMatch.Groups[1].Value}");
+
+            var katMatch = Regex.Match(rawText, @"(?:Kat|Eta[žz]a)[:\s]+([^\n\r,]{2,20})", RegexOptions.IgnoreCase);
+            if (katMatch.Success) structuredInfo.Add($"Kat: {katMatch.Groups[1].Value.Trim()}");
+
+            var sobeMatch = Regex.Match(rawText, @"(?:Broj\s+soba|Sobe)[:\s]+([^\n\r,]{1,15})", RegexOptions.IgnoreCase);
+            if (sobeMatch.Success) structuredInfo.Add($"Broj soba: {sobeMatch.Groups[1].Value.Trim()}");
+
+            var grijanjeMatch = Regex.Match(rawText, @"Grijanje[:\s]+([^\n\r,]{3,40})", RegexOptions.IgnoreCase);
+            if (grijanjeMatch.Success) structuredInfo.Add($"Grijanje: {grijanjeMatch.Groups[1].Value.Trim()}");
+
+            var parkingMatch = Regex.Match(rawText, @"(?:Parking|Gara[žz]a|Garažno mjesto)[:\s]+([^\n\r,]{2,30})", RegexOptions.IgnoreCase);
+            if (parkingMatch.Success) structuredInfo.Add($"Parking: {parkingMatch.Groups[1].Value.Trim()}");
+
+            var okucnicaMatch = Regex.Match(rawText, @"(?:Okućnica|Dvorišt|Površina\s+(?:parcele|zemljišta|okućnice))[:\s]+([^\n\r,]{3,30})", RegexOptions.IgnoreCase);
+            if (okucnicaMatch.Success) structuredInfo.Add($"Okućnica: {okucnicaMatch.Groups[1].Value.Trim()}");
+
+            var katoviMatch = Regex.Match(rawText, @"Broj\s+katova[:\s]+([^\n\r,]{1,10})", RegexOptions.IgnoreCase);
+            if (katoviMatch.Success) structuredInfo.Add($"Broj katova: {katoviMatch.Groups[1].Value.Trim()}");
+
+            // ── LAND-SPECIFIC FIELDS ──
+            var landTypeMatch = Regex.Match(rawText, @"Tip\s+zemlji[šs]ta[:\s]+([^\n\r,]{3,40})", RegexOptions.IgnoreCase);
+            if (landTypeMatch.Success) structuredInfo.Add($"Tip zemljišta: {landTypeMatch.Groups[1].Value.Trim()}");
+
+            string? deepDetectedLandType = null;
+            var tipZemljistaEntry = structuredInfo.FirstOrDefault(s => s.StartsWith("Tip zemljišta:"));
+            if (tipZemljistaEntry != null)
+            {
+                var tzLower = tipZemljistaEntry.ToLowerInvariant();
+                if (tzLower.Contains("poljoprivredno") || tzLower.Contains("oranica") ||
+                    tzLower.Contains("šuma") || tzLower.Contains("pašnjak") || tzLower.Contains("vinograd"))
+                    deepDetectedLandType = "poljoprivredno zemljište";
+                else if (tzLower.Contains("građevinsko") || tzLower.Contains("gradevinsko"))
+                    deepDetectedLandType = "građevinsko zemljište";
+            }
+
+            if (deepDetectedLandType == null)
+            {
+                if (descLower.Contains("poljoprivredno zemljište") || descLower.Contains("poljoprivredno zemljiste") ||
+                    descLower.Contains("poljoprivredno zeml"))
+                    deepDetectedLandType = "poljoprivredno zemljište";
+                else if (descLower.Contains("građevinsko zemljište") || descLower.Contains("gradevinsko zemljiste") ||
+                         descLower.Contains("građevinsko zeml") || descLower.Contains("gradevinsko zeml"))
+                    deepDetectedLandType = "građevinsko zemljište";
+            }
+
+            if (deepDetectedLandType != null)
+                structuredInfo.Add($"DetectedLandType: {deepDetectedLandType}");
+
+            var opisMatch = Regex.Match(rawText, @"Opis\s+oglasa[:\s]*\n?([\s\S]{10,500}?)(?:\n\n|\r\n\r\n|$)", RegexOptions.IgnoreCase);
+            if (opisMatch.Success) structuredInfo.Add($"Opis: {opisMatch.Groups[1].Value.Trim()}");
+
+            string structuredPrefix = structuredInfo.Count > 0
+                ? $"[STRUCTURED] {string.Join(" | ", structuredInfo)} "
+                : "";
+
+            if (structuredInfo.Count > 0)
+                _logger.LogInformation("DeepDive: structured data for {Url}: {Data}",
+                    listing.Url, string.Join(" | ", structuredInfo));
+
+            var enrichedText = rawText.Length > 3000 ? rawText[..3000] : rawText;
+            listing.Content = $"{structuredPrefix}[DEEP DIVE] {enrichedText} [ORIGINAL] {listing.Content}";
+
+            // ── Extract renovation year from raw text ──
+            int? yearRenovation = null;
+            var renovYearMatch = Regex.Match(rawText,
+                @"(?:renovir|adaptir|obnovljen|zadnja?\s*(?:renovacija|adaptacija))[^\d]{0,30}(\d{4})",
+                RegexOptions.IgnoreCase);
+            if (renovYearMatch.Success && int.TryParse(renovYearMatch.Groups[1].Value, out var ry) && ry >= 1990 && ry <= 2030)
+                yearRenovation = ry;
+
+            if (!yearRenovation.HasValue)
+            {
+                var yearKvMatch = Regex.Match(rawText, @"(?:godina\s+(?:zadnje\s+)?renovacije|godina\s+adaptacije)[:\s]+(\d{4})", RegexOptions.IgnoreCase);
+                if (yearKvMatch.Success && int.TryParse(yearKvMatch.Groups[1].Value, out var ry2) && ry2 >= 1990 && ry2 <= 2030)
+                    yearRenovation = ry2;
+            }
+
+            // ── Intelligent condition detection ──
+            if (descLower.Contains("potrebna adaptacija") || descLower.Contains("za rušenje") ||
+                descLower.Contains("zapušteno") || descLower.Contains("dotrajalo") ||
+                descLower.Contains("vlaga") || descLower.Contains("za adaptaciju") ||
+                descLower.Contains("izvorno stanje") || descLower.Contains("roh-bau") ||
+                descLower.Contains("roh bau"))
+            {
+                listing.AiCondition ??= "needs_work";
+                listing.NeedsRenovation = true;
+                listing.IsRenovated = false;
+            }
+            else if (yearRenovation.HasValue && yearRenovation >= 2020)
+            {
+                listing.AiCondition ??= "renovated";
+                listing.IsRenovated = true;
+                listing.NeedsRenovation = false;
+            }
+            else if (descLower.Contains("novogradnja") || descLower.Contains("novo izgrađen"))
+            {
+                listing.AiCondition ??= "new";
+                listing.IsRenovated = true;
+                listing.NeedsRenovation = false;
+            }
+            else if (descLower.Contains("renoviran") || descLower.Contains("adaptiran") ||
+                     descLower.Contains("obnovljen") || descLower.Contains("kompletno uređen") ||
+                     descLower.Contains("novi krov"))
+            {
+                listing.AiCondition ??= "renovated";
+                listing.IsRenovated = true;
+                listing.NeedsRenovation = false;
+            }
+            else if (yearRenovation.HasValue && yearRenovation >= 2015)
+            {
+                listing.IsRenovated = true;
+                listing.NeedsRenovation = false;
+                listing.AiCondition ??= "renovated";
+            }
+            else if (descLower.Contains("održavan") || descLower.Contains("useljiv") ||
+                     descLower.Contains("dobro stanje"))
+            {
+                listing.AiCondition ??= "good";
+                listing.IsRenovated = false;
+                listing.NeedsRenovation = false;
+            }
+            else
+            {
+                listing.IsRenovated ??= false;
+                listing.NeedsRenovation ??= false;
+            }
+
+            if (yearRenovation.HasValue)
+                listing.YearLastRenovation = yearRenovation;
+
+            // ── Extract yard area ──
+            var yardMatch = Regex.Match(rawText,
+                @"(?:okućnica|dvorišt|zemljišt|parcela)[^\d]{0,20}(\d{1,6}(?:\.\d{3})*(?:,\d+)?)\s*m",
+                RegexOptions.IgnoreCase);
+            if (yardMatch.Success)
+            {
+                double yardArea = ValuationEngine.ParseCroatianNumber(yardMatch.Groups[1].Value);
+                if (yardArea > 0) listing.AiYardAreaM2 ??= yardArea;
+            }
+
+            // ── Extract size ──
+            var sizeMatch = Regex.Match(rawText,
+                @"(?:površina|stambena|korisna)[^\d]{0,20}(\d{1,6}(?:\.\d{3})*(?:,\d+)?)\s*m",
+                RegexOptions.IgnoreCase);
+            if (sizeMatch.Success)
+            {
+                double sizeVal = ValuationEngine.ParseCroatianNumber(sizeMatch.Groups[1].Value);
+                if (sizeVal > 0) listing.AiSizeM2 ??= sizeVal;
+            }
+
+            // ── Equipment-based feature detection ──
+            if (descLower.Contains("garaž") || descLower.Contains("garaz") || descLower.Contains("parking"))
+                listing.HasGarage ??= true;
+
+            if (descLower.Contains("bazen") || descLower.Contains("pool"))
+                listing.Content += " [Oprema: Bazen]";
+
+            if (descLower.Contains("plinsko grijanje") || descLower.Contains("centralno grijanje"))
+            {
+                var heatingMatch = Regex.Match(rawText, @"(?:grijanje)[:\s]+([^\n,.]{3,30})", RegexOptions.IgnoreCase);
+                listing.Content += $" [Grijanje: {(heatingMatch.Success ? heatingMatch.Groups[1].Value.Trim() : "plinsko")}]";
+            }
+
+            return true;
+        }
+        catch (Exception ex)
         {
-            foreach (var bad in toDiscard)
-                listings.Remove(bad);
-            _logger.LogInformation("DeepDive: discarded {Count} listings (vanknjižno/invalid)", toDiscard.Count);
+            _logger.LogWarning(ex, "DeepDive: failed for individual listing {Url}", listing.Url);
+            listing.DeepDiveStatus ??= $"✗ Iznimka: {ex.Message[..Math.Min(ex.Message.Length, 80)]}";
+            return false;
         }
-
-        _logger.LogInformation("DeepDive V20: enriched {Enriched}/{Total} Njuškalo + {Other} non-Njuškalo listings",
-            enriched, scored.Count, otherListings.Count);
-
-        // ── V20: Ensure every listing has a DeepDiveStatus ──
-        foreach (var listing in listings)
-        {
-            listing.DeepDiveStatus ??= "⚠ Nije obrađen — nema status";
-        }
-
-        // ── V19: Title-based enrichment for ALL listings that lack structured data ──
-        // Many listings have informative titles like "Kuća: Daruvar, 2 stana, dupla garaža, dvorište!"
-        // Extract features from title + content for listings that didn't get deep-dived or got cookie wall.
-        EnrichFromTitleAndSnippet(listings);
     }
 
     /// <summary>
