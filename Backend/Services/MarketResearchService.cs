@@ -956,27 +956,60 @@ public class MarketResearchService
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     /// <summary>
-    /// Select the top 16 most promising Njuškalo listings, visit each detail page,
-    /// and enrich the ComparableSearchResult with the extracted data.
+    /// V20: Deep dive ALL listings — visit each detail page and enrich with scraped data.
+    /// Every listing gets a deep dive attempt. If it fails, DeepDiveStatus explains why.
     /// Discards listings with "vanknjižno vlasništvo" and reclassifies
     /// "prodaje se samo gornji kat" as apartment.
     /// </summary>
     private async Task DeepDiveTopListingsAsync(List<ComparableSearchResult> listings, string regionName = "")
     {
-        // ── Step 1: Only Njuškalo URLs (we have selectors for those) ──
-        var njuskaloListings = listings
-            .Where(l => l.Url.Contains("njuskalo.hr", StringComparison.OrdinalIgnoreCase))
-            .ToList();
-
-        if (njuskaloListings.Count == 0)
+        if (listings.Count == 0)
         {
-            _logger.LogInformation("DeepDive: no Njuškalo URLs to visit");
+            _logger.LogInformation("DeepDive: no listings to visit");
             return;
         }
 
-        // ── Step 2: Neighborhood filter — prioritize listings matching target region ──
-        //    Score: neighborhood match in URL/title/content → high priority
-        //    This prevents wasting deep-dive time on Gornji Grad when searching Retfala.
+        // ── Step 1: Separate Njuškalo and non-Njuškalo listings ──
+        var njuskaloListings = listings
+            .Where(l => l.Url.Contains("njuskalo.hr", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var otherListings = listings
+            .Where(l => !l.Url.Contains("njuskalo.hr", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        // ── Step 1b: Mark non-Njuškalo listings — attempt Tavily Extract for them too ──
+        foreach (var listing in otherListings)
+        {
+            try
+            {
+                var rawText = await ExecuteTavilyExtract(listing.Url);
+                if (!string.IsNullOrWhiteSpace(rawText) && rawText.Length > 300)
+                {
+                    listing.Content = $"[DEEP DIVE] {(rawText.Length > 3000 ? rawText[..3000] : rawText)} [ORIGINAL] {listing.Content}";
+                    listing.DeepDiveStatus = $"✓ Tavily Extract OK ({rawText.Length:N0} znakova)";
+                    _logger.LogInformation("DeepDive: Tavily Extract OK for non-Njuškalo {Url} — {Len} chars",
+                        listing.Url, rawText.Length);
+                }
+                else
+                {
+                    listing.DeepDiveStatus = "✗ Tavily Extract prazan — nije Njuškalo, samo osnovni snippet";
+                }
+            }
+            catch (Exception ex)
+            {
+                listing.DeepDiveStatus = $"✗ Tavily Extract greška: {ex.Message[..Math.Min(ex.Message.Length, 60)]}";
+                _logger.LogWarning(ex, "DeepDive: Tavily Extract failed for non-Njuškalo {Url}", listing.Url);
+            }
+        }
+
+        if (njuskaloListings.Count == 0)
+        {
+            _logger.LogInformation("DeepDive: no Njuškalo URLs to visit ({Other} non-Njuškalo attempted)", otherListings.Count);
+            return;
+        }
+
+        // ── Step 2: Sort by priority — neighborhood match first, then by content needs ──
+        //    V20: NO LIMIT — deep dive ALL Njuškalo listings
         var regionLower = regionName.ToLowerInvariant();
         var regionNormalized = NormalizeLocationSlug(regionName);
 
@@ -994,12 +1027,12 @@ public class MarketResearchService
             .OrderByDescending(x => x.MatchesNeighborhood)  // Neighborhood matches first!
             .ThenByDescending(x => x.HasPrice)
             .ThenBy(x => x.ContentLength)
-            .Take(16)
+            // V20: NO .Take() — deep dive ALL listings
             .Select(x => x.Listing)
             .ToList();
 
-        _logger.LogInformation("DeepDive: selected {Count}/{Total} Njuškalo listings for detail scrape",
-            scored.Count, njuskaloListings.Count);
+        _logger.LogInformation("DeepDive V20: deep-diving ALL {Count} Njuškalo listings (+ {Other} non-Njuškalo attempted)",
+            scored.Count, otherListings.Count);
 
         // ── Step 3: Visit each listing (sequential to avoid rate-limiting) ──
         // For Njuškalo URLs: use BrightData FIRST (Tavily Extract always hits cookie wall).
@@ -1020,6 +1053,7 @@ public class MarketResearchService
                     rawText = await BrightDataScrape(listing.Url);
                     if (!string.IsNullOrWhiteSpace(rawText) && rawText.Length > 300)
                     {
+                        listing.DeepDiveStatus = $"✓ BrightData OK ({rawText.Length:N0} znakova)";
                         _logger.LogInformation("DeepDive: BRIGHT DATA OK for {Url} — {Len} chars",
                             listing.Url, rawText.Length);
                         goto ProcessRawText;
@@ -1027,10 +1061,20 @@ public class MarketResearchService
                     _logger.LogInformation("DeepDive: BrightData failed for {Url}, trying Tavily Extract",
                         listing.Url);
                 }
+                else if (isNjuskalo && _brightDataWsEndpoint == null)
+                {
+                    _logger.LogInformation("DeepDive: BrightData not configured, trying Tavily for {Url}", listing.Url);
+                }
 
                 // ── Tavily Extract (works for non-Njuškalo, or as Njuškalo fallback) ──
                 rawText = await ExecuteTavilyExtract(listing.Url);
-                if (string.IsNullOrWhiteSpace(rawText)) continue;
+                if (string.IsNullOrWhiteSpace(rawText))
+                {
+                    listing.DeepDiveStatus = _brightDataWsEndpoint != null
+                        ? "✗ BrightData neuspješan + Tavily Extract prazan"
+                        : "✗ BrightData nije konfiguriran + Tavily Extract prazan";
+                    continue;
+                }
 
                 // ── DETECT: Cookie consent wall — Njuškalo blocks Tavily scraper ──
                 var rawLower = rawText.ToLowerInvariant();
@@ -1173,8 +1217,16 @@ public class MarketResearchService
                             listing.Url, string.Join(" | ", fallbackStructured));
 
                     listing.Content = $"{fbPrefix}[SEARCH-FALLBACK] {fallbackSnippet} [ORIGINAL] {listing.Content}";
+                    // V20: Track cookie wall status
+                    if (fallbackStructured.Count > 0 || fallbackSnippet.Length > 50)
+                        listing.DeepDiveStatus = $"⚠ Cookie wall → Tavily Search fallback ({fallbackSnippet.Length} znakova, {fallbackStructured.Count} polja)";
+                    else
+                        listing.DeepDiveStatus = "✗ Cookie wall → svi fallbackovi neuspješni — samo osnovni snippet";
                     continue;
                 }
+
+                // ── Tavily Extract succeeded (no cookie wall) ──
+                listing.DeepDiveStatus = $"✓ Tavily Extract OK ({rawText.Length:N0} znakova)";
 
                 ProcessRawText:
                 var descLower = rawText.ToLowerInvariant();
@@ -1183,6 +1235,7 @@ public class MarketResearchService
                 if (descLower.Contains("vanknjižno vlasništvo") || descLower.Contains("vanknjižno"))
                 {
                     _logger.LogInformation("DeepDive: DISCARDING {Url} — vanknjižno vlasništvo", listing.Url);
+                    listing.DeepDiveStatus = "✗ Odbačeno — vanknjižno vlasništvo";
                     toDiscard.Add(listing);
                     continue;
                 }
@@ -1450,6 +1503,7 @@ public class MarketResearchService
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "DeepDive: failed for individual listing {Url}", listing.Url);
+                listing.DeepDiveStatus ??= $"✗ Iznimka: {ex.Message[..Math.Min(ex.Message.Length, 80)]}";
                 // Continue with next listing — non-fatal
             }
         }
@@ -1462,8 +1516,14 @@ public class MarketResearchService
             _logger.LogInformation("DeepDive: discarded {Count} listings (vanknjižno/invalid)", toDiscard.Count);
         }
 
-        _logger.LogInformation("DeepDive: enriched {Enriched}/{Selected} listings with detail page data",
-            enriched, scored.Count);
+        _logger.LogInformation("DeepDive V20: enriched {Enriched}/{Total} Njuškalo + {Other} non-Njuškalo listings",
+            enriched, scored.Count, otherListings.Count);
+
+        // ── V20: Ensure every listing has a DeepDiveStatus ──
+        foreach (var listing in listings)
+        {
+            listing.DeepDiveStatus ??= "⚠ Nije obrađen — nema status";
+        }
 
         // ── V19: Title-based enrichment for ALL listings that lack structured data ──
         // Many listings have informative titles like "Kuća: Daruvar, 2 stana, dupla garaža, dvorište!"
@@ -2744,6 +2804,9 @@ public class ComparableSearchResult
     public string? AiPropertyType { get; set; }    // AI-detected type
     public double? AiSimilarityScore { get; set; }  // AI-scored similarity to target (0.0–1.0)
     public string? AiSimilarityReason { get; set; }  // V18: AI-generated one-sentence Croatian reason
+
+    // V20: Deep dive status tracking — what happened when we tried to scrape this listing
+    public string? DeepDiveStatus { get; set; }
 
     // V9 Deep Scraping: enrichment booleans
     public bool? IsRenovated { get; set; }          // True if renovated/new (YearReno>2015 or description)

@@ -747,6 +747,9 @@ public class ValuationEngine
             if (!string.IsNullOrEmpty(price.SourceUrl))
                 listingLookup.TryGetValue(price.SourceUrl, out listing);
 
+            // V20: Per-comparable correction (individual adjustment)
+            var (corrPct, corrReason) = CalculatePerCompCorrection(property, listing, price, marketData.DetectedPropertyType);
+
             compDetails.Add(new UsedComparable
             {
                 Title = price.SourceTitle,
@@ -770,6 +773,10 @@ public class ValuationEngine
                 HasParking = price.HasParking ? true : null,
                 YardAreaM2 = listing?.AiYardAreaM2 > 0 ? listing.AiYardAreaM2 : (price.DetectedYardM2 > 0 ? price.DetectedYardM2 : null),
                 SimilarityReason = listing?.AiSimilarityReason,
+                DeepDiveStatus = listing?.DeepDiveStatus,
+                // V20: Per-comparable correction
+                CorrectionPercent = corrPct,
+                CorrectionReason = corrReason,
             });
         }
 
@@ -896,6 +903,7 @@ public class ValuationEngine
         if (cleanPrices.Count >= 2)
         {
             // Build weight-value pairs (3x boost for exact neighborhood match)
+            // V20: Use per-comparable corrected prices for weighted median
             var weightedPairs = cleanPrices.Select(p =>
             {
                 var match = compDetails
@@ -907,7 +915,12 @@ public class ValuationEngine
                 if (p.IsExactNeighborhoodMatch)
                     weight *= 3.0;
 
-                return (Value: p.PricePerM2, Weight: weight);
+                // V20: Apply per-comparable correction to price
+                double correctedPrice = p.PricePerM2;
+                if (match != null && match.CorrectionPercent != 0)
+                    correctedPrice = p.PricePerM2 * (1 + match.CorrectionPercent / 100.0);
+
+                return (Value: correctedPrice, Weight: weight);
             }).ToList();
 
             basePricePerM2 = WeightedMedian(weightedPairs);
@@ -1616,6 +1629,183 @@ public class ValuationEngine
         }
 
         return adj;
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  V20: PER-COMPARABLE CORRECTIONS (usporedna metoda)
+    //  Each comparable is individually adjusted based on how it
+    //  differs from the subject property. This is the standard
+    //  Croatian comparative valuation methodology.
+    // ══════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Calculate the correction percentage for a single comparable relative to the subject.
+    /// Positive = comparable is WORSE than subject → its price is adjusted UP.
+    /// Negative = comparable is BETTER than subject → its price is adjusted DOWN.
+    /// </summary>
+    private static (double percent, string reason) CalculatePerCompCorrection(
+        ExtractedPropertyInfo subject,
+        ComparableSearchResult? listing,
+        ExtractedPrice price,
+        string detectedType)
+    {
+        double correction = 0;
+        var reasons = new List<string>();
+        bool isLand = MarketResearchService.IsLandType(detectedType);
+
+        // ── 1. SIZE ADJUSTMENT ──
+        // Larger properties tend to have lower €/m², smaller → higher €/m².
+        // If comp is bigger than subject, its €/m² is naturally lower → adjust UP.
+        double subjectSize = subject.SizeM2;
+        double compSize = listing?.AiSizeM2 ?? price.DetectedSizeM2;
+        if (subjectSize > 10 && compSize > 10)
+        {
+            double sizeRatio = compSize / subjectSize;
+            if (sizeRatio > 1.25)
+            {
+                // Comp is >25% larger → lower €/m² → adjust UP
+                double adj = Math.Min((sizeRatio - 1.0) * 10, 8);
+                correction += adj;
+                reasons.Add($"Veći +{adj:F0}%");
+            }
+            else if (sizeRatio < 0.75)
+            {
+                // Comp is >25% smaller → higher €/m² → adjust DOWN
+                double adj = Math.Max((sizeRatio - 1.0) * 10, -8);
+                correction += adj;
+                reasons.Add($"Manji {adj:F0}%");
+            }
+        }
+
+        // ── 2. CONDITION ADJUSTMENT (buildings only) ──
+        if (!isLand)
+        {
+            int subjectCond = ParseConditionLevel(subject.PropertyState);
+            int compCond = ParseConditionLevel(listing?.AiCondition);
+            if (subjectCond > 0 && compCond > 0 && subjectCond != compCond)
+            {
+                int condDiff = compCond - subjectCond; // positive = comp is BETTER
+                double adj = -condDiff * 5.0; // better comp → negative correction (reduce price)
+                adj = Math.Clamp(adj, -15, 15);
+                correction += adj;
+                string compCondLabel = ConditionLabel(listing?.AiCondition);
+                reasons.Add(adj > 0
+                    ? $"Lošije stanje ({compCondLabel}) +{adj:F0}%"
+                    : $"Bolje stanje ({compCondLabel}) {adj:F0}%");
+            }
+        }
+
+        // ── 3. AGE ADJUSTMENT (buildings only) ──
+        if (!isLand && listing?.AiYearBuilt > 0)
+        {
+            // Estimate subject year from description
+            int subjectYear = EstimateYearBuilt(subject);
+            if (subjectYear > 0)
+            {
+                int yearDiff = (listing.AiYearBuilt ?? 0) - subjectYear; // positive = comp is NEWER
+                if (Math.Abs(yearDiff) >= 15)
+                {
+                    double adj = -(yearDiff / 10.0) * 3.0; // newer comp → negative correction
+                    adj = Math.Clamp(adj, -8, 8);
+                    correction += adj;
+                    reasons.Add(adj > 0
+                        ? $"Starije ({listing.AiYearBuilt}) +{adj:F0}%"
+                        : $"Novije ({listing.AiYearBuilt}) {adj:F0}%");
+                }
+            }
+        }
+
+        // ── 4. GARAGE ADJUSTMENT (buildings only) ──
+        if (!isLand)
+        {
+            bool subjectHasGarage = subject.Description != null &&
+                (subject.Description.Contains("garaž", StringComparison.OrdinalIgnoreCase) ||
+                 subject.Description.Contains("garaz", StringComparison.OrdinalIgnoreCase));
+            bool compHasGarage = listing?.HasGarage == true || price.HasGarage;
+
+            if (compHasGarage && !subjectHasGarage)
+            {
+                correction -= 3;
+                reasons.Add("Garaža -3%");
+            }
+            else if (!compHasGarage && subjectHasGarage)
+            {
+                correction += 3;
+                reasons.Add("Bez garaže +3%");
+            }
+        }
+
+        // ── 5. YARD ADJUSTMENT ──
+        if (!isLand)
+        {
+            double subjectYard = subject.YardAreaM2;
+            double compYard = listing?.AiYardAreaM2 ?? price.DetectedYardM2;
+            bool subjectHasYard = subjectYard > 20;
+            bool compHasYard = compYard > 20;
+
+            if (compHasYard && !subjectHasYard)
+            {
+                correction -= 3;
+                reasons.Add("Okućnica -3%");
+            }
+            else if (!compHasYard && subjectHasYard)
+            {
+                correction += 3;
+                reasons.Add("Bez okućnice +3%");
+            }
+        }
+
+        // ── CAP: ±25% ──
+        correction = Math.Clamp(correction, -25, 25);
+        string reasonStr = reasons.Count > 0 ? string.Join(", ", reasons) : "";
+        return (Math.Round(correction, 1), reasonStr);
+    }
+
+    /// <summary>
+    /// Parse condition string to numeric level for comparison.
+    /// 1=needs_work, 2=original, 3=good, 4=renovated, 5=new.
+    /// Returns 0 if unknown.
+    /// </summary>
+    private static int ParseConditionLevel(string? condition)
+    {
+        if (string.IsNullOrEmpty(condition)) return 0;
+        var lower = condition.ToLowerInvariant();
+        return lower switch
+        {
+            "needs_work" or "needs_adaptation" or "za adaptaciju" or "zapušteno" => 1,
+            "original" or "izvorno" or "izvorno stanje" => 2,
+            "good" or "dobro" or "održavano" or "useljivo" => 3,
+            "renovated" or "adaptirano" or "renovirano" or "obnovljeno" => 4,
+            "new" or "novogradnja" or "novo" or "novoizgrađeno" => 5,
+            _ => 0
+        };
+    }
+
+    /// <summary>Human-readable Croatian condition label.</summary>
+    private static string ConditionLabel(string? condition)
+    {
+        if (string.IsNullOrEmpty(condition)) return "nepoznato";
+        return condition.ToLowerInvariant() switch
+        {
+            "needs_work" => "za adaptaciju",
+            "original" => "izvorno",
+            "good" => "dobro",
+            "renovated" => "renovirano",
+            "new" => "novogradnja",
+            _ => condition
+        };
+    }
+
+    /// <summary>Try to estimate the subject property's year of construction from description text.</summary>
+    private static int EstimateYearBuilt(ExtractedPropertyInfo property)
+    {
+        var text = $"{property.Description} {property.RawText}";
+        var match = System.Text.RegularExpressions.Regex.Match(text,
+            @"(?:god(?:ina)?\.?\s*(?:izgradnje|gradnje)?[:\s]*|izgrađen[ao]?\s+)(\d{4})\b",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (match.Success && int.TryParse(match.Groups[1].Value, out int year) && year >= 1900 && year <= 2030)
+            return year;
+        return 0;
     }
 
     // ══════════════════════════════════════════════════════════
@@ -2371,6 +2561,13 @@ public class UsedComparable
     // V18: Yard area + similarity reason
     public double? YardAreaM2 { get; set; }
     public string? SimilarityReason { get; set; }
+
+    // V20: Deep dive status — what happened when we tried to scrape this listing
+    public string? DeepDiveStatus { get; set; }
+
+    // V20: Per-comparable correction % (usporedna metoda — individual adjustment)
+    public double CorrectionPercent { get; set; }
+    public string? CorrectionReason { get; set; }
 }
 
 public class ValuationAdjustment

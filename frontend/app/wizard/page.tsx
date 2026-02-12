@@ -168,6 +168,9 @@ interface ComparisonTableRow {
   correction_percent: number;
   adjusted_price_per_m2: number;
   similarity_score: number;
+  // V20
+  deep_dive_status?: string;
+  correction_reason?: string;
 }
 
 interface PriceRangeEstimate {
@@ -1140,8 +1143,11 @@ export default function WizardPage() {
                               <td className="py-2.5 pr-3 text-right text-gray-700">{row.area_m2 > 0 ? `${formatPrice(row.area_m2)} m²` : "—"}</td>
                               <td className="py-2.5 pr-3 text-right text-gray-700">{row.total_price > 0 ? `${formatPrice(Math.round(row.total_price))} €` : "—"}</td>
                               <td className="py-2.5 pr-3 text-right font-medium text-gray-900">{formatPrice(Math.round(row.raw_price_per_m2))} €</td>
-                              <td className={`py-2.5 pr-3 text-right font-semibold ${row.correction_percent > 0 ? "text-green-600" : row.correction_percent < 0 ? "text-red-600" : "text-gray-400"}`}>
+                              <td className={`py-2.5 pr-3 text-right font-semibold ${row.correction_percent > 0 ? "text-green-600" : row.correction_percent < 0 ? "text-red-600" : "text-gray-400"}`} title={row.correction_reason || undefined}>
                                 {row.correction_percent > 0 ? "+" : ""}{row.correction_percent.toFixed(1)}%
+                                {row.correction_reason && (
+                                  <div className="text-[9px] font-normal text-gray-400 truncate max-w-[120px]">{row.correction_reason}</div>
+                                )}
                               </td>
                               <td className="py-2.5 pr-3 text-right font-bold text-blue-700">{formatPrice(Math.round(row.adjusted_price_per_m2))} €</td>
                               <td className="py-2.5 text-right">
@@ -1162,7 +1168,10 @@ export default function WizardPage() {
                               {formatPrice(Math.round(result.comparison_table.reduce((s, r) => s + r.raw_price_per_m2, 0) / result.comparison_table.length))} €
                             </td>
                             <td className="py-3 pr-3 text-right text-gray-500">
-                              {result.total_adjustment_percent !== undefined ? `${result.total_adjustment_percent > 0 ? "+" : ""}${result.total_adjustment_percent.toFixed(1)}%` : ""}
+                              {(() => {
+                                const avgCorr = result.comparison_table!.reduce((s, r) => s + r.correction_percent, 0) / result.comparison_table!.length;
+                                return `${avgCorr > 0 ? "+" : ""}${avgCorr.toFixed(1)}%`;
+                              })()}
                             </td>
                             <td className="py-3 pr-3 text-right text-blue-800 text-base">
                               {formatPrice(Math.round(result.comparison_table.reduce((s, r) => s + r.adjusted_price_per_m2, 0) / result.comparison_table.length))} €/m²

@@ -1019,7 +1019,8 @@ public class EvaluateController : ControllerBase
     //  V14: STRUCTURED VALUATION HELPERS
     // ══════════════════════════════════════════════════════════
 
-    /// <summary>Build a transparent comparison table from engine UsedComparables.</summary>
+    /// <summary>Build a transparent comparison table from engine UsedComparables.
+    /// V20: Uses per-comparable corrections instead of global adjustment.</summary>
     private static List<ComparisonTableRow> BuildComparisonTable(
         DeterministicValuation engine, double totalAdjPct)
     {
@@ -1030,7 +1031,10 @@ public class EvaluateController : ControllerBase
         int idx = 1;
         foreach (var c in engine.UsedComparables.Where(x => !x.IsOutlier).OrderByDescending(x => x.SimilarityScore))
         {
-            var adjustedPpm2 = c.PricePerM2 * (1 + totalAdjPct / 100.0);
+            // V20: Use per-comparable correction (individual) + global subject-level adjustment
+            double perCompCorr = c.CorrectionPercent;
+            double totalCorr = perCompCorr + totalAdjPct;
+            var adjustedPpm2 = c.PricePerM2 * (1 + totalCorr / 100.0);
             rows.Add(new ComparisonTableRow
             {
                 Index = idx++,
@@ -1039,11 +1043,13 @@ public class EvaluateController : ControllerBase
                 AreaM2 = c.AreaM2 ?? 0,
                 TotalPrice = c.TotalPrice ?? 0,
                 RawPricePerM2 = Math.Round(c.PricePerM2, 1),
-                CorrectionPercent = Math.Round(totalAdjPct, 1),
+                CorrectionPercent = Math.Round(totalCorr, 1),
                 AdjustedPricePerM2 = Math.Round(adjustedPpm2, 1),
                 SimilarityScore = Math.Round(c.SimilarityScore <= 1 ? c.SimilarityScore * 100 : c.SimilarityScore, 0),
                 YardAreaM2 = c.YardAreaM2,
                 SimilarityReason = c.SimilarityReason,
+                DeepDiveStatus = c.DeepDiveStatus,
+                CorrectionReason = c.CorrectionReason,
             });
         }
         return rows;

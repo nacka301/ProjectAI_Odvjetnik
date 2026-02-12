@@ -36,6 +36,12 @@ public class ComparisonTableRow
     // V18: Yard area + similarity reason
     public double? YardAreaM2 { get; set; }
     public string? SimilarityReason { get; set; }
+
+    // V20: Deep dive status — what happened when we tried to scrape this listing
+    public string? DeepDiveStatus { get; set; }
+
+    // V20: Per-comparable correction reason
+    public string? CorrectionReason { get; set; }
 }
 
 /// <summary>Three-tier price range: conservative / realistic / optimistic.</summary>

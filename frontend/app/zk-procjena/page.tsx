@@ -120,6 +120,10 @@ interface UsedComparableV4 {
   // V18: Yard area + similarity reason
   yard_area_m2?: number;
   similarity_reason?: string;
+  // V20: Deep dive status
+  deep_dive_status?: string;
+  // V20: Per-comparable correction reason
+  correction_reason?: string;
 }
 
 interface AdjustmentV4 {
@@ -894,6 +898,16 @@ export default function ZkProcjenaPage() {
                               {c.similarity_reason && (
                                 <div className="text-[10px] text-gray-400 mt-1 italic truncate max-w-[300px]" title={c.similarity_reason}>
                                   {c.similarity_reason}
+                                </div>
+                              )}
+                              {/* V20: Deep dive status */}
+                              {c.deep_dive_status && (
+                                <div className={`text-[10px] mt-1 truncate max-w-[350px] ${
+                                  c.deep_dive_status.startsWith("✓") ? "text-green-500" 
+                                  : c.deep_dive_status.startsWith("⚠") ? "text-amber-500"
+                                  : "text-red-400"
+                                }`} title={c.deep_dive_status}>
+                                  {c.deep_dive_status}
                                 </div>
                               )}
                             </div>
