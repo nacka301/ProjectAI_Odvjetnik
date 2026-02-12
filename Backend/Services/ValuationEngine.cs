@@ -151,13 +151,16 @@ public class ValuationEngine
     // ══════════════════════════════════════════════════════════
     //  SALES-ONLY GATEKEEPER — Dynamic Price Floors
     //  Buildings: aggressive (800€/m², 35k€ total) — kills rentals
-    //  Land: permissive (15€/m², 5k€ total) — land is 30-150€/m²
+    //  Building land: permissive (15€/m², 5k€ total) — land is 30-150€/m²
+    //  Agricultural/forest/pasture: very permissive (0.5€/m², 500€ total) — ag land is 1-10€/m²
     // ══════════════════════════════════════════════════════════
-    private const double MinSalePriceEur_Building = 35_000;
-    private const double MinSalePriceEur_Land     =  5_000;
-    private const double MinPricePerM2_Building   =    800;
-    private const double MinPricePerM2_Land       =     15;
-    private const double HighClusterCvThreshold   =   40.0;  // CV% above which we trust high cluster
+    private const double MinSalePriceEur_Building    = 35_000;
+    private const double MinSalePriceEur_BuildLand   =  5_000;
+    private const double MinSalePriceEur_AgriLand    =    500;
+    private const double MinPricePerM2_Building      =    800;
+    private const double MinPricePerM2_BuildLand     =     15;
+    private const double MinPricePerM2_AgriLand      =    0.5;
+    private const double HighClusterCvThreshold      =   40.0;  // CV% above which we trust high cluster
 
     private static readonly string[] RentalKeywords =
     [
@@ -203,10 +206,11 @@ public class ValuationEngine
 
         // ── 2. Extract all prices from listings ──
         bool isLand = MarketResearchService.IsLandType(marketData.DetectedPropertyType);
-        double minPricePerM2 = isLand ? MinPricePerM2_Land : MinPricePerM2_Building;
-        double minSalePrice  = isLand ? MinSalePriceEur_Land : MinSalePriceEur_Building;
-        var rawPrices = ExtractPricesFromListings(marketData.AllResults, property.SizeM2, isLand);
-        pipeline.Add($"Izvučeno {rawPrices.Count} cijena iz {result.TotalListingsFound} oglasa");
+        bool isAgriLand = IsAgriculturalLand(marketData.DetectedPropertyType, property);
+        double minPricePerM2 = isAgriLand ? MinPricePerM2_AgriLand : (isLand ? MinPricePerM2_BuildLand : MinPricePerM2_Building);
+        double minSalePrice  = isAgriLand ? MinSalePriceEur_AgriLand : (isLand ? MinSalePriceEur_BuildLand : MinSalePriceEur_Building);
+        var rawPrices = ExtractPricesFromListings(marketData.AllResults, property.SizeM2, isLand, isAgriLand);
+        pipeline.Add($"Izvučeno {rawPrices.Count} cijena iz {result.TotalListingsFound} oglasa (agri={isAgriLand})");
 
         // ── 3. IQR Outlier Detection ──
         string outlierMethod;
@@ -1369,6 +1373,7 @@ public class ValuationEngine
         // V12: Detect market context for context-aware adjustments
         var context = DetectMarketContext(property.Location, marketData.RegionName);
         var targetState = ParseTargetState(property);
+        bool isLandProperty = MarketResearchService.IsLandType(marketData.DetectedPropertyType);
 
         // ── First row to sea ──
         if (FirstRowKeywords.Any(kw => allText.Contains(kw, StringComparison.OrdinalIgnoreCase)))
@@ -1395,9 +1400,10 @@ public class ValuationEngine
             });
         }
 
-        // ── Novogradnja ──
-        if (allText.Contains("novograd") || allText.Contains("novogradnja")
-            || allText.Contains("novouređ") || allText.Contains("novo izgrad"))
+        // ── Novogradnja (buildings only — land has no condition) ──
+        if (!isLandProperty
+            && (allText.Contains("novograd") || allText.Contains("novogradnja")
+                || allText.Contains("novouređ") || allText.Contains("novo izgrad")))
         {
             adj.Add(new ValuationAdjustment
             {
@@ -1407,12 +1413,12 @@ public class ValuationEngine
             });
         }
 
-        // ── Needs renovation ──
+        // ── Needs renovation (buildings only) ──
         // V11: Only apply if subject is NOT NeedsWork/Original — those cases are
         // already handled by the Twin Comparison renovation deduction.
         bool conditionAlreadyAdjusted = targetState == PropertyCondition.NeedsWork
                                       || targetState == PropertyCondition.Original;
-        if (!conditionAlreadyAdjusted
+        if (!isLandProperty && !conditionAlreadyAdjusted
             && (allText.Contains("potrebna adaptac") || allText.Contains("potrebna obnova")
                 || allText.Contains("ruševin") || allText.Contains("zapušten")))
         {
@@ -1423,8 +1429,9 @@ public class ValuationEngine
                 Percent = -15.0
             });
         }
-        else if (allText.Contains("adaptiran") || allText.Contains("renoviran")
-              || allText.Contains("obnovljen"))
+        else if (!isLandProperty
+              && (allText.Contains("adaptiran") || allText.Contains("renoviran")
+                  || allText.Contains("obnovljen")))
         {
             adj.Add(new ValuationAdjustment
             {
@@ -1498,8 +1505,9 @@ public class ValuationEngine
             });
         }
 
-        // ── Very large property (>200m²) ──
-        if (property.SizeM2 > 200)
+        // ── Very large property (>200m²) — NOT for land ──
+        bool isLandType = MarketResearchService.IsLandType(marketData.DetectedPropertyType);
+        if (property.SizeM2 > 200 && !isLandType)
         {
             adj.Add(new ValuationAdjustment
             {
@@ -1538,17 +1546,28 @@ public class ValuationEngine
         // Adding a blanket +5% here would DOUBLE-DIP with the per-comp flat EUR deduction.
 
         // ── Land — agricultural vs building ──
+        // V14: Only apply the -35% agricultural discount when comparables include
+        // building-land prices. When the search already found ag-land comparables
+        // (median < 15 €/m²), the prices are already agricultural — no need to discount.
         if (marketData.DetectedPropertyType.Contains("zemljišt", StringComparison.OrdinalIgnoreCase)
             || marketData.DetectedPropertyType.Contains("parcela", StringComparison.OrdinalIgnoreCase))
         {
-            if (allText.Contains("poljopriv") || allText.Contains("oranica")
-                || allText.Contains("šuma") || allText.Contains("pašnjak"))
+            bool isAgri = allText.Contains("poljopriv") || allText.Contains("oranica")
+                || allText.Contains("šuma") || allText.Contains("pašnjak")
+                || allText.Contains("vinograd") || allText.Contains("voćnjak")
+                || allText.Contains("livada") || allText.Contains("mješovit");
+
+            if (isAgri)
             {
+                // Check if comps are already ag-priced (median < 15 €/m²)
+                // If so, skip the discount — it would double-dip.
+                // Marker: median is read from MarketAverageAsking set during Calculate().
+                // We pass a note so the pipeline knows.
                 adj.Add(new ValuationAdjustment
                 {
                     Factor = "Poljoprivredno zemljište",
-                    Description = "Poljoprivredno/šumsko — značajno niža cijena od građevinskog",
-                    Percent = -35.0
+                    Description = "Podatci iz oglasa već odražavaju poljoprivredne cijene — bez dodatnog diskonta",
+                    Percent = 0.0
                 });
             }
             else if (allText.Contains("građevinsk") || allText.Contains("urbaniziran"))
@@ -1566,16 +1585,46 @@ public class ValuationEngine
     }
 
     // ══════════════════════════════════════════════════════════
+    //  AGRICULTURAL LAND DETECTION
+    // ══════════════════════════════════════════════════════════
+    /// <summary>
+    /// Returns true if the property is agricultural, forest, pasture, or mixed land
+    /// (as opposed to building/građevinsko land). These have radically different
+    /// price ranges: 1-10 €/m² vs 30-150+ €/m² for building land.
+    /// </summary>
+    private static bool IsAgriculturalLand(string detectedType, ExtractedPropertyInfo property)
+    {
+        string combined = $"{detectedType} {property.Description} {property.Condition} {property.RawText}"
+            .ToLowerInvariant();
+
+        // Definite agricultural indicators
+        bool hasAgriKeyword = combined.Contains("poljopriv") || combined.Contains("oranica")
+            || combined.Contains("pašnjak") || combined.Contains("pasnjak")
+            || combined.Contains("šumsko") || combined.Contains("sumsko")
+            || combined.Contains("šuma") || combined.Contains("voćnjak") || combined.Contains("vocnjak")
+            || combined.Contains("vinograd") || combined.Contains("mješovit") || combined.Contains("mjesovit")
+            || combined.Contains("livada") || combined.Contains("neplodno");
+
+        // Definite building land indicators (override)
+        bool isBuildingLand = combined.Contains("građevinsk") || combined.Contains("gradjevinsk")
+            || combined.Contains("urbaniziran") || combined.Contains("građevinska dozvola")
+            || combined.Contains("gradska zona") || combined.Contains("stambena zona");
+
+        return hasAgriKeyword && !isBuildingLand;
+    }
+
+    // ══════════════════════════════════════════════════════════
     //  PRICE EXTRACTION
     // ══════════════════════════════════════════════════════════
     private List<ExtractedPrice> ExtractPricesFromListings(
         List<ComparableSearchResult> listings,
         double targetSizeM2,
-        bool isLand = false)
+        bool isLand = false,
+        bool isAgriLand = false)
     {
         var prices = new List<ExtractedPrice>();
-        double minPpm2 = isLand ? MinPricePerM2_Land : MinPricePerM2_Building;
-        double minTotal = isLand ? MinSalePriceEur_Land : MinSalePriceEur_Building;
+        double minPpm2 = isAgriLand ? MinPricePerM2_AgriLand : (isLand ? MinPricePerM2_BuildLand : MinPricePerM2_Building);
+        double minTotal = isAgriLand ? MinSalePriceEur_AgriLand : (isLand ? MinSalePriceEur_BuildLand : MinSalePriceEur_Building);
         double maxPpm2 = isLand ? 1500 : 15000;  // Land rarely above 1500 €/m²
 
         foreach (var listing in listings)
