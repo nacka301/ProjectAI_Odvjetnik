@@ -965,15 +965,15 @@ public class ValuationEngine
         int finalValue = (int)Math.Round(adjustedPricePerM2 * sizeM2);
 
         // ── 9b. V11: SAFETY FLOOR — prevent algorithmic underflow ──
-        // Final valuation cannot be lower than 65% of the average RAW comparable price.
-        // Uses rawPrices (pre-adjustment) so adjustments can't crater below a sane floor.
-        // V12: Only activate when there are actual usable comparables; when ALL comps are
-        // outliers (cleanPrices==0), the floor would use wrong-type raw prices to inflate bogusly.
-        if (cleanPrices.Count > 0 && rawPrices.Count >= 2)
+        // Final valuation cannot be lower than 50% of the average CLEAN comparable price.
+        // V12: Only activate when there are actual usable comparables.
+        // V13: Use cleanPrices (post-outlier) not rawPrices — raw includes outliers
+        // and wrong-type listings that inflate the floor unrealistically.
+        if (cleanPrices.Count >= 2)
         {
-            double rawAvgPricePerM2 = rawPrices.Average(c => c.PricePerM2);
-            double averageCompTotal = rawAvgPricePerM2 * sizeM2;
-            double floorPrice = averageCompTotal * 0.65;
+            double cleanAvgPricePerM2 = cleanPrices.Average(c => c.PricePerM2);
+            double averageCompTotal = cleanAvgPricePerM2 * sizeM2;
+            double floorPrice = averageCompTotal * 0.50;
             if (finalValue < floorPrice)
             {
                 int oldValue = finalValue;
