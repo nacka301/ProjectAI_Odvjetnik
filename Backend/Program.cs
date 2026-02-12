@@ -49,12 +49,19 @@ builder.Services.AddCors(options =>
     {
         policy.SetIsOriginAllowed(origin =>
             {
+                // Allow null/empty origin (file:// or tools like Postman)
+                if (string.IsNullOrWhiteSpace(origin))
+                    return true;
+
                 // Always allow configured origins
                 if (allowedOrigins.Any(ao => ao.Equals(origin, StringComparison.OrdinalIgnoreCase)))
                     return true;
 
+                // Try parse — reject malformed origins gracefully
+                if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri))
+                    return false;
+
                 // Allow all Vercel preview deploys for the same project
-                var uri = new Uri(origin);
                 if (uri.Host.EndsWith(".vercel.app", StringComparison.OrdinalIgnoreCase))
                     return true;
 

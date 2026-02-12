@@ -397,15 +397,36 @@ public class ValuationService
         A) Extract features from the listing text.
         B) Score how SIMILAR this listing is to the TARGET PROPERTY (0.0 to 1.0).
 
+        === DATA FORMAT ===
+        Listings may contain STRUCTURED DATA blocks marked with [STRUCTURED] or [DEEP DIVE].
+        These contain pre-extracted key-value pairs from the detail page (via BrightData or Tavily):
+          Lokacija, Površina, Stanje, Namjena, Grijanje, Parking, Kat, Broj soba,
+          Godina izgradnje, Energetski razred, Okućnica, Tip zemljišta, DetectedLandType, Opis.
+        ALWAYS use these structured fields as your PRIMARY data source — they are more accurate
+        than free-text content. If structured data conflicts with free text, trust the structured data.
+
         === FEATURE EXTRACTION ===
-        - "has_garage": boolean — garage, parking space, or garažno mjesto?
-        - "has_renovation": boolean — evidence of renovation? (nova fasada, novi krov,
-          termoizolacija, energetska obnova, potpuno renovirano, kompletno uređen, novi prozori, nova stolarija)
-        - "has_yard": boolean — yard, garden, or okućnica? (dvorište, okućnica, vrt, bašta, parcela uz kuću)
+        - "has_garage": boolean — garage, parking space, or garažno mjesto? Check "Parking:" field.
+        - "has_renovation": boolean — evidence of renovation? Check "Stanje:" field + text.
+          (nova fasada, novi krov, termoizolacija, energetska obnova, potpuno renovirano,
+          kompletno uređen, novi prozori, nova stolarija, adaptiran)
+        - "has_yard": boolean — yard, garden, or okućnica? Check "Okućnica:" field.
+          (dvorište, okućnica, vrt, bašta, parcela uz kuću)
         - "condition": string — "new", "renovated", "good", "original", "needs_work", "unknown"
+          Check "Stanje:" structured field first, then text keywords.
         - "yard_area_m2": number — Yard size in m² if mentioned, 0 if not
-        - "size_m2": number — Property size in m² if detected, 0 if not clear
-        - "property_type": string — "stan", "kuća", "zemljište", "poslovni prostor", or "unknown"
+        - "size_m2": number — Property size in m². Check "Površina:" structured field first.
+        - "year_built": number — Year built. Check "Godina izgradnje:" field. 0 if unknown.
+        - "energy_class": string — Check "Energetski razred:" field. "" if unknown.
+        - "heating": string — Check "Grijanje:" field. "" if unknown.
+        - "floor": string — Check "Kat:" field. "" if unknown.
+        - "rooms": number — Check "Broj soba:" field. 0 if unknown.
+        - "property_type": string — one of: "stan", "kuća", "građevinsko zemljište",
+          "poljoprivredno zemljište", "zemljište", "poslovni prostor", or "unknown"
+          IMPORTANT: For land (zemljište), check "DetectedLandType:" and "Tip zemljišta:" fields first.
+          You MUST distinguish between "građevinsko zemljište" (building land, construction land)
+          and "poljoprivredno zemljište" (agricultural land, oranica, pašnjak, livada, šuma, voćnjak, vinograd).
+          Only use generic "zemljište" if you truly cannot determine the subtype.
 
         === SIMILARITY SCORING (0.0 – 1.0) ===
         Score how comparable this listing is to the TARGET for valuation purposes:
@@ -417,11 +438,12 @@ public class ValuationService
 
         SCORING PRIORITIES (in order of importance):
         1. LOCATION (50%): Same neighborhood > same city zone > same city > different city
+           Check "Lokacija:" structured field for precise location.
         2. PROPERTY TYPE (25%): Must be same type (stan≠kuća≠zemljište). Different type = max 0.30
         3. SIZE (15%): Closer size = higher score. ±10% is excellent, ±50% is poor
-        4. CONDITION (10%): Similar condition/age = bonus
+        4. CONDITION & FEATURES (10%): Similar condition/age, heating, energy class = bonus
 
-        Return JSON: {"listings": [{"index": 0, "has_garage": true, ..., "similarity_score": 0.75}, ...]}
+        Return JSON: {"listings": [{"index": 0, "has_garage": true, ..., "similarity_score": 0.75, "year_built": 1990, "energy_class": "C", "heating": "plinsko", "floor": "2. kat", "rooms": 3}, ...]}
         Return ONLY the raw JSON object, no markdown fences.
         """;
 
@@ -456,9 +478,11 @@ public class ValuationService
         for (int i = 0; i < listings.Count; i++)
         {
             var l = listings[i];
-            // Truncate content to keep tokens reasonable
-            string content = l.Content.Length > 600 ? l.Content[..600] : l.Content;
+            // Include enough content for AI to see structured data from BrightData/DeepDive
+            // Structured prefix alone can be 300-500 chars, so 600 was cutting off key data
+            string content = l.Content.Length > 1500 ? l.Content[..1500] : l.Content;
             sb.AppendLine($"--- Listing {i} ---");
+            sb.AppendLine($"URL: {l.Url}");
             sb.AppendLine($"Title: {l.Title}");
             sb.AppendLine($"Content: {content}");
             sb.AppendLine();
@@ -501,6 +525,18 @@ public class ValuationService
                     target.AiSizeM2 = item.TryGetProperty("size_m2", out var sz) ? sz.GetDouble() : 0;
                     target.AiPropertyType = item.TryGetProperty("property_type", out var pt) ? pt.GetString() : "unknown";
                     target.AiSimilarityScore = item.TryGetProperty("similarity_score", out var ss) ? ss.GetDouble() : null;
+
+                    // New structured fields from BrightData-enriched content
+                    if (item.TryGetProperty("year_built", out var yb) && yb.ValueKind == System.Text.Json.JsonValueKind.Number)
+                        target.AiYearBuilt = yb.GetInt32() > 0 ? yb.GetInt32() : null;
+                    if (item.TryGetProperty("energy_class", out var ec) && ec.ValueKind == System.Text.Json.JsonValueKind.String)
+                        target.AiEnergyClass = string.IsNullOrWhiteSpace(ec.GetString()) ? null : ec.GetString();
+                    if (item.TryGetProperty("heating", out var ht) && ht.ValueKind == System.Text.Json.JsonValueKind.String)
+                        target.AiHeating = string.IsNullOrWhiteSpace(ht.GetString()) ? null : ht.GetString();
+                    if (item.TryGetProperty("floor", out var fl) && fl.ValueKind == System.Text.Json.JsonValueKind.String)
+                        target.AiFloor = string.IsNullOrWhiteSpace(fl.GetString()) ? null : fl.GetString();
+                    if (item.TryGetProperty("rooms", out var rm) && rm.ValueKind == System.Text.Json.JsonValueKind.Number)
+                        target.AiRooms = rm.GetInt32() > 0 ? rm.GetInt32() : null;
                 }
 
                 int populated = listings.Count(l => l.HasGarage.HasValue);
@@ -518,6 +554,128 @@ public class ValuationService
             _logger.LogWarning(ex, "AI feature extraction failed — engine will use keyword fallback");
             // Non-fatal: engine falls back to keyword detection
         }
+    }
+
+    /// <summary>
+    /// After AI feature extraction, remove listings whose AiPropertyType
+    /// doesn't match the wanted type. This is more reliable than keyword matching
+    /// because AI reads and understands the full listing text.
+    /// </summary>
+    public int FilterByAiPropertyType(List<ComparableSearchResult> listings, string wantedType)
+    {
+        if (listings.Count == 0 || string.IsNullOrEmpty(wantedType)) return 0;
+
+        var wantedLower = wantedType.ToLowerInvariant();
+        bool wantedIsLand = wantedLower.Contains("zemlji");
+        bool wantedIsAgricultural = wantedLower.Contains("poljopriv");
+        bool wantedIsConstruction = wantedLower.Contains("građevinsko") || wantedLower.Contains("gradjevinsko");
+
+        var toRemove = new List<ComparableSearchResult>();
+
+        foreach (var l in listings)
+        {
+            var aiType = (l.AiPropertyType ?? "unknown").ToLowerInvariant();
+
+            // For land subtype searches: "unknown" gets same strict treatment
+            // — if we can't confirm it's the specific subtype, remove it
+            if (aiType == "unknown" && (wantedIsAgricultural || wantedIsConstruction))
+            {
+                var urlLower = (l.Url ?? "").ToLowerInvariant();
+                var titleLower = (l.Title ?? "").ToLowerInvariant();
+                var contentLower = (l.Content ?? "").ToLowerInvariant();
+                bool anyConfirmation = false;
+                if (wantedIsAgricultural)
+                    anyConfirmation = urlLower.Contains("poljopriv") || titleLower.Contains("poljopriv") ||
+                                     contentLower.Contains("poljoprivredno") || contentLower.Contains("oranica") ||
+                                     contentLower.Contains("pašnjak") || contentLower.Contains("livada");
+                else if (wantedIsConstruction)
+                    anyConfirmation = urlLower.Contains("gradevinsko") || urlLower.Contains("građevinsko") ||
+                                     titleLower.Contains("građevinsko") || titleLower.Contains("gradevinsko") ||
+                                     contentLower.Contains("građevinsko") || contentLower.Contains("gradevinsko");
+                if (!anyConfirmation)
+                {
+                    _logger.LogInformation(
+                        "AI TYPE FILTER: REMOVED '{Title}' — AI=unknown, no '{Wanted}' confirmation in URL/title/content",
+                        l.Title?.Length > 60 ? l.Title[..60] : l.Title, wantedType);
+                    toRemove.Add(l);
+                }
+                continue;
+            }
+
+            if (aiType == "unknown") continue; // For non-land-subtype searches, keep unknown
+
+            bool aiIsLand = aiType.Contains("zemlji");
+            bool aiIsAgricultural = aiType.Contains("poljopriv");
+            bool aiIsConstruction = aiType.Contains("građevinsko") || aiType.Contains("gradjevinsko");
+
+            bool shouldRemove = false;
+
+            if (wantedIsLand && aiIsLand)
+            {
+                // Both are land — check subtype cross-exclusion
+                if (wantedIsAgricultural && aiIsConstruction)
+                    shouldRemove = true;
+                else if (wantedIsConstruction && aiIsAgricultural)
+                    shouldRemove = true;
+                else if ((wantedIsAgricultural || wantedIsConstruction) && !aiIsAgricultural && !aiIsConstruction)
+                {
+                    // Wanted a specific land subtype but AI only returned generic "zemljište"
+                    // Also check URL/title for clues before removing
+                    var urlLower = (l.Url ?? "").ToLowerInvariant();
+                    var titleLower = (l.Title ?? "").ToLowerInvariant();
+                    var contentLower = (l.Content ?? "").ToLowerInvariant();
+                    bool urlTitleConfirms = false;
+                    if (wantedIsAgricultural)
+                        urlTitleConfirms = urlLower.Contains("poljopriv") || titleLower.Contains("poljopriv") ||
+                                           contentLower.Contains("poljoprivredno") || contentLower.Contains("oranica") ||
+                                           contentLower.Contains("pašnjak") || contentLower.Contains("livada") ||
+                                           contentLower.Contains("vinograd") || contentLower.Contains("voćnjak");
+                    else if (wantedIsConstruction)
+                        urlTitleConfirms = urlLower.Contains("gradevinsko") || urlLower.Contains("građevinsko") ||
+                                           titleLower.Contains("građevinsko") || titleLower.Contains("gradevinsko") ||
+                                           contentLower.Contains("građevinsko") || contentLower.Contains("gradevinsko");
+                    if (!urlTitleConfirms)
+                        shouldRemove = true; // Can't confirm subtype → remove
+                }
+            }
+            else if (wantedIsLand && !aiIsLand)
+            {
+                // Wanted land but AI says it's a building → remove
+                shouldRemove = true;
+            }
+            else if (!wantedIsLand && aiIsLand)
+            {
+                // Wanted building but AI says it's land → remove
+                shouldRemove = true;
+            }
+            else
+            {
+                // Both are buildings — check stan vs kuća vs poslovni
+                bool typesMatch = aiType.Contains(wantedLower) || wantedLower.Contains(aiType);
+                if (!typesMatch)
+                {
+                    // e.g. wanted "stan", AI says "kuća" → remove
+                    // but "kuća" includes "vikendica" which AI might classify as "kuća" → OK
+                    shouldRemove = true;
+                }
+            }
+
+            if (shouldRemove)
+            {
+                _logger.LogInformation(
+                    "AI TYPE FILTER: REMOVED '{Title}' — AI classified as '{AiType}', wanted '{Wanted}'",
+                    l.Title?.Length > 60 ? l.Title[..60] : l.Title, l.AiPropertyType, wantedType);
+                toRemove.Add(l);
+            }
+        }
+
+        foreach (var l in toRemove)
+            listings.Remove(l);
+
+        if (toRemove.Count > 0)
+            _logger.LogInformation("AI TYPE FILTER: removed {Count} wrong-type listings", toRemove.Count);
+
+        return toRemove.Count;
     }
 
     /// <summary>

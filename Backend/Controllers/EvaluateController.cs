@@ -119,6 +119,8 @@ public class EvaluateController : ControllerBase
             try
             {
                 await _valuationService.ExtractListingFeaturesAsync(marketData.ActiveListings, property);
+                _valuationService.FilterByAiPropertyType(
+                    marketData.ActiveListings, marketData.DetectedPropertyType);
                 _logger.LogInformation("Stage 2.5 done: AI features + similarity extracted for {Count} listings",
                     marketData.ActiveListings.Count);
             }
@@ -426,6 +428,8 @@ public class EvaluateController : ControllerBase
             try
             {
                 await _valuationService.ExtractListingFeaturesAsync(marketData.ActiveListings);
+                _valuationService.FilterByAiPropertyType(
+                    marketData.ActiveListings, marketData.DetectedPropertyType);
             }
             catch (Exception ex)
             {
@@ -707,6 +711,8 @@ public class EvaluateController : ControllerBase
         try
         {
             await _valuationService.ExtractListingFeaturesAsync(marketData.ActiveListings);
+            _valuationService.FilterByAiPropertyType(
+                marketData.ActiveListings, marketData.DetectedPropertyType);
 
             int withGarage = marketData.ActiveListings.Count(l => l.HasGarage == true);
             int withReno = marketData.ActiveListings.Count(l => l.HasRenovation == true);

@@ -17,6 +17,10 @@ frontend/.env.local
 frontend/.env.production
 frontend/.env*.local
 
+# --- Local test tools (NOT for deploy) ---
+Backend/Controllers/TestSearchController.cs
+Backend/test-search.html
+
 # --- IDE / OS ---
 .vs/
 .vscode/

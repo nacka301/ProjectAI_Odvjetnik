@@ -305,7 +305,9 @@ public class ZkUnifiedController : ControllerBase
         await SendProgress("ai_features", "active", "AI analizira značajke oglasa...");
         try
         {
-            await _valuationService.ExtractListingFeaturesAsync(marketData.ActiveListings);
+            await _valuationService.ExtractListingFeaturesAsync(marketData.ActiveListings, property);
+            _valuationService.FilterByAiPropertyType(
+                marketData.ActiveListings, marketData.DetectedPropertyType);
 
             int withGarage = marketData.ActiveListings.Count(l => l.HasGarage == true);
             int withReno = marketData.ActiveListings.Count(l => l.HasRenovation == true);
