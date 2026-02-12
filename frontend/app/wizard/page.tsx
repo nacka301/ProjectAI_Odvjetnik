@@ -35,6 +35,7 @@ import {
   Percent,
 } from "lucide-react";
 import { saveEvaluation } from "@/lib/supabase";
+import LocationSelector from "./LocationSelector";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5078";
 
@@ -797,24 +798,12 @@ export default function WizardPage() {
 
             {propertyType && (
               <>
-                <div className="rounded-xl bg-white border border-gray-200 p-6">
-                  <h3 className="text-sm font-semibold text-gray-700 mb-4">📍 Lokacija</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">Grad *</label>
-                      <input type="text" value={location.city}
-                        onChange={(e) => setLocation({ ...location, city: e.target.value })}
-                        placeholder="npr. Split" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">Kvart / Naselje</label>
-                      <input type="text" value={location.district}
-                        onChange={(e) => setLocation({ ...location, district: e.target.value })}
-                        placeholder="npr. Plokite" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                      <p className="text-[11px] text-blue-500 mt-1">💡 Za precizniju procjenu, unesite kvart ili naselje</p>
-                    </div>
-                  </div>
-                </div>
+                <LocationSelector
+                  city={location.city}
+                  district={location.district}
+                  onCityChange={(city) => setLocation({ ...location, city, district: "" })}
+                  onDistrictChange={(district) => setLocation({ ...location, district })}
+                />
 
                 <div className="flex justify-end">
                   <button onClick={() => setStep(2)}
