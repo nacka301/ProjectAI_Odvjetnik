@@ -608,7 +608,15 @@ public class EvaluateController : ControllerBase
 
         try
         {
+            _logger.LogInformation("\n\n" +
+                "╔══════════════════════════════════════════════════════════════╗\n" +
+                "║          🔵  NOVA PROCJENA — PDF UPLOAD                     ║\n" +
+                "║  Datoteka: {FileName}  ({Size} bytes)                       ║\n" +
+                "╚══════════════════════════════════════════════════════════════╝",
+                file.FileName, file.Length);
+
             // ── Stage 1: PDF extraction ──
+            _logger.LogInformation("━━━ STAGE 1: PDF EKSTRAKCIJA ━━━");
             await SendProgress("reading", "active", "Čitam PDF i ekstrahiram podatke...");
 
             string pdfText;
@@ -653,6 +661,16 @@ public class EvaluateController : ControllerBase
 
         try
         {
+            _logger.LogInformation("\n\n" +
+                "╔══════════════════════════════════════════════════════════════╗\n" +
+                "║          🟢  NOVA PROCJENA — WIZARD TEXT                    ║\n" +
+                "║  Tekst: {TextPreview}...                                    ║\n" +
+                "║  City: {City} | Neighborhood: {Neighborhood}                ║\n" +
+                "╚══════════════════════════════════════════════════════════════╝",
+                request.Text?.Length > 80 ? request.Text[..80] : request.Text,
+                request.City ?? "(none)", request.Neighborhood ?? "(none)");
+
+            _logger.LogInformation("━━━ STAGE 1: AI EKSTRAKCIJA TEKSTA ━━━");
             await SendProgress("reading", "active", "Analiziram uneseni tekst...");
 
             ExtractedPropertyInfo property;
@@ -695,6 +713,9 @@ public class EvaluateController : ControllerBase
             await SendProgress("reading", "done", "Tekst analiziran",
                 $"{property.Description}, {property.SizeM2} m², {property.Location}");
 
+            _logger.LogInformation("    ✅ STAGE 1 DONE: Opis={Description}, Površina={Size}m², Lokacija={Location}",
+                property.Description, property.SizeM2, property.Location);
+
             await RunStreamingPipelineAsync(property, request.Text, request.Email);
         }
         catch (Exception ex)
@@ -709,6 +730,8 @@ public class EvaluateController : ControllerBase
     private async Task RunStreamingPipelineAsync(ExtractedPropertyInfo property, string pdfText, string? email = null)
     {
         // ── Stage 2: Market research ──
+        _logger.LogInformation("━━━ STAGE 2: PRETRAGA TRŽIŠTA ━━━  Lokacija={Location}, Veličina={Size}m²",
+            property.Location, property.SizeM2);
         await SendProgress("searching", "active", "Pretražujem Njuškalo i tržište nekretnina...");
 
         MarketResearchResult marketData;
@@ -732,7 +755,15 @@ public class EvaluateController : ControllerBase
 
         await SendProgress("searching", "done", "Pretraga završena", searchDetail);
 
+        _logger.LogInformation("    ✅ STAGE 2 DONE: {Active} aktivnih, {Regional} regionalnih, Tip={Type}, Faza={Phase}",
+            marketData.ActiveListings.Count, marketData.RegionalData.Count,
+            marketData.DetectedPropertyType, marketData.SearchPhaseUsed);
+        foreach (var l in marketData.ActiveListings.Take(10))
+            _logger.LogInformation("       📋 {Title} — {Url}", l.Title?.Length > 60 ? l.Title[..60] : l.Title, l.Url);
+
         // ── Stage 2.5: AI feature extraction ──
+        _logger.LogInformation("━━━ STAGE 2.5: AI FEATURE EXTRACTION ━━━  {Count} oglasa za analizu",
+            marketData.ActiveListings.Count);
         await SendProgress("ai_features", "active", "AI analizira značajke oglasa...");
         try
         {
@@ -759,6 +790,8 @@ public class EvaluateController : ControllerBase
         }
 
         // ── Stage 3A: Engine ──
+        _logger.LogInformation("━━━ STAGE 3A: DETERMINISTIC ENGINE ━━━  Tip={Type}, Oglasi={Count}",
+            marketData.DetectedPropertyType, marketData.ActiveListings.Count);
         await SendProgress("engine", "active", "Engine izračunava tržišnu vrijednost...");
 
         DeterministicValuation engineResult;
@@ -776,6 +809,17 @@ public class EvaluateController : ControllerBase
         await SendProgress("engine", "done", "Engine izračun gotov",
             $"{engineResult.UsablePricePoints} korištenih • {engineResult.CalculatedPricePerM2:N0} €/m² • Conf: {engineResult.ConfidenceLevel}");
 
+        _logger.LogInformation("    ✅ STAGE 3A DONE: Vrijednost={Value}€, Cijena/m²={PriceM2}€, Usable={Usable}, Outliers={Outliers}, Confidence={Conf}({Score}/100)",
+            engineResult.EstimatedValueEur, engineResult.CalculatedPricePerM2,
+            engineResult.UsablePricePoints, engineResult.OutliersRemoved,
+            engineResult.MathConfidenceLevel, engineResult.MathConfidenceScore);
+        if (engineResult.UsedComparables != null)
+            foreach (var c in engineResult.UsedComparables)
+                _logger.LogInformation("       {Outlier} {Title} — {Price}€/m² sim={Sim}",
+                    c.IsOutlier ? "❌ OUTLIER" : "✅ USED",
+                    c.Title?.Length > 50 ? c.Title[..50] : c.Title,
+                    c.PricePerM2, c.SimilarityScore);
+
         // ── Sync filter ──
         if (engineResult.FinalUsedUrls.Count > 0)
         {
@@ -786,6 +830,8 @@ public class EvaluateController : ControllerBase
         }
 
         // ── Stage 3B: AI opinion ──
+        _logger.LogInformation("━━━ STAGE 3B: AI MIŠLJENJE ━━━  EngineValue={Value}€, Comps={Comps}",
+            engineResult.EstimatedValueEur, engineResult.UsablePricePoints);
         await SendProgress("ai_opinion", "active", "AI generira stručno mišljenje...");
 
         AutoValuationResult aiResult;
@@ -861,6 +907,7 @@ public class EvaluateController : ControllerBase
         };
 
         // ── Save to Supabase ──
+        _logger.LogInformation("━━━ STAGE 4: SPREMANJE REZULTATA ━━━  FinalValue={Value}€", finalValue);
         await SendProgress("saving", "active", "Spremam rezultate...");
         try
         {
