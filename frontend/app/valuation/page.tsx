@@ -95,6 +95,9 @@ interface UsedComparableV4 {
   location?: string;
   has_garage?: boolean;
   has_parking?: boolean;
+  // V18: Yard area + similarity reason
+  yard_area_m2?: number;
+  similarity_reason?: string;
 }
 
 interface AdjustmentV4 {
@@ -832,6 +835,13 @@ export default function ValuationPage() {
                                 {c.energy_class && <span className="text-[10px] bg-teal-50 text-teal-600 px-1.5 py-0.5 rounded">E: {c.energy_class}</span>}
                                 {c.heating && <span className="text-[10px] bg-orange-50 text-orange-600 px-1.5 py-0.5 rounded">{c.heating}</span>}
                                 {c.has_garage && <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">Garaža</span>}
+                                {c.yard_area_m2 != null && c.yard_area_m2 > 0 && <span className="text-[10px] bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded">Okućnica {c.yard_area_m2} m²</span>}
+                              </div>
+                            )}
+                            {/* V18: Similarity reason */}
+                            {c.similarity_reason && (
+                              <div className="text-[10px] text-gray-400 mt-1 italic truncate max-w-[300px]" title={c.similarity_reason}>
+                                {c.similarity_reason}
                               </div>
                             )}
                           </td>

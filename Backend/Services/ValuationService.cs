@@ -457,7 +457,17 @@ public class ValuationService
         3. SIZE (15%): Closer size = higher score. ±10% is excellent, ±50% is poor
         4. CONDITION & FEATURES (10%): Similar condition/age, heating, energy class = bonus
 
-        Return JSON: {"listings": [{"index": 0, "has_garage": true, ..., "similarity_score": 0.75, "year_built": 1990, "energy_class": "C", "heating": "plinsko", "floor": "2. kat", "rooms": 3}, ...]}
+        === SIMILARITY REASON (REQUIRED) ===
+        For each listing, also provide "similarity_reason": a SHORT one-sentence Croatian explanation
+        of WHY the listing is similar/different to the target property.
+        Focus on the most impactful factor (location match, size difference, type match, condition).
+        Examples:
+        - "Isti kvart (Trešnjevka), sličan stan 65m², renoviran — odlična usporedba."
+        - "Isti grad ali udaljeniji kvart, kuća umjesto stana — slabija usporedba."
+        - "Građevinsko zemljište u istom mjestu, slična površina — dobra usporedba."
+        Keep it under 120 characters. Write in Croatian.
+
+        Return JSON: {"listings": [{"index": 0, "has_garage": true, ..., "similarity_score": 0.75, "similarity_reason": "Isti kvart, sličan stan 60m² — odlična usporedba.", "year_built": 1990, "energy_class": "C", "heating": "plinsko", "floor": "2. kat", "rooms": 3}, ...]}
         Return ONLY the raw JSON object, no markdown fences.
         """;
 
@@ -539,6 +549,8 @@ public class ValuationService
                     target.AiSizeM2 = item.TryGetProperty("size_m2", out var sz) ? sz.GetDouble() : 0;
                     target.AiPropertyType = item.TryGetProperty("property_type", out var pt) ? pt.GetString() : "unknown";
                     target.AiSimilarityScore = item.TryGetProperty("similarity_score", out var ss) ? ss.GetDouble() : null;
+                    target.AiSimilarityReason = item.TryGetProperty("similarity_reason", out var sr) && sr.ValueKind == System.Text.Json.JsonValueKind.String
+                        ? sr.GetString() : null;
 
                     // New structured fields from BrightData-enriched content
                     if (item.TryGetProperty("year_built", out var yb) && yb.ValueKind == System.Text.Json.JsonValueKind.Number)

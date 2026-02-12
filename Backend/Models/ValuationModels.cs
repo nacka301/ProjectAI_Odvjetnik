@@ -32,6 +32,10 @@ public class ComparisonTableRow
     public double CorrectionPercent { get; set; }
     public double AdjustedPricePerM2 { get; set; }
     public double SimilarityScore { get; set; }
+
+    // V18: Yard area + similarity reason
+    public double? YardAreaM2 { get; set; }
+    public string? SimilarityReason { get; set; }
 }
 
 /// <summary>Three-tier price range: conservative / realistic / optimistic.</summary>

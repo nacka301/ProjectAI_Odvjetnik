@@ -768,6 +768,8 @@ public class ValuationEngine
                 Location = listing?.Title,
                 HasGarage = listing?.HasGarage ?? (price.HasGarage ? true : null),
                 HasParking = price.HasParking ? true : null,
+                YardAreaM2 = listing?.AiYardAreaM2 > 0 ? listing.AiYardAreaM2 : (price.DetectedYardM2 > 0 ? price.DetectedYardM2 : null),
+                SimilarityReason = listing?.AiSimilarityReason,
             });
         }
 
@@ -2365,6 +2367,10 @@ public class UsedComparable
     public string? Location { get; set; }
     public bool? HasGarage { get; set; }
     public bool? HasParking { get; set; }
+
+    // V18: Yard area + similarity reason
+    public double? YardAreaM2 { get; set; }
+    public string? SimilarityReason { get; set; }
 }
 
 public class ValuationAdjustment

@@ -1042,6 +1042,8 @@ public class EvaluateController : ControllerBase
                 CorrectionPercent = Math.Round(totalAdjPct, 1),
                 AdjustedPricePerM2 = Math.Round(adjustedPpm2, 1),
                 SimilarityScore = Math.Round(c.SimilarityScore <= 1 ? c.SimilarityScore * 100 : c.SimilarityScore, 0),
+                YardAreaM2 = c.YardAreaM2,
+                SimilarityReason = c.SimilarityReason,
             });
         }
         return rows;

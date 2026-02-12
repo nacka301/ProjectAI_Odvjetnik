@@ -2625,6 +2625,7 @@ public class ComparableSearchResult
     public double? AiSizeM2 { get; set; }          // AI-detected property size
     public string? AiPropertyType { get; set; }    // AI-detected type
     public double? AiSimilarityScore { get; set; }  // AI-scored similarity to target (0.0–1.0)
+    public string? AiSimilarityReason { get; set; }  // V18: AI-generated one-sentence Croatian reason
 
     // V9 Deep Scraping: enrichment booleans
     public bool? IsRenovated { get; set; }          // True if renovated/new (YearReno>2015 or description)
