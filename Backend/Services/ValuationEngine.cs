@@ -642,6 +642,7 @@ public class ValuationEngine
         // ── 4b++. V13: CROSS-TYPE HARD EXCLUSION ──
         // Stan ≠ Kuća ≠ Zemljište — NIKAD ne uspoređivati različite tipove.
         // If subject is House, ALL apartment comps are EXCLUDED (and vice versa).
+        // V15: Also excludes land sub-type mismatch (poljopriv. vs građevinsko).
         // This is a hard block, not a penalty.
         {
             string subjectType = marketData.DetectedPropertyType.ToLowerInvariant();
@@ -650,6 +651,13 @@ public class ValuationEngine
             bool subjectIsApt   = subjectType.Contains("stan") || subjectType.Contains("apartman")
                                || subjectType.Contains("garsonije");
             bool subjectIsLand  = MarketResearchService.IsLandType(subjectType);
+            bool subjectIsAgriLand = subjectIsLand && (subjectType.Contains("poljopriv")
+                || subjectType.Contains("oranica") || subjectType.Contains("pašnjak")
+                || subjectType.Contains("livada") || subjectType.Contains("šuma")
+                || subjectType.Contains("vinograd") || subjectType.Contains("voćnjak")
+                || subjectType.Contains("mješovit"));
+            bool subjectIsBuildLand = subjectIsLand && (subjectType.Contains("građevinsk")
+                || subjectType.Contains("gradjevinsk"));
 
             var toExclude = new List<ExtractedPrice>();
             foreach (var p in cleanPrices)
@@ -661,6 +669,12 @@ public class ValuationEngine
                                 || compText.Contains("garsonije");
                 bool compIsLand  = compText.Contains("zemljišt") || compText.Contains("zemljist")
                                 || compText.Contains("parcela") || compText.Contains("oranica");
+                bool compIsAgriLand = compIsLand && (compText.Contains("poljopriv")
+                    || compText.Contains("oranica") || compText.Contains("pašnjak")
+                    || compText.Contains("livada") || compText.Contains("šuma")
+                    || compText.Contains("vinograd") || compText.Contains("voćnjak"));
+                bool compIsBuildLand = compIsLand && (compText.Contains("građevinsk")
+                    || compText.Contains("gradjevinsk"));
 
                 bool mismatch = false;
                 string reason = "";
@@ -674,6 +688,11 @@ public class ValuationEngine
                 // Apartment vs Land — FORBIDDEN
                 else if ((subjectIsApt && compIsLand) || (subjectIsLand && compIsApt))
                 { mismatch = true; reason = subjectIsApt ? "stan vs zemljište" : "zemljište vs stan"; }
+                // V15: Agricultural vs Construction land — FORBIDDEN
+                else if (subjectIsAgriLand && compIsBuildLand)
+                { mismatch = true; reason = "poljopriv. vs građevinsko zemljište"; }
+                else if (subjectIsBuildLand && compIsAgriLand)
+                { mismatch = true; reason = "građevinsko vs poljopriv. zemljište"; }
 
                 if (mismatch)
                 {
@@ -833,7 +852,9 @@ public class ValuationEngine
         }
 
         // ── 4d. Reality Check Cap ──
-        // Any comp priced >50% above median → weight crushed to 0.1
+        // Any comp priced >50% above median → EXCLUDED as outlier.
+        // V15: Previously only crushed weight to 0.1 but still showed in table.
+        // Now properly marks as outlier and removes from cleanPrices.
         if (cleanPrices.Count >= 3)
         {
             var rcPrices = cleanPrices.Select(p => p.PricePerM2).OrderBy(v => v).ToList();
@@ -841,21 +862,28 @@ public class ValuationEngine
             double rcCap = rcMedian * 1.50;
             int capped = 0;
 
+            var cappedUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var cd in compDetails.Where(c => !c.IsOutlier))
             {
                 if (cd.PricePerM2 > rcCap)
                 {
-                    cd.SimilarityScore = 0.10; // Nearly zero weight
+                    cd.IsOutlier = true; // V15: Mark as outlier (was: weight=0.1)
+                    cappedUrls.Add(cd.Url);
                     capped++;
                     _logger.LogDebug(
-                        "Reality cap: {Title} {Price:F0} EUR/m2 > cap {Cap:F0} -> weight=0.1",
+                        "Reality cap: {Title} {Price:F0} EUR/m2 > cap {Cap:F0} -> EXCLUDED as outlier",
                         cd.Title.Length > 40 ? cd.Title[..40] : cd.Title,
                         cd.PricePerM2, rcCap);
                 }
             }
 
             if (capped > 0)
-                pipeline.Add($"Reality check: {capped} comps capped to weight 0.1 (price > {rcCap:F0} = 150% of median {rcMedian:F0})");
+            {
+                cleanPrices = cleanPrices
+                    .Where(p => !cappedUrls.Contains(p.SourceUrl))
+                    .ToList();
+                pipeline.Add($"Reality check: {capped} comps EXCLUDED as outliers (price > {rcCap:F0} = 150% of median {rcMedian:F0})");
+            }
         }
 
         // ── 5. Weighted Median / Valuation ──
