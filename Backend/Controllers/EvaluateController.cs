@@ -275,6 +275,11 @@ public class EvaluateController : ControllerBase
                 ConfidenceColor = marketData.Confidence.Color,
                 SearchPhaseUsed = marketData.SearchPhaseUsed,
                 SherlockInsight = engineResult.SherlockInsight,
+
+                // V14: Structured valuation output
+                ComparisonTable = BuildComparisonTable(engineResult, engineResult.TotalAdjustmentPercent),
+                PriceRange = BuildPriceRange(engineResult, property.SizeM2),
+                BenchmarkSummary = BuildBenchmarkSummary(engineResult, marketData),
             };
 
             // ────────────────────────────────────────────────────
@@ -524,6 +529,11 @@ public class EvaluateController : ControllerBase
                 ConfidenceColor = marketData.Confidence.Color,
                 SearchPhaseUsed = marketData.SearchPhaseUsed,
                 SherlockInsight = engineResult.SherlockInsight,
+
+                // V14: Structured valuation output
+                ComparisonTable = BuildComparisonTable(engineResult, engineResult.TotalAdjustmentPercent),
+                PriceRange = BuildPriceRange(engineResult, property.SizeM2),
+                BenchmarkSummary = BuildBenchmarkSummary(engineResult, marketData),
             };
 
             // Save to Supabase
@@ -904,6 +914,11 @@ public class EvaluateController : ControllerBase
             ConfidenceColor = marketData.Confidence.Color,
             SearchPhaseUsed = marketData.SearchPhaseUsed,
             SherlockInsight = engineResult.SherlockInsight,
+
+            // V14: Structured valuation output
+            ComparisonTable = BuildComparisonTable(engineResult, engineResult.TotalAdjustmentPercent),
+            PriceRange = BuildPriceRange(engineResult, property.SizeM2),
+            BenchmarkSummary = BuildBenchmarkSummary(engineResult, marketData),
         };
 
         // ── Save to Supabase ──
@@ -945,6 +960,86 @@ public class EvaluateController : ControllerBase
 
         // ── Final result ──
         await SendResult(response);
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  V14: STRUCTURED VALUATION HELPERS
+    // ══════════════════════════════════════════════════════════
+
+    /// <summary>Build a transparent comparison table from engine UsedComparables.</summary>
+    private static List<ComparisonTableRow> BuildComparisonTable(
+        DeterministicValuation engine, double totalAdjPct)
+    {
+        if (engine.UsedComparables == null || engine.UsedComparables.Count == 0)
+            return [];
+
+        var rows = new List<ComparisonTableRow>();
+        int idx = 1;
+        foreach (var c in engine.UsedComparables.Where(x => !x.IsOutlier).OrderByDescending(x => x.SimilarityScore))
+        {
+            var adjustedPpm2 = c.PricePerM2 * (1 + totalAdjPct / 100.0);
+            rows.Add(new ComparisonTableRow
+            {
+                Index = idx++,
+                Title = c.Title,
+                Url = c.Url,
+                AreaM2 = c.AreaM2 ?? 0,
+                TotalPrice = c.TotalPrice ?? 0,
+                RawPricePerM2 = Math.Round(c.PricePerM2, 1),
+                CorrectionPercent = Math.Round(totalAdjPct, 1),
+                AdjustedPricePerM2 = Math.Round(adjustedPpm2, 1),
+                SimilarityScore = Math.Round(c.SimilarityScore <= 1 ? c.SimilarityScore * 100 : c.SimilarityScore, 0),
+            });
+        }
+        return rows;
+    }
+
+    /// <summary>Build a 3-tier price range: conservative / realistic / optimistic.</summary>
+    private static PriceRangeEstimate? BuildPriceRange(
+        DeterministicValuation engine, double targetSizeM2)
+    {
+        if (engine.CalculatedPricePerM2 <= 0 || targetSizeM2 <= 0) return null;
+
+        var ppm2 = engine.CalculatedPricePerM2;
+        var stdDev = engine.StdDevPerM2;
+
+        // If no std dev, use 15% spread as fallback
+        if (stdDev <= 0) stdDev = ppm2 * 0.15;
+
+        var conservative = Math.Max(ppm2 - stdDev, ppm2 * 0.7);  // floor at -30%
+        var optimistic = Math.Min(ppm2 + stdDev, ppm2 * 1.3);    // cap at +30%
+
+        return new PriceRangeEstimate
+        {
+            ConservativePricePerM2 = Math.Round(conservative, 1),
+            RealisticPricePerM2 = Math.Round(ppm2, 1),
+            OptimisticPricePerM2 = Math.Round(optimistic, 1),
+            ConservativeTotal = (int)Math.Round(conservative * targetSizeM2),
+            RealisticTotal = (int)Math.Round(ppm2 * targetSizeM2),
+            OptimisticTotal = (int)Math.Round(optimistic * targetSizeM2),
+        };
+    }
+
+    /// <summary>Build a benchmark summary string from engine + market data.</summary>
+    private static string BuildBenchmarkSummary(
+        DeterministicValuation engine, MarketResearchResult market)
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(engine.RegionName))
+            parts.Add($"Regija: {engine.RegionName}");
+        if (!string.IsNullOrWhiteSpace(market.DetectedPropertyType))
+            parts.Add($"Tip: {market.DetectedPropertyType}");
+        if (engine.MarketAverageAsking > 0)
+            parts.Add($"Prosjek traženih cijena: {engine.MarketAverageAsking:N0} €/m²");
+        if (engine.CalculatedPricePerM2 > 0)
+            parts.Add($"Izračunata cijena: {engine.CalculatedPricePerM2:N0} €/m²");
+        if (engine.RealizationDiscountPercent != 0)
+            parts.Add($"Diskont tražena→ostvarena: {engine.RealizationDiscountPercent:F1}%");
+        if (engine.UsablePricePoints > 0)
+            parts.Add($"Korištenih usporedivih: {engine.UsablePricePoints}");
+        if (engine.CoefficientOfVariation > 0)
+            parts.Add($"Koeficijent varijacije: {engine.CoefficientOfVariation:F1}%");
+        return string.Join(" | ", parts);
     }
 }
 

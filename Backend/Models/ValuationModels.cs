@@ -18,6 +18,35 @@ public class ValueDriver
     public double AdjustmentPercent { get; set; }
 }
 
+// --- Structured Valuation Output (V14) ---
+
+/// <summary>Row in the transparent comparison table — computed server-side from engine data.</summary>
+public class ComparisonTableRow
+{
+    public int Index { get; set; }
+    public string Title { get; set; } = "";
+    public string Url { get; set; } = "";
+    public double AreaM2 { get; set; }
+    public double TotalPrice { get; set; }
+    public double RawPricePerM2 { get; set; }
+    public double CorrectionPercent { get; set; }
+    public double AdjustedPricePerM2 { get; set; }
+    public double SimilarityScore { get; set; }
+}
+
+/// <summary>Three-tier price range: conservative / realistic / optimistic.</summary>
+public class PriceRangeEstimate
+{
+    // Per m²
+    public double ConservativePricePerM2 { get; set; }
+    public double RealisticPricePerM2 { get; set; }
+    public double OptimisticPricePerM2 { get; set; }
+    // Total value
+    public int ConservativeTotal { get; set; }
+    public int RealisticTotal { get; set; }
+    public int OptimisticTotal { get; set; }
+}
+
 public class SelectedComparable
 {
     public string Title { get; set; } = string.Empty;
@@ -97,4 +126,9 @@ public class FullEvaluationResult
 
     // ── V13: Sherlock Insight ──
     public string SherlockInsight { get; set; } = "";
+
+    // ── V14: Structured Valuation Output ──
+    public List<ComparisonTableRow> ComparisonTable { get; set; } = [];
+    public PriceRangeEstimate? PriceRange { get; set; }
+    public string BenchmarkSummary { get; set; } = "";
 }

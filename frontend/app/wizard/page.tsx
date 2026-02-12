@@ -158,6 +158,27 @@ interface ValuationAdjustment {
   percent: number;
 }
 
+interface ComparisonTableRow {
+  index: number;
+  title: string;
+  url: string;
+  area_m2: number;
+  total_price: number;
+  raw_price_per_m2: number;
+  correction_percent: number;
+  adjusted_price_per_m2: number;
+  similarity_score: number;
+}
+
+interface PriceRangeEstimate {
+  conservative_price_per_m2: number;
+  realistic_price_per_m2: number;
+  optimistic_price_per_m2: number;
+  conservative_total: number;
+  realistic_total: number;
+  optimistic_total: number;
+}
+
 interface ValuationResult {
   target_property_summary: string;
   selected_comparables: SelectedComparable[];
@@ -191,6 +212,10 @@ interface ValuationResult {
   note?: string;
   search_phase_used?: string;
   sherlock_insight?: string;
+  // V14: Structured valuation output
+  comparison_table?: ComparisonTableRow[];
+  price_range?: PriceRangeEstimate;
+  benchmark_summary?: string;
 }
 
 const INITIAL_STAGES: StreamStage[] = [
@@ -1011,8 +1036,12 @@ export default function WizardPage() {
                 <p className="text-xs font-semibold uppercase tracking-widest text-blue-200">Procijenjena tržišna vrijednost</p>
                 <p className="text-5xl md:text-6xl font-extrabold mt-3 tracking-tight">{formatPrice(result.estimated_value_eur)} €</p>
 
-                {/* Price range from std_dev */}
-                {result.std_dev_per_m2 && result.calculated_price_per_m2 && result.calculated_price_per_m2 > 0 && (() => {
+                {/* V14: Price range from server-computed PriceRangeEstimate */}
+                {result.price_range ? (
+                  <p className="mt-2 text-sm text-blue-200">
+                    Raspon: {formatPrice(result.price_range.conservative_total)} € — {formatPrice(result.price_range.optimistic_total)} €
+                  </p>
+                ) : result.std_dev_per_m2 && result.calculated_price_per_m2 && result.calculated_price_per_m2 > 0 && (() => {
                   const areaM2 = propertyType === "Apartment" ? apt.area_m2 : propertyType === "House" ? house.living_area_m2 : land.land_area_m2;
                   const rangeLow = Math.round((result.calculated_price_per_m2! - result.std_dev_per_m2!) * Math.max(areaM2, 1));
                   const rangeHigh = Math.round((result.calculated_price_per_m2! + result.std_dev_per_m2!) * Math.max(areaM2, 1));
@@ -1076,6 +1105,148 @@ export default function WizardPage() {
                   <MiniStat icon={<Target className="h-4 w-4 text-purple-500" />} label="€/m² prosjek" value={result.market_average_asking ? formatPrice(Math.round(result.market_average_asking)) : "—"} />
                   <MiniStat icon={<Activity className="h-4 w-4 text-indigo-500" />} label="Σ korekcija" value={result.total_adjustment_percent !== undefined ? `${result.total_adjustment_percent > 0 ? "+" : ""}${result.total_adjustment_percent.toFixed(1)}%` : "—"} />
                 </div>
+
+                {/* V14: Comparison Table — transparent per-comparable breakdown */}
+                {result.comparison_table && result.comparison_table.length > 0 && (
+                  <div className="rounded-xl bg-white border border-gray-200 p-6">
+                    <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                      <Layers className="h-4 w-4" /> Tablica usporednih nekretnina
+                    </h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-gray-200 text-left text-xs text-gray-500 uppercase tracking-wider">
+                            <th className="pb-3 pr-3">#</th>
+                            <th className="pb-3 pr-3">Oglas</th>
+                            <th className="pb-3 pr-3 text-right">Površina</th>
+                            <th className="pb-3 pr-3 text-right">Cijena</th>
+                            <th className="pb-3 pr-3 text-right">€/m²</th>
+                            <th className="pb-3 pr-3 text-right">Korekcija</th>
+                            <th className="pb-3 pr-3 text-right">Prilagođeno €/m²</th>
+                            <th className="pb-3 text-right">Sličnost</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {result.comparison_table.map((row) => (
+                            <tr key={row.index} className="hover:bg-gray-50 transition">
+                              <td className="py-2.5 pr-3 text-gray-400 font-medium">{row.index}</td>
+                              <td className="py-2.5 pr-3 max-w-[200px]">
+                                {row.url ? (
+                                  <a href={row.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline truncate block">{row.title.slice(0, 40)}{row.title.length > 40 ? "…" : ""}</a>
+                                ) : (
+                                  <span className="text-gray-800 truncate block">{row.title.slice(0, 40)}</span>
+                                )}
+                              </td>
+                              <td className="py-2.5 pr-3 text-right text-gray-700">{row.area_m2 > 0 ? `${formatPrice(row.area_m2)} m²` : "—"}</td>
+                              <td className="py-2.5 pr-3 text-right text-gray-700">{row.total_price > 0 ? `${formatPrice(Math.round(row.total_price))} €` : "—"}</td>
+                              <td className="py-2.5 pr-3 text-right font-medium text-gray-900">{formatPrice(Math.round(row.raw_price_per_m2))} €</td>
+                              <td className={`py-2.5 pr-3 text-right font-semibold ${row.correction_percent > 0 ? "text-green-600" : row.correction_percent < 0 ? "text-red-600" : "text-gray-400"}`}>
+                                {row.correction_percent > 0 ? "+" : ""}{row.correction_percent.toFixed(1)}%
+                              </td>
+                              <td className="py-2.5 pr-3 text-right font-bold text-blue-700">{formatPrice(Math.round(row.adjusted_price_per_m2))} €</td>
+                              <td className="py-2.5 text-right">
+                                <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                  row.similarity_score >= 70 ? "bg-green-100 text-green-800" :
+                                  row.similarity_score >= 40 ? "bg-yellow-100 text-yellow-800" :
+                                  "bg-red-100 text-red-800"
+                                }`}>{row.similarity_score}%</span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        {/* Summary row */}
+                        <tfoot>
+                          <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
+                            <td colSpan={4} className="py-3 pr-3 text-right text-gray-600">Prosjek prilagođen:</td>
+                            <td className="py-3 pr-3 text-right text-gray-500">
+                              {formatPrice(Math.round(result.comparison_table.reduce((s, r) => s + r.raw_price_per_m2, 0) / result.comparison_table.length))} €
+                            </td>
+                            <td className="py-3 pr-3 text-right text-gray-500">
+                              {result.total_adjustment_percent !== undefined ? `${result.total_adjustment_percent > 0 ? "+" : ""}${result.total_adjustment_percent.toFixed(1)}%` : ""}
+                            </td>
+                            <td className="py-3 pr-3 text-right text-blue-800 text-base">
+                              {formatPrice(Math.round(result.comparison_table.reduce((s, r) => s + r.adjusted_price_per_m2, 0) / result.comparison_table.length))} €/m²
+                            </td>
+                            <td></td>
+                          </tr>
+                          {result.realization_discount_percent && (
+                            <tr className="bg-gray-50 text-sm">
+                              <td colSpan={6} className="py-2 pr-3 text-right text-gray-500">
+                                Nakon diskonta ({result.realization_discount_percent.toFixed(1)}%):
+                              </td>
+                              <td className="py-2 pr-3 text-right font-bold text-indigo-700 text-base">
+                                {result.calculated_price_per_m2 ? `${formatPrice(Math.round(result.calculated_price_per_m2))} €/m²` : "—"}
+                              </td>
+                              <td></td>
+                            </tr>
+                          )}
+                          <tr className="bg-blue-50 text-base">
+                            <td colSpan={6} className="py-3 pr-3 text-right font-bold text-blue-900">
+                              Konačna procjena:
+                            </td>
+                            <td colSpan={2} className="py-3 text-right font-extrabold text-blue-900 text-lg">
+                              {formatPrice(result.estimated_value_eur)} €
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* V14: Price Range — Conservative / Realistic / Optimistic */}
+                {result.price_range && (
+                  <div className="rounded-xl bg-white border border-gray-200 p-6">
+                    <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                      <BarChart3 className="h-4 w-4" /> Raspon procjene
+                    </h3>
+                    <div className="space-y-4">
+                      {[
+                        { label: "Konzervativno", perM2: result.price_range.conservative_price_per_m2, total: result.price_range.conservative_total, color: "bg-amber-500", textColor: "text-amber-700" },
+                        { label: "Realno", perM2: result.price_range.realistic_price_per_m2, total: result.price_range.realistic_total, color: "bg-blue-600", textColor: "text-blue-700" },
+                        { label: "Optimistično", perM2: result.price_range.optimistic_price_per_m2, total: result.price_range.optimistic_total, color: "bg-green-500", textColor: "text-green-700" },
+                      ].map((tier) => {
+                        const maxTotal = result.price_range!.optimistic_total || 1;
+                        const widthPct = Math.max((tier.total / maxTotal) * 100, 15);
+                        return (
+                          <div key={tier.label} className="flex items-center gap-4">
+                            <span className={`w-28 text-sm font-medium ${tier.textColor}`}>{tier.label}</span>
+                            <div className="flex-1 h-8 bg-gray-100 rounded-lg overflow-hidden relative">
+                              <div className={`h-full ${tier.color} rounded-lg transition-all duration-700 flex items-center justify-end pr-3`} style={{ width: `${widthPct}%` }}>
+                                <span className="text-xs font-bold text-white whitespace-nowrap">{formatPrice(Math.round(tier.perM2))} €/m²</span>
+                              </div>
+                            </div>
+                            <span className={`w-28 text-right text-sm font-bold ${tier.textColor}`}>{formatPrice(tier.total)} €</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* V14: Benchmark Summary */}
+                {result.benchmark_summary && (
+                  <div className="rounded-xl bg-indigo-50 border border-indigo-100 p-4">
+                    <h3 className="text-xs font-semibold text-indigo-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+                      <Target className="h-3.5 w-3.5" /> Benchmark regije
+                    </h3>
+                    <p className="text-sm text-indigo-900">{result.benchmark_summary}</p>
+                  </div>
+                )}
+
+                {/* V14: Confidence detail */}
+                {result.math_confidence_explanation && (
+                  <div className={`rounded-xl border p-4 ${
+                    (result.math_confidence_score ?? 0) >= 70 ? "bg-green-50 border-green-200" :
+                    (result.math_confidence_score ?? 0) >= 40 ? "bg-yellow-50 border-yellow-200" :
+                    "bg-red-50 border-red-200"
+                  }`}>
+                    <h3 className="text-xs font-semibold uppercase tracking-wider mb-2 flex items-center gap-2">
+                      <Shield className="h-3.5 w-3.5" /> Pouzdanost procjene: {result.math_confidence_score}/100 ({result.math_confidence_level})
+                    </h3>
+                    <p className="text-sm leading-relaxed">{result.math_confidence_explanation}</p>
+                  </div>
+                )}
 
                 {/* Adjustments as chips */}
                 {result.adjustments && result.adjustments.length > 0 && (

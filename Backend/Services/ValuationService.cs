@@ -112,9 +112,12 @@ public class ValuationService
            - Do NOT use any hardcoded regional benchmark numbers. Base all analysis on the actual
              search results provided to you.
 
-        3. Novogradnja vs. Starogradnja:
-           - If the PDF does NOT explicitly say 'Novogradnja' or the building is old, assume 'Starogradnja' (Old Build).
-           - If a Comparable is 'Novogradnja' but the Target is 'Starogradnja', apply a -25% correction to that comparable's price per m².
+        3. Novogradnja vs. Starogradnja (BUILDINGS ONLY — NOT for land/zemljište):
+           - This rule applies ONLY to apartments (stanovi), houses (kuće), and commercial (poslovni prostor).
+           - This rule does NOT apply to any type of land (građevinsko, poljoprivredno, šumsko, mješovito).
+             Land has no 'condition/stanje' — do not use terms like 'starogradnja' or 'novogradnja' for land.
+           - For buildings: If the PDF does NOT explicitly say 'Novogradnja' or it's old, assume 'Starogradnja'.
+           - If a Comparable building is 'Novogradnja' but the Target is 'Starogradnja', apply -25% correction.
              Example: Ad says 4.000 €/m² → adjusted fair value = 3.000 €/m².
            - If Target is also Novogradnja, no correction needed.
 
@@ -352,17 +355,22 @@ public class ValuationService
         - Write in formal Croatian legal/technical language.
         - State which valuation method was used (Usporedna / Prinosna / Troškovna).
         - Explain your reasoning for selecting each comparable and how it relates to the target property.
-        - In the valuation_reasoning, explicitly show the FULL calculation pipeline:
-          1. List each comparable's raw asking price per m²
-          2. Show each correction applied (Novogradnja -25%, size -X%, infrastructure, location)
-          3. Show the adjusted price per m² for each comparable
-          4. Show the average adjusted price per m²
-          5. Apply the -15% Realization Gap discount (or -5% for high-demand Novogradnja)
-          6f a search result does not have a URL, set "url" to an empty string.
+        - In the valuation_reasoning, structure the text with CLEAR NUMERIC TRANSPARENCY:
+          a) Start with a brief introduction of the property and method used.
+          b) For EACH comparable, state: raw asking price, size, €/m², and any correction applied.
+          c) State the weighted average/median €/m² after corrections.
+          d) State the realization gap discount applied and the final €/m².
+          e) State the final estimated value = final €/m² × target size.
+          f) End with a professional conclusion referencing market conditions.
+        - NOTE: The server will ALSO provide a separate structured comparison table and price range
+          to the frontend. Your narrative should reference the numbers but does not need to format tables.
+        - For LAND (zemljište): Do NOT mention 'starogradnja', 'novogradnja', or 'stanje objekta'.
+          Describe land by: type (građevinsko/poljoprivredno/šumsko/mješovito), infrastructure, access, shape, legal status.
+        - If a search result does not have a URL, set "url" to an empty string.
 
         Output JSON (return ONLY this, no markdown fences):
         {
-          "target_property_summary": "Brief summary of the target property including Novogradnja/Starogradnja classification, island/mainland, infrastructure status, and valuation method used",
+          "target_property_summary": "Brief summary of the target property. For buildings: include Novogradnja/Starogradnja, condition. For land: include land type, infrastructure, access. Always include: island/mainland, location, size, valuation method used.",
           "selected_comparables": [
               {
                 "title": "Ad title exactly as found in search results",
