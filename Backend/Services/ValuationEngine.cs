@@ -716,7 +716,9 @@ public class ValuationEngine
             }
 
             // Lookup enriched data from BrightData/AI for this listing
-            listingLookup.TryGetValue(price.SourceUrl, out var listing);
+            ComparableSearchResult? listing = null;
+            if (!string.IsNullOrEmpty(price.SourceUrl))
+                listingLookup.TryGetValue(price.SourceUrl, out listing);
 
             compDetails.Add(new UsedComparable
             {
@@ -736,6 +738,7 @@ public class ValuationEngine
                 Condition = listing?.AiCondition,
                 EnergyClass = listing?.AiEnergyClass,
                 Heating = listing?.AiHeating,
+                Location = listing?.Title,
                 HasGarage = listing?.HasGarage ?? (price.HasGarage ? true : null),
                 HasParking = price.HasParking ? true : null,
             });
@@ -747,7 +750,9 @@ public class ValuationEngine
         var outlierPrices = rawPrices.Except(cleanPrices);
         foreach (var price in outlierPrices)
         {
-            listingLookup.TryGetValue(price.SourceUrl, out var olisting);
+            ComparableSearchResult? olisting = null;
+            if (!string.IsNullOrEmpty(price.SourceUrl))
+                listingLookup.TryGetValue(price.SourceUrl, out olisting);
 
             compDetails.Add(new UsedComparable
             {

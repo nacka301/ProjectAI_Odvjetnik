@@ -1208,8 +1208,8 @@ export default function WizardPage() {
                           {/* Similarity bar */}
                           <div className="mt-3 h-1.5 bg-gray-200 rounded-full overflow-hidden">
                             <div className="h-full rounded-full transition-all duration-500" style={{
-                              width: `${Math.min(c.similarity_score, 100)}%`,
-                              backgroundColor: c.similarity_score >= 70 ? "#22c55e" : c.similarity_score >= 40 ? "#eab308" : "#ef4444"
+                              width: `${Math.max((c.similarity_score <= 1 ? c.similarity_score * 100 : c.similarity_score), 5)}%`,
+                              backgroundColor: (c.similarity_score <= 1 ? c.similarity_score : c.similarity_score / 100) >= 0.7 ? "#22c55e" : (c.similarity_score <= 1 ? c.similarity_score : c.similarity_score / 100) >= 0.4 ? "#eab308" : "#ef4444"
                             }} />
                           </div>
                         </div>
@@ -1375,11 +1375,12 @@ function MiniStat({ icon, label, value }: { icon: React.ReactNode; label: string
 }
 
 function SimilarityBadge({ score }: { score: number }) {
-  const color = score >= 70 ? "bg-green-100 text-green-800" : score >= 40 ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800";
-  const label = score >= 70 ? "Visoka" : score >= 40 ? "Srednja" : "Niska";
+  const pct = score <= 1 ? score * 100 : score; // handle both 0-1 and 0-100 scales
+  const color = pct >= 70 ? "bg-green-100 text-green-800" : pct >= 40 ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800";
+  const label = pct >= 70 ? "Visoka" : pct >= 40 ? "Srednja" : "Niska";
   return (
     <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${color}`}>
-      {label} {score.toFixed(0)}%
+      {label} {pct.toFixed(0)}%
     </span>
   );
 }

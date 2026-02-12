@@ -184,7 +184,7 @@ public class EvaluateController : ControllerBase
             try
             {
                 aiResult = await _valuationService
-                    .GenerateAutoValuationAsync(property, marketData);
+                    .GenerateAutoValuationAsync(property, marketData, engineResult);
             }
             catch (Exception ex)
             {
@@ -273,7 +273,8 @@ public class EvaluateController : ControllerBase
                 ConfidenceScore = marketData.Confidence.Score,
                 ConfidenceExplanation = marketData.Confidence.Explanation,
                 ConfidenceColor = marketData.Confidence.Color,
-                SearchPhaseUsed = marketData.SearchPhaseUsed
+                SearchPhaseUsed = marketData.SearchPhaseUsed,
+                SherlockInsight = engineResult.SherlockInsight,
             };
 
             // ────────────────────────────────────────────────────
@@ -318,7 +319,7 @@ public class EvaluateController : ControllerBase
 
         string overrideLocation;
         if (!string.IsNullOrWhiteSpace(neighborhood) && !string.IsNullOrWhiteSpace(city))
-            overrideLocation = $"{city.Trim()}, {neighborhood.Trim()}";
+            overrideLocation = $"{neighborhood.Trim()}, {city.Trim()}";
         else if (!string.IsNullOrWhiteSpace(city))
             overrideLocation = city.Trim();
         else
@@ -427,7 +428,7 @@ public class EvaluateController : ControllerBase
             // STAGE 2.5: AI Feature Extraction
             try
             {
-                await _valuationService.ExtractListingFeaturesAsync(marketData.ActiveListings);
+                await _valuationService.ExtractListingFeaturesAsync(marketData.ActiveListings, property);
                 _valuationService.FilterByAiPropertyType(
                     marketData.ActiveListings, marketData.DetectedPropertyType);
             }
@@ -521,7 +522,8 @@ public class EvaluateController : ControllerBase
                 ConfidenceScore = marketData.Confidence.Score,
                 ConfidenceExplanation = marketData.Confidence.Explanation,
                 ConfidenceColor = marketData.Confidence.Color,
-                SearchPhaseUsed = marketData.SearchPhaseUsed
+                SearchPhaseUsed = marketData.SearchPhaseUsed,
+                SherlockInsight = engineResult.SherlockInsight,
             };
 
             // Save to Supabase
@@ -710,7 +712,7 @@ public class EvaluateController : ControllerBase
         await SendProgress("ai_features", "active", "AI analizira značajke oglasa...");
         try
         {
-            await _valuationService.ExtractListingFeaturesAsync(marketData.ActiveListings);
+            await _valuationService.ExtractListingFeaturesAsync(marketData.ActiveListings, property);
             _valuationService.FilterByAiPropertyType(
                 marketData.ActiveListings, marketData.DetectedPropertyType);
 
