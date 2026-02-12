@@ -712,6 +712,59 @@ public class EvaluateController : ControllerBase
                     if (!property.Description.Contains("Mješovito", StringComparison.OrdinalIgnoreCase))
                         property.Description = "Mješovito zemljište";
                 }
+
+                // Safety net: house type — if text clearly says kuća/katnica but
+                // GPT returned Stan, override to ensure correct search type.
+                bool textIsHouse = textLower.Contains("kuća") || textLower.Contains("kuca")
+                    || textLower.Contains("katnica") || textLower.Contains("višekatni")
+                    || textLower.Contains("visekatni") || textLower.Contains("vikendica")
+                    || (textLower.Contains("okućnica") && !textLower.Contains("stan"));
+                bool descIsApartment = property.Description != null
+                    && (property.Description.Contains("Stan", StringComparison.OrdinalIgnoreCase)
+                        || property.Description.Contains("stan", StringComparison.Ordinal))
+                    && !property.Description.Contains("Kuća", StringComparison.OrdinalIgnoreCase)
+                    && !property.Description.Contains("kuća", StringComparison.OrdinalIgnoreCase);
+
+                if (textIsHouse && descIsApartment && property.Description != null)
+                {
+                    _logger.LogWarning(
+                        "House type safety net: text says kuća/katnica but AI returned '{Desc}' — overriding",
+                        property.Description);
+                    // Replace "Stan" prefix with "Kuća" while keeping the rest
+                    property.Description = System.Text.RegularExpressions.Regex.Replace(
+                        property.Description,
+                        @"^(Jednosoban|Dvosoban|Trosoban|Četverosoban|\d+-soban)\s+stan",
+                        "Kuća",
+                        System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                    if (!property.Description.Contains("Kuća", StringComparison.OrdinalIgnoreCase)
+                        && !property.Description.Contains("kuća", StringComparison.OrdinalIgnoreCase))
+                        property.Description = "Kuća " + property.Description;
+                }
+
+                // Safety net: apartment type — if text clearly says stan but
+                // GPT returned Kuća, override.
+                bool textIsApartment = (textLower.Contains("stan ") || textLower.Contains("stan,")
+                    || textLower.Contains("-soban stan"))
+                    && !textLower.Contains("kuća") && !textLower.Contains("kuca")
+                    && !textLower.Contains("katnica");
+                bool descIsHouse = property.Description != null
+                    && (property.Description.Contains("Kuća", StringComparison.OrdinalIgnoreCase)
+                        || property.Description.Contains("kuća", StringComparison.OrdinalIgnoreCase))
+                    && !property.Description.Contains("Stan", StringComparison.OrdinalIgnoreCase);
+
+                if (textIsApartment && descIsHouse && property.Description != null)
+                {
+                    _logger.LogWarning(
+                        "Apartment type safety net: text says stan but AI returned '{Desc}' — overriding",
+                        property.Description);
+                    property.Description = System.Text.RegularExpressions.Regex.Replace(
+                        property.Description,
+                        @"^Kuća\b",
+                        "Stan",
+                        System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                    if (!property.Description.Contains("Stan", StringComparison.OrdinalIgnoreCase))
+                        property.Description = "Stan " + property.Description;
+                }
             }
             catch (Exception ex)
             {

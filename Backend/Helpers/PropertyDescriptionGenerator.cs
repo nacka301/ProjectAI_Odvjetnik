@@ -97,8 +97,8 @@ public static class PropertyDescriptionGenerator
         string floorDesc = h.Floors switch
         {
             HouseFloors.OneStory => "Prizemna kuća",
-            HouseFloors.TwoStory => "Katnica",
-            HouseFloors.MultiStory => "Višekatnica",
+            HouseFloors.TwoStory => "Kuća katnica",
+            HouseFloors.MultiStory => "Višekatna kuća",
             _ => "Kuća"
         };
 

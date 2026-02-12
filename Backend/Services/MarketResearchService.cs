@@ -2519,6 +2519,8 @@ public class MarketResearchService
 
             // Weak land signal (only k.č. etc.) — check if house/flat is more prominent
             bool hasHouseKeyword = text.Contains("kuća") || text.Contains("kuca")
+                || text.Contains("katnica") || text.Contains("višekatni") || text.Contains("visekatni")
+                || text.Contains("okućnica") || text.Contains("okucnica")
                 || text.Contains("vikendica") || text.Contains("stambena zgrada");
             bool hasFlatKeyword = text.Contains("stan ") || text.Contains("apartman");
 
@@ -2530,7 +2532,11 @@ public class MarketResearchService
         bool looksLikeFlat = text.Contains("stan na") || text.Contains("stan u ");
         if (!looksLikeFlat &&
             (text.Contains("kuća") || text.Contains("kuca") ||
+             text.Contains("katnica") || text.Contains("višekatni") ||
+             text.Contains("visekatni") || text.Contains("prizemna kuća") ||
              text.Contains("vikendica") ||
+             text.Contains("okućnica") || text.Contains("okucnica") ||
+             text.Contains("stambena površina") ||
              text.Contains("zgrada mješovite uporabe") ||
              text.Contains("zgrada mjesovite uporabe")))
             return "kuća";
