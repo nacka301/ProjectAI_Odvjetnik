@@ -149,10 +149,12 @@ public class ValuationEngine
     };
 
     // ══════════════════════════════════════════════════════════
-    //  SALES-ONLY GATEKEEPER — Dynamic Price Floors
-    //  Buildings: aggressive (800€/m², 35k€ total) — kills rentals
-    //  Building land: permissive (15€/m², 5k€ total) — land is 30-150€/m²
-    //  Agricultural/forest/pasture: very permissive (0.5€/m², 500€ total) — ag land is 1-10€/m²
+    // ══════════════════════════════════════════════════════════
+    //  SALES-ONLY GATEKEEPER — EXTREME SAFETY NET ONLY
+    //  These floors exist ONLY to filter out obvious garbage (monthly rents,
+    //  corrupt data). They are NOT valuation benchmarks. Real comparable
+    //  prices from actual ads are ALWAYS the primary data source.
+    //  Floor values are set very low intentionally so they never kill real listings.
     // ══════════════════════════════════════════════════════════
     private const double MinSalePriceEur_Building    = 35_000;
     private const double MinSalePriceEur_BuildLand   =  5_000;
@@ -202,9 +204,9 @@ public class ValuationEngine
         // ── 1. Context ──
         result.RegionName = marketData.RegionName;
         result.TotalListingsFound = marketData.ActiveListings.Count + marketData.RegionalData.Count;
-        pipeline.Add($"Region: {result.RegionName} - no hardcoded benchmarks, pure search data");
+        pipeline.Add($"Region: {result.RegionName} - PURE SEARCH DATA (no hardcoded benchmarks)");
 
-        // ── 2. Extract all prices from listings ──
+        // ── 2. Extract all prices from REAL listings (primary data source) ──
         bool isLand = MarketResearchService.IsLandType(marketData.DetectedPropertyType);
         bool isAgriLand = IsAgriculturalLand(marketData.DetectedPropertyType, property);
         double minPricePerM2 = isAgriLand ? MinPricePerM2_AgriLand : (isLand ? MinPricePerM2_BuildLand : MinPricePerM2_Building);
@@ -292,8 +294,9 @@ public class ValuationEngine
             pipeline.Add("No price data available");
         }
 
-        // ── 3b. SALES-ONLY GATEKEEPER (dynamic floor) ──
-        // For buildings: 800 €/m² kills rentals. For land: 15 €/m² allows real parcels.
+        // ── 3b. SALES-ONLY GATEKEEPER (extreme safety net) ──
+        // Only removes obvious garbage (monthly rents misclassified as sales).
+        // Floors are intentionally very low so real ad data is NEVER filtered out.
         {
             int beforeGatekeeper = cleanPrices.Count;
             cleanPrices = cleanPrices.Where(p => p.PricePerM2 >= minPricePerM2).ToList();
@@ -1682,14 +1685,21 @@ public class ValuationEngine
                 if (size > 0 && price > 0)
                 {
                     // ── RENT-TRAP: Reject total price below floor ──
-                    if (price >= 1000 && price < minTotal)
-                        continue; // Almost certainly monthly rent or land scrap
+                    // For ag land, floor is 500€ — small parcels are valid sales.
+                    // For buildings, floor is 35k€ — anything below is likely rent.
+                    if (price >= minTotal * 0.5 && price < minTotal)
+                        continue; // Likely monthly rent or garbage data
 
                     double ppm2;
-                    if (price < 1000)
+                    if (!isLand && price < 1000)
                     {
-                        // Below €1000: treat as price/m² only if ≥ floor
+                        // Buildings only: below €1000 treat as price/m² (not total price)
                         ppm2 = price;
+                    }
+                    else if (isLand && price < minTotal)
+                    {
+                        // Land: below minTotal, skip — too low to be a real sale
+                        continue;
                     }
                     else
                     {
