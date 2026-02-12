@@ -807,19 +807,20 @@ export default function WizardPage() {
                         placeholder="npr. Split" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">Kvart / Naselje *</label>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Kvart / Naselje</label>
                       <input type="text" value={location.district}
                         onChange={(e) => setLocation({ ...location, district: e.target.value })}
                         placeholder="npr. Plokite" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+                      <p className="text-[11px] text-blue-500 mt-1">💡 Za precizniju procjenu, unesite kvart ili naselje</p>
                     </div>
                   </div>
                 </div>
 
                 <div className="flex justify-end">
                   <button onClick={() => setStep(2)}
-                    disabled={!location.city.trim() || !location.district.trim()}
+                    disabled={!location.city.trim()}
                     className={`rounded-lg px-6 py-2.5 text-sm font-semibold text-white flex items-center gap-2 transition ${
-                      location.city.trim() && location.district.trim()
+                      location.city.trim()
                         ? "bg-blue-600 hover:bg-blue-700" : "bg-gray-300 cursor-not-allowed"
                     }`}>
                     Dalje <ArrowRight className="h-4 w-4" />
