@@ -265,18 +265,35 @@ public class ValuationEngine
         }
         else if (rawPrices.Count >= 2)
         {
-            // 2-4 prices: use median ±80% as filter
+            // V21: 2-4 prices — tighter median ±55% filter (was ±80%).
+            // With few comparables, one outlier drastically skews the result.
+            // E.g. [517, 1833, 2143] — 517 is clearly wrong for Split center.
             var sorted = rawPrices.Select(p => p.PricePerM2).OrderBy(v => v).ToList();
             double median = sorted[sorted.Count / 2];
             cleanPrices = rawPrices
-                .Where(p => p.PricePerM2 >= median * 0.20
-                         && p.PricePerM2 <= median * 1.80)
+                .Where(p => p.PricePerM2 >= median * 0.45
+                         && p.PricePerM2 <= median * 1.55)
                 .ToList();
+
+            // V21: If filter is too aggressive (removes all or <2), widen to ±70%
+            if (cleanPrices.Count < 2 && rawPrices.Count >= 2)
+            {
+                cleanPrices = rawPrices
+                    .Where(p => p.PricePerM2 >= median * 0.30
+                             && p.PricePerM2 <= median * 1.70)
+                    .ToList();
+                outlierMethod = "Median+/-70%(widened)";
+                int removedW = rawPrices.Count - cleanPrices.Count;
+                outlierLog.Add($"V21 widened: median filter +/-70% ({median:F0} EUR/m2), {removedW} removed");
+            }
+            else
+            {
+                outlierMethod = "Median+/-55%";
+            }
             int removed = rawPrices.Count - cleanPrices.Count;
-            outlierMethod = "Median+/-80%";
-            outlierLog.Add($"Premalo za IQR ({rawPrices.Count}) - median filter +/-80% ({median:F0} EUR/m2)");
+            outlierLog.Add($"Premalo za IQR ({rawPrices.Count}) - median filter ({median:F0} EUR/m2)");
             outlierLog.Add($"Uklonjeno {removed} outliera od {rawPrices.Count}");
-            pipeline.Add($"Median filter: {cleanPrices.Count} ostalo");
+            pipeline.Add($"Median filter: {cleanPrices.Count} ostalo, {removed} uklonjeno");
         }
         else if (rawPrices.Count == 1)
         {
@@ -332,9 +349,10 @@ public class ValuationEngine
         }
 
         // ── 3d. HIGH-CLUSTER TRUST (CV > 40%) ──
-        // If CV is huge, we likely have two populations (rentals vs sales).
+        // If CV is huge, we likely have two populations (rentals vs sales, or suburb vs center).
         // Trust the HIGHER cluster — those are the real sales.
-        if (cleanPrices.Count >= 4)
+        // V21: Lowered threshold from ≥4 to ≥3 — with 3 comps a single ruin can ruin the median.
+        if (cleanPrices.Count >= 3)
         {
             var sortedVals = cleanPrices.Select(p => p.PricePerM2).OrderBy(v => v).ToList();
             double mean = sortedVals.Average();
@@ -861,15 +879,15 @@ public class ValuationEngine
             pipeline.Add($"Top-N limiter: kept top {cleanPrices.Count} comps, trimmed {trimmed} low-similarity tail");
         }
 
-        // ── 4d. Reality Check Cap ──
-        // Any comp priced >50% above median → EXCLUDED as outlier.
-        // V15: Previously only crushed weight to 0.1 but still showed in table.
-        // Now properly marks as outlier and removes from cleanPrices.
+        // ── 4d. Reality Check Cap (HIGH + LOW) ──
+        // V21: SYMMETRIC check — comps priced >50% above OR <50% below median → EXCLUDED.
+        // Previously only high-side was checked, so cheap suburban ruins survived.
         if (cleanPrices.Count >= 3)
         {
             var rcPrices = cleanPrices.Select(p => p.PricePerM2).OrderBy(v => v).ToList();
             double rcMedian = rcPrices[rcPrices.Count / 2];
             double rcCap = rcMedian * 1.50;
+            double rcFloor = rcMedian * 0.50;  // V21: LOW-side check
             int capped = 0;
 
             var cappedUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -877,22 +895,45 @@ public class ValuationEngine
             {
                 if (cd.PricePerM2 > rcCap)
                 {
-                    cd.IsOutlier = true; // V15: Mark as outlier (was: weight=0.1)
+                    cd.IsOutlier = true;
                     cappedUrls.Add(cd.Url);
                     capped++;
                     _logger.LogDebug(
-                        "Reality cap: {Title} {Price:F0} EUR/m2 > cap {Cap:F0} -> EXCLUDED as outlier",
+                        "Reality cap HIGH: {Title} {Price:F0} EUR/m2 > cap {Cap:F0} -> EXCLUDED",
                         cd.Title.Length > 40 ? cd.Title[..40] : cd.Title,
                         cd.PricePerM2, rcCap);
+                }
+                else if (cd.PricePerM2 < rcFloor)
+                {
+                    cd.IsOutlier = true;
+                    cappedUrls.Add(cd.Url);
+                    capped++;
+                    _logger.LogDebug(
+                        "Reality cap LOW: {Title} {Price:F0} EUR/m2 < floor {Floor:F0} -> EXCLUDED",
+                        cd.Title.Length > 40 ? cd.Title[..40] : cd.Title,
+                        cd.PricePerM2, rcFloor);
                 }
             }
 
             if (capped > 0)
             {
-                cleanPrices = cleanPrices
+                // V21: Only remove if we still have ≥2 comps after removal
+                var remainingPrices = cleanPrices
                     .Where(p => !cappedUrls.Contains(p.SourceUrl))
                     .ToList();
-                pipeline.Add($"Reality check: {capped} comps EXCLUDED as outliers (price > {rcCap:F0} = 150% of median {rcMedian:F0})");
+                if (remainingPrices.Count >= 2)
+                {
+                    cleanPrices = remainingPrices;
+                    pipeline.Add($"Reality check: {capped} comps EXCLUDED as outliers " +
+                        $"(floor={rcFloor:F0}, cap={rcCap:F0}, median={rcMedian:F0})");
+                }
+                else
+                {
+                    // Can't remove — would leave <2 comps. Reset outlier flags.
+                    foreach (var cd in compDetails.Where(c => cappedUrls.Contains(c.Url)))
+                        cd.IsOutlier = false;
+                    pipeline.Add($"Reality check: {capped} potential outliers found but NOT removed (would leave <2 comps)");
+                }
             }
         }
 
