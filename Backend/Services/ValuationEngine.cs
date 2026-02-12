@@ -150,6 +150,36 @@ public class ValuationEngine
     };
 
     // ══════════════════════════════════════════════════════════
+    //  V22: CENTER / PREMIUM LOCATION KEYWORDS
+    //  Detect when user's additional info indicates the property is in
+    //  a city center, historic core, or premium micro-location.
+    // ══════════════════════════════════════════════════════════
+    private static readonly string[] CenterLocationKeywords =
+        ["centar grada", "centar", "stari grad", "uži centar", "strogi centar",
+         "strogom centru", "historijska jezgra", "povijesna jezgra",
+         "širem centru", "širi centar", "city center", "old town"];
+
+    private static readonly string[] PremiumLandmarkKeywords =
+        ["dioklecijanova palača", "dioklecijanova", "riva", "marjan",
+         "peristil", "prokurative", "katedrala", "bazilika",
+         "lučica", "marina", "ACI marina",
+         "ban jelačić", "gornji grad", "kaptol", "dolac",
+         "knežev dvor", "stradun", "pile"];
+
+    private static readonly string[] PeripheryKeywords =
+        ["periferija", "predgrađe", "predgradje", "rubno područje",
+         "rubno podrucje", "industrijska zona", "prigradsko",
+         "daleko od centra", "udaljen"];
+
+    private static readonly string[] PremiumAmenityKeywords =
+        ["blizu škole", "blizu skole", "blizu fakulteta", "blizu bolnice",
+         "blizu tramvaja", "blizu autobusne", "javni prijevoz",
+         "blizu parka", "mirna ulica", "mirno naselje",
+         "blizu trgovačkog centra", "blizu shopping centra",
+         "turistička zona", "turisticka zona", "elitna lokacija",
+         "atraktivna lokacija", "top lokacija"];
+
+    // ══════════════════════════════════════════════════════════
     // ══════════════════════════════════════════════════════════
     //  SALES-ONLY GATEKEEPER — EXTREME SAFETY NET ONLY
     //  These floors exist ONLY to filter out obvious garbage (monthly rents,
@@ -438,7 +468,8 @@ public class ValuationEngine
                             || marketData.DetectedPropertyType.Contains("apartman", StringComparison.OrdinalIgnoreCase);
 
             // Detect subject features from description
-            string subjectText = $"{property.Description} {property.Condition} {property.RawText}".ToLowerInvariant();
+            // V22: Include AdditionalNotes so user-provided features (garaža, parking, etc.) are detected
+            string subjectText = $"{property.Description} {property.Condition} {property.RawText} {property.AdditionalNotes}".ToLowerInvariant();
             bool subjectHasGarage = DetectFeature(subjectText, GarageKeywords);
             bool subjectHasParking = subjectHasGarage || DetectFeature(subjectText, ParkingKeywords);
             bool subjectHasReno = targetState == PropertyCondition.Renovated
@@ -1455,13 +1486,81 @@ public class ValuationEngine
         MarketResearchResult marketData)
     {
         var adj = new List<ValuationAdjustment>();
-        string allText = $"{property.Description} {property.Location} {property.Condition} {property.RawText}"
+        // V22: Include AdditionalNotes and KeyFeatures in the text scan so user-provided
+        // info (centar grada, blizu Dioklecijanove palače, etc.) triggers adjustments
+        string keyFeaturesText = property.KeyFeatures?.Count > 0
+            ? string.Join(" ", property.KeyFeatures) : "";
+        string allText = $"{property.Description} {property.Location} {property.Condition} {property.RawText} {property.AdditionalNotes} {keyFeaturesText} {property.MicroLocation}"
             .ToLowerInvariant();
 
         // V12: Detect market context for context-aware adjustments
         var context = DetectMarketContext(property.Location, marketData.RegionName);
         var targetState = ParseTargetState(property);
         bool isLandProperty = MarketResearchService.IsLandType(marketData.DetectedPropertyType);
+
+        // ── V22: Center / Premium location ──
+        bool isCenter = CenterLocationKeywords.Any(kw => allText.Contains(kw));
+        bool hasPremiumLandmark = PremiumLandmarkKeywords.Any(kw => allText.Contains(kw));
+        bool isPeriphery = PeripheryKeywords.Any(kw => allText.Contains(kw));
+        bool hasPremiumAmenities = PremiumAmenityKeywords.Count(kw => allText.Contains(kw)) >= 2;
+
+        if (isCenter && hasPremiumLandmark)
+        {
+            adj.Add(new ValuationAdjustment
+            {
+                Factor = "Premium centar grada",
+                Description = "Nekretnina u strogom centru blizu značajnog orijentira — vrhunska mikrolokacija",
+                Percent = 20.0
+            });
+        }
+        else if (isCenter)
+        {
+            adj.Add(new ValuationAdjustment
+            {
+                Factor = "Centar grada",
+                Description = "Nekretnina u centru grada — viša potražnja i cijena",
+                Percent = 12.0
+            });
+        }
+        else if (hasPremiumLandmark)
+        {
+            adj.Add(new ValuationAdjustment
+            {
+                Factor = "Blizina orijentira",
+                Description = "Nekretnina u blizini značajnog gradskog orijentira",
+                Percent = 10.0
+            });
+        }
+
+        if (isPeriphery && !isCenter)
+        {
+            adj.Add(new ValuationAdjustment
+            {
+                Factor = "Periferija",
+                Description = "Nekretnina na periferiji grada — niža potražnja",
+                Percent = -8.0
+            });
+        }
+
+        if (hasPremiumAmenities && !isPeriphery)
+        {
+            adj.Add(new ValuationAdjustment
+            {
+                Factor = "Premium sadržaji u blizini",
+                Description = "Više premium sadržaja u neposrednoj blizini (škola, park, javni prijevoz...)",
+                Percent = 5.0
+            });
+        }
+
+        if (allText.Contains("turistič") || allText.Contains("turistic"))
+        {
+            adj.Add(new ValuationAdjustment
+            {
+                Factor = "Turistička zona",
+                Description = "Nekretnina u turističkoj zoni — pojačana turističko-rentalna potražnja",
+                Percent = 8.0
+            });
+        }
 
         // ── First row to sea ──
         if (FirstRowKeywords.Any(kw => allText.Contains(kw, StringComparison.OrdinalIgnoreCase)))
@@ -1840,7 +1939,8 @@ public class ValuationEngine
     /// <summary>Try to estimate the subject property's year of construction from description text.</summary>
     private static int EstimateYearBuilt(ExtractedPropertyInfo property)
     {
-        var text = $"{property.Description} {property.RawText}";
+        // V22: Include AdditionalNotes for year detection from user notes
+        var text = $"{property.Description} {property.RawText} {property.AdditionalNotes}";
         var match = System.Text.RegularExpressions.Regex.Match(text,
             @"(?:god(?:ina)?\.?\s*(?:izgradnje|gradnje)?[:\s]*|izgrađen[ao]?\s+)(\d{4})\b",
             System.Text.RegularExpressions.RegexOptions.IgnoreCase);
@@ -1859,7 +1959,8 @@ public class ValuationEngine
     /// </summary>
     private static bool IsAgriculturalLand(string detectedType, ExtractedPropertyInfo property)
     {
-        string combined = $"{detectedType} {property.Description} {property.Condition} {property.RawText}"
+        // V22: Include AdditionalNotes for agricultural land detection
+        string combined = $"{detectedType} {property.Description} {property.Condition} {property.RawText} {property.AdditionalNotes}"
             .ToLowerInvariant();
 
         // Definite agricultural indicators
@@ -2168,7 +2269,8 @@ public class ValuationEngine
 
     private double EstimateSizeFromContext(ExtractedPropertyInfo property)
     {
-        string text = $"{property.Description} {property.RawText}";
+        // V22: Include AdditionalNotes for size detection from user notes
+        string text = $"{property.Description} {property.RawText} {property.AdditionalNotes}";
         double size = ExtractSize(text);
         return size > 0 ? size : 50; // Default assumption
     }
@@ -2226,8 +2328,9 @@ public class ValuationEngine
                 _ => DetectConditionFromText(property.Condition + " " + property.Description)
             };
         }
+        // V22: Include AdditionalNotes for condition detection from user notes
         return DetectConditionFromText(
-            property.Condition + " " + property.Description + " " + property.RawText);
+            property.Condition + " " + property.Description + " " + property.RawText + " " + property.AdditionalNotes);
     }
 
     private static double ExtractYardArea(string text)

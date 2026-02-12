@@ -15,6 +15,22 @@ public class ValuationService
         Extract property information from this document (Zemljišnoknjižni izvadak,
         Procjembeni elaborat, or property description).
 
+        ═══════════════════════════════════════════
+        CRITICAL: "DODATNE INFORMACIJE" SECTION
+        ═══════════════════════════════════════════
+        The text may contain a section starting with "Dodatne informacije:" — this is
+        USER-PROVIDED ADDITIONAL INFORMATION and it is THE MOST IMPORTANT PART of the input.
+        It often contains critical details that dramatically affect valuation:
+        - Micro-location (e.g., "centar grada", "stari grad", "Varoš", "Firule")
+        - Landmark proximity ("blizu Dioklecijanove palače", "uz Rivu", "pored parka")
+        - Sea/beach proximity ("100m od mora", "blizu plaže")
+        - Special features ("panoramski pogled", "renovirano 2023", "bazen")
+        - Access/infrastructure ("pristupni put", "bez parkinga")
+        - Context ("turistička zona", "poslovni prostor u prizemlju")
+        
+        You MUST extract ALL relevant details from "Dodatne informacije" into the
+        appropriate fields AND into "additional_notes" and "key_features".
+
         CRITICAL SIZE EXTRACTION RULES:
         ─────────────────────────────────
         "size_m2" MUST be the LIVING/USABLE AREA (stambena površina, korisna površina,
@@ -49,7 +65,11 @@ public class ValuationService
           Format: "Ime naselja, Općina/Grad" or as found in the document.
           ALWAYS include the settlement/village name and the municipality.
           If document says "k.o. Kukunjevac" → location should include "Kukunjevac".
+          IMPORTANT: If "Dodatne informacije" mentions a specific micro-location
+          (e.g., "centar grada", "Varoš", "stari grad"), INCLUDE it in the location string.
         - "condition": string — Any info about condition, building year, renovations.
+          INCLUDE relevant details from "Dodatne informacije" here too (e.g., "renovirano 2023",
+          "nova fasada", "potrebna adaptacija").
           "Nije navedeno" if not found. If only land area found, note:
           "Površina zgrade nije navedena, navedena je samo površina čestice: XXX m²"
         - "property_state": string — One of: "new", "renovated", "good", "original", "needs_adaptation"
@@ -61,9 +81,25 @@ public class ValuationService
           * "needs_adaptation" = potrebna adaptacija, ruševina, zapušteno, treba obnovu,
             vlažno, stara stolarija, dotrajalo, plijesan, prokišnjavanje, curenje,
             oronulo, neuseljivo, napuknuto, buđ, probija vlaga
+          IMPORTANT: Check "Dodatne informacije" for condition clues — they override defaults.
         - "yard_area_m2": number — Size of okućnica/yard/garden in m² if found, 0 if not.
           For houses: look for "okućnica", "dvorište", "vrt", "parcela uz objekt".
           For land: this is 0 (the plot IS the property).
+        - "additional_notes": string — Copy the ENTIRE content from "Dodatne informacije:" section
+          verbatim. If there is no such section, return empty string "".
+          This is critical — it contains the user's own knowledge about the property.
+        - "key_features": array of strings — Extract ALL notable features mentioned anywhere
+          in the text (especially "Dodatne informacije") that affect property value.
+          Examples: ["centar grada", "blizu Dioklecijanove palače", "pogled na more",
+          "renovirano 2023", "bazen", "garaža", "1. red do mora", "turistička zona",
+          "blizu škole", "blizu tramvaja", "mirna ulica", "parking", "lift",
+          "terasa 20m²", "klima", "podrum"].
+          Return empty array [] if no notable features found.
+        - "micro_location": string — If the text mentions a specific neighborhood, district,
+          or micro-location within a city (e.g., "Varoš", "Firule", "Manuš", "centar",
+          "Spinut", "Gornji grad", "Trnje"), extract it here. Empty string if not found.
+          This is CRITICAL for accurate valuation — "centar Splita" vs "periferija Splita"
+          can mean 2-3x price difference.
 
         DOCUMENT FORMAT HINTS:
         ─────────────────────────────────
@@ -733,7 +769,9 @@ public class ValuationService
 
         if (result is not null)
         {
-            result.RawText = pdfText.Length > 500 ? pdfText[..500] + "..." : pdfText;
+            // V22: Increased from 500→2000 to preserve "Dodatne informacije" notes
+            // which are appended at the END of the description string.
+            result.RawText = pdfText.Length > 2000 ? pdfText[..2000] + "..." : pdfText;
         }
 
         return result ?? throw new InvalidOperationException("Failed to extract property info from PDF.");
@@ -802,6 +840,29 @@ public class ValuationService
                 $"═══════════════════════════════════════════\n";
         }
 
+        // V22: Build additional info block for the AI to reference
+        var additionalInfoBlock = "";
+        if (!string.IsNullOrWhiteSpace(property.AdditionalNotes))
+        {
+            additionalInfoBlock =
+                $"\n═══════════════════════════════════════════\n" +
+                $"CRITICAL: USER-PROVIDED ADDITIONAL INFORMATION\n" +
+                $"═══════════════════════════════════════════\n" +
+                $"The property owner/user provided these CRITICAL details:\n" +
+                $"{property.AdditionalNotes}\n";
+
+            if (property.KeyFeatures?.Count > 0)
+                additionalInfoBlock += $"Key features extracted: {string.Join(", ", property.KeyFeatures)}\n";
+            if (!string.IsNullOrEmpty(property.MicroLocation))
+                additionalInfoBlock += $"Micro-location: {property.MicroLocation}\n";
+
+            additionalInfoBlock +=
+                $"\nINSTRUCTION: These details are VERY IMPORTANT. Reference them in your\n" +
+                $"valuation_reasoning. A property in the city center near a landmark is\n" +
+                $"worth significantly MORE than the same property on the periphery.\n" +
+                $"═══════════════════════════════════════════\n";
+        }
+
         var userMessage =
             $"""
             TARGET PROPERTY (from Land Registry Extract):
@@ -809,8 +870,10 @@ public class ValuationService
             - Size: {property.SizeM2} m²
             - Location: {property.Location}
             - Condition: {property.Condition}
+            - Micro-location: {(string.IsNullOrEmpty(property.MicroLocation) ? "N/A" : property.MicroLocation)}
+            - Key features: {(property.KeyFeatures?.Count > 0 ? string.Join(", ", property.KeyFeatures) : "N/A")}
             - Full PDF excerpt: {property.RawText}
-
+            {additionalInfoBlock}
             ACTIVE NJUŠKALO/INDEX LISTINGS (ghost/archived filtered out):
             {activeBlock}
             {regionalBlock}

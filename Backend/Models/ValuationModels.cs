@@ -79,6 +79,11 @@ public class ExtractedPropertyInfo
     // V5: Fine-tuning fields
     public string PropertyState { get; set; } = "";   // "new", "renovated", "good", "original", "needs_adaptation"
     public double YardAreaM2 { get; set; }             // Okucnica / yard size for houses
+
+    // V22: Additional information fields — user-provided notes are critical for valuation
+    public string AdditionalNotes { get; set; } = "";          // Verbatim user notes from wizard
+    public List<string> KeyFeatures { get; set; } = [];        // AI-extracted features: ["centar grada", "blizu mora", ...]
+    public string MicroLocation { get; set; } = "";            // Specific neighborhood/micro-location if detected
 }
 
 // --- Full Evaluation Response (V2 — deterministic + AI) ---

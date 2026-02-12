@@ -779,6 +779,14 @@ public class EvaluateController : ControllerBase
             _logger.LogInformation("    ✅ STAGE 1 DONE: Opis={Description}, Površina={Size}m², Lokacija={Location}",
                 property.Description, property.SizeM2, property.Location);
 
+            // V22: Log additional information fields
+            if (!string.IsNullOrEmpty(property.AdditionalNotes))
+                _logger.LogInformation("    📝 Dodatne informacije: {Notes}", property.AdditionalNotes);
+            if (property.KeyFeatures?.Count > 0)
+                _logger.LogInformation("    🔑 Ključne značajke: [{Features}]", string.Join(", ", property.KeyFeatures));
+            if (!string.IsNullOrEmpty(property.MicroLocation))
+                _logger.LogInformation("    📍 Mikrolokacija: {MicroLoc}", property.MicroLocation);
+
             await RunStreamingPipelineAsync(property, request.Text, request.Email);
         }
         catch (Exception ex)
