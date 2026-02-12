@@ -33,7 +33,13 @@ public class ValuationService
         EXTRACT THE FOLLOWING FIELDS:
         ─────────────────────────────────
         - "description": string — Property type and details.
-          Include: "Stan", "Kuća", "Građevinsko zemljište", "Poslovni prostor".
+          Use EXACTLY one of these types: "Stan", "Kuća", "Građevinsko zemljište",
+          "Poljoprivredno zemljište", "Mješovito zemljište", "Poslovni prostor".
+          CRITICAL: If the document says "Poljoprivredno" or mentions oranica, pašnjak,
+          livada, šuma, vinograd, voćnjak → use "Poljoprivredno zemljište".
+          If the document says "Građevinsko" or mentions parcela, neizgrađeno → use "Građevinsko zemljište".
+          If the document says "Mješovito" → use "Mješovito zemljište".
+          DO NOT convert agricultural land to construction land or vice versa.
           Include katastarska čestica number if found (e.g. "k.č. 1234/5").
           Include etažni udio if found (e.g. "E-3, suvlasništvo 3/100").
         - "size_m2": number — LIVING/USABLE area in m² for buildings, or PLOT area for land.

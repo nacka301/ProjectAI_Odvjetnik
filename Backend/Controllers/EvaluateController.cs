@@ -660,6 +660,30 @@ public class EvaluateController : ControllerBase
             {
                 property = await _valuationService.ExtractPropertyInfoAsync(request.Text);
                 ApplyLocationOverride(property, request.City, request.Neighborhood);
+
+                // Safety net: if the original text clearly says one land type
+                // but GPT returned a different one, override.
+                var textLower = request.Text.ToLowerInvariant();
+                if (textLower.Contains("poljoprivredno") &&
+                    property.Description != null &&
+                    !property.Description.Contains("Poljoprivredno", StringComparison.OrdinalIgnoreCase))
+                {
+                    property.Description = property.Description
+                        .Replace("Građevinsko zemljište", "Poljoprivredno zemljište", StringComparison.OrdinalIgnoreCase)
+                        .Replace("Mješovito zemljište", "Poljoprivredno zemljište", StringComparison.OrdinalIgnoreCase);
+                    if (!property.Description.Contains("Poljoprivredno", StringComparison.OrdinalIgnoreCase))
+                        property.Description = "Poljoprivredno zemljište";
+                }
+                else if (textLower.Contains("mješovito") &&
+                         property.Description != null &&
+                         !property.Description.Contains("Mješovito", StringComparison.OrdinalIgnoreCase))
+                {
+                    property.Description = property.Description
+                        .Replace("Građevinsko zemljište", "Mješovito zemljište", StringComparison.OrdinalIgnoreCase)
+                        .Replace("Poljoprivredno zemljište", "Mješovito zemljište", StringComparison.OrdinalIgnoreCase);
+                    if (!property.Description.Contains("Mješovito", StringComparison.OrdinalIgnoreCase))
+                        property.Description = "Mješovito zemljište";
+                }
             }
             catch (Exception ex)
             {
