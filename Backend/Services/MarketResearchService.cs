@@ -1409,20 +1409,28 @@ public class MarketResearchService
                     listing.YearLastRenovation = yearRenovation;
 
                 // ── Extract yard area from text (okućnica / dvorište / zemljište) ──
+                // V17: Croatian thousands-separator support (e.g. "4.327,00 m²")
                 var yardMatch = Regex.Match(rawText,
-                    @"(?:okućnica|dvorišt|zemljišt|parcela)[^\d]{0,20}(\d{1,5}(?:[.,]\d+)?)\s*m",
+                    @"(?:okućnica|dvorišt|zemljišt|parcela)[^\d]{0,20}(\d{1,6}(?:\.\d{3})*(?:,\d+)?)\s*m",
                     RegexOptions.IgnoreCase);
-                if (yardMatch.Success && double.TryParse(yardMatch.Groups[1].Value.Replace(',', '.'),
-                        System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var yardArea) && yardArea > 0)
-                    listing.AiYardAreaM2 ??= yardArea;
+                if (yardMatch.Success)
+                {
+                    double yardArea = ValuationEngine.ParseCroatianNumber(yardMatch.Groups[1].Value);
+                    if (yardArea > 0)
+                        listing.AiYardAreaM2 ??= yardArea;
+                }
 
                 // ── Extract size from text (površina / stambena) ──
+                // V17: Croatian thousands-separator support (e.g. "4.327,00 m²")
                 var sizeMatch = Regex.Match(rawText,
-                    @"(?:površina|stambena|korisna)[^\d]{0,20}(\d{1,5}(?:[.,]\d+)?)\s*m",
+                    @"(?:površina|stambena|korisna)[^\d]{0,20}(\d{1,6}(?:\.\d{3})*(?:,\d+)?)\s*m",
                     RegexOptions.IgnoreCase);
-                if (sizeMatch.Success && double.TryParse(sizeMatch.Groups[1].Value.Replace(',', '.'),
-                        System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var sizeVal) && sizeVal > 0)
-                    listing.AiSizeM2 ??= sizeVal;
+                if (sizeMatch.Success)
+                {
+                    double sizeVal = ValuationEngine.ParseCroatianNumber(sizeMatch.Groups[1].Value);
+                    if (sizeVal > 0)
+                        listing.AiSizeM2 ??= sizeVal;
+                }
 
                 // ── Equipment-based feature detection ──
                 if (descLower.Contains("garaž") || descLower.Contains("garaz") || descLower.Contains("parking"))

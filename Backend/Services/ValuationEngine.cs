@@ -32,8 +32,9 @@ public class ValuationEngine
         @"(\d{1,3}(?:\.\d{3})*(?:,\d+)?)\s*(?:€|EUR|eur)\s*/\s*m[²2]",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
+    // V17: Croatian thousands-separator support (e.g. "4.327,00 m²" → 4327)
     private static readonly Regex SizeRegex = new(
-        @"(\d{1,6}(?:[,\.]\d+)?)\s*m[²2]",
+        @"(\d{1,6}(?:\.\d{3})*(?:,\d+)?)\s*m[²2]",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     // ══════════════════════════════════════════════════════════
@@ -1893,8 +1894,9 @@ public class ValuationEngine
     /// Strategy: collect ALL m² numbers, discard those preceded by garage/parking keywords,
     /// then return the LARGEST plausible one (the main property area).
     /// </summary>
+    // V17: Croatian thousands-separator support (e.g. "4.327,00 m²" → 4327)
     private static readonly Regex SizeContextRegex = new(
-        @"(?<prefix>.{0,40}?)(\d{1,6}(?:[,\.]\d+)?)\s*m[²2]",
+        @"(?<prefix>.{0,40}?)(\d{1,6}(?:\.\d{3})*(?:,\d+)?)\s*m[²2]",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly string[] GarageSizePrefixes =
