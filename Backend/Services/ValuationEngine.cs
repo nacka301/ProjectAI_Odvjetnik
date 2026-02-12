@@ -405,6 +405,93 @@ public class ValuationEngine
             }
         }
 
+        // ── 3e. V23: LOCATION-AWARE PRICE CLUSTERING ──
+        // When there's a HUGE spread in prices (e.g., 833 vs 6500 €/m² in Split),
+        // the data contains properties from different micro-locations (center vs periphery).
+        // Instead of blindly averaging, detect 2 clusters and pick the one that matches
+        // the subject's location characteristics (center/premium vs peripheral).
+        if (cleanPrices.Count >= 4)
+        {
+            var sortedPrices = cleanPrices.Select(p => p.PricePerM2).OrderBy(v => v).ToList();
+            double overallMin = sortedPrices.First();
+            double overallMax = sortedPrices.Last();
+
+            // Only cluster if max/min ratio > 2.5 (significant price disparity)
+            if (overallMin > 0 && overallMax / overallMin > 2.5)
+            {
+                // Find the biggest gap between consecutive sorted prices
+                double maxGap = 0;
+                int splitIdx = 0;
+                for (int i = 1; i < sortedPrices.Count; i++)
+                {
+                    double gap = sortedPrices[i] - sortedPrices[i - 1];
+                    if (gap > maxGap)
+                    {
+                        maxGap = gap;
+                        splitIdx = i;
+                    }
+                }
+
+                // Gap must be >50% of the lower cluster's max to be a real cluster boundary
+                double lowerMax = sortedPrices[splitIdx - 1];
+                if (maxGap > lowerMax * 0.50 && splitIdx > 0 && splitIdx < sortedPrices.Count)
+                {
+                    double splitPoint = (sortedPrices[splitIdx - 1] + sortedPrices[splitIdx]) / 2.0;
+                    var lowerCluster = cleanPrices.Where(p => p.PricePerM2 < splitPoint).ToList();
+                    var upperCluster = cleanPrices.Where(p => p.PricePerM2 >= splitPoint).ToList();
+
+                    // Only act if both clusters have at least 1 member
+                    if (lowerCluster.Count >= 1 && upperCluster.Count >= 1)
+                    {
+                        double lowerAvg = lowerCluster.Average(p => p.PricePerM2);
+                        double upperAvg = upperCluster.Average(p => p.PricePerM2);
+
+                        // Determine if subject is premium/center based on V22 fields
+                        string subjectContext = $"{property.AdditionalNotes} {property.MicroLocation} " +
+                            $"{string.Join(" ", property.KeyFeatures ?? [])} {property.Location} {property.RawText}"
+                            .ToLowerInvariant();
+
+                        bool isPremiumSubject =
+                            CenterLocationKeywords.Any(kw => subjectContext.Contains(kw)) ||
+                            PremiumLandmarkKeywords.Any(kw => subjectContext.Contains(kw)) ||
+                            subjectContext.Contains("elitna") || subjectContext.Contains("prestižn") ||
+                            subjectContext.Contains("pješačka zona") || subjectContext.Contains("pjesacka zona") ||
+                            subjectContext.Contains("investicij");
+
+                        bool isPeripheralSubject =
+                            PeripheryKeywords.Any(kw => subjectContext.Contains(kw)) ||
+                            subjectContext.Contains("rural") || subjectContext.Contains("selo");
+
+                        if (isPremiumSubject && !isPeripheralSubject && upperCluster.Count >= 1)
+                        {
+                            int removed = lowerCluster.Count;
+                            cleanPrices = upperCluster;
+                            outlierLog.Add($"V23 Location Clustering: Subject is PREMIUM/CENTER → kept {upperCluster.Count} upper cluster " +
+                                $"(avg {upperAvg:F0} €/m²), discarded {removed} lower cluster (avg {lowerAvg:F0} €/m²). " +
+                                $"Split at {splitPoint:F0} €/m².");
+                            pipeline.Add($"V23 Location Cluster: PREMIUM → upper cluster ({upperCluster.Count} @ avg {upperAvg:F0} €/m²)");
+                        }
+                        else if (isPeripheralSubject && !isPremiumSubject && lowerCluster.Count >= 1)
+                        {
+                            int removed = upperCluster.Count;
+                            cleanPrices = lowerCluster;
+                            outlierLog.Add($"V23 Location Clustering: Subject is PERIPHERAL → kept {lowerCluster.Count} lower cluster " +
+                                $"(avg {lowerAvg:F0} €/m²), discarded {removed} upper cluster (avg {upperAvg:F0} €/m²). " +
+                                $"Split at {splitPoint:F0} €/m².");
+                            pipeline.Add($"V23 Location Cluster: PERIPHERAL → lower cluster ({lowerCluster.Count} @ avg {lowerAvg:F0} €/m²)");
+                        }
+                        else
+                        {
+                            // No clear location signal — log but don't filter
+                            pipeline.Add($"V23 Location Cluster: detected 2 clusters " +
+                                $"(lower={lowerCluster.Count}@{lowerAvg:F0}, upper={upperCluster.Count}@{upperAvg:F0}) " +
+                                $"but no clear premium/peripheral signal → keeping all");
+                        }
+                    }
+                }
+            }
+        }
+
         result.OutliersRemoved = rawPrices.Count - cleanPrices.Count;
         result.UsablePricePoints = cleanPrices.Count;
 

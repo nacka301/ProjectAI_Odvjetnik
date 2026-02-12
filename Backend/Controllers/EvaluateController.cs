@@ -98,7 +98,8 @@ public class EvaluateController : ControllerBase
             try
             {
                 marketData = await _marketResearchService
-                    .SearchComparables(property.Location, property.SizeM2, pdfText);
+                    .SearchComparables(property.Location, property.SizeM2, pdfText,
+                        property.MicroLocation, property.KeyFeatures);
             }
             catch (Exception ex)
             {
@@ -422,7 +423,8 @@ public class EvaluateController : ControllerBase
             try
             {
                 marketData = await _marketResearchService
-                    .SearchComparables(property.Location, property.SizeM2, pdfText);
+                    .SearchComparables(property.Location, property.SizeM2, pdfText,
+                        property.MicroLocation, property.KeyFeatures);
             }
             catch (Exception ex)
             {
@@ -809,7 +811,8 @@ public class EvaluateController : ControllerBase
         try
         {
             marketData = await _marketResearchService
-                .SearchComparables(property.Location, property.SizeM2, pdfText);
+                .SearchComparables(property.Location, property.SizeM2, pdfText,
+                    property.MicroLocation, property.KeyFeatures);
         }
         catch (Exception ex)
         {

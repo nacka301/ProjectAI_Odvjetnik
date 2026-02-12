@@ -106,8 +106,13 @@ public class MarketResearchService
         { "Firule",      ["Spinut", "Bačvice", "Trstenik", "Meje"] },
         { "Bačvice",     ["Firule", "Spinut", "Trstenik"] },
         { "Meje",        ["Spinut", "Firule", "Bačvice", "Manuš"] },
-        { "Manuš",       ["Meje", "Spinut", "Varoš"] },
-        { "Varoš",       ["Manuš", "Meje", "Spinut"] },
+        { "Manuš",       ["Meje", "Spinut", "Varoš", "Grad"] },
+        { "Varoš",       ["Manuš", "Meje", "Grad", "Lučac"] },
+        // Split — center / historic core (V23: premium center neighborhoods)
+        { "Grad",        ["Varoš", "Manuš", "Lučac", "Bačvice"] },
+        { "Lučac",       ["Grad", "Varoš", "Manuš", "Bačvice"] },
+        { "centar",      ["Grad", "Varoš", "Manuš", "Lučac", "Bačvice"] },
+        { "stari grad",  ["Grad", "Varoš", "Manuš", "Lučac"] },
         // Rijeka — neighborhoods
         { "Kantrida",    ["Kostabela", "Pećine", "Martinkovac"] },
         { "Kostabela",   ["Kantrida", "Pećine"] },
@@ -182,6 +187,9 @@ public class MarketResearchService
         { "Split 3", "Split" }, { "Sućidar", "Split" }, { "Sucidar", "Split" },
         { "Kman", "Split" }, { "Brda", "Split" }, { "Gripe", "Split" },
         { "Lovret", "Split" }, { "Lučac", "Split" }, { "Lucac", "Split" },
+        // V23: Split center/historic core neighborhoods
+        { "Grad", "Split" }, { "centar", "Split" }, { "stari grad", "Split" },
+        { "Trstenik", "Split" },
         { "Pujanke", "Split" }, { "Ravne njive", "Split" },
         { "Mejaši", "Split" }, { "Mejasi", "Split" },
     };
@@ -377,7 +385,8 @@ public class MarketResearchService
     // ══════════════════════════════════════════════════════════
 
     public async Task<MarketResearchResult> SearchComparables(
-        string location, double sizeM2, string pdfText = "")
+        string location, double sizeM2, string pdfText = "",
+        string microLocation = "", List<string>? keyFeatures = null)
     {
         var detectedType = DetectPropertyType(pdfText);
         _currentDetectedType = detectedType;   // Set for PriceFirstFilter gates
@@ -397,9 +406,9 @@ public class MarketResearchService
         var searchLog = new List<SearchLogEntry>();
 
         _logger.LogInformation(
-            "V4 Shotgun: Type={Type}, Synonyms=[{Syns}], Region={Region}, SubLocs=[{Subs}]",
+            "V4 Shotgun: Type={Type}, Synonyms=[{Syns}], Region={Region}, SubLocs=[{Subs}], MicroLoc={MicroLoc}",
             detectedType, string.Join(", ", synonyms), regionName,
-            string.Join(" → ", subLocations));
+            string.Join(" → ", subLocations), microLocation);
 
         // Log village fallback and size cap decisions
         if (VillageFallback.TryGetValue(regionName, out var logFallback))
@@ -407,6 +416,111 @@ public class MarketResearchService
         if (!isLand && sizeM2 > 300)
             _logger.LogWarning("Size {Size:0}m² too large for living area ({Type}) — skipping livingArea filter (likely plot area)",
                 sizeM2, detectedType);
+
+        // ─────────────────────────────────────────────────────
+        // V23 PHASE 0M: MICRO-LOCATION NJUŠKALO SEARCH
+        //   When user provides a micro-location (e.g., "centar", "Varoš", "Grad"),
+        //   search Njuškalo with neighborhood-specific slugs FIRST.
+        //   This ensures center-of-city properties find center-level comparables
+        //   rather than being diluted by cheap suburban listings.
+        // ─────────────────────────────────────────────────────
+        if (!string.IsNullOrWhiteSpace(microLocation))
+        {
+            _logger.LogInformation("V23 Phase 0M: Micro-location search for '{MicroLoc}' in {Region}",
+                microLocation, regionName);
+
+            // Try to map micro-location to a Njuškalo neighborhood slug
+            // Njuškalo uses city-neighborhood format: split-varos, split-spinut, etc.
+            var microSlug = NormalizeLocationSlug(microLocation);
+            var citySlug = NormalizeLocationSlug(regionName);
+
+            // Also check if micro-location IS a known neighborhood in BroaderRegion
+            string? microCity = null;
+            if (BroaderRegion.TryGetValue(microLocation, out var mc))
+                microCity = mc;
+            else if (BroaderRegion.TryGetValue(regionName, out var rc2))
+                microCity = rc2;
+
+            var microLocs = new List<string> { regionName, microLocation };
+            if (microCity != null) microLocs.Add(microCity);
+
+            // Search 1: Direct Njuškalo neighborhood URL
+            var microResults = await FetchNjuskaloDirectListings(detectedType, microLocation, sizeM2);
+            if (microResults.Count == 0 && microCity != null)
+            {
+                // Try city-neighborhood format as location
+                microResults = await FetchNjuskaloDirectListings(detectedType,
+                    $"{microCity}-{microLocation}", sizeM2);
+            }
+            totalApiCalls += (microResults.Count > 0 ? 1 : 0);
+
+            var microFiltered = PriceFirstFilter(microResults, "Phase0M-MicroLoc", microLocs);
+            MergeInto(allVerified, microFiltered);
+
+            _logger.LogInformation("Phase 0M (Micro-location '{MicroLoc}'): {New}/{Raw} passed → total={Total}",
+                microLocation, microFiltered.Count, microResults.Count, allVerified.Count);
+            searchLog.Add(new SearchLogEntry
+            {
+                Phase = "0M-MicroLocation",
+                Query = $"Njuškalo micro: {microLocation} in {regionName}",
+                ResultCount = microResults.Count,
+                PassedFilter = microFiltered.Count
+            });
+
+            // Search 2: Tavily search with micro-location keywords for premium coverage
+            if (allVerified.Count < 8)
+            {
+                var microQueries = new List<string>
+                {
+                    $"site:njuskalo.hr prodaja {detectedType} \"{regionName}\" \"{microLocation}\" € {now.Year}",
+                    $"site:njuskalo.hr {detectedType} \"{regionName} {microLocation}\" cijena €",
+                };
+
+                // Add key features as search terms (e.g., "Dioklecijanova palača")
+                if (keyFeatures?.Count > 0)
+                {
+                    var landmark = keyFeatures.FirstOrDefault(f =>
+                        f.Contains("palač", StringComparison.OrdinalIgnoreCase) ||
+                        f.Contains("riva", StringComparison.OrdinalIgnoreCase) ||
+                        f.Contains("marjan", StringComparison.OrdinalIgnoreCase) ||
+                        f.Contains("katedr", StringComparison.OrdinalIgnoreCase));
+                    if (landmark != null)
+                    {
+                        microQueries.Add(
+                            $"site:njuskalo.hr {detectedType} \"{regionName}\" \"{landmark}\" €");
+                    }
+                }
+
+                var tavilyMicroResults = await FireParallelSearches(microQueries, 15, "Phase0M-Tavily");
+                totalApiCalls += microQueries.Count;
+
+                var tavilyMicroFiltered = PriceFirstFilter(tavilyMicroResults, "Phase0M-Tavily", microLocs);
+                MergeInto(allVerified, tavilyMicroFiltered);
+
+                _logger.LogInformation("Phase 0M Tavily (MicroLoc): +{New} → total={Total}",
+                    tavilyMicroFiltered.Count, allVerified.Count);
+            }
+
+            // If micro-location found decent results, add prestige peers for that neighborhood
+            if (allVerified.Count >= 3 && allVerified.Count < 8
+                && PrestigePeers.TryGetValue(microLocation, out var microPeers))
+            {
+                var peerQueries = microPeers.Take(3)
+                    .Select(p => $"site:njuskalo.hr prodaja {detectedType} \"{p}\" cijena € {now.Year}")
+                    .ToList();
+
+                var peerResults = await FireParallelSearches(peerQueries, 10, "Phase0M-Peers");
+                totalApiCalls += peerQueries.Count;
+
+                var peerAllowed = new List<string>(microLocs);
+                peerAllowed.AddRange(microPeers);
+                var peerFiltered = PriceFirstFilter(peerResults, "Phase0M-Peers", peerAllowed);
+                MergeInto(allVerified, peerFiltered);
+
+                _logger.LogInformation("Phase 0M Peers: +{New} → total={Total}",
+                    peerFiltered.Count, allVerified.Count);
+            }
+        }
 
         // ─────────────────────────────────────────────────────
         // PHASE 0A: Njuškalo DIRECT — ALL params (type + location + SIZE)
