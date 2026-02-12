@@ -88,9 +88,9 @@ public class HouseInputValidator : AbstractValidator<HouseInput>
             .GreaterThan(0)
             .WithMessage("Površina zemljišta (okućnica) mora biti veća od 0 m².");
 
-        RuleFor(x => x.LandAreaM2)
-            .GreaterThanOrEqualTo(x => x.LivingAreaM2)
-            .WithMessage("Površina zemljišta bi trebala biti veća ili jednaka stambenoj površini.");
+        // V20: Removed LandAreaM2 >= LivingAreaM2 validation.
+        // Multi-story houses (višekatnica) can have total living area > plot area
+        // (e.g., 3-story house on 180m² plot = 300m² living area).
 
         RuleFor(x => x.LandAreaM2)
             .LessThanOrEqualTo(100_000)
