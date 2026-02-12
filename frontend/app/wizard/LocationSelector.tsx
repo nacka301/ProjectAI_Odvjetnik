@@ -318,7 +318,9 @@ export default function LocationSelector({
     const entry = flatCities[idx];
     if (entry) {
       onCityChange(entry.city);
-      onDistrictChange("");
+      // Note: parent's onCityChange already resets district to ""
+      // Do NOT call onDistrictChange("") here — it would use a stale
+      // closure and overwrite the city back to "".
     }
   };
 

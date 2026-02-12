@@ -826,8 +826,8 @@ export default function WizardPage() {
                 <LocationSelector
                   city={location.city}
                   district={location.district}
-                  onCityChange={(city) => setLocation({ ...location, city, district: "" })}
-                  onDistrictChange={(district) => setLocation({ ...location, district })}
+                  onCityChange={(city) => setLocation((prev) => ({ ...prev, city, district: "" }))}
+                  onDistrictChange={(district) => setLocation((prev) => ({ ...prev, district }))}
                 />
 
                 <div className="flex justify-end">
