@@ -349,8 +349,17 @@ public class MarketResearchService
                 "Tavily API key is not configured. Set Tavily__ApiKey or TAVILY_API_KEY environment variable.");
 
         // ── Bright Data Scraping Browser (Playwright CDP) ──
-        _brightDataWsEndpoint = config["BrightData:BrowserWsEndpoint"]
-            ?? Environment.GetEnvironmentVariable("BRIGHTDATA_BROWSER_WS");
+        // Env var takes priority so Render can override the appsettings.json placeholder
+        _brightDataWsEndpoint = Environment.GetEnvironmentVariable("BRIGHTDATA_BROWSER_WS")
+            ?? config["BrightData:BrowserWsEndpoint"];
+        // Detect placeholder values that were never replaced
+        if (_brightDataWsEndpoint != null &&
+            (_brightDataWsEndpoint.Contains("CUSTOMER_ID") ||
+             _brightDataWsEndpoint.Contains("ZONE_NAME") ||
+             _brightDataWsEndpoint.Contains("PASSWORD")))
+        {
+            _brightDataWsEndpoint = null;
+        }
         if (string.IsNullOrWhiteSpace(_brightDataWsEndpoint))
         {
             _brightDataWsEndpoint = null;
