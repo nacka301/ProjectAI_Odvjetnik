@@ -740,6 +740,11 @@ public class EvaluateController : ControllerBase
             _valuationService.FilterByAiPropertyType(
                 marketData.ActiveListings, marketData.DetectedPropertyType);
 
+            // Also type-filter RegionalData so AllResults (used by engine) doesn't
+            // mix in wrong-type prices (e.g. construction land in agricultural valuation)
+            _valuationService.FilterByAiPropertyType(
+                marketData.RegionalData, marketData.DetectedPropertyType);
+
             int withGarage = marketData.ActiveListings.Count(l => l.HasGarage == true);
             int withReno = marketData.ActiveListings.Count(l => l.HasRenovation == true);
             int withYard = marketData.ActiveListings.Count(l => l.HasYard == true);
@@ -811,6 +816,11 @@ public class EvaluateController : ControllerBase
             else
                 finalReasoning = PatchReasoningValue(
                     aiResult.ValuationReasoning, aiResult.EstimatedValueEur, engineResult.EstimatedValueEur);
+        }
+        else if (engineResult.EstimatedValueEur <= 0 && aiResult.EstimatedValueEur > 0)
+        {
+            // Engine had 0 usable comparables — fall back to AI estimate
+            finalValue = (int)Math.Round(aiResult.EstimatedValueEur);
         }
 
         // ── Build response ──
