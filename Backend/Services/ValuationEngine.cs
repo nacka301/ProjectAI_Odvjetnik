@@ -7,7 +7,7 @@ namespace Backend.Services;
 /// V4 — Robust Estimator Valuation Engine (with Intelligent Adjuster)
 /// 
 /// Statistical overhaul:
-///   1. IQR outlier detection (fallback ±80% median)
+///   1. IQR outlier detection (no hardcoded median fallbacks)
 ///   2. SimilarityScore per comparable (AI-scored, math fallback)
 ///   3. Weighted Median (by SimilarityScore)
 ///   4. Adaptive Realization Gap (based on StdDev + search phase)
@@ -193,7 +193,6 @@ public class ValuationEngine
     private const double MinPricePerM2_Building      =    800;
     private const double MinPricePerM2_BuildLand     =     15;
     private const double MinPricePerM2_AgriLand      =    0.5;
-    private const double HighClusterCvThreshold      =   40.0;  // CV% above which we trust high cluster
 
     private static readonly string[] RentalKeywords =
     [
@@ -278,52 +277,25 @@ public class ValuationEngine
             outlierLog.Add($"Uklonjeno {removed} outliera od {rawPrices.Count}");
             pipeline.Add($"IQR filter: {cleanPrices.Count} ostalo, {removed} uklonjeno");
 
-            // Fallback: if IQR was too aggressive and <3 remain → use median ±80%
+            // V24: If IQR was too aggressive and <3 remain, restore ALL raw prices
+            // (V23 location-aware clustering will handle mixed populations later)
             if (cleanPrices.Count < 3 && rawPrices.Count >= 3)
             {
-                double rawMedian = ppsqmValues[ppsqmValues.Count / 2];
-                cleanPrices = rawPrices
-                    .Where(p => p.PricePerM2 >= rawMedian * 0.20
-                             && p.PricePerM2 <= rawMedian * 1.80)
-                    .ToList();
-                outlierMethod = "IQR->Median+/-80%";
-                int removedFallback = rawPrices.Count - cleanPrices.Count;
-                outlierLog.Add($"IQR previse agresivan - fallback na median +/-80% ({rawMedian:F0} EUR/m2)");
-                outlierLog.Add($"Fallback: {cleanPrices.Count} ostalo, {removedFallback} uklonjeno");
-                pipeline.Add($"IQR fallback (median-based): {cleanPrices.Count} ostalo");
+                cleanPrices = rawPrices.ToList();
+                outlierMethod = "IQR->Restored";
+                outlierLog.Add($"IQR previse agresivan — vraćeni svi ({rawPrices.Count}) za V23 clustering");
+                pipeline.Add($"IQR fallback: restored all {rawPrices.Count} for location clustering");
             }
         }
         else if (rawPrices.Count >= 2)
         {
-            // V21: 2-4 prices — tighter median ±55% filter (was ±80%).
-            // With few comparables, one outlier drastically skews the result.
-            // E.g. [517, 1833, 2143] — 517 is clearly wrong for Split center.
-            var sorted = rawPrices.Select(p => p.PricePerM2).OrderBy(v => v).ToList();
-            double median = sorted[sorted.Count / 2];
-            cleanPrices = rawPrices
-                .Where(p => p.PricePerM2 >= median * 0.45
-                         && p.PricePerM2 <= median * 1.55)
-                .ToList();
-
-            // V21: If filter is too aggressive (removes all or <2), widen to ±70%
-            if (cleanPrices.Count < 2 && rawPrices.Count >= 2)
-            {
-                cleanPrices = rawPrices
-                    .Where(p => p.PricePerM2 >= median * 0.30
-                             && p.PricePerM2 <= median * 1.70)
-                    .ToList();
-                outlierMethod = "Median+/-70%(widened)";
-                int removedW = rawPrices.Count - cleanPrices.Count;
-                outlierLog.Add($"V21 widened: median filter +/-70% ({median:F0} EUR/m2), {removedW} removed");
-            }
-            else
-            {
-                outlierMethod = "Median+/-55%";
-            }
-            int removed = rawPrices.Count - cleanPrices.Count;
-            outlierLog.Add($"Premalo za IQR ({rawPrices.Count}) - median filter ({median:F0} EUR/m2)");
-            outlierLog.Add($"Uklonjeno {removed} outliera od {rawPrices.Count}");
-            pipeline.Add($"Median filter: {cleanPrices.Count} ostalo, {removed} uklonjeno");
+            // V24: 2-4 prices — NO hardcoded median filter.
+            // Pass all through; V23 location-aware clustering (step 3e) will handle
+            // mixed populations (center vs periphery) much better than blind percentages.
+            cleanPrices = rawPrices.ToList();
+            outlierMethod = "SmallSample-PassThrough";
+            outlierLog.Add($"2-4 cijene ({rawPrices.Count}) — bez median filtera, V23 clustering će obraditi");
+            pipeline.Add($"Small sample: {cleanPrices.Count} prices passed through for clustering");
         }
         else if (rawPrices.Count == 1)
         {
@@ -378,39 +350,17 @@ public class ValuationEngine
             }
         }
 
-        // ── 3d. HIGH-CLUSTER TRUST (CV > 40%) ──
-        // If CV is huge, we likely have two populations (rentals vs sales, or suburb vs center).
-        // Trust the HIGHER cluster — those are the real sales.
-        // V21: Lowered threshold from ≥4 to ≥3 — with 3 comps a single ruin can ruin the median.
-        if (cleanPrices.Count >= 3)
-        {
-            var sortedVals = cleanPrices.Select(p => p.PricePerM2).OrderBy(v => v).ToList();
-            double mean = sortedVals.Average();
-            double sumSq = sortedVals.Sum(v => (v - mean) * (v - mean));
-            double cv = mean > 0 ? Math.Sqrt(sumSq / sortedVals.Count) / mean * 100 : 0;
-
-            if (cv > HighClusterCvThreshold)
-            {
-                // Split at median — keep only upper half
-                double medianSplit = sortedVals[sortedVals.Count / 2];
-                int beforeSplit = cleanPrices.Count;
-                cleanPrices = cleanPrices.Where(p => p.PricePerM2 >= medianSplit).ToList();
-                int splitRemoved = beforeSplit - cleanPrices.Count;
-
-                if (splitRemoved > 0)
-                {
-                    outlierLog.Add($"High-Cluster Trust: CV={cv:F1}% > {HighClusterCvThreshold}% -> discarded {splitRemoved} low-cluster listings (split at EUR {medianSplit:F0}/m2)");
-                    pipeline.Add($"High-Cluster Trust: kept {cleanPrices.Count} upper-cluster listings (CV was {cv:F1}%)");
-                }
-            }
-        }
+        // ── 3d. (REMOVED in V24) ──
+        // High-Cluster Trust (CV>40% → keep upper half) was removed because:
+        // - It ALWAYS picked the upper cluster, which is wrong for peripheral subjects
+        // - V23 location-aware clustering (3e) does the same thing but with location context
 
         // ── 3e. V23: LOCATION-AWARE PRICE CLUSTERING ──
         // When there's a HUGE spread in prices (e.g., 833 vs 6500 €/m² in Split),
         // the data contains properties from different micro-locations (center vs periphery).
         // Instead of blindly averaging, detect 2 clusters and pick the one that matches
         // the subject's location characteristics (center/premium vs peripheral).
-        if (cleanPrices.Count >= 4)
+        if (cleanPrices.Count >= 2)
         {
             var sortedPrices = cleanPrices.Select(p => p.PricePerM2).OrderBy(v => v).ToList();
             double overallMin = sortedPrices.First();
