@@ -5,10 +5,6 @@
 //  + detailed settlements for major cities
 // ══════════════════════════════════════════════════════════
 
-export interface Settlement {
-  name: string;
-}
-
 export interface CityMunicipality {
   name: string;
   settlements: string[];
@@ -756,12 +752,4 @@ export function getFlatCities(): FlatCity[] {
   }
   _flatCitiesCache = flat;
   return flat;
-}
-
-export function getSettlements(cityName: string): string[] {
-  const flat = getFlatCities();
-  const match = flat.find(
-    (c) => c.city.toLowerCase() === cityName.toLowerCase()
-  );
-  return match?.settlements ?? [];
 }

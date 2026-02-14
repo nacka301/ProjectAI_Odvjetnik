@@ -111,6 +111,5 @@ public class EvaluationRecord
     public string Location { get; set; } = "";
     public double? SizeM2 { get; set; }
     public int? EstimatedValue { get; set; }
-    public string? PdfUrl { get; set; }
     public object? RawJsonOutput { get; set; }
 }

@@ -201,9 +201,6 @@ public class EmailService
 </html>";
     }
 
-    private static string FormatEur(double value) =>
-        value.ToString("N0", new CultureInfo("hr-HR"));
-
     private static string FormatEur(int value) =>
         value.ToString("N0", new CultureInfo("hr-HR"));
 

@@ -46,32 +46,3 @@ body {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
-
-.animate-float-blob {
-  animation: float-blob 8s ease-in-out infinite;
-}
-
-.animate-float-blob-delayed {
-  animation: float-blob 10s ease-in-out 2s infinite;
-}
-
-.animate-float-blob-slow {
-  animation: float-blob 12s ease-in-out 4s infinite;
-}
-
-.animate-pulse-glow {
-  animation: pulse-glow 2s ease-in-out infinite;
-}
-
-.animate-line-fill {
-  animation: line-fill 0.5s ease-out forwards;
-  transform-origin: top;
-}
-
-.animate-pop-in {
-  animation: pop-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-}
-
-.animate-fade-up {
-  animation: fade-up 0.3s ease-out forwards;
-}

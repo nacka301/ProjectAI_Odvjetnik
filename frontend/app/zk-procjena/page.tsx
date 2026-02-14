@@ -339,7 +339,7 @@ export default function ZkProcjenaPage() {
           estimated_value: streamedUnifiedResult.valuation.estimated_value_eur,
           pdf_url: pdfUrl,
           raw_json_output: streamedUnifiedResult as unknown as Record<string, unknown>,
-        }).catch((e) => console.warn("Failed to save evaluation:", e));
+        }).catch(() => { /* non-critical */ });
       }
     } catch {
       setIsStreaming(false);
@@ -392,14 +392,6 @@ export default function ZkProcjenaPage() {
       case "HIGH": return "bg-red-100 border-red-500 text-red-800";
       case "MEDIUM": return "bg-yellow-100 border-yellow-500 text-yellow-800";
       default: return "bg-green-100 border-green-500 text-green-800";
-    }
-  };
-
-  const riskBg = (score: string) => {
-    switch (score) {
-      case "HIGH": return "bg-red-50";
-      case "MEDIUM": return "bg-yellow-50";
-      default: return "bg-green-50";
     }
   };
 

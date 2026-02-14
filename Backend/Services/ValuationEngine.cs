@@ -128,13 +128,6 @@ public class ValuationEngine
         "cavtat", "mlini", "orebić", "orebic"
     };
 
-    private static readonly HashSet<string> PremiumParkingCities =
-        new(StringComparer.OrdinalIgnoreCase)
-    {
-        "split", "dubrovnik", "rijeka", "zadar", "rovinj",
-        "hvar", "trogir", "šibenik", "sibenik"
-    };
-
     private static readonly Regex YardRegex = new(
         @"(?:oku\u0107nica|okucnica|dvori\u0161te|dvoriste|vrt|ba\u0161ta|basta|\bparcela\b)[:\s]*(?:od\s+)?(?:cca\.?\s+)?(?:ca\.?\s+)?(?:oko\s+)?(\d[\d.,]*)\s*m[\u00b22]",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);

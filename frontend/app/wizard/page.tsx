@@ -17,8 +17,6 @@ import {
   FileCheck,
   ExternalLink,
   ClipboardCopy,
-  ChevronDown,
-  ChevronUp,
   FileSearch,
   Cpu,
   Bot,
@@ -322,18 +320,6 @@ const STAGE_MICROCOPY: Record<string, string[]> = {
   ],
 };
 
-const FLOOR_OPTIONS = [
-  { value: "Subbasement", label: "Podrum" },
-  { value: "SemiBasement", label: "Suteren" },
-  { value: "Ground", label: "Prizemlje" },
-  ...Array.from({ length: 30 }, (_, i) => ({
-    value: `Floor${i + 1}`,
-    label: `${i + 1}. kat`,
-  })),
-  { value: "Attic", label: "Potkrovlje" },
-  { value: "Penthouse", label: "Penthouse" },
-];
-
 const floorNumericValue = (f: string): number => {
   const m = f.match(/^Floor(\d+)$/);
   if (m) return parseInt(m[1]);
@@ -531,7 +517,7 @@ export default function WizardPage() {
           estimated_value: streamedResult.estimated_value_eur,
           pdf_url: null,
           raw_json_output: streamedResult as unknown as Record<string, unknown>,
-        }).catch((e) => console.warn("Failed to save evaluation:", e));
+        }).catch(() => { /* non-critical */ });
       }
     } catch {
       setIsStreaming(false);
@@ -1497,15 +1483,6 @@ function Toggle({ label, checked, onChange }: { label: string; checked: boolean;
         className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
       <span className="text-sm text-gray-700">{label}</span>
     </label>
-  );
-}
-
-function StatCard({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="rounded-lg bg-white border border-gray-200 p-4 text-center">
-      <p className="text-2xl font-bold text-gray-900">{value}</p>
-      <p className="text-xs text-gray-500 mt-1">{label}</p>
-    </div>
   );
 }
 

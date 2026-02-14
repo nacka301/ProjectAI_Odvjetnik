@@ -1,7 +1,7 @@
+using Backend.Helpers;
 using Backend.Models;
 using Backend.Services;
 using Microsoft.AspNetCore.Mvc;
-using System.Text.Json;
 
 namespace Backend.Controllers;
 
@@ -46,68 +46,17 @@ public class ZkUnifiedController : ControllerBase
         _logger = logger;
     }
 
-    private static readonly JsonSerializerOptions _sseJson = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
-
-    private async Task SendSSE(string type, object? payload)
-    {
-        var json = JsonSerializer.Serialize(new { type, data = payload }, _sseJson);
-        await Response.WriteAsync($"data: {json}\n\n");
-        await Response.Body.FlushAsync();
-    }
+    private Task SendSSE(string type, object? payload)
+        => SseHelpers.SendSSE(Response, type, payload);
 
     private Task SendProgress(string stage, string status, string label, string? detail = null)
-        => SendSSE("progress", new { stage, status, label, detail });
+        => SseHelpers.SendProgress(Response, stage, status, label, detail);
 
     private Task SendError(string stage, string message)
-        => SendSSE("error", new { stage, message });
+        => SseHelpers.SendError(Response, stage, message);
 
     private void SetupSSEHeaders()
-    {
-        Response.ContentType = "text/event-stream";
-        Response.Headers.Append("Cache-Control", "no-cache");
-        Response.Headers.Append("Connection", "keep-alive");
-        Response.Headers.Append("X-Accel-Buffering", "no");
-    }
-
-    // ══════════════════════════════════════════════════════════
-    //  POST /api/zk/analyze — ZK parse only (returns JSON, no valuation)
-    //  Quick replacement for old /api/analyze with richer data.
-    // ══════════════════════════════════════════════════════════
-
-    /// <summary>
-    /// Parse a ZK izvadak PDF and return structured analysis.
-    /// No valuation — just risk + legal analysis.
-    /// </summary>
-    [HttpPost("analyze")]
-    [RequestSizeLimit(10 * 1024 * 1024)]
-    public async Task<IActionResult> AnalyzeZk(IFormFile file)
-    {
-        if (file is null || file.Length == 0)
-            return BadRequest(new { error = "Nije učitana datoteka." });
-
-        if (!file.ContentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase)
-            && !file.FileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
-        {
-            return BadRequest(new { error = "Samo PDF datoteke su prihvaćene." });
-        }
-
-        _logger.LogInformation("ZK Analyze: {FileName} ({Size} bytes)", file.FileName, file.Length);
-
-        try
-        {
-            var (parsed, _) = await _zkParsingService.ParseZkIzvadakAsync(file);
-            return Ok(parsed);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "ZK analysis failed.");
-            return StatusCode(500, new { error = $"Greška pri analizi ZK izvadka: {ex.Message}" });
-        }
-    }
+        => SseHelpers.SetupSSEHeaders(Response);
 
     // ══════════════════════════════════════════════════════════
     //  POST /api/zk/stream — UNIFIED: ZK parse + full valuation (SSE)
@@ -309,6 +258,11 @@ public class ZkUnifiedController : ControllerBase
             _valuationService.FilterByAiPropertyType(
                 marketData.ActiveListings, marketData.DetectedPropertyType);
 
+            // Also type-filter RegionalData so AllResults (used by engine) doesn't
+            // mix in wrong-type prices (e.g. construction land in agricultural valuation)
+            _valuationService.FilterByAiPropertyType(
+                marketData.RegionalData, marketData.DetectedPropertyType);
+
             int withGarage = marketData.ActiveListings.Count(l => l.HasGarage == true);
             int withReno = marketData.ActiveListings.Count(l => l.HasRenovation == true);
             int withYard = marketData.ActiveListings.Count(l => l.HasYard == true);
@@ -378,8 +332,13 @@ public class ZkUnifiedController : ControllerBase
                 finalValue = (int)Math.Round(
                     (aiResult.EstimatedValueEur + engineResult.EstimatedValueEur) / 2.0);
             else
-                finalReasoning = PatchReasoningValue(
+                finalReasoning = SseHelpers.PatchReasoningValue(
                     aiResult.ValuationReasoning, aiResult.EstimatedValueEur, engineResult.EstimatedValueEur);
+        }
+        else if (engineResult.EstimatedValueEur <= 0 && aiResult.EstimatedValueEur > 0)
+        {
+            // Engine had 0 usable comparables — fall back to AI estimate
+            finalValue = (int)Math.Round(aiResult.EstimatedValueEur);
         }
 
         // ── Build response ──
@@ -417,6 +376,11 @@ public class ZkUnifiedController : ControllerBase
             ConfidenceColor = marketData.Confidence.Color,
             SearchPhaseUsed = marketData.SearchPhaseUsed,
             SherlockInsight = engineResult.SherlockInsight,
+
+            // V14: Structured valuation output
+            ComparisonTable = SseHelpers.BuildComparisonTable(engineResult, engineResult.TotalAdjustmentPercent),
+            PriceRange = SseHelpers.BuildPriceRange(engineResult, property.SizeM2),
+            BenchmarkSummary = SseHelpers.BuildBenchmarkSummary(engineResult, marketData),
         };
 
         // ── Save to Supabase ──
@@ -455,41 +419,5 @@ public class ZkUnifiedController : ControllerBase
         }
 
         return response;
-    }
-
-    /// <summary>
-    /// Patch reasoning: replace AI's wrong final value with engine's authoritative value.
-    /// (Same as EvaluateController.PatchReasoningValue)
-    /// </summary>
-    private static string PatchReasoningValue(string reasoning, double aiValue, int engineValue)
-    {
-        if (string.IsNullOrWhiteSpace(reasoning)) return reasoning;
-
-        int aiInt = (int)Math.Round(aiValue);
-        string[] aiFormats =
-        [
-            aiInt.ToString("N0", System.Globalization.CultureInfo.GetCultureInfo("hr-HR")),
-            aiInt.ToString("N0", System.Globalization.CultureInfo.InvariantCulture),
-            aiInt.ToString(),
-        ];
-
-        string engineFormatted = engineValue.ToString("N0",
-            System.Globalization.CultureInfo.GetCultureInfo("hr-HR"));
-
-        foreach (var fmt in aiFormats)
-        {
-            if (reasoning.Contains(fmt))
-                reasoning = reasoning.Replace(fmt, engineFormatted);
-        }
-
-        foreach (var fmt in aiFormats)
-        {
-            reasoning = reasoning
-                .Replace($"{fmt} €", $"{engineFormatted} €")
-                .Replace($"{fmt} EUR", $"{engineFormatted} EUR")
-                .Replace($"{fmt} eur", $"{engineFormatted} EUR");
-        }
-
-        return reasoning;
     }
 }
