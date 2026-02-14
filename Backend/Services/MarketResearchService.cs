@@ -109,10 +109,10 @@ public class MarketResearchService
         { "Manuš",       ["Meje", "Spinut", "Varoš", "Grad"] },
         { "Varoš",       ["Manuš", "Meje", "Grad", "Lučac"] },
         // Split — center / historic core (V23: premium center neighborhoods)
-        { "Grad",        ["Varoš", "Manuš", "Lučac", "Bačvice"] },
-        { "Lučac",       ["Grad", "Varoš", "Manuš", "Bačvice"] },
-        { "centar",      ["Grad", "Varoš", "Manuš", "Lučac", "Bačvice"] },
-        { "stari grad",  ["Grad", "Varoš", "Manuš", "Lučac"] },
+        { "Grad",          ["Varoš", "Manuš", "Lučac", "Bačvice"] },
+        { "Lučac",         ["Grad", "Varoš", "Manuš", "Bačvice"] },
+        { "centar Split",  ["Grad", "Varoš", "Manuš", "Lučac", "Bačvice"] },
+        { "stari grad",    ["Grad", "Varoš", "Manuš", "Lučac"] },
         // Rijeka — neighborhoods
         { "Kantrida",    ["Kostabela", "Pećine", "Martinkovac"] },
         { "Kostabela",   ["Kantrida", "Pećine"] },
@@ -188,7 +188,7 @@ public class MarketResearchService
         { "Kman", "Split" }, { "Brda", "Split" }, { "Gripe", "Split" },
         { "Lovret", "Split" }, { "Lučac", "Split" }, { "Lucac", "Split" },
         // V23: Split center/historic core neighborhoods
-        { "Grad", "Split" }, { "centar", "Split" }, { "stari grad", "Split" },
+        { "Grad", "Split" }, { "centar", "Split" }, { "centar Split", "Split" }, { "stari grad", "Split" },
         { "Trstenik", "Split" },
         { "Pujanke", "Split" }, { "Ravne njive", "Split" },
         { "Mejaši", "Split" }, { "Mejasi", "Split" },
