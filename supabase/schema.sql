@@ -73,6 +73,8 @@ CREATE POLICY "service_role_full_access" ON evaluations
     FOR ALL USING (auth.role() = 'service_role');
 CREATE POLICY "anon_insert_only" ON evaluations
     FOR INSERT WITH CHECK (true);
+CREATE POLICY "anon_select" ON evaluations
+    FOR SELECT USING (true);
 
 -- zk_analyses
 ALTER TABLE zk_analyses ENABLE ROW LEVEL SECURITY;

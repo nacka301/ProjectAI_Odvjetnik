@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, BookOpen, ClipboardList } from "lucide-react";
+import { ArrowRight, BookOpen, ClipboardList, Clock } from "lucide-react";
 
 export default function Home() {
   return (
@@ -48,6 +48,24 @@ export default function Home() {
             </p>
             <span className="flex items-center gap-1 text-sm font-medium text-indigo-600 group-hover:underline">
               Pokreni <ArrowRight className="h-4 w-4" />
+            </span>
+          </Link>
+
+          {/* History — saved evaluations */}
+          <Link
+            href="/history"
+            className="group flex flex-col items-center gap-4 rounded-xl border-2 border-gray-200 bg-white p-8 shadow-sm transition hover:shadow-md hover:border-gray-400"
+          >
+            <Clock className="h-12 w-12 text-gray-500" />
+            <h2 className="text-xl font-semibold text-gray-900">
+              Povijest procjena
+            </h2>
+            <p className="text-sm text-gray-500 leading-relaxed max-w-lg">
+              Pregledajte sve dosadašnje procjene, preuzmite PDF izvještaje
+              i usporedite rezultate za različite nekretnine.
+            </p>
+            <span className="flex items-center gap-1 text-sm font-medium text-gray-600 group-hover:underline">
+              Pregledaj <ArrowRight className="h-4 w-4" />
             </span>
           </Link>
         </div>

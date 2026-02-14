@@ -79,3 +79,39 @@ export async function saveEvaluation(evaluation: {
 
   return data?.id ?? null;
 }
+
+/**
+ * Fetch evaluation history from the 'evaluations' table.
+ * Returns the most recent evaluations, ordered by created_at DESC.
+ * Requires anon SELECT policy on evaluations (see schema.sql).
+ */
+export interface EvaluationRow {
+  id: string;
+  created_at: string;
+  property_type: string;
+  location: string;
+  size_m2: number | null;
+  estimated_value: number;
+  pdf_url: string | null;
+  raw_json_output: Record<string, unknown>;
+}
+
+export async function getEvaluations(limit = 50): Promise<EvaluationRow[]> {
+  if (!supabase) {
+    console.warn("Supabase not configured — cannot fetch evaluations.");
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from("evaluations")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error("Supabase select error:", error.message);
+    return [];
+  }
+
+  return (data as EvaluationRow[]) ?? [];
+}
