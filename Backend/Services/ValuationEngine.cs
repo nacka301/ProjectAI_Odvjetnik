@@ -173,6 +173,19 @@ public class ValuationEngine
          "turistička zona", "turisticka zona", "elitna lokacija",
          "atraktivna lokacija", "top lokacija"];
 
+    // V25: Investment / commercial-potential property keywords
+    // When these appear in the subject description, the property has commercial
+    // conversion potential — renovation penalty must be CAPPED because location
+    // value dominates (e.g. Split center house → mini hotel conversion).
+    private static readonly string[] InvestmentKeywords =
+        ["investicij", "mini hotel", "hotel", "hostel", "apartmani",
+         "turistički", "turisticka", "turistickih", "turističkih",
+         "komercijalni", "komercijaln", "poslovno-stambeni", "poslovno stambeni",
+         "poslovni potencijal", "investicijski", "iznajmljivanj",
+         "turizam", "booking", "airbnb", "pješačka zona", "pjesačka zona",
+         "pješačkoj zoni", "ekskluzivn", "luksuzn",
+         "rekonstrukcij", "prenamjen", "pretvorit", "konverzij"];
+
     // ══════════════════════════════════════════════════════════
     // ══════════════════════════════════════════════════════════
     //  SALES-ONLY GATEKEEPER — EXTREME SAFETY NET ONLY
@@ -398,9 +411,9 @@ public class ValuationEngine
                         bool isPremiumSubject =
                             CenterLocationKeywords.Any(kw => subjectContext.Contains(kw)) ||
                             PremiumLandmarkKeywords.Any(kw => subjectContext.Contains(kw)) ||
+                            InvestmentKeywords.Any(kw => subjectContext.Contains(kw)) ||
                             subjectContext.Contains("elitna") || subjectContext.Contains("prestižn") ||
-                            subjectContext.Contains("pješačka zona") || subjectContext.Contains("pjesacka zona") ||
-                            subjectContext.Contains("investicij");
+                            subjectContext.Contains("pješačka zona") || subjectContext.Contains("pjesacka zona");
 
                         bool isPeripheralSubject =
                             PeripheryKeywords.Any(kw => subjectContext.Contains(kw)) ||
@@ -512,6 +525,21 @@ public class ValuationEngine
             bool subjectIsNorth = DetectFeature(subjectText, NorthFacingKeywords);
             bool subjectIsSouth = DetectFeature(subjectText, SouthFacingKeywords);
 
+            // V25: Detect investment/commercial properties — cap renovation penalties
+            // A 300m² house in Split center pedestrian zone needing reconstruction still
+            // has enormous location value. For investment properties the value is in the
+            // LOCATION + POTENTIAL, not in the current building condition.
+            bool isInvestmentProperty = InvestmentKeywords.Any(kw => subjectText.Contains(kw));
+            bool isPremiumLocation =
+                CenterLocationKeywords.Any(kw => subjectText.Contains(kw)) ||
+                PremiumLandmarkKeywords.Any(kw => subjectText.Contains(kw));
+            // Investment property = explicitly flagged OR premium center location
+            bool capRenovationPenalty = isInvestmentProperty || (isPremiumLocation && subjectNeedsWorkFlag);
+            if (capRenovationPenalty)
+            {
+                pipeline.Add("V25 Investment/Premium: renovation deductions CAPPED (location value dominates)");
+            }
+
             int featureAdjCount = 0;
             var featureLog = new List<string>();
 
@@ -560,22 +588,30 @@ public class ValuationEngine
                                          || p.DetectedCondition == PropertyCondition.New;
                 bool compHasPartialReno = p.HasRenovation && !compIsFullyRenovated;
 
+                // V25: For investment/premium properties, cap renovation deduction to max 10%
+                // The location value dominates — a ruin in Split center pedestrian zone
+                // is worth more than a renovated house in the suburbs.
+                double maxRenoPenalty = capRenovationPenalty ? 0.10 : 0.30;
+                double maxPartialRenoPenalty = capRenovationPenalty ? 0.05 : 0.15;
+                double maxGenericRenoPenalty = capRenovationPenalty ? 0.08 : 0.25;
+
                 if (subjectNeedsWork && compIsFullyRenovated)
                 {
-                    // Use derived renovation premium, but cap at 30%
-                    double deduction = Math.Min(derived.RenovationPremiumPct, 0.30);
+                    double deduction = Math.Min(derived.RenovationPremiumPct, maxRenoPenalty);
                     p.PricePerM2 *= (1 - deduction);
-                    reasons.Add($"-{deduction * 100:F0}% (trošak adaptacije, derived reno premium={derived.RenovationPremiumPct * 100:F0}%)");
+                    reasons.Add(capRenovationPenalty
+                        ? $"-{deduction * 100:F0}% (adaptacija — CAPPED, investicijski potencijal)"
+                        : $"-{deduction * 100:F0}% (trošak adaptacije, derived reno premium={derived.RenovationPremiumPct * 100:F0}%)");
                 }
                 else if (subjectNeedsWork && compHasPartialReno)
                 {
-                    double deduction = Math.Min(derived.RenovationPremiumPct * 0.4, 0.15); // 40% of full reno
+                    double deduction = Math.Min(derived.RenovationPremiumPct * 0.4, maxPartialRenoPenalty);
                     p.PricePerM2 *= (1 - deduction);
                     reasons.Add($"-{deduction * 100:F0}% (parcijalna reno)");
                 }
                 else if (!subjectHasReno && p.HasRenovation)
                 {
-                    double deduction = Math.Min(derived.RenovationPremiumPct * 0.8, 0.25);
+                    double deduction = Math.Min(derived.RenovationPremiumPct * 0.8, maxGenericRenoPenalty);
                     p.PricePerM2 *= (1 - deduction);
                     reasons.Add($"-{deduction * 100:F0}% (comp renoviran, subjekt nije)");
                 }
@@ -1534,6 +1570,9 @@ public class ValuationEngine
         var targetState = ParseTargetState(property);
         bool isLandProperty = MarketResearchService.IsLandType(marketData.DetectedPropertyType);
 
+        // V25: Detect investment / commercial-potential properties
+        bool hasInvestmentPotential = InvestmentKeywords.Any(kw => allText.Contains(kw));
+
         // ── V22: Center / Premium location ──
         bool isCenter = CenterLocationKeywords.Any(kw => allText.Contains(kw));
         bool hasPremiumLandmark = PremiumLandmarkKeywords.Any(kw => allText.Contains(kw));
@@ -1598,6 +1637,17 @@ public class ValuationEngine
             });
         }
 
+        // V25: Investment / commercial-potential property premium
+        if (hasInvestmentPotential && !isLandProperty)
+        {
+            adj.Add(new ValuationAdjustment
+            {
+                Factor = "Investicijski potencijal",
+                Description = "Nekretnina s komercijalnim/turističkim potencijalom (hotel, apartmani, prenamjena) — vrijednost lokacije dominira nad stanjem objekta",
+                Percent = 15.0
+            });
+        }
+
         // ── First row to sea ──
         if (FirstRowKeywords.Any(kw => allText.Contains(kw, StringComparison.OrdinalIgnoreCase)))
         {
@@ -1645,11 +1695,15 @@ public class ValuationEngine
             && (allText.Contains("potrebna adaptac") || allText.Contains("potrebna obnova")
                 || allText.Contains("ruševin") || allText.Contains("zapušten")))
         {
+            // V25: Cap renovation penalty for investment/premium properties
+            double renoPenalty = hasInvestmentPotential ? -5.0 : -15.0;
             adj.Add(new ValuationAdjustment
             {
                 Factor = "Potrebna adaptacija",
-                Description = "Nekretnina zahtijeva značajnu adaptaciju",
-                Percent = -15.0
+                Description = hasInvestmentPotential
+                    ? "Nekretnina zahtijeva adaptaciju (umanjeno – investicijski potencijal)"
+                    : "Nekretnina zahtijeva značajnu adaptaciju",
+                Percent = renoPenalty
             });
         }
         else if (!isLandProperty
