@@ -173,6 +173,20 @@ public class ValuationEngine
          "turistička zona", "turisticka zona", "elitna lokacija",
          "atraktivna lokacija", "top lokacija"];
 
+    // V26: Known SUBURB neighborhoods — when subject is in Prime Zone (centar/stari grad),
+    // comparables from these neighborhoods are EXCLUDED ("Anti-Barutana Rule").
+    // These are peripheral/suburban locations in major Croatian cities.
+    private static readonly string[] SuburbKeywords =
+        ["barutana", "mejaši", "mejasi", "sirobuja", "kman", "visoka",
+         "neslanovac", "kopilica", "skalice", "žnjan", "znjan", "pazdigrad",
+         "kila", "brda", "mertojak", "ravne njive", "pujanke", "trstenik",
+         "dubrava", "sesvete", "velika gorica", "zaprešić", "zapresic",
+         "spansko", "sloboština", "slobostina", "kozari bok", "kozari putevi",
+         "novi zagreb", "žitnjak", "pescenica", "peščenica",
+         "mokošica", "mokosica", "župa dubrovačka", "gruda",
+         "srdoči", "srdoci", "zamet", "marinići", "marinici",
+         "pehlin", "drenova"];
+
     // V25: Investment / commercial-potential property keywords
     // When these appear in the subject description, the property has commercial
     // conversion potential — renovation penalty must be CAPPED because location
@@ -756,6 +770,72 @@ public class ValuationEngine
             }
         }
 
+        // ── 4b-ZONE. V26: PRIME ZONE LOCK ("Anti-Barutana Rule") ──
+        // If subject is in a prime zone (Centar, Stari Grad, uži centar),
+        // EXCLUDE any comparable located in a known suburb.
+        // Reason: A house in Split Center near Diocletian's Palace CANNOT be compared
+        // with a house in Barutana or Mejaši — completely different micro-markets.
+        if (cleanPrices.Count > 0)
+        {
+            string subjectCtx = $"{property.AdditionalNotes} {property.MicroLocation} " +
+                $"{string.Join(" ", property.KeyFeatures ?? [])} {property.Location} " +
+                $"{property.RawText} {property.Description}"
+                .ToLowerInvariant();
+
+            bool subjectInPrimeZone =
+                CenterLocationKeywords.Any(kw => subjectCtx.Contains(kw)) ||
+                PremiumLandmarkKeywords.Any(kw => subjectCtx.Contains(kw));
+
+            if (subjectInPrimeZone)
+            {
+                var zoneExcluded = new List<ExtractedPrice>();
+                foreach (var p in cleanPrices)
+                {
+                    string compText = $"{p.SourceTitle} {p.SourceUrl}".ToLowerInvariant();
+                    // Check if comp is in a known suburb
+                    bool compIsSuburb = SuburbKeywords.Any(kw => compText.Contains(kw));
+                    // Also check: if subject has center/landmark keywords, comp should too
+                    bool compHasCenterSignal =
+                        CenterLocationKeywords.Any(kw => compText.Contains(kw)) ||
+                        PremiumLandmarkKeywords.Any(kw => compText.Contains(kw)) ||
+                        compText.Contains("centar") || compText.Contains("center") ||
+                        compText.Contains("stari grad") || compText.Contains("old town");
+
+                    if (compIsSuburb && !compHasCenterSignal)
+                        zoneExcluded.Add(p);
+                }
+
+                if (zoneExcluded.Count > 0)
+                {
+                    // Only exclude if we'd still have ≥1 comp remaining
+                    int remaining = cleanPrices.Count - zoneExcluded.Count;
+                    if (remaining >= 1)
+                    {
+                        var excludeUrls = new HashSet<string>(
+                            zoneExcluded.Select(e => e.SourceUrl), StringComparer.OrdinalIgnoreCase);
+                        cleanPrices = cleanPrices.Where(p => !excludeUrls.Contains(p.SourceUrl)).ToList();
+
+                        // Mark as outliers in compDetails
+                        foreach (var cd in compDetails.Where(c => excludeUrls.Contains(c.Url)))
+                            cd.IsOutlier = true;
+
+                        var excludedNames = string.Join(", ",
+                            zoneExcluded.Select(e => e.SourceTitle.Length > 30 ? e.SourceTitle[..30] : e.SourceTitle));
+                        pipeline.Add($"V26 PRIME ZONE LOCK: {zoneExcluded.Count} suburban comps EXCLUDED " +
+                            $"(subject is in prime zone). Removed: {excludedNames}");
+                        _logger.LogInformation(
+                            "V26 Prime Zone Lock: excluded {Count} suburban comps, {Remaining} remain",
+                            zoneExcluded.Count, cleanPrices.Count);
+                    }
+                    else
+                    {
+                        pipeline.Add($"V26 PRIME ZONE LOCK: {zoneExcluded.Count} suburban comps detected " +
+                            $"but NOT excluded (would leave 0 comps)");
+                    }
+                }
+            }
+        }
+
         // ── 4b++. V13: CROSS-TYPE HARD EXCLUSION ──
         // Stan ≠ Kuća ≠ Zemljište — NIKAD ne uspoređivati različite tipove.
         // If subject is House, ALL apartment comps are EXCLUDED (and vice versa).
@@ -1040,6 +1120,52 @@ public class ValuationEngine
             }
         }
 
+        // ── 4d+. V26: ZONE-AWARE OUTLIER PURGE ──
+        // When 2 comps have a price gap >100% (e.g. 900€ vs 2600€), identify zone mismatch.
+        // If subject is in a superior zone (prime/center), discard the cheaper one.
+        // Use median of the TOP tier only — don't average "palace" and "shack".
+        if (cleanPrices.Count >= 2)
+        {
+            var activeComps = compDetails.Where(c => !c.IsOutlier).OrderBy(c => c.PricePerM2).ToList();
+            double lowestPrice = activeComps.First().PricePerM2;
+            double highestPrice = activeComps.Last().PricePerM2;
+
+            if (lowestPrice > 0 && highestPrice / lowestPrice > 2.0)
+            {
+                // >100% gap detected — check if subject is in a prime zone
+                string subjectCtx2 = $"{property.AdditionalNotes} {property.MicroLocation} " +
+                    $"{string.Join(" ", property.KeyFeatures ?? [])} {property.Location} " +
+                    $"{property.RawText} {property.Description}"
+                    .ToLowerInvariant();
+
+                bool subjectIsPrime =
+                    CenterLocationKeywords.Any(kw => subjectCtx2.Contains(kw)) ||
+                    PremiumLandmarkKeywords.Any(kw => subjectCtx2.Contains(kw));
+
+                if (subjectIsPrime)
+                {
+                    // Find the split point (median) and discard comps in the lower tier
+                    double midPoint = (lowestPrice + highestPrice) / 2.0;
+                    var cheapComps = activeComps.Where(c => c.PricePerM2 < midPoint).ToList();
+                    var premiumComps = activeComps.Where(c => c.PricePerM2 >= midPoint).ToList();
+
+                    if (cheapComps.Count > 0 && premiumComps.Count >= 1)
+                    {
+                        var cheapUrls = new HashSet<string>(
+                            cheapComps.Select(c => c.Url), StringComparer.OrdinalIgnoreCase);
+                        foreach (var cd in cheapComps)
+                            cd.IsOutlier = true;
+                        cleanPrices = cleanPrices
+                            .Where(p => !cheapUrls.Contains(p.SourceUrl)).ToList();
+
+                        pipeline.Add($"V26 ZONE OUTLIER PURGE: {cheapComps.Count} cheap comps discarded " +
+                            $"(gap >{highestPrice / lowestPrice:F1}x, subject in prime zone). " +
+                            $"Kept {premiumComps.Count} premium-tier comps (≥{midPoint:F0} €/m²)");
+                    }
+                }
+            }
+        }
+
         // ── 5. Weighted Median / Valuation ──
         double basePricePerM2;
         string priceSource;
@@ -1134,7 +1260,18 @@ public class ValuationEngine
 
         // ── 7. Adaptive Realization Gap ──
         var searchPhase = ParseSearchPhase(marketData.SearchPhaseUsed);
-        double realizationGap = CalculateAdaptiveGap(coeffVar, searchPhase, cleanPrices.Count, priceSource);
+
+        // V26: Detect if subject is prime zone + investment property → cap realization gap
+        string gapCtx = $"{property.AdditionalNotes} {property.MicroLocation} " +
+            $"{string.Join(" ", property.KeyFeatures ?? [])} {property.Location} " +
+            $"{property.RawText} {property.Description}"
+            .ToLowerInvariant();
+        bool isPrimeZoneInvestment =
+            (CenterLocationKeywords.Any(kw => gapCtx.Contains(kw)) ||
+             PremiumLandmarkKeywords.Any(kw => gapCtx.Contains(kw))) &&
+            InvestmentKeywords.Any(kw => gapCtx.Contains(kw));
+
+        double realizationGap = CalculateAdaptiveGap(coeffVar, searchPhase, cleanPrices.Count, priceSource, isPrimeZoneInvestment);
         result.RealizationDiscountPercent = Math.Round(realizationGap * 100, 1);
 
         double afterGap = basePricePerM2 * (1 + realizationGap);
@@ -1377,7 +1514,8 @@ public class ValuationEngine
         double coeffVar,
         SearchPhase searchPhase,
         int compCount,
-        string priceSource)
+        string priceSource,
+        bool isPrimeZoneInvestment = false)
     {
         double gap;
 
@@ -1421,6 +1559,15 @@ public class ValuationEngine
         else if (searchPhase >= SearchPhase.SynonymBlitz)
         {
             gap -= 0.02;
+        }
+
+        // V26: Prime zone investment properties — cap realization gap at -10%.
+        // Commercial properties in city centers (Centar, Stari Grad) generate yield;
+        // asking prices are closer to transaction prices in these premium micro-markets.
+        if (isPrimeZoneInvestment)
+        {
+            gap = Math.Max(gap, -0.10); // Never more than -10% for prime zone investments
+            _logger.LogInformation("V26: Prime zone investment — realization gap CAPPED at {Gap:P1}", gap);
         }
 
         // Clamp: never less than -25%, minimum -5%
@@ -1783,8 +1930,9 @@ public class ValuationEngine
         }
 
         // ── Very large property (>200m²) — NOT for land ──
+        // V26: Skip for investment/commercial properties — they generate yield, not discount.
         bool isLandType = MarketResearchService.IsLandType(marketData.DetectedPropertyType);
-        if (property.SizeM2 > 200 && !isLandType)
+        if (property.SizeM2 > 200 && !isLandType && !hasInvestmentPotential)
         {
             adj.Add(new ValuationAdjustment
             {

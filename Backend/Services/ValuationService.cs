@@ -489,6 +489,10 @@ public class ValuationService
         SCORING PRIORITIES (in order of importance):
         1. LOCATION (50%): Same neighborhood > same city zone > same city > different city
            Check "Lokacija:" structured field for precise location.
+           CRITICAL "PRIME ZONE" RULE: If the TARGET is in "Centar", "Stari Grad", "Grad",
+           or "Donji Grad" — any comparable from a SUBURB (e.g. Barutana, Mejaši, Sirobuja,
+           Dubrava, Sesvete) MUST score ≤0.30 regardless of other factors.
+           Center properties and suburban properties are DIFFERENT MARKETS.
         2. PROPERTY TYPE (25%): Must be same type (stan≠kuća≠zemljište). Different type = max 0.30
         3. SIZE (15%): Closer size = higher score. ±10% is excellent, ±50% is poor
         4. CONDITION & FEATURES (10%): Similar condition/age, heating, energy class = bonus
