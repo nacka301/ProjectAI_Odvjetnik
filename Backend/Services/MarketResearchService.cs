@@ -1720,85 +1720,63 @@ public class MarketResearchService
     }
 
     /// <summary>
-    /// Build the Njuškalo search URL from property type + location.
-    /// e.g. "građevinsko zemljište" + "Vir" → "https://www.njuskalo.hr/prodaja-zemljista/vir"
+    /// Build the Njuškalo search URL using the /search/ endpoint.
+    /// e.g. "kuća" + "Split" → "https://www.njuskalo.hr/search/?keywords=split+kuća"
+    ///      "stan" + "Srebrnjak" (→Zagreb) → "https://www.njuskalo.hr/search/?keywords=zagreb+srebrnjak+stan"
     /// </summary>
     private static string? BuildNjuskaloSearchUrl(string detectedType, string regionName, double sizeM2 = 0)
     {
-        // Find the correct URL slug for this property type
-        string? slug = null;
-        foreach (var (key, value) in NjuskaloTypeSlug)
-        {
-            if (detectedType.Contains(key, StringComparison.OrdinalIgnoreCase))
-            {
-                slug = value;
-                break;
-            }
-        }
-
-        // Default fallback for unknown types
-        slug ??= detectedType.Contains("zemlj", StringComparison.OrdinalIgnoreCase)
-            ? "prodaja-zemljista"
-            : detectedType.Contains("kuć", StringComparison.OrdinalIgnoreCase)
-                ? "prodaja-kuca"
-                : "prodaja-stanova";
-
-        // NEIGHBORHOOD URL: Njuškalo supports neighborhood-level slugs!
-        // Format: "{city-slug}-{neighborhood-slug}" e.g. "osijek-retfala"
-        // Try neighborhood-specific URL first for much better results.
-        string urlRegion = regionName;
-        string? neighborhoodUrl = null;
-
-        if (BroaderRegion.TryGetValue(regionName, out var parentCity))
-        {
-            // Build neighborhood-specific URL: osijek-retfala, split-spinut, etc.
-            var citySlug = NormalizeLocationSlug(parentCity);
-            var neighborhoodSlug = NormalizeLocationSlug(regionName);
-            neighborhoodUrl = $"https://www.njuskalo.hr/{slug}/{citySlug}-{neighborhoodSlug}";
-            urlRegion = parentCity; // fallback to city-level
-        }
-        // NOTE: VillageFallback is NOT used here anymore.
-        // BuildNjuskaloSearchUrl always tries the original regionName first.
-        // FetchNjuskaloDirectListings handles the fallback to the parent city
-        // only when the primary URL returns empty results.
-
-        var locSlug = NormalizeLocationSlug(urlRegion);
-        if (string.IsNullOrWhiteSpace(locSlug))
+        if (string.IsNullOrWhiteSpace(regionName))
             return null;
 
-        var baseUrl = neighborhoodUrl ?? $"https://www.njuskalo.hr/{slug}/{locSlug}";
+        // ── Build keyword list: location(s) + property type ──
+        var keywords = new List<string>();
 
-        // ── QUERY PARAMETERS: Size filter (±30%) ──
-        // Njuškalo supports livingArea[min]/[max] for houses & apartments,
-        // plotArea[min]/[max] for land. This dramatically improves result quality.
-        var queryParams = new List<string>();
-
-        if (sizeM2 > 10)
+        // Add parent city first if this is a neighborhood/village
+        if (BroaderRegion.TryGetValue(regionName, out var parentCity))
         {
-            bool isLand = slug.Contains("zemljist");
-
-            if (!isLand && sizeM2 > 300)
-            {
-                // Houses/apartments NEVER have 300+ m² living area.
-                // If sizeM2 > 300, the AI likely confused plot area with living area.
-                // Skip size filter entirely — downstream similarity scoring will handle it.
-            }
-            else
-            {
-                string sizeParam = isLand ? "plotArea" : "livingArea";
-
-                int minSize = (int)(sizeM2 * 0.70);  // -30%
-                int maxSize = (int)(sizeM2 * 1.30);  // +30%
-
-                queryParams.Add($"{sizeParam}%5Bmin%5D={minSize}");
-                queryParams.Add($"{sizeParam}%5Bmax%5D={maxSize}");
-            }
+            keywords.Add(parentCity.ToLowerInvariant());
+            keywords.Add(regionName.ToLowerInvariant());
+        }
+        else if (VillageFallback.TryGetValue(regionName, out var fallbackTown))
+        {
+            keywords.Add(fallbackTown.ToLowerInvariant());
+            keywords.Add(regionName.ToLowerInvariant());
+        }
+        else
+        {
+            keywords.Add(regionName.ToLowerInvariant());
         }
 
-        if (queryParams.Count > 0)
-            baseUrl += "?" + string.Join("&", queryParams);
+        // Map detected type to a simple Croatian keyword
+        string typeKeyword;
+        if (detectedType.Contains("stan", StringComparison.OrdinalIgnoreCase))
+            typeKeyword = "stan";
+        else if (detectedType.Contains("kuć", StringComparison.OrdinalIgnoreCase)
+              || detectedType.Contains("kuc", StringComparison.OrdinalIgnoreCase))
+            typeKeyword = "kuća";
+        else if (detectedType.Contains("vila", StringComparison.OrdinalIgnoreCase))
+            typeKeyword = "kuća";
+        else if (detectedType.Contains("vikend", StringComparison.OrdinalIgnoreCase))
+            typeKeyword = "vikendica";
+        else if (detectedType.Contains("zemlj", StringComparison.OrdinalIgnoreCase))
+            typeKeyword = "zemljište";
+        else if (detectedType.Contains("poslov", StringComparison.OrdinalIgnoreCase))
+            typeKeyword = "poslovni prostor";
+        else
+            typeKeyword = detectedType.ToLowerInvariant();
 
-        return baseUrl;
+        keywords.Add(typeKeyword);
+
+        // Optionally add size hint as keyword (e.g. "70m2")
+        if (sizeM2 > 10 && sizeM2 <= 300)
+            keywords.Add($"{(int)sizeM2}m2");
+
+        // URL-encode each keyword and join with +
+        var encodedKeywords = string.Join("+",
+            keywords.Select(k => Uri.EscapeDataString(k)));
+
+        return $"https://www.njuskalo.hr/search/?keywords={encodedKeywords}";
     }
 
     /// <summary>
