@@ -1275,6 +1275,7 @@ public class ValuationEngine
         result.RealizationDiscountPercent = Math.Round(realizationGap * 100, 1);
 
         double afterGap = basePricePerM2 * (1 + realizationGap);
+        result.AfterDiscountPerM2 = Math.Round(afterGap, 0);  // V27: store for UI sync
         pipeline.Add($"Realization gap: {realizationGap * 100:F1}% -> {afterGap:F0} EUR/m2");
 
         // ── 8. Contextual Adjustments (with hard cap ±40%) ──
@@ -1287,6 +1288,12 @@ public class ValuationEngine
 
         double adjustedPricePerM2 = afterGap * (1 + totalAdjPercent / 100.0);
         pipeline.Add($"Adjustments: {totalAdjPercent:+0.0;-0.0}% -> {adjustedPricePerM2:F0} EUR/m2");
+
+        // V27: DEBUG — full transparent math chain
+        pipeline.Add($"V27 MATH CHAIN: Base(WM)={basePricePerM2:F0} × (1{realizationGap:+0.0%;-0.0%})={afterGap:F0} × (1{totalAdjPercent/100.0:+0.0%;-0.0%})={adjustedPricePerM2:F0} EUR/m2");
+        _logger.LogInformation(
+            "V27 Math: Base={Base:F0} × Discount={Gap:P1} = {AfterGap:F0} × Adj={Adj:+0.0;-0.0}% = {Final:F0} EUR/m2",
+            basePricePerM2, realizationGap, afterGap, totalAdjPercent, adjustedPricePerM2);
 
         result.CalculatedPricePerM2 = Math.Round(adjustedPricePerM2, 0);
         result.Adjustments = adjustments;
@@ -2937,7 +2944,8 @@ public class DeterministicValuation
     // ── Core values ──
     public int EstimatedValueEur { get; set; }
     public double CalculatedPricePerM2 { get; set; }
-    public double MarketAverageAsking { get; set; }
+    public double MarketAverageAsking { get; set; }   // Weighted median (base)
+    public double AfterDiscountPerM2 { get; set; }    // V27: After realization gap, before adjustments
     public double RealizationDiscountPercent { get; set; }
     public string ConfidenceLevel { get; set; } = "";
     public string PriceSource { get; set; } = "";

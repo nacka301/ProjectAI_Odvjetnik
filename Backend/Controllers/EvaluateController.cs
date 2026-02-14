@@ -454,6 +454,7 @@ public class EvaluateController : ControllerBase
             ValuationReasoning = finalReasoning,
             ConfidenceLevel = engineResult.ConfidenceLevel,
             MarketAverageAsking = engineResult.MarketAverageAsking,
+            AfterDiscountPerM2 = engineResult.AfterDiscountPerM2,
             CalculatedPricePerM2 = engineResult.CalculatedPricePerM2,
             RealizationDiscountPercent = engineResult.RealizationDiscountPercent,
             TotalListingsFound = engineResult.TotalListingsFound,

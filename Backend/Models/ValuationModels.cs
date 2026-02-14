@@ -104,7 +104,8 @@ public class FullEvaluationResult
 
     // ── Deterministic engine fields ──
     public string ConfidenceLevel { get; set; } = "";
-    public double MarketAverageAsking { get; set; }
+    public double MarketAverageAsking { get; set; }      // Weighted median (base)
+    public double AfterDiscountPerM2 { get; set; }       // V27: After gap, before adjustments
     public double CalculatedPricePerM2 { get; set; }
     public double RealizationDiscountPercent { get; set; }
     public int TotalListingsFound { get; set; }

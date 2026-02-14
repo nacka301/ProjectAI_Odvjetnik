@@ -72,7 +72,13 @@ public static class SseHelpers
         return reasoning;
     }
 
-    /// <summary>Build a transparent comparison table from engine UsedComparables.</summary>
+    /// <summary>
+    /// Build a transparent comparison table from engine UsedComparables.
+    /// V27: Show ONLY per-comp corrections (size/condition/features), NOT combined with global adjustments.
+    /// Global adjustments (centar, investicija, etc.) are shown separately in the UI.
+    /// This prevents the math-disconnect where the table shows one set of numbers
+    /// but the final value is computed from different ones.
+    /// </summary>
     public static List<ComparisonTableRow> BuildComparisonTable(
         DeterministicValuation engine, double totalAdjPct)
     {
@@ -83,9 +89,11 @@ public static class SseHelpers
         int idx = 1;
         foreach (var c in engine.UsedComparables.Where(x => !x.IsOutlier).OrderByDescending(x => x.SimilarityScore))
         {
+            // V27: Only per-comp correction — NOT combined with global adjustments.
+            // The engine's weighted median already uses these corrected prices.
+            // Global adjustments are applied AFTER the weighted median in a separate step.
             double perCompCorr = c.CorrectionPercent;
-            double totalCorr = perCompCorr + totalAdjPct;
-            var adjustedPpm2 = c.PricePerM2 * (1 + totalCorr / 100.0);
+            var adjustedPpm2 = c.PricePerM2 * (1 + perCompCorr / 100.0);
             rows.Add(new ComparisonTableRow
             {
                 Index = idx++,
@@ -94,7 +102,7 @@ public static class SseHelpers
                 AreaM2 = c.AreaM2 ?? 0,
                 TotalPrice = c.TotalPrice ?? 0,
                 RawPricePerM2 = Math.Round(c.PricePerM2, 1),
-                CorrectionPercent = Math.Round(totalCorr, 1),
+                CorrectionPercent = Math.Round(perCompCorr, 1),
                 AdjustedPricePerM2 = Math.Round(adjustedPpm2, 1),
                 SimilarityScore = Math.Round(c.SimilarityScore <= 1 ? c.SimilarityScore * 100 : c.SimilarityScore, 0),
                 YardAreaM2 = c.YardAreaM2,

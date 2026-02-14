@@ -148,6 +148,7 @@ export interface ValuationResult {
   valuation_reasoning: string;
   confidence_level?: string;
   calculated_price_per_m2?: number;
+  after_discount_per_m2?: number;  // V27: After gap, before adjustments
   total_listings_found?: number;
   usable_price_points?: number;
   outliers_removed?: number;

@@ -198,28 +198,33 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
                     ))}
                   </tbody>
                   <tfoot>
+                    {/* V27: Ponderirani prosjek — weighted median from backend, NOT recalculated */}
                     <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
-                      <td colSpan={4} className="py-3 pr-3 text-right text-gray-600">Prosjek prilagođen:</td>
-                      <td className="py-3 pr-3 text-right text-gray-500">
-                        {formatPrice(Math.round(result.comparison_table.reduce((s, r) => s + r.raw_price_per_m2, 0) / result.comparison_table.length))} €
-                      </td>
-                      <td className="py-3 pr-3 text-right text-gray-500">
-                        {(() => {
-                          const avgCorr = result.comparison_table!.reduce((s, r) => s + r.correction_percent, 0) / result.comparison_table!.length;
-                          return `${avgCorr > 0 ? "+" : ""}${avgCorr.toFixed(1)}%`;
-                        })()}
-                      </td>
+                      <td colSpan={6} className="py-3 pr-3 text-right text-gray-600">Ponderirani prosjek:</td>
                       <td className="py-3 pr-3 text-right text-blue-800 text-base">
-                        {formatPrice(Math.round(result.comparison_table.reduce((s, r) => s + r.adjusted_price_per_m2, 0) / result.comparison_table.length))} €/m²
+                        {result.market_average_asking ? `${formatPrice(Math.round(result.market_average_asking))} €/m²` : "—"}
                       </td>
                       <td></td>
                     </tr>
+                    {/* V27: After realization gap */}
                     {result.realization_discount_percent && (
                       <tr className="bg-gray-50 text-sm">
                         <td colSpan={6} className="py-2 pr-3 text-right text-gray-500">
                           Nakon diskonta ({result.realization_discount_percent.toFixed(1)}%):
                         </td>
                         <td className="py-2 pr-3 text-right font-bold text-indigo-700 text-base">
+                          {result.after_discount_per_m2 ? `${formatPrice(Math.round(result.after_discount_per_m2))} €/m²` : (result.calculated_price_per_m2 ? `${formatPrice(Math.round(result.calculated_price_per_m2))} €/m²` : "—")}
+                        </td>
+                        <td></td>
+                      </tr>
+                    )}
+                    {/* V27: After contextual adjustments */}
+                    {result.total_adjustment_percent !== undefined && result.total_adjustment_percent !== 0 && (
+                      <tr className="bg-gray-50 text-sm">
+                        <td colSpan={6} className="py-2 pr-3 text-right text-gray-500">
+                          Σ Korekcija ({result.total_adjustment_percent > 0 ? "+" : ""}{result.total_adjustment_percent.toFixed(1)}%):
+                        </td>
+                        <td className="py-2 pr-3 text-right font-bold text-purple-700 text-base">
                           {result.calculated_price_per_m2 ? `${formatPrice(Math.round(result.calculated_price_per_m2))} €/m²` : "—"}
                         </td>
                         <td></td>
