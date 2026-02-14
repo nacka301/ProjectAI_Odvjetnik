@@ -33,7 +33,7 @@ import {
   Percent,
 } from "lucide-react";
 import { saveEvaluation } from "@/lib/supabase";
-import LocationSelector from "./LocationSelector";
+import LocationSelector from "@/components/LocationSelector";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5078";
 

@@ -28,6 +28,7 @@ import {
   ChevronUp,
 } from "lucide-react";
 import { uploadPdfToStorage, saveEvaluation } from "@/lib/supabase";
+import LocationSelector from "@/components/LocationSelector";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5078";
 
@@ -464,35 +465,13 @@ export default function ZkProcjenaPage() {
         {/* ===================== UPLOAD ===================== */}
         {!isLoading && !hasResult && (
           <div className="space-y-6">
-            {/* Location Override */}
-            <div className="rounded-xl bg-white border border-gray-200 p-5">
-              <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                📍 Lokacija nekretnine
-                <span className="text-xs font-normal text-gray-400">(opcionalno — za precizniju pretragu)</span>
-              </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Grad</label>
-                  <input
-                    type="text"
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    placeholder="npr. Osijek, Split, Zagreb..."
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 placeholder-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Kvart / Naselje</label>
-                  <input
-                    type="text"
-                    value={neighborhood}
-                    onChange={(e) => setNeighborhood(e.target.value)}
-                    placeholder="npr. Retfala, Spinut, Maksimir..."
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 placeholder-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-            </div>
+            {/* Location Override — using shared LocationSelector combobox */}
+            <LocationSelector
+              city={city}
+              district={neighborhood}
+              onCityChange={(c) => { setCity(c); setNeighborhood(""); }}
+              onDistrictChange={(d) => setNeighborhood(d)}
+            />
 
             {/* Email */}
             <div className="rounded-xl bg-white border border-gray-200 p-5">
