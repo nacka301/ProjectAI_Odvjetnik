@@ -361,6 +361,7 @@ export default function WizardPage() {
   const [draftWarnings, setDraftWarnings] = useState<ValidationError[]>([]);
 
   // Valuation (SSE)
+  const abortRef = useRef<AbortController | null>(null);
   const [stages, setStages] = useState<StreamStage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [result, setResult] = useState<ValuationResult | null>(null);
@@ -450,7 +451,10 @@ export default function WizardPage() {
     setIsStreaming(true);
     setViewState("PROCESSING");
 
-    let streamedResult: ValuationResult | null = null;
+    // Using object wrapper so TypeScript doesn't narrow the closure-assigned value to `never`
+    const state = { streamedResult: null as ValuationResult | null };
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     try {
       // Send the description as text to the text/stream endpoint
@@ -466,6 +470,7 @@ export default function WizardPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body,
+        signal: controller.signal,
       });
 
       if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`);
@@ -474,55 +479,70 @@ export default function WizardPage() {
       const decoder = new TextDecoder();
       let buffer = "";
 
+      const processEvent = (line: string) => {
+        if (!line.startsWith("data: ")) return;
+        try {
+          const evt = JSON.parse(line.slice(6));
+          if (evt.type === "progress") {
+            const { stage, status, label, detail } = evt.data;
+            setStages((prev) =>
+              prev.map((s) =>
+                s.id === stage ? { ...s, status, label: label || s.label, detail: detail ?? s.detail } : s
+              )
+            );
+          } else if (evt.type === "error") {
+            const { stage, message } = evt.data;
+            setStages((prev) =>
+              prev.map((s) => (s.id === stage ? { ...s, status: "error", error: message } : s))
+            );
+            setError(message);
+          } else if (evt.type === "result") {
+            state.streamedResult = evt.data;
+            setResult(evt.data);
+          }
+        } catch { /* skip malformed */ }
+      };
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
         const parts = buffer.split("\n\n");
         buffer = parts.pop()!;
-
-        for (const part of parts) {
-          const line = part.trim();
-          if (!line.startsWith("data: ")) continue;
-          try {
-            const evt = JSON.parse(line.slice(6));
-            if (evt.type === "progress") {
-              const { stage, status, label, detail } = evt.data;
-              setStages((prev) =>
-                prev.map((s) =>
-                  s.id === stage ? { ...s, status, label: label || s.label, detail: detail ?? s.detail } : s
-                )
-              );
-            } else if (evt.type === "error") {
-              const { stage, message } = evt.data;
-              setStages((prev) =>
-                prev.map((s) => (s.id === stage ? { ...s, status: "error", error: message } : s))
-              );
-              setError(message);
-            } else if (evt.type === "result") {
-              streamedResult = evt.data;
-              setResult(evt.data);
-            }
-          } catch { /* skip */ }
-        }
+        for (const part of parts) processEvent(part.trim());
       }
+      // Flush remaining buffer (last SSE event might lack trailing \n\n)
+      if (buffer.trim()) processEvent(buffer.trim());
+
       setIsStreaming(false);
-      if (streamedResult) setViewState("RESULT");
+      if (state.streamedResult) setViewState("RESULT");
 
       // Save to Supabase (fire-and-forget)
-      if (streamedResult) {
+      if (state.streamedResult) {
         saveEvaluation({
           property_type: propertyType || "nekretnina",
           location: `${location.city}, ${location.district}`,
-          estimated_value: streamedResult.estimated_value_eur,
+          estimated_value: state.streamedResult.estimated_value_eur,
           pdf_url: null,
-          raw_json_output: streamedResult as unknown as Record<string, unknown>,
+          raw_json_output: state.streamedResult as unknown as Record<string, unknown>,
         }).catch(() => { /* non-critical */ });
       }
-    } catch {
+    } catch (e: unknown) {
       setIsStreaming(false);
-      setError("Server ne odgovara. Pokušajte ponovno za minutu.");
+      if (e instanceof DOMException && e.name === "AbortError") {
+        setError("Procjena je otkazana.");
+      } else {
+        setError("Server ne odgovara. Pokušajte ponovno za minutu.");
+      }
+    } finally {
+      abortRef.current = null;
     }
+  };
+
+  const cancelValuation = () => {
+    abortRef.current?.abort();
+    setIsStreaming(false);
+    setViewState("INPUT");
   };
 
   // ── Copy reasoning ──
@@ -541,6 +561,7 @@ export default function WizardPage() {
   // ── Reset ──
 
   const reset = () => {
+    abortRef.current?.abort();
     setViewState("INPUT");
     setStep(1);
     setPropertyType(null);
@@ -735,6 +756,18 @@ export default function WizardPage() {
               </div>
               <button onClick={reset} className="rounded-lg bg-gray-100 px-5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 transition">
                 ← Pokušaj ponovno
+              </button>
+            </div>
+          )}
+
+          {/* Cancel button — visible while streaming */}
+          {isStreaming && (
+            <div className="mt-5 text-center">
+              <button
+                onClick={cancelValuation}
+                className="rounded-lg border border-gray-300 bg-white px-5 py-2 text-sm font-medium text-gray-600 hover:bg-red-50 hover:border-red-300 hover:text-red-700 transition"
+              >
+                ✕ Odustani
               </button>
             </div>
           )}
@@ -1323,7 +1356,7 @@ export default function WizardPage() {
                       <Cpu className="h-4 w-4" /> Engine — korištene usporedbe ({result.used_comparables.filter(c => !c.is_outlier).length})
                     </h3>
                     <div className="space-y-3">
-                      {result.used_comparables
+                      {[...result.used_comparables]
                         .sort((a, b) => b.similarity_score - a.similarity_score)
                         .map((c, i) => (
                         <div key={i} className={`p-4 rounded-xl border transition ${c.is_outlier ? "border-red-200 bg-red-50/50 opacity-60" : "border-gray-100 bg-gray-50 hover:border-blue-200 hover:bg-blue-50/30"}`}>
@@ -1543,7 +1576,7 @@ function PriceDistributionChart({ comparables, calculatedPricePerM2 }: { compara
     <div className="space-y-3">
       {/* Bar chart */}
       <div className="space-y-2">
-        {comparables
+        {[...comparables]
           .sort((a, b) => b.price_per_m2 - a.price_per_m2)
           .map((c, i) => {
           const widthPct = Math.max(((c.price_per_m2 - minP * 0.9) / (maxP * 1.1 - minP * 0.9)) * 100, 8);

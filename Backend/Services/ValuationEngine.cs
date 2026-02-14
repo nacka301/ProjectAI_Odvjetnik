@@ -2777,17 +2777,6 @@ public class ExtractedPrice
     public double DetectedSizeM2 { get; set; } // extracted main area
 }
 
-/// <summary>Property condition states for adjustment logic.</summary>
-public enum PropertyCondition
-{
-    Unknown,
-    New,          // novogradnja, novo
-    Renovated,    // renovirano, adaptirano, obnovljeno
-    Good,         // odrzavano, uredna
-    Original,     // izvorno stanje
-    NeedsWork     // potrebna adaptacija, rusevina, zapusteno
-}
-
 internal class MathConfidence
 {
     public int Score { get; set; }

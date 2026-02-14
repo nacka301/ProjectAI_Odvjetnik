@@ -61,7 +61,22 @@ CREATE INDEX IF NOT EXISTS idx_zk_analyses_created_at ON zk_analyses (created_at
 -- Public: true (so Backend can fetch the URL)
 -- ========================================
 
--- Row Level Security (optional — enable if needed)
--- ALTER TABLE evaluations ENABLE ROW LEVEL SECURITY;
--- CREATE POLICY "Allow all inserts" ON evaluations FOR INSERT WITH CHECK (true);
--- CREATE POLICY "Allow all selects" ON evaluations FOR SELECT USING (true);
+-- ========================================
+-- Row Level Security
+-- Backend uses the service_role key, which bypasses RLS.
+-- The anon key (exposed in frontend) is limited to INSERT only.
+-- ========================================
+
+-- evaluations
+ALTER TABLE evaluations ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "service_role_full_access" ON evaluations
+    FOR ALL USING (auth.role() = 'service_role');
+CREATE POLICY "anon_insert_only" ON evaluations
+    FOR INSERT WITH CHECK (true);
+
+-- zk_analyses
+ALTER TABLE zk_analyses ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "service_role_full_access" ON zk_analyses
+    FOR ALL USING (auth.role() = 'service_role');
+CREATE POLICY "anon_insert_only" ON zk_analyses
+    FOR INSERT WITH CHECK (true);

@@ -2,6 +2,7 @@ using Backend.Helpers;
 using Backend.Models;
 using Backend.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Backend.Controllers;
 
@@ -69,6 +70,7 @@ public class ZkUnifiedController : ControllerBase
     /// </summary>
     [HttpPost("stream")]
     [RequestSizeLimit(10 * 1024 * 1024)]
+    [EnableRateLimiting("valuation")]
     public async Task UnifiedStream(
         IFormFile? file,
         [FromForm] string? city = null,
@@ -77,6 +79,7 @@ public class ZkUnifiedController : ControllerBase
         [FromForm] bool skipValuation = false)
     {
         SetupSSEHeaders();
+        var ct = HttpContext.RequestAborted;
 
         if (file is null || file.Length == 0)
         {
@@ -201,7 +204,7 @@ public class ZkUnifiedController : ControllerBase
             // (same logic as EvaluateController.RunStreamingPipelineAsync)
             // ────────────────────────────────────────────────────
             var valuationResult = await RunValuationPipelineAsync(
-                property, rawPdfText, zkResult, email);
+                property, rawPdfText, zkResult, email, ct);
 
             // ── Final combined result ──
             await SendSSE("complete", new UnifiedZkValuationResult
@@ -210,6 +213,10 @@ public class ZkUnifiedController : ControllerBase
                 Valuation = valuationResult,
                 ValuationAttempted = true
             });
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogInformation("Client disconnected during ZK unified pipeline");
         }
         catch (Exception ex)
         {
@@ -224,10 +231,11 @@ public class ZkUnifiedController : ControllerBase
     /// </summary>
     private async Task<FullEvaluationResult?> RunValuationPipelineAsync(
         ExtractedPropertyInfo property, string pdfText,
-        ZkParsedResult zkResult, string? email)
+        ZkParsedResult zkResult, string? email, CancellationToken ct = default)
     {
         // ── Stage 2: Market research ──
         await SendProgress("searching", "active", "Pretražujem Njuškalo i tržište nekretnina...");
+        ct.ThrowIfCancellationRequested();
 
         MarketResearchResult marketData;
         try
@@ -252,6 +260,7 @@ public class ZkUnifiedController : ControllerBase
 
         // ── Stage 2.5: AI feature extraction ──
         await SendProgress("ai_features", "active", "AI analizira značajke oglasa...");
+        ct.ThrowIfCancellationRequested();
         try
         {
             await _valuationService.ExtractListingFeaturesAsync(marketData.ActiveListings, property);
@@ -278,6 +287,7 @@ public class ZkUnifiedController : ControllerBase
 
         // ── Stage 3A: Engine ──
         await SendProgress("engine", "active", "Engine izračunava tržišnu vrijednost...");
+        ct.ThrowIfCancellationRequested();
 
         DeterministicValuation engineResult;
         try
@@ -305,6 +315,7 @@ public class ZkUnifiedController : ControllerBase
 
         // ── Stage 3B: AI opinion ──
         await SendProgress("ai_opinion", "active", "AI generira stručno mišljenje...");
+        ct.ThrowIfCancellationRequested();
 
         AutoValuationResult aiResult;
         try

@@ -17,6 +17,7 @@ public enum PropertyType
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum PropertyCondition
 {
+    Unknown,       // Nije poznato
     New,           // Novogradnja
     Renovated,     // Renovirano / adaptirano
     Good,          // Dobro stanje / održavano

@@ -2,6 +2,7 @@ using Backend.Helpers;
 using Backend.Models;
 using Backend.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Backend.Controllers;
 
@@ -88,6 +89,7 @@ public class EvaluateController : ControllerBase
     /// </summary>
     [HttpPost("stream")]
     [RequestSizeLimit(10 * 1024 * 1024)]
+    [EnableRateLimiting("valuation")]
     public async Task EvaluateStream(
         IFormFile? file,
         [FromForm] string? city = null,
@@ -95,6 +97,7 @@ public class EvaluateController : ControllerBase
         [FromForm] string? email = null)
     {
         SetupSSEHeaders();
+        var ct = HttpContext.RequestAborted;
 
         if (file is null || file.Length == 0)
         {
@@ -133,7 +136,11 @@ public class EvaluateController : ControllerBase
             await SendProgress("reading", "done", "PDF pročitan",
                 $"{property.Description}, {property.SizeM2} m², {property.Location}");
 
-            await RunStreamingPipelineAsync(property, pdfText, email);
+            await RunStreamingPipelineAsync(property, pdfText, email, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogInformation("Client disconnected during PDF evaluation");
         }
         catch (Exception ex)
         {
@@ -145,9 +152,11 @@ public class EvaluateController : ControllerBase
     /// SSE streaming text evaluation — sends real-time stage progress.
     /// </summary>
     [HttpPost("text/stream")]
+    [EnableRateLimiting("valuation")]
     public async Task EvaluateTextStream([FromBody] TextEvaluationRequest request)
     {
         SetupSSEHeaders();
+        var ct = HttpContext.RequestAborted;
 
         if (string.IsNullOrWhiteSpace(request?.Text))
         {
@@ -273,7 +282,11 @@ public class EvaluateController : ControllerBase
             if (!string.IsNullOrEmpty(property.MicroLocation))
                 _logger.LogInformation("    📍 Mikrolokacija: {MicroLoc}", property.MicroLocation);
 
-            await RunStreamingPipelineAsync(property, request.Text, request.Email);
+            await RunStreamingPipelineAsync(property, request.Text, request.Email, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogInformation("Client disconnected during text evaluation");
         }
         catch (Exception ex)
         {
@@ -284,12 +297,13 @@ public class EvaluateController : ControllerBase
     /// <summary>
     /// Shared streaming pipeline: Stage 2 through result.
     /// </summary>
-    private async Task RunStreamingPipelineAsync(ExtractedPropertyInfo property, string pdfText, string? email = null)
+    private async Task RunStreamingPipelineAsync(ExtractedPropertyInfo property, string pdfText, string? email = null, CancellationToken ct = default)
     {
         // ── Stage 2: Market research ──
         _logger.LogInformation("━━━ STAGE 2: PRETRAGA TRŽIŠTA ━━━  Lokacija={Location}, Veličina={Size}m²",
             property.Location, property.SizeM2);
         await SendProgress("searching", "active", "Pretražujem Njuškalo i tržište nekretnina...");
+        ct.ThrowIfCancellationRequested();
 
         MarketResearchResult marketData;
         try
@@ -323,6 +337,7 @@ public class EvaluateController : ControllerBase
         _logger.LogInformation("━━━ STAGE 2.5: AI FEATURE EXTRACTION ━━━  {Count} oglasa za analizu",
             marketData.ActiveListings.Count);
         await SendProgress("ai_features", "active", "AI analizira značajke oglasa...");
+        ct.ThrowIfCancellationRequested();
         try
         {
             await _valuationService.ExtractListingFeaturesAsync(marketData.ActiveListings, property);
@@ -351,6 +366,7 @@ public class EvaluateController : ControllerBase
         _logger.LogInformation("━━━ STAGE 3A: DETERMINISTIC ENGINE ━━━  Tip={Type}, Oglasi={Count}",
             marketData.DetectedPropertyType, marketData.ActiveListings.Count);
         await SendProgress("engine", "active", "Engine izračunava tržišnu vrijednost...");
+        ct.ThrowIfCancellationRequested();
 
         DeterministicValuation engineResult;
         try
@@ -391,6 +407,7 @@ public class EvaluateController : ControllerBase
         _logger.LogInformation("━━━ STAGE 3B: AI MIŠLJENJE ━━━  EngineValue={Value}€, Comps={Comps}",
             engineResult.EstimatedValueEur, engineResult.UsablePricePoints);
         await SendProgress("ai_opinion", "active", "AI generira stručno mišljenje...");
+        ct.ThrowIfCancellationRequested();
 
         AutoValuationResult aiResult;
         try

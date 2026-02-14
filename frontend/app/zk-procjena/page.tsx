@@ -3,6 +3,7 @@
 import {
   useState,
   useCallback,
+  useRef,
   type DragEvent,
   type ChangeEvent,
 } from "react";
@@ -197,6 +198,7 @@ const INITIAL_STAGES: StreamStage[] = [
 export default function ZkProcjenaPage() {
   const [file, setFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
   const [stages, setStages] = useState<StreamStage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [zkAnalysis, setZkAnalysis] = useState<ZkParsedResult | null>(null);
@@ -261,7 +263,9 @@ export default function ZkProcjenaPage() {
     // Upload PDF to Supabase Storage (non-blocking)
     const pdfUrlPromise = uploadPdfToStorage(file);
 
-    let streamedUnifiedResult: UnifiedResult | null = null;
+    const state = { result: null as UnifiedResult | null };
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     try {
       const url = `${API_BASE}/api/zk/stream`;
@@ -271,7 +275,7 @@ export default function ZkProcjenaPage() {
       if (neighborhood.trim()) formData.append("neighborhood", neighborhood.trim());
       if (email.trim()) formData.append("email", email.trim());
 
-      const response = await fetch(url, { method: "POST", body: formData });
+      const response = await fetch(url, { method: "POST", body: formData, signal: controller.signal });
 
       if (!response.ok || !response.body) {
         throw new Error(`HTTP ${response.status}`);
@@ -281,72 +285,83 @@ export default function ZkProcjenaPage() {
       const decoder = new TextDecoder();
       let buffer = "";
 
+      const processEvent = (line: string) => {
+        if (!line.startsWith("data: ")) return;
+        try {
+          const evt = JSON.parse(line.slice(6));
+
+          if (evt.type === "progress") {
+            const { stage, status, label, detail } = evt.data;
+            setStages((prev) =>
+              prev.map((s) =>
+                s.id === stage
+                  ? { ...s, status, label: label || s.label, detail: detail ?? s.detail }
+                  : s
+              )
+            );
+          } else if (evt.type === "error") {
+            const { stage, message } = evt.data;
+            setStages((prev) =>
+              prev.map((s) =>
+                s.id === stage
+                  ? { ...s, status: "error", error: message }
+                  : s
+              )
+            );
+            setError(message);
+          } else if (evt.type === "zk_analysis") {
+            setZkAnalysis(evt.data);
+          } else if (evt.type === "complete") {
+            state.result = evt.data;
+            setUnifiedResult(evt.data);
+            if (evt.data.zk_analysis) setZkAnalysis(evt.data.zk_analysis);
+          }
+        } catch {
+          // skip malformed SSE lines
+        }
+      };
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
         const parts = buffer.split("\n\n");
         buffer = parts.pop()!;
-
-        for (const part of parts) {
-          const line = part.trim();
-          if (!line.startsWith("data: ")) continue;
-          try {
-            const evt = JSON.parse(line.slice(6));
-
-            if (evt.type === "progress") {
-              const { stage, status, label, detail } = evt.data;
-              setStages((prev) =>
-                prev.map((s) =>
-                  s.id === stage
-                    ? { ...s, status, label: label || s.label, detail: detail ?? s.detail }
-                    : s
-                )
-              );
-            } else if (evt.type === "error") {
-              const { stage, message } = evt.data;
-              setStages((prev) =>
-                prev.map((s) =>
-                  s.id === stage
-                    ? { ...s, status: "error", error: message }
-                    : s
-                )
-              );
-              setError(message);
-            } else if (evt.type === "zk_analysis") {
-              // Intermediate ZK analysis result
-              setZkAnalysis(evt.data);
-            } else if (evt.type === "complete") {
-              // Final unified result
-              streamedUnifiedResult = evt.data;
-              setUnifiedResult(evt.data);
-              if (evt.data.zk_analysis) setZkAnalysis(evt.data.zk_analysis);
-            }
-          } catch {
-            // skip malformed SSE lines
-          }
-        }
+        for (const part of parts) processEvent(part.trim());
       }
+      // Flush remaining buffer (last SSE event might lack trailing \n\n)
+      if (buffer.trim()) processEvent(buffer.trim());
 
       setIsStreaming(false);
 
       // Save to Supabase (fire-and-forget)
-      if (streamedUnifiedResult?.valuation) {
+      if (state.result?.valuation) {
         const pdfUrl = await pdfUrlPromise;
         saveEvaluation({
-          property_type: streamedUnifiedResult.zk_analysis.property_type || "nekretnina",
-          location: streamedUnifiedResult.zk_analysis.location || "nepoznato",
-          estimated_value: streamedUnifiedResult.valuation.estimated_value_eur,
+          property_type: state.result.zk_analysis.property_type || "nekretnina",
+          location: state.result.zk_analysis.location || "nepoznato",
+          estimated_value: state.result.valuation.estimated_value_eur,
           pdf_url: pdfUrl,
-          raw_json_output: streamedUnifiedResult as unknown as Record<string, unknown>,
+          raw_json_output: state.result as unknown as Record<string, unknown>,
         }).catch(() => { /* non-critical */ });
       }
-    } catch {
+    } catch (e: unknown) {
       setIsStreaming(false);
-      setError(
-        "Server ne odgovara. Moguće da se Render restartira (~30s). Pokušajte ponovno za minutu."
-      );
+      if (e instanceof DOMException && e.name === "AbortError") {
+        setError("Analiza je otkazana.");
+      } else {
+        setError(
+          "Server ne odgovara. Moguće da se Render restartira (~30s). Pokušajte ponovno za minutu."
+        );
+      }
+    } finally {
+      abortRef.current = null;
     }
+  };
+
+  const cancelAnalysis = () => {
+    abortRef.current?.abort();
+    setIsStreaming(false);
   };
 
   // --- Copy ---
@@ -371,6 +386,7 @@ export default function ZkProcjenaPage() {
   // --- Reset ---
 
   const reset = () => {
+    abortRef.current?.abort();
     setFile(null);
     setCity("");
     setNeighborhood("");
@@ -577,6 +593,18 @@ export default function ZkProcjenaPage() {
                 </div>
               ))}
             </div>
+
+            {/* Cancel button */}
+            {isStreaming && (
+              <div className="mt-4 text-center">
+                <button
+                  onClick={cancelAnalysis}
+                  className="rounded-lg border border-gray-300 bg-white px-5 py-2 text-sm font-medium text-gray-600 hover:bg-red-50 hover:border-red-300 hover:text-red-700 transition"
+                >
+                  ✕ Odustani
+                </button>
+              </div>
+            )}
           </div>
         )}
 

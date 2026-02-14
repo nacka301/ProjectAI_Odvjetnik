@@ -1,9 +1,11 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
 using Backend.Models;
 using Backend.Services;
 using Backend.Validators;
 using FluentValidation;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using OpenAI.Chat;
 
@@ -72,8 +74,11 @@ builder.Services.AddCors(options =>
                 if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri))
                     return false;
 
-                // Allow all Vercel preview deploys for the same project
-                if (uri.Host.EndsWith(".vercel.app", StringComparison.OrdinalIgnoreCase))
+                // Allow Vercel preview deploys ONLY for this project
+                if (uri.Host.EndsWith(".vercel.app", StringComparison.OrdinalIgnoreCase)
+                    && (uri.Host.Contains("projectai", StringComparison.OrdinalIgnoreCase)
+                        || uri.Host.Contains("odvjetnik", StringComparison.OrdinalIgnoreCase)
+                        || uri.Host.Contains("nacka", StringComparison.OrdinalIgnoreCase)))
                     return true;
 
                 // Allow localhost for development
@@ -85,6 +90,36 @@ builder.Services.AddCors(options =>
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
+});
+
+// ── Rate Limiting — prevent API credit drain ──
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    // Valuation endpoints: 5 requests per 10 minutes per IP
+    options.AddFixedWindowLimiter("valuation", opt =>
+    {
+        opt.PermitLimit = 5;
+        opt.Window = TimeSpan.FromMinutes(10);
+        opt.QueueLimit = 0;
+    });
+
+    // General API: 30 requests per minute per IP
+    options.AddFixedWindowLimiter("general", opt =>
+    {
+        opt.PermitLimit = 30;
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.QueueLimit = 2;
+    });
+
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        context.HttpContext.Response.ContentType = "application/json";
+        await context.HttpContext.Response.WriteAsync(
+            "{\"error\":\"Previše zahtjeva. Pokušajte ponovno za nekoliko minuta.\"}",
+            cancellationToken);
+    };
 });
 
 // OpenAI ChatClient (reads key from config or env var)
@@ -119,6 +154,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("Frontend");
+app.UseRateLimiter();
 
 // Only redirect to HTTPS in development; Render handles TLS at the proxy level
 if (app.Environment.IsDevelopment())

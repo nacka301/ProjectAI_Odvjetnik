@@ -47,7 +47,8 @@ public class EmailService
             return false;
         }
 
-        if (string.IsNullOrWhiteSpace(recipientEmail) || !recipientEmail.Contains('@'))
+        if (string.IsNullOrWhiteSpace(recipientEmail)
+            || !System.Net.Mail.MailAddress.TryCreate(recipientEmail, out _))
         {
             _logger.LogWarning("EmailService: Invalid recipient email: {Email}", recipientEmail);
             return false;
