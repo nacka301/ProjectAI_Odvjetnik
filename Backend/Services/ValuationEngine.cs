@@ -24,8 +24,9 @@ public class ValuationEngine
     // ══════════════════════════════════════════════════════════
     //  REGEX — price extraction from listing snippets
     // ══════════════════════════════════════════════════════════
+    // V24: Negative lookahead — do NOT match "981 €/m²" as a total price
     private static readonly Regex PriceRegex = new(
-        @"(\d{1,3}(?:\.\d{3})*(?:,\d+)?)\s*(?:€|EUR|eur)",
+        @"(\d{1,3}(?:\.\d{3})*(?:,\d+)?)\s*(?:€|EUR|eur)(?!\s*/\s*m[²2])",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex PricePerM2Regex = new(
@@ -829,6 +830,13 @@ public class ValuationEngine
             // V20: Per-comparable correction (individual adjustment)
             var (corrPct, corrReason) = CalculatePerCompCorrection(property, listing, price, marketData.DetectedPropertyType);
 
+            // V24: Prefer ListedPriceEur (actual ad price) for TotalPrice in the table
+            double? totalPrice = listing?.ListedPriceEur > 0
+                ? listing.ListedPriceEur
+                : listing?.AiSizeM2 > 0
+                    ? Math.Round(price.PricePerM2 * listing.AiSizeM2!.Value, 0)
+                    : price.DetectedSizeM2 > 0 ? Math.Round(price.PricePerM2 * price.DetectedSizeM2, 0) : null;
+
             compDetails.Add(new UsedComparable
             {
                 Title = price.SourceTitle,
@@ -838,9 +846,7 @@ public class ValuationEngine
                 IsOutlier = false,
                 // Enriched fields from BrightData / AI extraction
                 AreaM2 = listing?.AiSizeM2 ?? (price.DetectedSizeM2 > 0 ? price.DetectedSizeM2 : null),
-                TotalPrice = listing?.AiSizeM2 > 0
-                    ? Math.Round(price.PricePerM2 * listing.AiSizeM2!.Value, 0)
-                    : price.DetectedSizeM2 > 0 ? Math.Round(price.PricePerM2 * price.DetectedSizeM2, 0) : null,
+                TotalPrice = totalPrice,
                 Rooms = listing?.AiRooms,
                 Floor = listing?.AiFloor,
                 YearBuilt = listing?.AiYearBuilt,
@@ -2031,6 +2037,62 @@ public class ValuationEngine
             if (IsRentalListing(text))
                 continue;
 
+            // ── V24: PREFER explicit stored prices from initial parsing + deep dive ──
+            // These are extracted from the actual listing page, not from mixed content text.
+            if (listing.ListedPricePerM2 > 0 && listing.ListedPricePerM2 >= minPpm2 && listing.ListedPricePerM2 <= maxPpm2)
+            {
+                prices.Add(new ExtractedPrice
+                {
+                    PricePerM2 = listing.ListedPricePerM2.Value,
+                    SourceTitle = listing.Title,
+                    SourceUrl = listing.Url,
+                    DetectedCondition = ParseAiCondition(listing.AiCondition) ?? DetectConditionFromText(text),
+                    DetectedYardM2 = listing.AiYardAreaM2 > 0 ? listing.AiYardAreaM2.Value : ExtractYardArea(text),
+                    HasGarage = listing.HasGarage ?? DetectFeature(text, GarageKeywords),
+                    HasRenovation = listing.HasRenovation ?? listing.IsRenovated ?? DetectFeature(text, RenovationKeywords),
+                    HasYard = listing.HasYard ?? DetectFeature(text, YardKeywords),
+                    HasParking = DetectFeature(text, ParkingKeywords),
+                    HasSeaView = DetectFeature(text, SeaViewKeywords),
+                    IsNorthFacing = DetectFeature(text, NorthFacingKeywords),
+                    IsSouthFacing = DetectFeature(text, SouthFacingKeywords),
+                    DetectedSizeM2 = listing.AiSizeM2 > 0 ? listing.AiSizeM2.Value : 0
+                });
+                continue;
+            }
+
+            // V24: If we have a listed total price and a size, calculate per m² from those
+            if (listing.ListedPriceEur > 0)
+            {
+                double sizeForCalc = listing.AiSizeM2 > 0 ? listing.AiSizeM2.Value : ExtractMainSize(text);
+                if (sizeForCalc <= 0 && targetSizeM2 > 0) sizeForCalc = targetSizeM2;
+
+                if (sizeForCalc > 0)
+                {
+                    double calcPpm2 = listing.ListedPriceEur.Value / sizeForCalc;
+                    if (calcPpm2 >= minPpm2 && calcPpm2 <= maxPpm2 && listing.ListedPriceEur.Value >= minTotal)
+                    {
+                        prices.Add(new ExtractedPrice
+                        {
+                            PricePerM2 = calcPpm2,
+                            SourceTitle = listing.Title,
+                            SourceUrl = listing.Url,
+                            DetectedCondition = ParseAiCondition(listing.AiCondition) ?? DetectConditionFromText(text),
+                            DetectedYardM2 = listing.AiYardAreaM2 > 0 ? listing.AiYardAreaM2.Value : ExtractYardArea(text),
+                            HasGarage = listing.HasGarage ?? DetectFeature(text, GarageKeywords),
+                            HasRenovation = listing.HasRenovation ?? listing.IsRenovated ?? DetectFeature(text, RenovationKeywords),
+                            HasYard = listing.HasYard ?? DetectFeature(text, YardKeywords),
+                            HasParking = DetectFeature(text, ParkingKeywords),
+                            HasSeaView = DetectFeature(text, SeaViewKeywords),
+                            IsNorthFacing = DetectFeature(text, NorthFacingKeywords),
+                            IsSouthFacing = DetectFeature(text, SouthFacingKeywords),
+                            DetectedSizeM2 = listing.AiSizeM2 > 0 ? listing.AiSizeM2.Value : sizeForCalc
+                        });
+                        continue;
+                    }
+                }
+            }
+
+            // ── FALLBACK: Regex extraction from content text (original behavior) ──
             // Try price per m² first (most reliable)
             var ppm2Match = PricePerM2Regex.Match(text);
             if (ppm2Match.Success)

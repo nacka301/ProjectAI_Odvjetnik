@@ -71,8 +71,15 @@ public class MarketResearchService
         @"###\s*\[(?<title>[^\]]+)\]\((?<url>https://www\.njuskalo\.hr/[^)]+)\)",
         RegexOptions.Compiled);
 
+    // V24: Negative lookahead — do NOT match "981 €/m²" as a total price.
+    //      Only matches total prices like "386.000 €".
     private static readonly Regex NjuskaloPricePattern = new(
-        @"(?<price>\d{1,3}(?:\.\d{3})*)\s*€",
+        @"(?<price>\d{1,3}(?:\.\d{3})*(?:,\d+)?)\s*€(?!\s*/\s*m[²2])",
+        RegexOptions.Compiled);
+
+    // V24: Explicit price-per-m² pattern for search results
+    private static readonly Regex NjuskaloPricePerM2Pattern = new(
+        @"(?<price>\d{1,3}(?:\.\d{3})*(?:,\d+)?)\s*€\s*/\s*m[²2]",
         RegexOptions.Compiled);
 
     // ══════════════════════════════════════════════════════════
@@ -1492,6 +1499,83 @@ public class MarketResearchService
                 _logger.LogInformation("DeepDive: structured data for {Url}: {Data}",
                     listing.Url, string.Join(" | ", structuredInfo));
 
+            // ── V24: Extract definitive price from deep dive structured data ──
+            // The deep dive page has the actual listing price — use it to correct initial extraction.
+            // Look for "Cijena:" key in the structured data first
+            var cijenaEntry = structuredInfo.FirstOrDefault(s =>
+                s.StartsWith("Cijena:", StringComparison.OrdinalIgnoreCase) &&
+                !s.Contains("/m", StringComparison.OrdinalIgnoreCase));
+            if (cijenaEntry != null)
+            {
+                var ddPriceMatch = Regex.Match(cijenaEntry, @"(\d{1,3}(?:[\.,]\d{3})*(?:,\d+)?)\s*€", RegexOptions.IgnoreCase);
+                if (ddPriceMatch.Success)
+                {
+                    double ddPrice = ValuationEngine.ParseCroatianNumber(ddPriceMatch.Groups[1].Value);
+                    if (ddPrice > 1000) // Sanity: real listing prices > €1000
+                    {
+                        listing.ListedPriceEur = ddPrice;
+                        _logger.LogInformation("DeepDive: extracted ListedPriceEur={Price:N0} from structured data for {Url}",
+                            ddPrice, listing.Url);
+                    }
+                }
+            }
+
+            // Also check for price/m² in structured data
+            var cijenaPm2Entry = structuredInfo.FirstOrDefault(s =>
+                s.Contains("€/m", StringComparison.OrdinalIgnoreCase) ||
+                s.Contains("Cijena po m", StringComparison.OrdinalIgnoreCase) ||
+                s.Contains("Cijena/m", StringComparison.OrdinalIgnoreCase));
+            if (cijenaPm2Entry != null)
+            {
+                var ddPpm2Match = Regex.Match(cijenaPm2Entry, @"(\d{1,3}(?:[\.,]\d{3})*(?:,\d+)?)\s*€", RegexOptions.IgnoreCase);
+                if (ddPpm2Match.Success)
+                {
+                    double ddPpm2 = ValuationEngine.ParseCroatianNumber(ddPpm2Match.Groups[1].Value);
+                    if (ddPpm2 >= 10 && ddPpm2 <= 30000) // Sanity for €/m²
+                    {
+                        listing.ListedPricePerM2 = ddPpm2;
+                        _logger.LogInformation("DeepDive: extracted ListedPricePerM2={Ppm2:N0} from structured data for {Url}",
+                            ddPpm2, listing.Url);
+                    }
+                }
+            }
+
+            // If no price found in structured data, try targeted regex on raw text
+            if (listing.ListedPriceEur == null || listing.ListedPriceEur <= 0)
+            {
+                // Look for "Cijena: X €" or "Ukupna cijena: X €" in raw text (NOT €/m²)
+                var rawPriceMatch = Regex.Match(rawText,
+                    @"(?:Cijena|Ukupna cijena|Tražena cijena)[:\s]+(\d{1,3}(?:[\.,]\d{3})*(?:,\d+)?)\s*€(?!\s*/\s*m)",
+                    RegexOptions.IgnoreCase);
+                if (rawPriceMatch.Success)
+                {
+                    double rawPrice = ValuationEngine.ParseCroatianNumber(rawPriceMatch.Groups[1].Value);
+                    if (rawPrice > 1000)
+                    {
+                        listing.ListedPriceEur = rawPrice;
+                        _logger.LogInformation("DeepDive: extracted ListedPriceEur={Price:N0} from raw text for {Url}",
+                            rawPrice, listing.Url);
+                    }
+                }
+            }
+
+            if (listing.ListedPricePerM2 == null || listing.ListedPricePerM2 <= 0)
+            {
+                var rawPpm2Match = Regex.Match(rawText,
+                    @"(?:Cijena\s*(?:po\s*)?(?:/\s*)?m[²2]|€/m[²2])[:\s]*(\d{1,3}(?:[\.,]\d{3})*(?:,\d+)?)",
+                    RegexOptions.IgnoreCase);
+                if (rawPpm2Match.Success)
+                {
+                    double rawPpm2 = ValuationEngine.ParseCroatianNumber(rawPpm2Match.Groups[1].Value);
+                    if (rawPpm2 >= 10 && rawPpm2 <= 30000)
+                    {
+                        listing.ListedPricePerM2 = rawPpm2;
+                        _logger.LogInformation("DeepDive: extracted ListedPricePerM2={Ppm2:N0} from raw text for {Url}",
+                            rawPpm2, listing.Url);
+                    }
+                }
+            }
+
             var enrichedText = rawText.Length > 3000 ? rawText[..3000] : rawText;
             listing.Content = $"{structuredPrefix}[DEEP DIVE] {enrichedText} [ORIGINAL] {listing.Content}";
 
@@ -2068,9 +2152,40 @@ public class MarketResearchService
             if (!url.Contains("njuskalo.hr/"))
                 continue;
 
-            // Extract price: number + €
+            // Extract price: number + € (V24: negative lookahead excludes €/m²)
             var priceMatch = NjuskaloPricePattern.Match(block);
             string priceStr = priceMatch.Success ? priceMatch.Groups["price"].Value : "";
+
+            // V24: Also extract price per m² separately
+            var ppm2Match = NjuskaloPricePerM2Pattern.Match(block);
+            string ppm2Str = ppm2Match.Success ? ppm2Match.Groups["price"].Value : "";
+
+            // V24: Parse numeric values for ListedPrice fields
+            double? listedPriceEur = null;
+            double? listedPricePerM2 = null;
+
+            if (!string.IsNullOrEmpty(priceStr))
+            {
+                double parsed = ValuationEngine.ParseCroatianNumber(priceStr);
+                if (parsed > 0) listedPriceEur = parsed;
+            }
+            if (!string.IsNullOrEmpty(ppm2Str))
+            {
+                double parsedPpm2 = ValuationEngine.ParseCroatianNumber(ppm2Str);
+                if (parsedPpm2 > 0) listedPricePerM2 = parsedPpm2;
+            }
+
+            // V24: If only €/m² found and no total price, try to infer total from size × €/m²
+            if (listedPriceEur == null && listedPricePerM2 != null)
+            {
+                var sizeInBlock = Regex.Match(block, @"(\d{1,6}(?:\.\d{3})*(?:,\d+)?)\s*m[²2]", RegexOptions.IgnoreCase);
+                if (sizeInBlock.Success)
+                {
+                    double blockSize = ValuationEngine.ParseCroatianNumber(sizeInBlock.Groups[1].Value);
+                    if (blockSize > 5 && blockSize < 50000)
+                        listedPriceEur = Math.Round(listedPricePerM2.Value * blockSize, 0);
+                }
+            }
 
             // Build content string with all available data
             var contentParts = new List<string> { title };
@@ -2115,12 +2230,16 @@ public class MarketResearchService
 
             if (!string.IsNullOrEmpty(priceStr))
                 contentParts.Add($"Cijena: {priceStr} €");
+            if (!string.IsNullOrEmpty(ppm2Str))
+                contentParts.Add($"Cijena/m²: {ppm2Str} €/m²");
 
             listings.Add(new ComparableSearchResult
             {
                 Url = url,
                 Title = title,
-                Content = string.Join(". ", contentParts)
+                Content = string.Join(". ", contentParts),
+                ListedPriceEur = listedPriceEur,
+                ListedPricePerM2 = listedPricePerM2,
             });
         }
 
@@ -2218,8 +2337,9 @@ public class MarketResearchService
         "najamnina", "rezije", "režije"
     ];
 
+    // V24: Negative lookahead — ensure we extract TOTAL price, not €/m²
     private static readonly Regex PriceAmountRegex = new(
-        @"(\d{1,3}(?:\.\d{3})*(?:,\d+)?)\s*(?:€|EUR|eur)",
+        @"(\d{1,3}(?:\.\d{3})*(?:,\d+)?)\s*(?:€|EUR|eur)(?!\s*/\s*m[²2])",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     /// <summary>The currently detected property type — set per search call.</summary>
@@ -2857,6 +2977,10 @@ public class ComparableSearchResult
     public string? AiPropertyType { get; set; }    // AI-detected type
     public double? AiSimilarityScore { get; set; }  // AI-scored similarity to target (0.0–1.0)
     public string? AiSimilarityReason { get; set; }  // V18: AI-generated one-sentence Croatian reason
+
+    // V24: Explicit listed prices — extracted from source, not regex on mixed content
+    public double? ListedPriceEur { get; set; }       // Total price from ad (e.g. 386.000 €)
+    public double? ListedPricePerM2 { get; set; }     // Price per m² from ad (e.g. 2.572 €/m²)
 
     // V20: Deep dive status tracking — what happened when we tried to scrape this listing
     public string? DeepDiveStatus { get; set; }
