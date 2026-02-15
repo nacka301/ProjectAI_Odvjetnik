@@ -1837,7 +1837,29 @@ public class ValuationEngine
             });
         }
 
-        if (allText.Contains("turistič") || allText.Contains("turistic"))
+        // ── Tourist zone / T2 Zoning Recognition ──
+        bool isTouristZone = allText.Contains("turistič") || allText.Contains("turistic")
+            || allText.Contains("zona t2") || allText.Contains("zona t1")
+            || allText.Contains("turističko naselje") || allText.Contains("ugostiteljsko-turistič");
+
+        // Detect if this is a large T2/tourist land near sea (prime investment site)
+        bool isSeaNearby = FirstRowKeywords.Any(kw => allText.Contains(kw, StringComparison.OrdinalIgnoreCase))
+            || allText.Contains("blizu mora") || allText.Contains("blizina mora")
+            || allText.Contains("200m") || allText.Contains("300m") || allText.Contains("100m");
+        bool isLargeTouristLand = isLandProperty && isTouristZone && property.SizeM2 > 2000;
+
+        if (isLargeTouristLand && isSeaNearby)
+        {
+            // T2 zoning + large plot + near sea = prime hotel/resort site
+            // This REPLACES both the generic tourist zone +8% AND the generic sea +10%
+            adj.Add(new ValuationAdjustment
+            {
+                Factor = "T2 zona — investicijski premium",
+                Description = $"Zemljište {property.SizeM2:N0} m² u turističkoj zoni blizu mora — kandidat za hotel/resort/apartmane",
+                Percent = 20.0
+            });
+        }
+        else if (isTouristZone)
         {
             adj.Add(new ValuationAdjustment
             {
@@ -1848,6 +1870,7 @@ public class ValuationEngine
         }
 
         // V25: Investment / commercial-potential property premium
+        // Skip for large tourist land near sea — already covered by T2 premium above
         if (hasInvestmentPotential && !isLandProperty)
         {
             adj.Add(new ValuationAdjustment
@@ -1859,7 +1882,8 @@ public class ValuationEngine
         }
 
         // ── First row to sea ──
-        if (FirstRowKeywords.Any(kw => allText.Contains(kw, StringComparison.OrdinalIgnoreCase)))
+        // Skip if already handled by T2 investment premium above
+        if (!isLargeTouristLand && FirstRowKeywords.Any(kw => allText.Contains(kw, StringComparison.OrdinalIgnoreCase)))
         {
             bool isDubrovnikOrHvar = allText.Contains("dubrovnik") || allText.Contains("hvar");
             double seaAdj = isDubrovnikOrHvar ? 50.0 : 25.0;
@@ -1872,8 +1896,9 @@ public class ValuationEngine
                 Percent = seaAdj
             });
         }
-        else if (allText.Contains("blizu mora") || allText.Contains("blizina mora")
-              || allText.Contains("200m") || allText.Contains("300m"))
+        else if (!isLargeTouristLand
+              && (allText.Contains("blizu mora") || allText.Contains("blizina mora")
+                  || allText.Contains("200m") || allText.Contains("300m")))
         {
             adj.Add(new ValuationAdjustment
             {
@@ -2003,6 +2028,53 @@ public class ValuationEngine
                 Description = "Nekretnine >200 m² obično imaju niži €/m²",
                 Percent = -7.0
             });
+        }
+
+        // ── V29: Large Plot Bulk Discount (land only) ──
+        // The "10x Rule": large land parcels trade at lower €/m² because buyers must
+        // invest significant CAPEX (infrastructure, subdivision, permits). 
+        // Compare subject area to average comp area — if 3x+ larger, apply bulk discount.
+        if (isLandType && property.SizeM2 > 1000)
+        {
+            var compAreas = marketData.ActiveListings
+                .Where(l => l.AiSizeM2.HasValue && l.AiSizeM2.Value > 0)
+                .Select(l => l.AiSizeM2!.Value)
+                .ToList();
+
+            if (compAreas.Count > 0)
+            {
+                double avgCompArea = compAreas.Average();
+                double areaRatio = property.SizeM2 / avgCompArea;
+
+                if (areaRatio >= 10.0)
+                {
+                    // 10x+ larger than average comp → max bulk discount
+                    adj.Add(new ValuationAdjustment
+                    {
+                        Factor = "Veliki zemljišni kompleks",
+                        Description = $"Parcela ({property.SizeM2:N0} m²) je {areaRatio:F0}× veća od prosječne usporedive ({avgCompArea:F0} m²) — potreban značajan CAPEX za infrastrukturu i parcelizaciju",
+                        Percent = -15.0
+                    });
+                }
+                else if (areaRatio >= 5.0)
+                {
+                    adj.Add(new ValuationAdjustment
+                    {
+                        Factor = "Veliki zemljišni kompleks",
+                        Description = $"Parcela ({property.SizeM2:N0} m²) je {areaRatio:F0}× veća od prosječne usporedive ({avgCompArea:F0} m²) — diskont zbog veličine",
+                        Percent = -12.0
+                    });
+                }
+                else if (areaRatio >= 3.0)
+                {
+                    adj.Add(new ValuationAdjustment
+                    {
+                        Factor = "Velika parcela",
+                        Description = $"Parcela ({property.SizeM2:N0} m²) je {areaRatio:F0}× veća od prosječne usporedive ({avgCompArea:F0} m²) — umjereni diskont",
+                        Percent = -10.0
+                    });
+                }
+            }
         }
 
         // ── Bad infrastructure ──

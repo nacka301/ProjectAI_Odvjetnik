@@ -894,6 +894,16 @@ public class ValuationService
                            $"Area={area:F0}m² | Price={total:N0}€ | " +
                            $"€/m²={c.PricePerM2:F0} | Similarity={c.SimilarityScore:P0}";
                 });
+            // Build adjustment breakdown for the AI to reference
+            var adjBreakdown = "";
+            if (engineResult.Adjustments?.Count > 0)
+            {
+                var adjLines = engineResult.Adjustments
+                    .Where(a => a.Percent != 0)
+                    .Select(a => $"  {a.Factor}: {a.Percent:+0.0;-0.0}% ({a.Description})");
+                adjBreakdown = "\nApplied Adjustments:\n" + string.Join("\n", adjLines) + "\n";
+            }
+
             compTableBlock =
                 $"\n═══════════════════════════════════════════\n" +
                 $"COMPARISON TABLE (EXACT NUMBERS — use THESE in your narrative):\n" +
@@ -901,9 +911,11 @@ public class ValuationService
                 string.Join("\n", usedComps) + "\n" +
                 $"Weighted Median: {engineResult.MarketAverageAsking:F0} €/m²\n" +
                 $"After Discount ({engineResult.RealizationDiscountPercent:F1}%): {engineResult.AfterDiscountPerM2:F0} €/m²\n" +
+                adjBreakdown +
                 $"After Adjustments ({engineResult.TotalAdjustmentPercent:+0.0;-0.0}%): {engineResult.CalculatedPricePerM2:F0} €/m²\n" +
                 $"\nCRITICAL: When referencing comparable prices in your text,\n" +
                 $"use ONLY the €/m² values from THIS table above.\n" +
+                $"Reference EACH adjustment by name and percentage in your valuation reasoning.\n" +
                 $"Do NOT recalculate €/m² from the listing content.\n" +
                 $"═══════════════════════════════════════════\n";
         }
