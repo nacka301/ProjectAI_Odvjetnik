@@ -183,7 +183,7 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
                         <td className={`py-2.5 pr-3 text-right font-semibold ${row.correction_percent > 0 ? "text-green-600" : row.correction_percent < 0 ? "text-red-600" : "text-gray-400"}`} title={row.correction_reason || undefined}>
                           {row.correction_percent > 0 ? "+" : ""}{row.correction_percent.toFixed(1)}%
                           {row.correction_reason && (
-                            <div className="text-[9px] font-normal text-gray-400 truncate max-w-[120px]">{row.correction_reason}</div>
+                            <div className="text-[9px] font-normal text-gray-400 max-w-[200px] whitespace-normal text-right">{row.correction_reason}</div>
                           )}
                         </td>
                         <td className="py-2.5 pr-3 text-right font-bold text-blue-700">{formatPrice(Math.round(row.adjusted_price_per_m2))} €</td>
@@ -298,21 +298,22 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
             </div>
           )}
 
-          {/* Adjustments as chips */}
+          {/* Adjustments — full breakdown with descriptions */}
           {result.adjustments && result.adjustments.length > 0 && (
             <div className="rounded-xl bg-white border border-gray-200 p-6">
               <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                <TrendingUp className="h-4 w-4" /> Korekcije primijenjene na usporedbe
+                <TrendingUp className="h-4 w-4" /> Korekcije primijenjene na procjenu
               </h3>
-              <div className="flex flex-wrap gap-2">
+              <div className="space-y-2">
                 {result.adjustments.map((a, i) => (
-                  <div key={i} className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium border ${
-                    a.percent > 0 ? "bg-green-50 border-green-200 text-green-800" :
-                    a.percent < 0 ? "bg-red-50 border-red-200 text-red-800" :
-                    "bg-gray-50 border-gray-200 text-gray-700"
-                  }`}>
-                    <span>{a.factor}</span>
-                    <span className="font-bold">{a.percent > 0 ? "+" : ""}{a.percent.toFixed(1)}%</span>
+                  <div key={i} className={`flex items-start justify-between p-3 rounded-lg border ${a.percent > 0 ? "bg-green-50/50 border-green-100" : a.percent < 0 ? "bg-red-50/50 border-red-100" : "bg-gray-50 border-gray-100"}`}>
+                    <div className="flex-1 min-w-0">
+                      <span className={`text-sm font-semibold ${a.percent > 0 ? "text-green-800" : a.percent < 0 ? "text-red-800" : "text-gray-700"}`}>{a.factor}</span>
+                      <p className="text-xs text-gray-500 mt-0.5">{a.description}</p>
+                    </div>
+                    <span className={`ml-4 text-sm font-bold whitespace-nowrap ${a.percent > 0 ? "text-green-600" : a.percent < 0 ? "text-red-600" : "text-gray-400"}`}>
+                      {a.percent > 0 ? "+" : ""}{a.percent.toFixed(1)}%
+                    </span>
                   </div>
                 ))}
               </div>
@@ -424,6 +425,13 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
                         backgroundColor: (c.similarity_score <= 1 ? c.similarity_score : c.similarity_score / 100) >= 0.7 ? "#22c55e" : (c.similarity_score <= 1 ? c.similarity_score : c.similarity_score / 100) >= 0.4 ? "#eab308" : "#ef4444"
                       }} />
                     </div>
+                    {/* Per-comp correction */}
+                    {!c.is_outlier && c.correction_percent !== undefined && c.correction_percent !== 0 && (
+                      <div className={`mt-2 text-xs px-3 py-1.5 rounded-md ${c.correction_percent > 0 ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+                        <span className="font-semibold">Korekcija: {c.correction_percent > 0 ? "+" : ""}{c.correction_percent.toFixed(1)}%</span>
+                        {c.correction_reason && <span className="ml-1 text-gray-500">— {c.correction_reason}</span>}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

@@ -126,6 +126,7 @@ interface UsedComparableV4 {
   // V20: Deep dive status
   deep_dive_status?: string;
   // V20: Per-comparable correction reason
+  correction_percent?: number;
   correction_reason?: string;
 }
 
@@ -925,6 +926,13 @@ export default function ZkProcjenaPage() {
                             <div className={`h-full rounded-full ${c.is_outlier ? "bg-red-300" : c.similarity_score >= 0.7 ? "bg-green-500" : c.similarity_score >= 0.4 ? "bg-yellow-500" : "bg-red-500"}`}
                               style={{ width: `${Math.max(c.similarity_score * 100, 5)}%` }} />
                           </div>
+                          {/* Per-comp correction */}
+                          {!c.is_outlier && c.correction_percent !== undefined && c.correction_percent !== 0 && (
+                            <div className={`mt-2 text-xs px-3 py-1.5 rounded-md ${c.correction_percent > 0 ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+                              <span className="font-semibold">Korekcija: {c.correction_percent > 0 ? "+" : ""}{c.correction_percent.toFixed(1)}%</span>
+                              {c.correction_reason && <span className="ml-1 text-gray-500">— {c.correction_reason}</span>}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -946,6 +954,28 @@ export default function ZkProcjenaPage() {
                           </div>
                           <span className={`text-sm font-bold ${d.adjustment_percent > 0 ? "text-green-600" : d.adjustment_percent < 0 ? "text-red-600" : "text-gray-500"}`}>
                             {d.adjustment_percent > 0 ? "+" : ""}{d.adjustment_percent}%
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Engine Adjustments */}
+                {valuation.adjustments && valuation.adjustments.length > 0 && (
+                  <div className="rounded-xl bg-white border border-gray-200 p-6">
+                    <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">
+                      📀 Korekcije primijenjene na procjenu
+                    </h3>
+                    <div className="space-y-2">
+                      {valuation.adjustments.map((a: AdjustmentV4, i: number) => (
+                        <div key={i} className={`flex items-start justify-between p-3 rounded-lg border ${a.percent > 0 ? "bg-green-50/50 border-green-100" : a.percent < 0 ? "bg-red-50/50 border-red-100" : "bg-gray-50 border-gray-100"}`}>
+                          <div className="flex-1 min-w-0">
+                            <span className={`text-sm font-semibold ${a.percent > 0 ? "text-green-800" : a.percent < 0 ? "text-red-800" : "text-gray-700"}`}>{a.factor}</span>
+                            <p className="text-xs text-gray-500 mt-0.5">{a.description}</p>
+                          </div>
+                          <span className={`ml-4 text-sm font-bold whitespace-nowrap ${a.percent > 0 ? "text-green-600" : a.percent < 0 ? "text-red-600" : "text-gray-400"}`}>
+                            {a.percent > 0 ? "+" : ""}{a.percent.toFixed(1)}%
                           </span>
                         </div>
                       ))}

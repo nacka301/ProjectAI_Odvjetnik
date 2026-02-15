@@ -110,6 +110,9 @@ export interface UsedComparable {
   location?: string;
   has_garage?: boolean;
   has_parking?: boolean;
+  // V29: Per-comparable correction
+  correction_percent?: number;
+  correction_reason?: string;
 }
 
 export interface ValuationAdjustment {
