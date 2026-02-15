@@ -153,6 +153,37 @@ public class ZkParsingService
         Vlasništvo je čisto (1/1), bez aktivnih sporova."
 
         ═══════════════════════════════════════════════════════
+        📍 8. USKLAĐENOST EVIDENCIJA — KATASTAR vs ZK (V40)
+        ═══════════════════════════════════════════════════════
+        
+        ZK izvadak može sadržavati podatke iz OBJE evidencije:
+        - Zemljišnoknjižni podaci (ZK) — pravno mjerodavni za vlasništvo
+        - Katastarski podaci — faktično stanje terena, površine, kulture
+        
+        🔍 TRAŽI NESLAGANJA:
+        1. POVRŠINA: ZK izvadak ponekad sadrži i katastarsku i ZK površinu. 
+           Traži izraze poput: "po katastru", "kat. površina", "katastarska 
+           čestica", "prema katastru", "katastar", "kat.čest.", "k.č.br.",
+           usporedi s ZK površinom.
+        2. ČESTICA: ZK čestica (zk.č.) može se razlikovati od katastarske 
+           čestice (kat.č./k.č.br.) nakon diobe, spajanja ili nove izmjere.
+        3. KULTURA: Katastar može imati ažurniju kulturu (namjenu) od ZK.
+           Npr. ZK piše "oranica" ali katastar piše "kuća i dvorište".
+        
+        ⚠️ DETEKTIRAJ:
+        - Ako se površine razlikuju > 5% → WARNING finding kategorija "KATASTAR":
+          "Nesklad površina: ZK {X} m² vs katastar {Y} m² (razlika {Z}%). 
+          Potrebno ispitati — preporučen geodetski elaborat."
+        - Ako se čestice razlikuju → WARNING: "Nesklad čestica: ZK č. {X} 
+          vs kat.č. {Y}. Potrebno ispitati usklađenost."
+        - Ako se kultura razlikuje → INFO: "Nesklad kulture: ZK '{X}' vs 
+          katastar '{Y}'."
+        - Ako nema katastarskih podataka u izvadku → status "USKLAĐENO" 
+          ali u summary napiši "Katastarski podaci nisu navedeni u izvadku."
+        
+        survey_recommended = true ako je razlika površina > 10% ili čestica mismatch.
+
+        ═══════════════════════════════════════════════════════
         OUTPUT FORMAT — Vrati ISKLJUČIVO čisti JSON (bez markdown):
         ═══════════════════════════════════════════════════════
         {
@@ -191,13 +222,36 @@ public class ZkParsingService
           "has_usage_permit_issue": false,
           "findings": [
             {
-              "category": "PLOMBA|VLASNISTVO|HIPOTEKA|SLUZNOST|OVRHA|LEGALIZACIJA|OSTALO",
+              "category": "PLOMBA|VLASNISTVO|HIPOTEKA|SLUZNOST|OVRHA|LEGALIZACIJA|KATASTAR|OSTALO",
               "severity": "CRITICAL|WARNING|INFO",
               "title": "Kratki naziv",
               "description": "Detaljno objašnjenje rizika",
               "advice": "Konkretni pravni savjet"
             }
           ],
+          "katastar_uskladjenost": {
+            "status": "USKLAĐENO|NESKLAD|DJELOMIČNO",
+            "area_difference_m2": 0,
+            "area_difference_percent": 0.0,
+            "katastar_area_m2": 787,
+            "zk_area_m2": 787,
+            "parcel_discrepancies": [
+              {
+                "type": "AREA_MISMATCH|PARCEL_MISSING|LAND_USE_MISMATCH|PARCEL_NUMBER_MISMATCH",
+                "zk_parcel_number": "1234/5",
+                "katastar_parcel_number": "1234/5",
+                "zk_area_m2": 500,
+                "katastar_area_m2": 520,
+                "zk_land_use": "oranica",
+                "katastar_land_use": "oranica",
+                "description": "Opis nesklada",
+                "severity": "HIGH|MEDIUM|LOW"
+              }
+            ],
+            "summary": "Opis usklađenosti ili nesklada...",
+            "discrepancy_count": 0,
+            "survey_recommended": false
+          },
           "due_diligence_summary": "Profesionalni sažetak pravnog stanja...",
           "lawyer_comment": "Kratki sažetak za kompatibilnost...",
           "location": "Naselje, Općina/Grad",

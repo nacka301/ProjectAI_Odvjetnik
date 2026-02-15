@@ -77,11 +77,36 @@ interface PlombaInfo {
 }
 
 interface DueDiligenceFinding {
-  category: "PLOMBA" | "VLASNISTVO" | "HIPOTEKA" | "SLUZNOST" | "OVRHA" | "LEGALIZACIJA" | "OSTALO";
+  category: "PLOMBA" | "VLASNISTVO" | "HIPOTEKA" | "SLUZNOST" | "OVRHA" | "LEGALIZACIJA" | "KATASTAR" | "OSTALO";
   severity: "CRITICAL" | "WARNING" | "INFO";
   title: string;
   description: string;
   advice: string;
+}
+
+// V40: Katastar vs ZK Usklađenost
+interface KatastarParcelDiscrepancy {
+  type: "AREA_MISMATCH" | "PARCEL_MISSING" | "LAND_USE_MISMATCH" | "PARCEL_NUMBER_MISMATCH";
+  zk_parcel_number: string;
+  katastar_parcel_number: string;
+  zk_area_m2: number;
+  katastar_area_m2: number;
+  zk_land_use: string;
+  katastar_land_use: string;
+  description: string;
+  severity: "HIGH" | "MEDIUM" | "LOW";
+}
+
+interface KatastarComparison {
+  status: "USKLAĐENO" | "NESKLAD" | "DJELOMIČNO";
+  area_difference_m2: number;
+  area_difference_percent: number;
+  katastar_area_m2: number;
+  zk_area_m2: number;
+  parcel_discrepancies: KatastarParcelDiscrepancy[];
+  summary: string;
+  discrepancy_count: number;
+  survey_recommended: boolean;
 }
 
 interface ZkParsedResult {
@@ -117,6 +142,8 @@ interface ZkParsedResult {
   land_use_mismatch?: string;
   has_usage_permit_issue?: boolean;
   due_diligence_summary?: string;
+  // V40: Katastar vs ZK
+  katastar_uskladjenost?: KatastarComparison;
 }
 
 interface SelectedComparable {
@@ -776,6 +803,133 @@ export default function ZkProcjenaPage() {
                 </div>
               </div>
             </div>
+
+            {/* ─── V40: KATASTAR vs ZK USKLAĐENOST ─── */}
+            {zkAnalysis.katastar_uskladjenost && (
+              <div className={`rounded-xl border-2 p-6 ${
+                zkAnalysis.katastar_uskladjenost.status === "NESKLAD" ? "border-orange-500 bg-orange-50" :
+                zkAnalysis.katastar_uskladjenost.status === "DJELOMIČNO" ? "border-yellow-500 bg-yellow-50" :
+                "border-green-500 bg-green-50"
+              }`}>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className={`flex items-center justify-center h-10 w-10 rounded-full text-xl ${
+                    zkAnalysis.katastar_uskladjenost.status === "NESKLAD" ? "bg-orange-200" :
+                    zkAnalysis.katastar_uskladjenost.status === "DJELOMIČNO" ? "bg-yellow-200" :
+                    "bg-green-200"
+                  }`}>
+                    {zkAnalysis.katastar_uskladjenost.status === "NESKLAD" ? "⚠️" :
+                     zkAnalysis.katastar_uskladjenost.status === "DJELOMIČNO" ? "🔶" : "✅"}
+                  </div>
+                  <div>
+                    <h3 className={`text-lg font-bold ${
+                      zkAnalysis.katastar_uskladjenost.status === "NESKLAD" ? "text-orange-800" :
+                      zkAnalysis.katastar_uskladjenost.status === "DJELOMIČNO" ? "text-yellow-800" :
+                      "text-green-800"
+                    }`}>
+                      📍 Usklađenost evidencija
+                    </h3>
+                    <p className="text-xs text-gray-600">Katastar ↔ Zemljišna knjiga</p>
+                  </div>
+                  <span className={`ml-auto text-xs font-bold uppercase px-3 py-1 rounded-full ${
+                    zkAnalysis.katastar_uskladjenost.status === "NESKLAD" ? "bg-orange-200 text-orange-800" :
+                    zkAnalysis.katastar_uskladjenost.status === "DJELOMIČNO" ? "bg-yellow-200 text-yellow-800" :
+                    "bg-green-200 text-green-800"
+                  }`}>
+                    {zkAnalysis.katastar_uskladjenost.status}
+                  </span>
+                </div>
+
+                {/* Area comparison bar */}
+                {(zkAnalysis.katastar_uskladjenost.zk_area_m2 > 0 || zkAnalysis.katastar_uskladjenost.katastar_area_m2 > 0) && (
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div className="rounded-lg bg-white/70 p-3 text-center">
+                      <p className="text-xs font-semibold text-gray-500 uppercase">ZK površina</p>
+                      <p className="text-xl font-bold text-gray-900">
+                        {zkAnalysis.katastar_uskladjenost.zk_area_m2.toLocaleString("hr-HR")} m²
+                      </p>
+                    </div>
+                    <div className="rounded-lg bg-white/70 p-3 text-center">
+                      <p className="text-xs font-semibold text-gray-500 uppercase">Katastar površina</p>
+                      <p className="text-xl font-bold text-gray-900">
+                        {zkAnalysis.katastar_uskladjenost.katastar_area_m2.toLocaleString("hr-HR")} m²
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Difference highlight */}
+                {zkAnalysis.katastar_uskladjenost.area_difference_m2 !== 0 && (
+                  <div className={`rounded-lg p-3 mb-4 text-center ${
+                    Math.abs(zkAnalysis.katastar_uskladjenost.area_difference_percent) > 10 ? "bg-red-100" :
+                    Math.abs(zkAnalysis.katastar_uskladjenost.area_difference_percent) > 5 ? "bg-orange-100" :
+                    "bg-yellow-100"
+                  }`}>
+                    <p className="text-sm font-semibold">
+                      Razlika: {zkAnalysis.katastar_uskladjenost.area_difference_m2 > 0 ? "+" : ""}
+                      {zkAnalysis.katastar_uskladjenost.area_difference_m2.toLocaleString("hr-HR")} m²
+                      <span className="text-gray-600 ml-2">
+                        ({zkAnalysis.katastar_uskladjenost.area_difference_percent > 0 ? "+" : ""}
+                        {zkAnalysis.katastar_uskladjenost.area_difference_percent.toFixed(1)}%)
+                      </span>
+                    </p>
+                  </div>
+                )}
+
+                {/* Individual parcel discrepancies */}
+                {zkAnalysis.katastar_uskladjenost.parcel_discrepancies?.length > 0 && (
+                  <div className="space-y-2 mb-4">
+                    {zkAnalysis.katastar_uskladjenost.parcel_discrepancies.map((d, i) => (
+                      <div key={i} className={`p-3 rounded-lg border-l-4 bg-white/60 ${
+                        d.severity === "HIGH" ? "border-red-500" :
+                        d.severity === "MEDIUM" ? "border-orange-400" :
+                        "border-yellow-400"
+                      }`}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${
+                            d.type === "AREA_MISMATCH" ? "bg-orange-100 text-orange-700" :
+                            d.type === "PARCEL_NUMBER_MISMATCH" ? "bg-red-100 text-red-700" :
+                            d.type === "LAND_USE_MISMATCH" ? "bg-yellow-100 text-yellow-700" :
+                            "bg-gray-100 text-gray-700"
+                          }`}>
+                            {d.type === "AREA_MISMATCH" ? "Površina" :
+                             d.type === "PARCEL_NUMBER_MISMATCH" ? "Čestica" :
+                             d.type === "LAND_USE_MISMATCH" ? "Kultura" :
+                             d.type === "PARCEL_MISSING" ? "Nedostaje" : d.type}
+                          </span>
+                          {d.zk_parcel_number && (
+                            <span className="text-xs text-gray-500 font-mono">
+                              ZK č. {d.zk_parcel_number}
+                              {d.katastar_parcel_number && d.katastar_parcel_number !== d.zk_parcel_number && 
+                                ` → kat.č. ${d.katastar_parcel_number}`}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-700">{d.description}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Summary */}
+                <p className="text-sm text-gray-700 leading-relaxed">
+                  {zkAnalysis.katastar_uskladjenost.summary}
+                </p>
+
+                {/* Survey recommendation */}
+                {zkAnalysis.katastar_uskladjenost.survey_recommended && (
+                  <div className="mt-3 flex items-start gap-2 p-3 rounded-lg bg-orange-100 border border-orange-300">
+                    <span className="text-lg">📐</span>
+                    <div>
+                      <p className="text-sm font-semibold text-orange-800">Preporučen geodetski elaborat</p>
+                      <p className="text-xs text-orange-700">
+                        Značajne razlike između katastra i ZK — preporučamo angažirati ovlaštenog geodeta 
+                        za izradu elaborata usklađenja prije kupoprodaje.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* ─── DUE DILIGENCE FINDINGS ─── */}
             {zkAnalysis.findings && zkAnalysis.findings.length > 0 && (

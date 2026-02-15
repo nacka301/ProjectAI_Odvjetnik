@@ -48,6 +48,9 @@ public class ZkParsedResult
     public bool HasUsagePermitIssue { get; set; }                      // "Nije priložena uporabna dozvola"
     public string DueDiligenceSummary { get; set; } = string.Empty;    // Professional report summary
 
+    // ── V40: Katastar vs ZK Usklađenost ──
+    public KatastarComparison? KatastarUskladjenost { get; set; }      // Cadastre vs land registry discrepancies
+
     // ── Location (extracted or inferred) ──
     public string Location { get; set; } = string.Empty;              // "Naselje, Općina/Grad"
     public string Address { get; set; } = string.Empty;               // Street address if found
@@ -113,6 +116,77 @@ public class DueDiligenceFinding
     public string Title { get; set; } = string.Empty;          // Short title
     public string Description { get; set; } = string.Empty;    // Detailed explanation
     public string Advice { get; set; } = string.Empty;         // Actionable legal advice
+}
+
+// ══════════════════════════════════════════════════════════
+//  V40: Katastar vs ZK Usklađenost (Cadastre ↔ Land Registry)
+// ══════════════════════════════════════════════════════════
+
+/// <summary>
+/// Overall comparison between cadastre (katastar) and land registry (ZK) records.
+/// Detects discrepancies in areas, parcel numbers, and land use descriptions.
+/// </summary>
+public class KatastarComparison
+{
+    /// <summary>Overall status: "USKLAĐENO", "NESKLAD", "DJELOMIČNO"</summary>
+    public string Status { get; set; } = "USKLAĐENO";
+
+    /// <summary>Total area difference (katastar vs ZK) in m²</summary>
+    public double AreaDifferenceM2 { get; set; }
+
+    /// <summary>Percentage difference ((katastar - ZK) / ZK * 100)</summary>
+    public double AreaDifferencePercent { get; set; }
+
+    /// <summary>Area recorded in katastar (m²)</summary>
+    public double KatastarAreaM2 { get; set; }
+
+    /// <summary>Area recorded in ZK (m²)</summary>
+    public double ZkAreaM2 { get; set; }
+
+    /// <summary>Individual parcel-level discrepancies</summary>
+    public List<KatastarParcelDiscrepancy> ParcelDiscrepancies { get; set; } = [];
+
+    /// <summary>Human-readable summary of all discrepancies in Croatian</summary>
+    public string Summary { get; set; } = string.Empty;
+
+    /// <summary>Number of discrepancies found</summary>
+    public int DiscrepancyCount { get; set; }
+
+    /// <summary>Whether a survey (geodetski elaborat) is recommended</summary>
+    public bool SurveyRecommended { get; set; }
+}
+
+/// <summary>
+/// A single parcel-level discrepancy between katastar and ZK records.
+/// </summary>
+public class KatastarParcelDiscrepancy
+{
+    /// <summary>Type: "AREA_MISMATCH", "PARCEL_MISSING", "LAND_USE_MISMATCH", "PARCEL_NUMBER_MISMATCH"</summary>
+    public string Type { get; set; } = string.Empty;
+
+    /// <summary>Parcel number in ZK (e.g. "1234/5")</summary>
+    public string ZkParcelNumber { get; set; } = string.Empty;
+
+    /// <summary>Parcel number in katastar (may differ after parcellation)</summary>
+    public string KatastarParcelNumber { get; set; } = string.Empty;
+
+    /// <summary>Area in ZK (m²)</summary>
+    public double ZkAreaM2 { get; set; }
+
+    /// <summary>Area in katastar (m²)</summary>
+    public double KatastarAreaM2 { get; set; }
+
+    /// <summary>Land use description in ZK</summary>
+    public string ZkLandUse { get; set; } = string.Empty;
+
+    /// <summary>Land use description in katastar</summary>
+    public string KatastarLandUse { get; set; } = string.Empty;
+
+    /// <summary>Human-readable description of the discrepancy</summary>
+    public string Description { get; set; } = string.Empty;
+
+    /// <summary>Severity: "HIGH", "MEDIUM", "LOW"</summary>
+    public string Severity { get; set; } = "MEDIUM";
 }
 
 /// <summary>

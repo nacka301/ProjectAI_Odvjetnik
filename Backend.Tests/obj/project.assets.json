@@ -2762,11 +2762,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\David\\Documents\\ProjectAI_Odvjetnik\\Backend.Tests\\Backend.Tests.csproj",
+      "projectUniqueName": "c:\\Users\\David\\Documents\\ProjectAI_Odvjetnik\\Backend.Tests\\Backend.Tests.csproj",
       "projectName": "Backend.Tests",
-      "projectPath": "C:\\Users\\David\\Documents\\ProjectAI_Odvjetnik\\Backend.Tests\\Backend.Tests.csproj",
+      "projectPath": "c:\\Users\\David\\Documents\\ProjectAI_Odvjetnik\\Backend.Tests\\Backend.Tests.csproj",
       "packagesPath": "C:\\Users\\David\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\David\\Documents\\ProjectAI_Odvjetnik\\Backend.Tests\\obj\\",
+      "outputPath": "c:\\Users\\David\\Documents\\ProjectAI_Odvjetnik\\Backend.Tests\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -2788,8 +2788,8 @@
         "net8.0": {
           "targetAlias": "net8.0",
           "projectReferences": {
-            "C:\\Users\\David\\Documents\\ProjectAI_Odvjetnik\\Backend\\Backend.csproj": {
-              "projectPath": "C:\\Users\\David\\Documents\\ProjectAI_Odvjetnik\\Backend\\Backend.csproj"
+            "c:\\Users\\David\\Documents\\ProjectAI_Odvjetnik\\Backend\\Backend.csproj": {
+              "projectPath": "c:\\Users\\David\\Documents\\ProjectAI_Odvjetnik\\Backend\\Backend.csproj"
             }
           }
         }
