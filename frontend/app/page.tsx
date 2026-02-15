@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+
 import {
   Search as SearchIcon,
   Home,
@@ -13,8 +13,6 @@ import {
   Building2,
   TreePine,
   MapPin,
-  Upload,
-  FileText,
   AlertTriangle,
   ChevronRight,
   Loader2,
@@ -72,11 +70,10 @@ interface RawEvaluation {
 // ═══════════════════════════════════════════════════════════
 
 export default function Dashboard() {
-  const router = useRouter();
+
   const [evaluations, setEvaluations] = useState<EvaluationRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dragOver, setDragOver] = useState(false);
-  const dropRef = useRef<HTMLDivElement>(null);
+
 
   useEffect(() => {
     (async () => {
@@ -91,45 +88,7 @@ export default function Dashboard() {
     })();
   }, []);
 
-  // ── Quick Drop Zone logic ──
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setDragOver(false);
-      const files = Array.from(e.dataTransfer.files).filter((f) =>
-        f.name.toLowerCase().endsWith(".pdf")
-      );
-      if (files.length === 0) return;
 
-      // Heuristic: multiple files → chronology; single file → detect by name
-      if (files.length > 1) {
-        router.push("/kronologija");
-        return;
-      }
-
-      const name = files[0].name.toLowerCase();
-      if (
-        name.includes("zk") ||
-        name.includes("izvadak") ||
-        name.includes("gruntovni") ||
-        name.includes("vlastovnica") ||
-        name.includes("posjedovnica")
-      ) {
-        router.push("/zk-procjena");
-      } else if (
-        name.includes("ugovor") ||
-        name.includes("predugovor") ||
-        name.includes("aneks") ||
-        name.includes("kupoprodaj")
-      ) {
-        router.push("/ugovor");
-      } else {
-        // Default: contract analysis (most common single-document use case)
-        router.push("/ugovor");
-      }
-    },
-    [router]
-  );
 
   // ── Status badge for evaluation ──
   function getStatusBadge(ev: EvaluationRow) {
@@ -436,67 +395,8 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* ── RIGHT: Quick Drop Zone + Stats ── */}
+          {/* ── RIGHT: Legal Feed + Stats ── */}
           <div className="space-y-4">
-            <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">
-              AI Inbox
-            </h2>
-
-            <div
-              ref={dropRef}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragOver(true);
-              }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={handleDrop}
-              className={`rounded-xl border-2 border-dashed p-8 text-center transition-all ${
-                dragOver
-                  ? "border-blue-500 bg-blue-50 scale-[1.02]"
-                  : "border-slate-300 bg-white hover:border-slate-400"
-              }`}
-            >
-              <div
-                className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 transition ${
-                  dragOver ? "bg-blue-100" : "bg-slate-100"
-                }`}
-              >
-                <Upload
-                  className={`h-7 w-7 transition ${
-                    dragOver ? "text-blue-600" : "text-slate-400"
-                  }`}
-                />
-              </div>
-              <p
-                className={`font-medium text-sm mb-1 transition ${
-                  dragOver ? "text-blue-700" : "text-slate-700"
-                }`}
-              >
-                Povuci dokument ovdje
-              </p>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Ugovor, ZK izvadak ili hrpu
-                <br />
-                računa — AI automatski prepoznaje
-              </p>
-
-              {/* Quick file type hints */}
-              <div className="mt-5 space-y-2">
-                <div className="flex items-center gap-2 text-[11px] text-slate-400">
-                  <FileText className="h-3.5 w-3.5 text-emerald-500" />
-                  <span>ugovor.pdf → Analiza rizika</span>
-                </div>
-                <div className="flex items-center gap-2 text-[11px] text-slate-400">
-                  <BookOpen className="h-3.5 w-3.5 text-indigo-500" />
-                  <span>zk_izvadak.pdf → Tereti + Procjena</span>
-                </div>
-                <div className="flex items-center gap-2 text-[11px] text-slate-400">
-                  <ScrollText className="h-3.5 w-3.5 text-violet-500" />
-                  <span>Više datoteka → Kronologija</span>
-                </div>
-              </div>
-            </div>
-
             {/* Legal Intelligence Feed */}
             <LegalFeed />
 
