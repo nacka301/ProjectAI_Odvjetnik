@@ -30,6 +30,9 @@ public class ContractAnalysisResult
     /// <summary>Risk score 0-100 (100 = extremely risky)</summary>
     public int RiskScore { get; set; }
 
+    /// <summary>V42: All norms cited in this analysis — structured for validity badges</summary>
+    public List<CitedNorm> CitedNorms { get; set; } = [];
+
     /// <summary>Legal disclaimer (always present)</summary>
     public string Disclaimer { get; set; } = "";
 }

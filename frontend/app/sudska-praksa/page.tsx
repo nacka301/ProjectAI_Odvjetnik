@@ -30,6 +30,8 @@ import {
   BarChart3,
 } from "lucide-react";
 import PrecedentSidebar from "@/components/PrecedentSidebar";
+import { NormBadge, CitedNormsList, TemporalDatePicker, CitationModeToggle } from "@/components/NormBadge";
+import { type CitedNorm, fetchTemporalBatch, type TemporalNormResult } from "@/lib/normApi";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000";
 
@@ -100,6 +102,7 @@ interface LegalStrategyResult {
   strategy_summary: string;
   estimated_duration: string;
   estimated_cost: string;
+  cited_norms?: CitedNorm[];
   disclaimer: string;
 }
 
@@ -390,6 +393,10 @@ export default function ProvjeriIshodPage() {
   const [activeTab, setActiveTab] = useState<"text" | "pdf">("text");
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  // V42: Norm Validity Engine state
+  const [eventDate, setEventDate] = useState("");
+  const [courtCitationMode, setCourtCitationMode] = useState(true);
+  const [temporalResults, setTemporalResults] = useState<TemporalNormResult[]>([]);
 
   // ── Submit via SSE stream ──
   const submitAnalysis = async () => {
@@ -774,6 +781,24 @@ export default function ProvjeriIshodPage() {
               </div>
             )}
 
+            {/* V42: Temporal Law Mode + Citation Toggle */}
+            <div className="space-y-3">
+              <TemporalDatePicker
+                value={eventDate}
+                onChange={setEventDate}
+                label="Temporal Law Mode — Datum pravnog događaja"
+              />
+              <div className="flex items-center justify-between">
+                <CitationModeToggle
+                  enabled={courtCitationMode}
+                  onToggle={setCourtCitationMode}
+                />
+                <span className="text-[10px] text-gray-400">
+                  Citati u sudskom formatu: čl. + st. + NN oznaka
+                </span>
+              </div>
+            </div>
+
             {/* Submit button */}
             <button
               onClick={submitAnalysis}
@@ -1131,9 +1156,19 @@ export default function ProvjeriIshodPage() {
                             {p.legal_basis && (
                               <>
                                 <span className="text-slate-300">•</span>
-                                <span className="text-blue-500 font-medium">
-                                  {p.legal_basis}
-                                </span>
+                                <NormBadge
+                                  norm={{
+                                    abbreviation: "",
+                                    full_name: "",
+                                    article: p.legal_basis,
+                                    paragraph: "",
+                                    point: "",
+                                    nn_reference: "",
+                                    status: "VAŽEĆI",
+                                    formatted_citation: p.legal_basis,
+                                    nn_url: "",
+                                  }}
+                                />
                               </>
                             )}
                             {p.similarity_score > 0 && (
@@ -1216,6 +1251,24 @@ export default function ProvjeriIshodPage() {
                 ))}
               </div>
             </div>
+
+            {/* V42: Cited Norms — Validity Badges */}
+            {result.cited_norms && result.cited_norms.length > 0 && (
+              <div className="bg-white rounded-xl border border-indigo-200 shadow-sm overflow-hidden">
+                <div className="bg-indigo-50 px-6 py-3 border-b border-indigo-200 flex items-center gap-2">
+                  <Scale className="h-5 w-5 text-indigo-600" />
+                  <h3 className="font-bold text-indigo-800">Citirani propisi</h3>
+                  <span className="text-xs text-indigo-400">({result.cited_norms.length})</span>
+                </div>
+                <div className="px-6 py-4">
+                  <CitedNormsList
+                    norms={result.cited_norms}
+                    temporalResults={temporalResults}
+                    variant="cards"
+                  />
+                </div>
+              </div>
+            )}
 
             {/* ── Disclaimer ── */}
             <div className="p-4 bg-amber-50 rounded-xl border border-amber-200">

@@ -144,6 +144,18 @@ public class ContractAnalysisService
               "proposed_text": "Predloženi tekst koji štiti kupca",
               "rationale": "Ratio legis — zašto je ova izmjena pravno nužna"
             }
+          ],
+          "cited_norms": [
+            {
+              "abbreviation": "ZOO",
+              "full_name": "Zakon o obveznim odnosima",
+              "article": "čl. 322.",
+              "paragraph": "st. 1.",
+              "point": "",
+              "nn_reference": "NN 35/05, 41/08, 125/11, 78/15, 29/18",
+              "status": "VAŽEĆI",
+              "formatted_citation": "čl. 322. st. 1. Zakona o obveznim odnosima (NN 35/05, 41/08, 125/11, 78/15, 29/18)"
+            }
           ]
         }
         """;

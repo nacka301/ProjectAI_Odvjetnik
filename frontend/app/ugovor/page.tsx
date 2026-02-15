@@ -16,6 +16,8 @@ import {
   Quote,
   BookOpen,
 } from "lucide-react";
+import { NormBadge, CitedNormsList, TemporalDatePicker } from "@/components/NormBadge";
+import { type CitedNorm } from "@/lib/normApi";
 
 // ── Types matching backend ContractAnalysisResult ──
 
@@ -42,6 +44,7 @@ interface ContractAnalysisResult {
   warnings: ContractIssue[];
   positives: string[];
   suggested_amendments: SuggestedAmendment[];
+  cited_norms?: CitedNorm[];
   disclaimer: string;
 }
 
@@ -56,6 +59,8 @@ export default function ContractAnalysisPage() {
   const [result, setResult] = useState<ContractAnalysisResult | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const selectedFileRef = useRef<File | null>(null);
+  // V42: Temporal Law Mode
+  const [eventDate, setEventDate] = useState("");
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -235,6 +240,13 @@ export default function ContractAnalysisPage() {
               </div>
             )}
 
+            {/* V42: Temporal Law Mode */}
+            <TemporalDatePicker
+              value={eventDate}
+              onChange={setEventDate}
+              label="Datum sklapanja ugovora (za temporal provjeru)"
+            />
+
             {/* Analyze Button */}
             <button
               onClick={handleAnalyze}
@@ -359,9 +371,20 @@ export default function ContractAnalysisPage() {
                         </div>
                       )}
                       {flag.legal_basis && (
-                        <span className="inline-block mt-2 text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
-                          {flag.legal_basis}
-                        </span>
+                        <NormBadge
+                          norm={{
+                            abbreviation: "",
+                            full_name: "",
+                            article: flag.legal_basis,
+                            paragraph: "",
+                            point: "",
+                            nn_reference: "",
+                            status: "VAŽEĆI",
+                            formatted_citation: flag.legal_basis,
+                            nn_url: "",
+                          }}
+                          context="red_flag"
+                        />
                       )}
                     </div>
                   ))}
@@ -396,9 +419,20 @@ export default function ContractAnalysisPage() {
                         </div>
                       )}
                       {warn.legal_basis && (
-                        <span className="inline-block mt-2 text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
-                          {warn.legal_basis}
-                        </span>
+                        <NormBadge
+                          norm={{
+                            abbreviation: "",
+                            full_name: "",
+                            article: warn.legal_basis,
+                            paragraph: "",
+                            point: "",
+                            nn_reference: "",
+                            status: "VAŽEĆI",
+                            formatted_citation: warn.legal_basis,
+                            nn_url: "",
+                          }}
+                          context="warning"
+                        />
                       )}
                     </div>
                   ))}
@@ -470,6 +504,20 @@ export default function ContractAnalysisPage() {
                       </p>
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {/* V42: Cited Norms — Validity Badges */}
+            {result.cited_norms && result.cited_norms.length > 0 && (
+              <div className="bg-white rounded-xl border border-indigo-200 shadow-sm overflow-hidden">
+                <div className="bg-indigo-50 px-6 py-3 border-b border-indigo-200 flex items-center gap-2">
+                  <Scale className="h-5 w-5 text-indigo-600" />
+                  <h2 className="font-bold text-indigo-800">Citirani propisi</h2>
+                  <span className="text-xs text-indigo-400">({result.cited_norms.length})</span>
+                </div>
+                <div className="px-6 py-4">
+                  <CitedNormsList norms={result.cited_norms} variant="cards" />
                 </div>
               </div>
             )}

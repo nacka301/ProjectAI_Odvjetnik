@@ -203,7 +203,19 @@ public class LegalIntelligenceService
           ],
           "strategy_summary": "Profesionalni sažetak strategije",
           "estimated_duration": "12-18 mjeseci (prvostupanjski) + 6-12 mjeseci (žalba)",
-          "estimated_cost": "3.000 - 8.000 EUR (odvjetnički + sudski troškovi)"
+          "estimated_cost": "3.000 - 8.000 EUR (odvjetnički + sudski troškovi)",
+          "cited_norms": [
+            {
+              "abbreviation": "ZOO",
+              "full_name": "Zakon o obveznim odnosima",
+              "article": "čl. 368.",
+              "paragraph": "",
+              "point": "",
+              "nn_reference": "NN 35/05, 41/08, 125/11, 78/15, 29/18",
+              "status": "VAŽEĆI",
+              "formatted_citation": "čl. 368. Zakona o obveznim odnosima (NN 35/05, 41/08, 125/11, 78/15, 29/18)"
+            }
+          ]
         }
         """;
 

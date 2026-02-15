@@ -104,6 +104,9 @@ public class LegalStrategyResult
     /// <summary>Estimated cost range</summary>
     public string EstimatedCost { get; set; } = "";
 
+    /// <summary>V42: All norms cited in this analysis — structured for validity badges</summary>
+    public List<CitedNorm> CitedNorms { get; set; } = [];
+
     /// <summary>Legal disclaimer</summary>
     public string Disclaimer { get; set; } =
         "Ova AI analiza temelji se na općim načelima sudske prakse i ne zamjenjuje pravni savjet ovlaštenog odvjetnika. " +

@@ -161,3 +161,57 @@ CREATE POLICY "service_role_full_access" ON legal_strategies
 DROP POLICY IF EXISTS "anon_select" ON legal_strategies;
 CREATE POLICY "anon_select" ON legal_strategies
     FOR SELECT USING (true);
+
+-- ========================================
+-- V42: Norm Registry — Croatian legal norms reference data
+-- Static reference table for the Norm Validity Engine.
+-- Stores law metadata, amendment history, and validity status.
+-- ========================================
+
+CREATE TABLE IF NOT EXISTS norms (
+    id                  UUID            DEFAULT uuid_generate_v4() PRIMARY KEY,
+    abbreviation        TEXT            NOT NULL UNIQUE,     -- 'ZOO', 'ZZK', 'ZV', etc.
+    full_name           TEXT            NOT NULL,            -- 'Zakon o obveznim odnosima'
+    status              TEXT            NOT NULL DEFAULT 'VAŽEĆI',  -- 'VAŽEĆI', 'IZMIJENJEN', 'UKINUT'
+    nn_reference        TEXT            NOT NULL DEFAULT '', -- 'NN 35/05, 41/08, 125/11, 78/15, 29/18'
+    nn_reference_short  TEXT            NOT NULL DEFAULT '', -- 'NN 35/05, 29/18'
+    category            TEXT            NOT NULL DEFAULT '', -- 'Obvezno pravo', 'Stvarno pravo', etc.
+    original_date       DATE,                               -- Date of original publication
+    last_amendment_date DATE,                               -- Date of most recent amendment
+    nn_url              TEXT            NOT NULL DEFAULT '', -- Link to Narodne novine
+    created_at          TIMESTAMPTZ     DEFAULT now() NOT NULL,
+    updated_at          TIMESTAMPTZ     DEFAULT now() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_norms_abbreviation ON norms (abbreviation);
+
+-- Amendment history for each norm
+CREATE TABLE IF NOT EXISTS norm_amendments (
+    id              UUID            DEFAULT uuid_generate_v4() PRIMARY KEY,
+    norm_id         UUID            NOT NULL REFERENCES norms(id) ON DELETE CASCADE,
+    nn_number       TEXT            NOT NULL,            -- '35/05'
+    publication_date DATE           NOT NULL,
+    amendment_type  TEXT            NOT NULL DEFAULT 'Izmjena', -- 'TemeljniTekst', 'Izmjena', 'Ispravak', 'OdlukaUSRH'
+    description     TEXT            NOT NULL DEFAULT '',
+    created_at      TIMESTAMPTZ     DEFAULT now() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_norm_amendments_norm_id ON norm_amendments (norm_id);
+CREATE INDEX IF NOT EXISTS idx_norm_amendments_date ON norm_amendments (publication_date);
+
+-- RLS for norms (read-only for anon)
+ALTER TABLE norms ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "service_role_full_access" ON norms;
+CREATE POLICY "service_role_full_access" ON norms
+    FOR ALL USING (auth.role() = 'service_role');
+DROP POLICY IF EXISTS "anon_select" ON norms;
+CREATE POLICY "anon_select" ON norms
+    FOR SELECT USING (true);
+
+ALTER TABLE norm_amendments ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "service_role_full_access" ON norm_amendments;
+CREATE POLICY "service_role_full_access" ON norm_amendments
+    FOR ALL USING (auth.role() = 'service_role');
+DROP POLICY IF EXISTS "anon_select" ON norm_amendments;
+CREATE POLICY "anon_select" ON norm_amendments
+    FOR SELECT USING (true);

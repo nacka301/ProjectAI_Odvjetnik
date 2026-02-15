@@ -48,6 +48,9 @@ public class ZkParsedResult
     public bool HasUsagePermitIssue { get; set; }                      // "Nije priložena uporabna dozvola"
     public string DueDiligenceSummary { get; set; } = string.Empty;    // Professional report summary
 
+    // ── V42: Norm Validity Engine — cited norms with validity status ──
+    public List<CitedNorm> CitedNorms { get; set; } = [];
+
     // ── V40: Katastar vs ZK Usklađenost ──
     public KatastarComparison? KatastarUskladjenost { get; set; }      // Cadastre vs land registry discrepancies
 

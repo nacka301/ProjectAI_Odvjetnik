@@ -279,6 +279,18 @@ public class ZkParsingService
             "survey_recommended": false
           },
           "due_diligence_summary": "Profesionalni sažetak pravnog stanja...",
+          "cited_norms": [
+            {
+              "abbreviation": "ZZK",
+              "full_name": "Zakon o zemljišnim knjigama",
+              "article": "čl. 98.",
+              "paragraph": "",
+              "point": "",
+              "nn_reference": "NN 91/96, 137/99, 114/01, 100/04, 107/07, 152/08, 55/13, 60/13, 108/17",
+              "status": "VAŽEĆI",
+              "formatted_citation": "čl. 98. Zakona o zemljišnim knjigama (NN 91/96, 137/99, 114/01, 100/04, 107/07, 152/08, 55/13, 60/13, 108/17)"
+            }
+          ],
           "lawyer_comment": "Kratki sažetak za kompatibilnost...",
           "location": "Naselje, Općina/Grad",
           "address": "Ulica 5 ili prazan string",
