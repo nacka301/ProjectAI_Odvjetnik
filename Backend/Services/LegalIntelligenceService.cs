@@ -5,16 +5,11 @@ using OpenAI.Chat;
 namespace Backend.Services;
 
 /// <summary>
-/// V33: Legal Intelligence Service — RAG-simulated Court Practice Analysis.
+/// V34: Legal Intelligence Service — Hardened & Transparent Court Practice Analysis.
 /// 
 /// Uses GPT-4o's extensive training data on Croatian legal texts as a "virtual vector DB".
-/// The AI acts as both the retrieval engine (finding relevant precedents) and the synthesis
-/// engine (analyzing how they apply to the current case).
-/// 
-/// Two main capabilities:
-/// 1. GetLegalFeedAsync() — "Legal Intelligence Feed" for the dashboard
-/// 2. AnalyzeLegalStrategyAsync() — "Provjeri ishod na sudu" killer feature
-/// 3. GetRelevantPrecedentsAsync() — Precedent sidebar for any case context
+/// V34 adds: probability ranges, deterministic score breakdown from precedent counts,
+/// stability indicators per precedent, contextual risk anchoring, data provenance.
 /// </summary>
 public class LegalIntelligenceService
 {
@@ -64,7 +59,7 @@ public class LegalIntelligenceService
         }
         """;
 
-    // ── System Prompt: Legal Strategy Analyzer ──
+    // ── System Prompt: Legal Strategy Analyzer (V34 Hardened) ──
     private const string StrategySystemPrompt = """
         TI SI: Iskusni hrvatski odvjetnik-strateg s 25 godina iskustva pred hrvatskim sudovima.
         Specijaliziran si za nekretnine, obvezno pravo i stvarno pravo.
@@ -82,13 +77,24 @@ public class LegalIntelligenceService
            - Za svaku presudu navedi: broj, sud, datum, sažetak, ključno pravno načelo
            - Označi je li presuda POVOLJNA, NEPOVOLJNA ili NEUTRALNA za klijenta
            - Koristi REALISTIČNE formate oznaka (Rev-xxx/yy-z, Gž-xxx/yyyy)
+           - Za svaku presudu označi STABILNOST prakse:
+             * "STABILNA" = ustaljena praksa, više presuda u istom smjeru
+             * "PODIJELJENA" = postoje protupresude, praksa nije ujednačena
+             * "NOVA" = novo pravno pitanje, malo presuda
+           - Za svaku presudu procijeni SLIČNOST s ovim slučajem (0-100)
 
-        3. PROCIJENI VJEROJATNOST USPJEHA
-           - Na temelju sličnosti s citiranom praksom, procijeni postotak uspjeha (0-100%)
-           - Uzmi u obzir regionalne razlike (npr. sudovi u Dalmaciji vs. u Zagrebu)
+        3. PROCIJENI VJEROJATNOST USPJEHA — RASPON
+           - Na temelju sličnosti s citiranom praksom, procijeni RASPON postotka uspjeha
+           - Navedi win_probability_min (donja granica) i win_probability_max (gornja granica)
+           - win_probability je srednja vrijednost (midpoint)
            - Budi konzervativan — bolje podcijeniti šanse nego dati lažnu nadu
+           - Navedi FAKTORE POVJERENJA koji utječu na širinu raspona:
+             * Faktori koji povećavaju povjerenje: bogata činjenična podloga, ustaljena sudska praksa
+             * Faktori koji smanjuju povjerenje: nepotpune informacije, podijeljena praksa
 
-        4. IDENTIFICIRAJ RIZIKE
+        4. IDENTIFICIRAJ RIZIKE — KONTEKSTUALNO
+           - Za SVAKI rizik navedi KONKRETNI element iz slučaja koji ga uzrokuje (case_element)
+           - NE navodi generičke rizike — svaki rizik mora biti vezan za specifičan dio činjenica
            - Procesni rizici (zastara, nedostatak dokaza, troškovi)
            - Materijalni rizici (slaba pravna pozicija, protupresude)
            - Praktični rizici (trajanje postupka, naplativost)
@@ -118,18 +124,39 @@ public class LegalIntelligenceService
               "legal_principle": "Ključno pravno načelo",
               "relevance_to_case": "Kako se odnosi na ovaj slučaj",
               "alignment": "POVOLJNA / NEPOVOLJNA / NEUTRALNA",
-              "legal_basis": "čl. 368. ZOO"
+              "legal_basis": "čl. 368. ZOO",
+              "stability": "STABILNA / PODIJELJENA / NOVA",
+              "similarity_score": 85
             }
           ],
           "win_probability": 65,
+          "win_probability_min": 55,
+          "win_probability_max": 75,
           "win_probability_label": "Srednja",
           "probability_reasoning": "Obrazloženje procjene",
+          "score_breakdown": {
+            "practice_stability": "STABILNA / PODIJELJENA / NOVA",
+            "legal_qualification": "Raskid ugovora zbog neispunjenja obveza (čl. 368. ZOO)"
+          },
+          "confidence_factors": [
+            {
+              "factor": "Ustaljena sudska praksa VSRH",
+              "direction": "POZITIVNO",
+              "explanation": "Više presuda VSRH potvrđuje ovo stajalište"
+            },
+            {
+              "factor": "Nepotpuna kronologija",
+              "direction": "NEGATIVNO",
+              "explanation": "Nedostaju datumi ključnih koraka"
+            }
+          ],
           "risks": [
             {
               "title": "Naziv rizika",
               "description": "Opis",
               "severity": "VISOK / SREDNJI / NIZAK",
-              "mitigation": "Kako umanjiti rizik"
+              "mitigation": "Kako umanjiti rizik",
+              "case_element": "Konkretni element slučaja koji uzrokuje ovaj rizik"
             }
           ],
           "strengths": ["Snaga pozicije 1", "Snaga pozicije 2"],
@@ -147,7 +174,7 @@ public class LegalIntelligenceService
         }
         """;
 
-    // ── System Prompt: Precedent Finder (for sidebar) ──
+    // ── System Prompt: Precedent Finder (for sidebar) — V34 with stability ──
     private const string PrecedentSystemPrompt = """
         TI SI: Pravni istraživač specijaliziran za pretragu sudske prakse u RH.
         
@@ -160,6 +187,8 @@ public class LegalIntelligenceService
         - Budi koncizan i praktičan
         - Fokusiraj se na presude koje bi odvjetniku pomogle u argumentaciji
         - Navedi za svaku je li povoljna ili nepovoljna za tipičnu poziciju kupca
+        - Za svaku presudu označi STABILNOST (STABILNA/PODIJELJENA/NOVA)
+        - Za svaku presudu procijeni SLIČNOST s priloženim pitanjem (0-100)
 
         IZLAZNI FORMAT — vrati ISKLJUČIVO čisti JSON:
         {
@@ -173,7 +202,9 @@ public class LegalIntelligenceService
               "legal_principle": "Ključno načelo",
               "relevance_to_case": "Relevantnost",
               "alignment": "POVOLJNA / NEPOVOLJNA / NEUTRALNA",
-              "legal_basis": "čl. XX. ZOO/ZZK/ZV"
+              "legal_basis": "čl. XX. ZOO/ZZK/ZV",
+              "stability": "STABILNA / PODIJELJENA / NOVA",
+              "similarity_score": 80
             }
           ]
         }
@@ -445,8 +476,15 @@ public class LegalIntelligenceService
             var root = doc.RootElement;
 
             result.KeyLegalIssue = GetStr(root, "key_legal_issue");
-            result.WinProbability = root.TryGetProperty("win_probability", out var wp) && wp.ValueKind == JsonValueKind.Number
+
+            // V34: Parse probability range
+            int gptProbability = root.TryGetProperty("win_probability", out var wp) && wp.ValueKind == JsonValueKind.Number
                 ? wp.GetInt32() : 50;
+            int gptMin = root.TryGetProperty("win_probability_min", out var wpMin) && wpMin.ValueKind == JsonValueKind.Number
+                ? wpMin.GetInt32() : Math.Max(0, gptProbability - 10);
+            int gptMax = root.TryGetProperty("win_probability_max", out var wpMax) && wpMax.ValueKind == JsonValueKind.Number
+                ? wpMax.GetInt32() : Math.Min(100, gptProbability + 10);
+
             result.WinProbabilityLabel = GetStr(root, "win_probability_label", "Srednja");
             result.ProbabilityReasoning = GetStr(root, "probability_reasoning");
             result.StrategySummary = GetStr(root, "strategy_summary");
@@ -463,7 +501,7 @@ public class LegalIntelligenceService
                 }
             }
 
-            // Precedents
+            // V34: Parse precedents with stability + similarity_score
             if (root.TryGetProperty("precedents", out var pa) && pa.ValueKind == JsonValueKind.Array)
             {
                 foreach (var item in pa.EnumerateArray())
@@ -477,12 +515,77 @@ public class LegalIntelligenceService
                         LegalPrinciple = GetStr(item, "legal_principle"),
                         RelevanceToCase = GetStr(item, "relevance_to_case"),
                         Alignment = GetStr(item, "alignment", "NEUTRALNA"),
-                        LegalBasis = GetStr(item, "legal_basis")
+                        LegalBasis = GetStr(item, "legal_basis"),
+                        Stability = GetStr(item, "stability", "NOVA"),
+                        SimilarityScore = item.TryGetProperty("similarity_score", out var ss) && ss.ValueKind == JsonValueKind.Number
+                            ? ss.GetInt32() : 50
                     });
                 }
             }
 
-            // Risks
+            // V34: Deterministic score breakdown from precedent alignment counts
+            int favorable = result.Precedents.Count(p => p.Alignment.Equals("POVOLJNA", StringComparison.OrdinalIgnoreCase));
+            int unfavorable = result.Precedents.Count(p => p.Alignment.Equals("NEPOVOLJNA", StringComparison.OrdinalIgnoreCase));
+            int neutral = result.Precedents.Count(p => !p.Alignment.Equals("POVOLJNA", StringComparison.OrdinalIgnoreCase) &&
+                                                        !p.Alignment.Equals("NEPOVOLJNA", StringComparison.OrdinalIgnoreCase));
+            int total = result.Precedents.Count;
+
+            // Deterministic precedent score: (favorable*100 + neutral*50 + unfavorable*0) / total
+            int precedentScore = total > 0
+                ? (int)Math.Round((favorable * 100.0 + neutral * 50.0) / total)
+                : 50;
+
+            // Final probability = weighted average: 60% GPT qualitative + 40% deterministic precedent score
+            int finalProbability = (int)Math.Round(gptProbability * 0.6 + precedentScore * 0.4);
+            int finalMin = Math.Max(0, (int)Math.Round(gptMin * 0.6 + Math.Max(0, precedentScore - 15) * 0.4));
+            int finalMax = Math.Min(100, (int)Math.Round(gptMax * 0.6 + Math.Min(100, precedentScore + 15) * 0.4));
+
+            // Ensure min <= mid <= max
+            result.WinProbability = Math.Clamp(finalProbability, 0, 100);
+            result.WinProbabilityMin = Math.Clamp(Math.Min(finalMin, result.WinProbability), 0, 100);
+            result.WinProbabilityMax = Math.Clamp(Math.Max(finalMax, result.WinProbability), 0, 100);
+
+            // Recalculate label from computed probability
+            result.WinProbabilityLabel = result.WinProbability >= 70 ? "Visoka"
+                : result.WinProbability >= 40 ? "Srednja" : "Niska";
+
+            // V34: Parse score_breakdown from GPT
+            string practiceStability = "NOVA";
+            string legalQualification = "";
+            if (root.TryGetProperty("score_breakdown", out var sb) && sb.ValueKind == JsonValueKind.Object)
+            {
+                practiceStability = GetStr(sb, "practice_stability", "NOVA");
+                legalQualification = GetStr(sb, "legal_qualification");
+            }
+
+            result.ScoreBreakdown = new ScoreBreakdown
+            {
+                FavorableCount = favorable,
+                NeutralCount = neutral,
+                UnfavorableCount = unfavorable,
+                PracticeStability = practiceStability,
+                LegalQualification = legalQualification,
+                PrecedentScore = precedentScore,
+                QualitativeScore = gptProbability,
+                Methodology = $"Konačna procjena = 60% AI kvalitativna analiza ({gptProbability}%) + 40% bodovanje presuda ({precedentScore}%). " +
+                              $"Od {total} presuda: {favorable} povoljnih, {neutral} neutralnih, {unfavorable} nepovoljnih."
+            };
+
+            // V34: Parse confidence_factors
+            if (root.TryGetProperty("confidence_factors", out var cf) && cf.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in cf.EnumerateArray())
+                {
+                    result.ConfidenceFactors.Add(new ConfidenceFactor
+                    {
+                        Factor = GetStr(item, "factor"),
+                        Direction = GetStr(item, "direction", "POZITIVNO"),
+                        Explanation = GetStr(item, "explanation")
+                    });
+                }
+            }
+
+            // V34: Risks with case_element
             if (root.TryGetProperty("risks", out var ra) && ra.ValueKind == JsonValueKind.Array)
             {
                 foreach (var item in ra.EnumerateArray())
@@ -492,7 +595,8 @@ public class LegalIntelligenceService
                         Title = GetStr(item, "title"),
                         Description = GetStr(item, "description"),
                         Severity = GetStr(item, "severity", "SREDNJI"),
-                        Mitigation = GetStr(item, "mitigation")
+                        Mitigation = GetStr(item, "mitigation"),
+                        CaseElement = GetStr(item, "case_element")
                     });
                 }
             }
@@ -523,9 +627,10 @@ public class LegalIntelligenceService
             }
 
             _logger.LogInformation(
-                "Legal strategy parsed: issue='{Issue}', win={Win}%, precedents={P}, risks={R}",
+                "Legal strategy parsed: issue='{Issue}', win={Min}-{Win}-{Max}%, precedents={P} ({F}+/{N}n/{U}-), risks={R}",
                 result.KeyLegalIssue.Length > 50 ? result.KeyLegalIssue[..50] + "…" : result.KeyLegalIssue,
-                result.WinProbability, result.Precedents.Count, result.Risks.Count);
+                result.WinProbabilityMin, result.WinProbability, result.WinProbabilityMax,
+                result.Precedents.Count, favorable, neutral, unfavorable, result.Risks.Count);
         }
         catch (Exception ex)
         {
@@ -562,7 +667,10 @@ public class LegalIntelligenceService
                         LegalPrinciple = GetStr(item, "legal_principle"),
                         RelevanceToCase = GetStr(item, "relevance_to_case"),
                         Alignment = GetStr(item, "alignment", "NEUTRALNA"),
-                        LegalBasis = GetStr(item, "legal_basis")
+                        LegalBasis = GetStr(item, "legal_basis"),
+                        Stability = GetStr(item, "stability", "NOVA"),
+                        SimilarityScore = item.TryGetProperty("similarity_score", out var ss) && ss.ValueKind == JsonValueKind.Number
+                            ? ss.GetInt32() : 50
                     });
                 }
             }

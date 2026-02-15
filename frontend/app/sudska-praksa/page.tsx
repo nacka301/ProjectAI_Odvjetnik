@@ -26,12 +26,14 @@ import {
   TrendingUp,
   CircleDot,
   ArrowRight,
+  Info,
+  BarChart3,
 } from "lucide-react";
 import PrecedentSidebar from "@/components/PrecedentSidebar";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000";
 
-// ── Types matching backend LegalStrategyResult ──
+// ── Types matching backend LegalStrategyResult (V34) ──
 
 interface CourtPrecedent {
   case_number: string;
@@ -42,6 +44,8 @@ interface CourtPrecedent {
   relevance_to_case: string;
   alignment: string;
   legal_basis: string;
+  stability: string;      // V34: "STABILNA" | "PODIJELJENA" | "NOVA"
+  similarity_score: number; // V34: 0-100
 }
 
 interface LegalRisk {
@@ -49,6 +53,7 @@ interface LegalRisk {
   description: string;
   severity: string;
   mitigation: string;
+  case_element: string;    // V34: contextual anchor
 }
 
 interface StrategicRecommendation {
@@ -58,13 +63,37 @@ interface StrategicRecommendation {
   timing: string;
 }
 
+// V34: Score Breakdown — transparent scoring methodology
+interface ScoreBreakdown {
+  favorable_count: number;
+  neutral_count: number;
+  unfavorable_count: number;
+  practice_stability: string;
+  legal_qualification: string;
+  precedent_score: number;
+  qualitative_score: number;
+  methodology: string;
+}
+
+// V34: Confidence Factor — what increases/decreases confidence
+interface ConfidenceFactor {
+  factor: string;
+  direction: string;  // "POZITIVNO" | "NEGATIVNO"
+  explanation: string;
+}
+
 interface LegalStrategyResult {
   key_legal_issue: string;
   sub_issues: string[];
   precedents: CourtPrecedent[];
   win_probability: number;
+  win_probability_min: number;  // V34: range lower bound
+  win_probability_max: number;  // V34: range upper bound
   win_probability_label: string;
   probability_reasoning: string;
+  score_breakdown?: ScoreBreakdown;       // V34
+  confidence_factors?: ConfidenceFactor[]; // V34
+  data_provenance?: string;               // V34
   risks: LegalRisk[];
   strengths: string[];
   recommendations: StrategicRecommendation[];
@@ -135,12 +164,16 @@ function ProgressStage({
   );
 }
 
-// ── Win probability gauge ──
+// ── Win probability gauge (V34: shows range) ──
 function WinGauge({
   probability,
+  probabilityMin,
+  probabilityMax,
   label,
 }: {
   probability: number;
+  probabilityMin?: number;
+  probabilityMax?: number;
   label: string;
 }) {
   const color =
@@ -162,16 +195,31 @@ function WinGauge({
         ? "ring-amber-200"
         : "ring-red-200";
 
+  const min = probabilityMin ?? probability;
+  const max = probabilityMax ?? probability;
+  const hasRange = min !== max;
+
   return (
     <div className="flex flex-col items-center">
       <div
         className={`relative w-32 h-32 rounded-full bg-white ring-8 ${ringColor} flex items-center justify-center shadow-lg`}
       >
         <div className="text-center">
-          <span className={`text-4xl font-black ${color}`}>
-            {probability}
-          </span>
-          <span className={`text-lg font-bold ${color}`}>%</span>
+          {hasRange ? (
+            <>
+              <span className={`text-lg font-bold ${color}`}>
+                {min}-{max}
+              </span>
+              <span className={`text-sm font-bold ${color}`}>%</span>
+            </>
+          ) : (
+            <>
+              <span className={`text-4xl font-black ${color}`}>
+                {probability}
+              </span>
+              <span className={`text-lg font-bold ${color}`}>%</span>
+            </>
+          )}
         </div>
         {/* Progress arc */}
         <svg
@@ -186,6 +234,21 @@ function WinGauge({
             stroke="#e2e8f0"
             strokeWidth="6"
           />
+          {/* Range area (lighter) */}
+          {hasRange && (
+            <circle
+              cx="64"
+              cy="64"
+              r="56"
+              fill="none"
+              className={bgColor.replace("bg-", "stroke-")}
+              strokeWidth="6"
+              strokeDasharray={`${(max / 100) * 352} 352`}
+              strokeLinecap="round"
+              opacity={0.25}
+            />
+          )}
+          {/* Midpoint arc */}
           <circle
             cx="64"
             cy="64"
@@ -201,7 +264,13 @@ function WinGauge({
       <p className={`text-sm font-bold mt-3 ${color}`}>
         {label || "Procjena"}
       </p>
-      <p className="text-xs text-slate-400">Vjerojatnost uspjeha</p>
+      {hasRange ? (
+        <p className="text-xs text-slate-400">
+          Raspon: {min}% – {max}%
+        </p>
+      ) : (
+        <p className="text-xs text-slate-400">Vjerojatnost uspjeha</p>
+      )}
     </div>
   );
 }
@@ -268,6 +337,28 @@ function PriorityBadge({ priority }: { priority: string }) {
   return (
     <span className="text-[10px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
       PREPORUČENO
+    </span>
+  );
+}
+
+// ── V34: Stability badge — how settled the legal position is ──
+function StabilityBadge({ stability }: { stability: string }) {
+  const upper = stability?.toUpperCase() ?? "";
+  if (upper === "STABILNA")
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
+        <Shield className="h-3 w-3" /> Stabilna
+      </span>
+    );
+  if (upper === "PODIJELJENA")
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
+        <AlertTriangle className="h-3 w-3" /> Podijeljena
+      </span>
+    );
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full">
+      <Info className="h-3 w-3" /> Nova praksa
     </span>
   );
 }
@@ -738,6 +829,8 @@ export default function ProvjeriIshodPage() {
               <div className="flex flex-col md:flex-row items-center gap-8">
                 <WinGauge
                   probability={result.win_probability}
+                  probabilityMin={result.win_probability_min}
+                  probabilityMax={result.win_probability_max}
                   label={result.win_probability_label}
                 />
                 <div className="flex-1 space-y-4">
@@ -779,6 +872,145 @@ export default function ProvjeriIshodPage() {
                 </div>
               </div>
             </div>
+
+            {/* ── V34: Data Provenance Warning ── */}
+            <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">
+              <div className="flex items-start gap-2.5">
+                <Info className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-[10px] font-bold text-blue-700 uppercase tracking-wider mb-1">
+                    Izvor podataka
+                  </p>
+                  <p className="text-xs text-blue-800 leading-relaxed">
+                    {result.data_provenance ||
+                      "Rezultati se temelje na GPT-4o modelu koji analizira kontekst slučaja u usporedbi s općim načelima sudske prakse. Citirane presude su ILUSTRATIVNE — generirane na temelju ustaljenih pravnih stajališta, a ne pretragom stvarne baze sudskih odluka."}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* ── V34: Score Breakdown Panel ── */}
+            {result.score_breakdown && (
+              <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4 text-indigo-600" />
+                  Metodologija Procjene
+                </h3>
+
+                {/* Score bars */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  {/* Deterministic precedent score */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-600 font-medium">Bodovi iz presuda</span>
+                      <span className="font-bold text-slate-800">{result.score_breakdown.precedent_score}%</span>
+                    </div>
+                    <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-indigo-500 rounded-full transition-all"
+                        style={{ width: `${result.score_breakdown.precedent_score}%` }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-400">
+                      40% ukupne ocjene — deterministički izračun iz usklađenosti presuda
+                    </p>
+                  </div>
+
+                  {/* AI qualitative */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-600 font-medium">AI kvalitativna analiza</span>
+                      <span className="font-bold text-slate-800">{result.score_breakdown.qualitative_score}%</span>
+                    </div>
+                    <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-purple-500 rounded-full transition-all"
+                        style={{ width: `${result.score_breakdown.qualitative_score}%` }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-400">
+                      60% ukupne ocjene — GPT-4o procjena specifičnih činjenica
+                    </p>
+                  </div>
+                </div>
+
+                {/* Precedent alignment counts */}
+                <div className="flex items-center gap-4 p-3 bg-slate-50 rounded-lg mb-3">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 bg-green-500 rounded-full" />
+                    <span className="text-xs text-slate-600">
+                      {result.score_breakdown.favorable_count} povoljnih
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 bg-slate-400 rounded-full" />
+                    <span className="text-xs text-slate-600">
+                      {result.score_breakdown.neutral_count} neutralnih
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 bg-red-500 rounded-full" />
+                    <span className="text-xs text-slate-600">
+                      {result.score_breakdown.unfavorable_count} nepovoljnih
+                    </span>
+                  </div>
+                  {result.score_breakdown.practice_stability && (
+                    <div className="ml-auto">
+                      <StabilityBadge stability={result.score_breakdown.practice_stability} />
+                    </div>
+                  )}
+                </div>
+
+                {/* Legal qualification */}
+                {result.score_breakdown.legal_qualification && (
+                  <div className="p-3 bg-indigo-50 rounded-lg mb-3">
+                    <p className="text-[10px] font-semibold text-indigo-600 uppercase tracking-wider mb-1">
+                      Pravna kvalifikacija
+                    </p>
+                    <p className="text-xs text-indigo-900">{result.score_breakdown.legal_qualification}</p>
+                  </div>
+                )}
+
+                {/* Methodology */}
+                {result.score_breakdown.methodology && (
+                  <p className="text-[10px] text-slate-400 leading-relaxed">
+                    {result.score_breakdown.methodology}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* ── V34: Confidence Factors ── */}
+            {result.confidence_factors && result.confidence_factors.length > 0 && (
+              <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <Info className="h-4 w-4 text-slate-500" />
+                  Faktori Povjerenja
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {result.confidence_factors.map((cf, i) => (
+                    <div
+                      key={i}
+                      className={`flex items-start gap-2 p-3 rounded-lg text-xs ${
+                        cf.direction?.toUpperCase() === "POZITIVNO"
+                          ? "bg-green-50 text-green-800"
+                          : "bg-red-50 text-red-800"
+                      }`}
+                    >
+                      {cf.direction?.toUpperCase() === "POZITIVNO" ? (
+                        <CheckCircle className="h-3.5 w-3.5 text-green-500 mt-0.5 shrink-0" />
+                      ) : (
+                        <AlertTriangle className="h-3.5 w-3.5 text-red-500 mt-0.5 shrink-0" />
+                      )}
+                      <div>
+                        <p className="font-semibold">{cf.factor}</p>
+                        <p className="text-[10px] opacity-80">{cf.explanation}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* ── Strategy Summary ── */}
             <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-indigo-200 p-6">
@@ -843,6 +1075,11 @@ export default function ProvjeriIshodPage() {
                         <p className="text-xs text-slate-600">
                           {r.description}
                         </p>
+                        {r.case_element && (
+                          <p className="text-[10px] text-slate-500 bg-slate-50 px-2 py-1 rounded italic">
+                            Uzrok: {r.case_element}
+                          </p>
+                        )}
                         {r.mitigation && (
                           <p className="text-[10px] text-blue-600 bg-blue-50 px-2 py-1 rounded">
                             Mitigacija: {r.mitigation}
@@ -882,6 +1119,7 @@ export default function ProvjeriIshodPage() {
                               {p.case_number}
                             </span>
                             <AlignmentBadge alignment={p.alignment} />
+                            {p.stability && <StabilityBadge stability={p.stability} />}
                           </div>
                           <p className="text-xs text-slate-600">
                             {p.summary}
@@ -895,6 +1133,14 @@ export default function ProvjeriIshodPage() {
                                 <span className="text-slate-300">•</span>
                                 <span className="text-blue-500 font-medium">
                                   {p.legal_basis}
+                                </span>
+                              </>
+                            )}
+                            {p.similarity_score > 0 && (
+                              <>
+                                <span className="text-slate-300">•</span>
+                                <span className="text-indigo-500 font-medium">
+                                  Sličnost: {p.similarity_score}%
                                 </span>
                               </>
                             )}
@@ -997,7 +1243,7 @@ export default function ProvjeriIshodPage() {
       {/* Footer */}
       <footer className="max-w-6xl mx-auto px-4 sm:px-6 pb-6">
         <div className="border-t border-slate-200 pt-4 flex items-center justify-between text-[11px] text-slate-400">
-          <span>Legal AI Assistant v3.0</span>
+          <span>Legal AI Assistant v4.0</span>
           <span>
             AI analiza ne zamjenjuje pravni savjet ovlaštenog odvjetnika
           </span>

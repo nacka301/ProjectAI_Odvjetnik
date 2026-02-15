@@ -11,6 +11,7 @@ import {
   Loader2,
   RefreshCw,
   BookOpen,
+  Info,
 } from "lucide-react";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000";
@@ -182,6 +183,25 @@ export default function LegalFeed() {
               </div>
             </button>
           ))}
+      </div>
+
+      {/* V34: AI Provenance Disclaimer */}
+      <div className="px-4 py-3 bg-blue-50 border-t border-blue-100">
+        <div className="flex items-start gap-2">
+          <Info className="h-3.5 w-3.5 text-blue-500 mt-0.5 shrink-0" />
+          <p className="text-[10px] text-blue-700 leading-relaxed">
+            <strong>Napomena:</strong> Presude su ilustrativne i generirane AI modelom na temelju
+            ustaljenih pravnih stajališta. Za autentičnu sudsku praksu koristite{" "}
+            <a
+              href="https://sudskapraksa.csp.vsrh.hr"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline font-medium"
+            >
+              sudsku bazu podataka VSRH
+            </a>.
+          </p>
+        </div>
       </div>
     </div>
   );

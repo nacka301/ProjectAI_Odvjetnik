@@ -1,13 +1,15 @@
 namespace Backend.Models;
 
 // ══════════════════════════════════════════════════════════════
-//  V33: Legal Intelligence — RAG-simulated Court Practice
-//  Sudska Praksa + AI Prognoza Ishoda + Precedent Analysis
+//  V34: Legal Intelligence — Hardened & Transparent
+//  Probability Ranges, Score Breakdown, Stability Indicators,
+//  Data Provenance, Contextual Risks
 // ══════════════════════════════════════════════════════════════
 
 /// <summary>
 /// A single court precedent (presuda) — either from the embedded knowledge base
 /// or synthesized by GPT from its training data on Croatian court practice.
+/// V34: Added Stability + SimilarityScore for transparency.
 /// </summary>
 public class CourtPrecedent
 {
@@ -34,10 +36,17 @@ public class CourtPrecedent
 
     /// <summary>Legal basis — relevant law articles</summary>
     public string LegalBasis { get; set; } = "";
+
+    /// <summary>V34: Practice stability — how settled the legal position is</summary>
+    public string Stability { get; set; } = "";  // "STABILNA", "PODIJELJENA", "NOVA"
+
+    /// <summary>V34: AI-estimated similarity to the current case (0-100)</summary>
+    public int SimilarityScore { get; set; }
 }
 
 /// <summary>
 /// Full legal strategy analysis result — the "Provjeri ishod na sudu" output.
+/// V34: Added probability range, score breakdown, confidence factors, data provenance.
 /// </summary>
 public class LegalStrategyResult
 {
@@ -50,14 +59,32 @@ public class LegalStrategyResult
     /// <summary>Relevant court precedents found</summary>
     public List<CourtPrecedent> Precedents { get; set; } = [];
 
-    /// <summary>Win probability percentage (0-100)</summary>
+    /// <summary>Win probability percentage — midpoint (0-100)</summary>
     public int WinProbability { get; set; }
+
+    /// <summary>V34: Lower bound of probability range (0-100)</summary>
+    public int WinProbabilityMin { get; set; }
+
+    /// <summary>V34: Upper bound of probability range (0-100)</summary>
+    public int WinProbabilityMax { get; set; }
 
     /// <summary>Win probability label: "Visoka", "Srednja", "Niska"</summary>
     public string WinProbabilityLabel { get; set; } = "";
 
     /// <summary>Detailed reasoning for the probability assessment</summary>
     public string ProbabilityReasoning { get; set; } = "";
+
+    /// <summary>V34: Structured score breakdown explaining how the probability was derived</summary>
+    public ScoreBreakdown? ScoreBreakdown { get; set; }
+
+    /// <summary>V34: Factors that increase or decrease confidence in the assessment</summary>
+    public List<ConfidenceFactor> ConfidenceFactors { get; set; } = [];
+
+    /// <summary>V34: Data provenance disclaimer — where the AI info comes from</summary>
+    public string DataProvenance { get; set; } =
+        "Rezultati se temelje na GPT-4o modelu koji analizira kontekst slučaja u usporedbi s " +
+        "općim načelima sudske prakse. Citirane presude su ILUSTRATIVNE — generirane na temelju " +
+        "ustaljenih pravnih stajališta, a ne pretragom stvarne baze sudskih odluka.";
 
     /// <summary>Identified risks that could lower chances</summary>
     public List<LegalRisk> Risks { get; set; } = [];
@@ -84,7 +111,54 @@ public class LegalStrategyResult
 }
 
 /// <summary>
+/// V34: Transparent score breakdown — shows exactly how the win probability was computed.
+/// Combines deterministic counting of precedent alignment with AI qualitative assessment.
+/// </summary>
+public class ScoreBreakdown
+{
+    /// <summary>Number of precedents favoring the client's position</summary>
+    public int FavorableCount { get; set; }
+
+    /// <summary>Number of neutral precedents</summary>
+    public int NeutralCount { get; set; }
+
+    /// <summary>Number of precedents against the client's position</summary>
+    public int UnfavorableCount { get; set; }
+
+    /// <summary>Practice stability: "STABILNA" (settled law) / "PODIJELJENA" (divided) / "NOVA" (emerging)</summary>
+    public string PracticeStability { get; set; } = "";
+
+    /// <summary>Legal qualification of the case type</summary>
+    public string LegalQualification { get; set; } = "";
+
+    /// <summary>Precedent-based probability computed from alignment counts (deterministic)</summary>
+    public int PrecedentScore { get; set; }
+
+    /// <summary>AI qualitative assessment (GPT's judgment based on facts)</summary>
+    public int QualitativeScore { get; set; }
+
+    /// <summary>Human-readable explanation of the scoring methodology</summary>
+    public string Methodology { get; set; } = "";
+}
+
+/// <summary>
+/// V34: A factor that influences the confidence level of the probability assessment.
+/// </summary>
+public class ConfidenceFactor
+{
+    /// <summary>Factor name (e.g., "Bogata činjenična podloga")</summary>
+    public string Factor { get; set; } = "";
+
+    /// <summary>Direction: "POZITIVNO" (increases confidence) or "NEGATIVNO" (decreases confidence)</summary>
+    public string Direction { get; set; } = "";
+
+    /// <summary>Brief explanation of this factor's impact</summary>
+    public string Explanation { get; set; } = "";
+}
+
+/// <summary>
 /// A specific legal risk identified in the case.
+/// V34: Added CaseElement for contextual specificity.
 /// </summary>
 public class LegalRisk
 {
@@ -99,6 +173,9 @@ public class LegalRisk
 
     /// <summary>Mitigation strategy</summary>
     public string Mitigation { get; set; } = "";
+
+    /// <summary>V34: Specific element of the case that triggers this risk (contextual anchor)</summary>
+    public string CaseElement { get; set; } = "";
 }
 
 /// <summary>
@@ -121,6 +198,7 @@ public class StrategicRecommendation
 
 /// <summary>
 /// Legal Intelligence Feed item — a recent relevant court decision for the dashboard.
+/// V34: Added IsAiGenerated flag for provenance.
 /// </summary>
 public class LegalFeedItem
 {
@@ -147,6 +225,9 @@ public class LegalFeedItem
 
     /// <summary>Relevant area of law</summary>
     public string AreaOfLaw { get; set; } = "";
+
+    /// <summary>V34: Flag indicating this content is AI-generated, not from a live database</summary>
+    public bool IsAiGenerated { get; set; } = true;
 }
 
 /// <summary>

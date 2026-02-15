@@ -12,6 +12,9 @@ import {
   X,
   ChevronDown,
   ChevronUp,
+  Shield,
+  AlertTriangle,
+  Info,
 } from "lucide-react";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000";
@@ -25,6 +28,8 @@ interface CourtPrecedent {
   relevance_to_case: string;
   alignment: string;
   legal_basis: string;
+  stability: string;        // V34
+  similarity_score: number;  // V34
 }
 
 interface PrecedentResult {
@@ -49,6 +54,28 @@ function AlignmentIcon({ alignment }: { alignment: string }) {
   return (
     <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full">
       <Minus className="h-3 w-3" /> Neutralna
+    </span>
+  );
+}
+
+// V34: Stability badge
+function StabilityIcon({ stability }: { stability: string }) {
+  const upper = stability?.toUpperCase() ?? "";
+  if (upper === "STABILNA")
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
+        <Shield className="h-3 w-3" /> Stabilna
+      </span>
+    );
+  if (upper === "PODIJELJENA")
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
+        <AlertTriangle className="h-3 w-3" /> Podijeljena
+      </span>
+    );
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full">
+      <Info className="h-3 w-3" /> Nova
     </span>
   );
 }
@@ -215,6 +242,7 @@ export default function PrecedentSidebar({
                           {p.case_number}
                         </span>
                         <AlignmentIcon alignment={p.alignment} />
+                        {p.stability && <StabilityIcon stability={p.stability} />}
                       </div>
                       <p className="text-xs text-slate-600 leading-snug">
                         {p.summary}
@@ -236,6 +264,16 @@ export default function PrecedentSidebar({
                             </span>
                             <span className="text-[10px] text-blue-500 font-medium">
                               {p.legal_basis}
+                            </span>
+                          </>
+                        )}
+                        {p.similarity_score > 0 && (
+                          <>
+                            <span className="text-[10px] text-slate-300">
+                              •
+                            </span>
+                            <span className="text-[10px] text-indigo-500 font-medium">
+                              Sličnost: {p.similarity_score}%
                             </span>
                           </>
                         )}
@@ -292,11 +330,15 @@ export default function PrecedentSidebar({
       </div>
 
       {/* Footer disclaimer */}
-      <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 shrink-0">
-        <p className="text-[10px] text-slate-400 text-center">
-          AI analiza sudske prakse ne zamjenjuje profesionalno pravno
-          istraživanje. Presude su ilustrativne.
-        </p>
+      <div className="px-5 py-3 bg-blue-50 border-t border-blue-100 shrink-0">
+        <div className="flex items-start gap-2">
+          <Info className="h-3.5 w-3.5 text-blue-500 mt-0.5 shrink-0" />
+          <p className="text-[10px] text-blue-700 leading-relaxed">
+            <strong>Napomena:</strong> Presude su ilustrativne — generirane AI modelom
+            na temelju ustaljenih pravnih stajališta, a ne iz stvarne sudske baze.
+            Stabilnost prakse podliježe AI procjeni.
+          </p>
+        </div>
       </div>
     </div>
   );
