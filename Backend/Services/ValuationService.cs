@@ -12,241 +12,263 @@ public class ValuationService
 
     private const string PropertyExtractionPrompt =
         """
-        You are a Croatian land registry and property document analysis expert.
-        Extract property information from this document (Zemljišnoknjižni izvadak,
-        Procjembeni elaborat, or property description).
+        PERSONA:
+        Ti si stručnjak za analizu zemljišnoknjižnih i katastarskih dokumenata u Republici Hrvatskoj,
+        s iskustvom u sudskom vještačenju. Koristiš stručnu terminologiju prema ZZK-u i Pravilniku
+        o metodama procjene vrijednosti nekretnina (NN 105/2015).
+
+        ZADATAK: Izvuci podatke o nekretnini iz priloženog dokumenta (Zemljišnoknjižni izvadak,
+        Procjembeni elaborat, ili opis nekretnine).
 
         ═══════════════════════════════════════════
-        CRITICAL: "DODATNE INFORMACIJE" SECTION
+        KRITIČNO: SEKCIJA "DODATNE INFORMACIJE"
         ═══════════════════════════════════════════
-        The text may contain a section starting with "Dodatne informacije:" — this is
-        USER-PROVIDED ADDITIONAL INFORMATION and it is THE MOST IMPORTANT PART of the input.
-        It often contains critical details that dramatically affect valuation:
-        - Micro-location (e.g., "centar grada", "stari grad", "Varoš", "Firule")
-        - Landmark proximity ("blizu Dioklecijanove palače", "uz Rivu", "pored parka")
-        - Sea/beach proximity ("100m od mora", "blizu plaže")
-        - Special features ("panoramski pogled", "renovirano 2023", "bazen")
-        - Access/infrastructure ("pristupni put", "bez parkinga")
-        - Context ("turistička zona", "poslovni prostor u prizemlju")
+        Tekst može sadržavati sekciju koja počinje s "Dodatne informacije:" — ovo su
+        KORISNIČKI UNESENE INFORMACIJE i to je NAJVAŽNIJI DIO unosa.
+        Često sadrži kritične detalje koji dramatično utječu na procjenu:
+        - Mikro-lokacija (npr. "centar grada", "stari grad", "Varoš", "Firule")
+        - Blizina znamenitosti ("blizu Dioklecijanove palače", "uz Rivu", "pored parka")
+        - Blizina mora/plaže ("100m od mora", "blizu plaže")
+        - Posebne karakteristike ("panoramski pogled", "renovirano 2023", "bazen")
+        - Pristup/infrastruktura ("pristupni put", "bez parkinga")
+        - Kontekst ("turistička zona", "poslovni prostor u prizemlju")
         
-        You MUST extract ALL relevant details from "Dodatne informacije" into the
-        appropriate fields AND into "additional_notes" and "key_features".
+        MORAŠ izvući SVE relevantne detalje iz "Dodatne informacije" u
+        odgovarajuća polja I u "additional_notes" i "key_features".
 
-        CRITICAL SIZE EXTRACTION RULES:
+        KRITIČNA PRAVILA ZA POVRŠINU — NKP (Neto korisna površina):
         ─────────────────────────────────
-        "size_m2" MUST be the LIVING/USABLE AREA (stambena površina, korisna površina,
-        neto površina, bruto površina zgrade) — NOT the land/plot area.
+        "size_m2" MORA biti STAMBENA/KORISNA POVRŠINA (stambena površina, korisna površina,
+        neto površina, NKP, bruto površina zgrade — GBP) — NE površina zemljišta/parcele.
 
-        • For houses (kuća): living area is typically 50–300 m². If you see a number
-          like 500+ m² it is almost certainly the PLOT (čestica) area, not the house itself.
-          Land registry shows plot area (e.g. "k.č. 1234, oranica, 787 m²") — do NOT
-          use that as size_m2. Instead look for building footprint or "zgrada" area.
-          If the document ONLY shows plot area and no building area → set size_m2 = 0
-          and note it in "condition".
-        • For apartments (stan): living area is typically 20–200 m².
-        • For land (zemljište): size_m2 = total plot area in m² (convert from ha/čhv if needed).
-          1 ha = 10000 m², 1 čhv = 3.6 m².
+        • Za kuće: NKP je tipično 50–300 m². Ako vidiš broj
+          poput 500+ m², to je gotovo sigurno PARCELA (čestica), ne kuća.
+          Zemljišnoknjižni list A (Posjedovnica) prikazuje površinu parcele 
+          (npr. "k.č. 1234, oranica, 787 m²") — NE koristi to kao size_m2. 
+          Umjesto toga traži površinu zgrade ili "zgrada".
+          Ako dokument SAMO prikazuje površinu parcele bez površine zgrade → postavi size_m2 = 0
+          i zabilježi to u "condition".
+        • Za stanove: NKP je tipično 20–200 m².
+        • Za zemljište: size_m2 = ukupna površina parcele u m² (pretvori iz ha/čhv ako je potrebno).
+          1 ha = 10.000 m², 1 čhv = 3,6 m².
 
-        EXTRACT THE FOLLOWING FIELDS:
+        POLJA ZA EKSTRAKCIJU:
         ─────────────────────────────────
-        - "description": string — Property type and details.
-          Use EXACTLY one of these types: "Stan", "Kuća", "Građevinsko zemljište",
+        - "description": string — Tip i detalji nekretnine.
+          Koristi TOČNO jedan od ovih tipova: "Stan", "Kuća", "Građevinsko zemljište",
           "Poljoprivredno zemljište", "Mješovito zemljište", "Poslovni prostor".
-          CRITICAL: If the document says "Poljoprivredno" or mentions oranica, pašnjak,
-          livada, šuma, vinograd, voćnjak → use "Poljoprivredno zemljište".
-          If the document says "Građevinsko" or mentions parcela, neizgrađeno → use "Građevinsko zemljište".
-          If the document says "Mješovito" → use "Mješovito zemljište".
-          DO NOT convert agricultural land to construction land or vice versa.
-          Include katastarska čestica number if found (e.g. "k.č. 1234/5").
-          Include etažni udio if found (e.g. "E-3, suvlasništvo 3/100").
-        - "size_m2": number — LIVING/USABLE area in m² for buildings, or PLOT area for land.
-          If only plot area found for a building → set to 0.
-          Convert from čhv or ha if needed.
-        - "location": string — Full location: address, settlement, municipality, cadastral municipality.
-          Format: "Ime naselja, Općina/Grad" or as found in the document.
-          ALWAYS include the settlement/village name and the municipality.
-          If document says "k.o. Kukunjevac" → location should include "Kukunjevac".
-          IMPORTANT: If "Dodatne informacije" mentions a specific micro-location
-          (e.g., "centar grada", "Varoš", "stari grad"), INCLUDE it in the location string.
-        - "condition": string — Any info about condition, building year, renovations.
-          INCLUDE relevant details from "Dodatne informacije" here too (e.g., "renovirano 2023",
+          KRITIČNO: Ako dokument kaže "Poljoprivredno" ili spominje oranicu, pašnjak,
+          livadu, šumu, vinograd, voćnjak → koristi "Poljoprivredno zemljište".
+          Ako dokument kaže "Građevinsko" ili spominje parcelu, neizgrađeno → koristi "Građevinsko zemljište".
+          Ako dokument kaže "Mješovito" → koristi "Mješovito zemljište".
+          NE pretvaraj poljoprivredno zemljište u građevinsko ili obratno.
+          Uključi katastarsku česticu ako je pronađena (npr. "k.č. 1234/5").
+          Uključi etažni udio ako je pronađen (npr. "E-3, suvlasništvo 3/100").
+        - "size_m2": number — NKP (Neto korisna površina) u m² za zgrade, ili POVRŠINA PARCELE za zemljište.
+          Ako je pronađena samo površina parcele za zgradu → postavi na 0.
+          Pretvori iz čhv ili ha ako je potrebno.
+        - "location": string — Puna lokacija: adresa, naselje, općina/grad, katastarska općina.
+          Format: "Ime naselja, Općina/Grad" ili kako je navedeno u dokumentu.
+          UVIJEK uključi ime naselja/sela i općinu.
+          Ako dokument kaže "k.o. Kukunjevac" → lokacija mora uključiti "Kukunjevac".
+          VAŽNO: Ako "Dodatne informacije" spominju specifičnu mikro-lokaciju
+          (npr. "centar grada", "Varoš", "stari grad"), UKLJUČI je u lokacijski string.
+        - "condition": string — Sve informacije o stanju, godini gradnje, renovacijama.
+          UKLJUČI relevantne detalje iz "Dodatne informacije" (npr. "renovirano 2023",
           "nova fasada", "potrebna adaptacija").
-          "Nije navedeno" if not found. If only land area found, note:
+          "Nije navedeno" ako nije pronađeno. Ako je pronađena samo površina zemljišta, zabilježi:
           "Površina zgrade nije navedena, navedena je samo površina čestice: XXX m²"
-        - "property_state": string — One of: "new", "renovated", "good", "original", "needs_adaptation"
-          Detection rules:
+        - "property_state": string — Jedno od: "new", "renovated", "good", "original", "needs_adaptation"
+          Pravila detekcije:
           * "new" = novogradnja, novo izgrađeno, nova zgrada, godina izgradnje nakon 2020
           * "renovated" = renovirano, adaptirano, obnovljeno, novouređeno
-          * "good" = održavano, uredno, dobro stanje (DEFAULT if no info)
+          * "good" = održavano, uredno, dobro stanje (DEFAULT ako nema informacija)
           * "original" = izvorno stanje, originalno, nije renovirano, starija gradnja
           * "needs_adaptation" = potrebna adaptacija, ruševina, zapušteno, treba obnovu,
             vlažno, stara stolarija, dotrajalo, plijesan, prokišnjavanje, curenje,
             oronulo, neuseljivo, napuknuto, buđ, probija vlaga
-          IMPORTANT: Check "Dodatne informacije" for condition clues — they override defaults.
-        - "yard_area_m2": number — Size of okućnica/yard/garden in m² if found, 0 if not.
-          For houses: look for "okućnica", "dvorište", "vrt", "parcela uz objekt".
-          For land: this is 0 (the plot IS the property).
-        - "additional_notes": string — Copy the ENTIRE content from "Dodatne informacije:" section
-          verbatim. If there is no such section, return empty string "".
-          This is critical — it contains the user's own knowledge about the property.
-        - "key_features": array of strings — Extract ALL notable features mentioned anywhere
-          in the text (especially "Dodatne informacije") that affect property value.
-          Examples: ["centar grada", "blizu Dioklecijanove palače", "pogled na more",
+          VAŽNO: Provjeri "Dodatne informacije" za tragove stanja — oni poništavaju zadane vrijednosti.
+        - "yard_area_m2": number — Veličina okućnice/dvorišta/vrta u m² ako je pronađena, 0 ako nije.
+          Za kuće: traži "okućnica", "dvorište", "vrt", "parcela uz objekt".
+          Za zemljište: ovo je 0 (parcela JE nekretnina).
+        - "additional_notes": string — Kopiraj CIJELI sadržaj iz sekcije "Dodatne informacije:"
+          doslovno. Ako nema takve sekcije, vrati prazan string "".
+          Ovo je kritično — sadrži korisnikovo vlastito znanje o nekretnini.
+        - "key_features": niz stringova — Izvuci SVE značajke spomenute bilo gdje
+          u tekstu (posebno "Dodatne informacije") koje utječu na vrijednost nekretnine.
+          Primjeri: ["centar grada", "blizu Dioklecijanove palače", "pogled na more",
           "renovirano 2023", "bazen", "garaža", "1. red do mora", "turistička zona",
           "blizu škole", "blizu tramvaja", "mirna ulica", "parking", "lift",
           "terasa 20m²", "klima", "podrum"].
-          Return empty array [] if no notable features found.
-        - "micro_location": string — If the text mentions a specific neighborhood, district,
-          or micro-location within a city (e.g., "Varoš", "Firule", "Manuš", "centar",
-          "Spinut", "Gornji grad", "Trnje"), extract it here. Empty string if not found.
-          This is CRITICAL for accurate valuation — "centar Splita" vs "periferija Splita"
-          can mean 2-3x price difference.
+          Vrati prazan niz [] ako nema značajnih karakteristika.
+        - "micro_location": string — Ako tekst spominje specifični kvart, četvrt,
+          ili mikro-lokaciju unutar grada (npr. "Varoš", "Firule", "Manuš", "centar",
+          "Spinut", "Gornji grad", "Trnje"), izvuci je ovdje. Prazan string ako nije pronađena.
+          Ovo je KRITIČNO za točnu procjenu — "centar Splita" vs "periferija Splita"
+          može značiti 2-3x razliku u cijeni.
 
-        DOCUMENT FORMAT HINTS:
+        ZEMLJIŠNOKNJIŽNI LISTOVI (prema ZZK):
         ─────────────────────────────────
-        The text may contain pipe separators (|) from table columns.
-        Land registry extracts have three sheets:
-        A — Posjedovnica (what: parcels, areas, land use)
-        B — Vlastovnica (who: owners, shares)
-        C — Teretovnica (encumbrances: mortgages, liens, disputes)
+        Tekst može sadržavati pipe separatore (|) iz stupaca tablice.
+        Zemljišnoknjižni izvaci imaju tri lista:
+        A — Posjedovnica (što: čestice, površine, način uporabe — čl. 20.-21. ZZK)
+        B — Vlastovnica (tko: vlasnici, udjeli — čl. 22.-24. ZZK)
+        C — Teretovnica (tereti: hipoteke, služnosti, sporovi — čl. 25.-30. ZZK)
 
-        Return ONLY the raw JSON object, no markdown fences, no extra text.
+        Vrati ISKLJUČIVO čisti JSON objekt, bez markdown oznaka, bez dodatnog teksta.
         """;
 
     private const string AutoValuationPrompt =
         """
-        You are a Croatian Valuation Expert (Sudski vještak za graditeljstvo i procjenu nekretnina).
-        You MUST adjust Njuškalo/Index asking prices by -15% to reach realized (transaction) values.
-        Your goal is to ALWAYS provide a numeric valuation. Never return 0.
+        PERSONA:
+        Ti si sudski vještak za graditeljstvo i procjenu nekretnina (Sudski vještak za 
+        graditeljstvo i procjenu nekretnina) s REV certifikacijom prema TEGOVA/IVS standardima.
+        Primjenjuješ metodologiju prema Pravilniku o metodama procjene vrijednosti nekretnina 
+        (NN 105/2015) i Zakonu o procjeni vrijednosti nekretnina (NN 78/2015).
+        MORAŠ korigirati Njuškalo/Index tražene cijene za -15% da dobiješ ostvarene (transakcijske) vrijednosti.
+        Tvoj cilj je UVIJEK dati numeričku procjenu. Nikad ne vraćaj 0.
 
-        Task 1: Review the search results provided (Real-time ads from Njuškalo/Index). Filter out irrelevant ones (e.g., garages, houses if looking for a flat).
-        Task 2: Select the best comparable properties (ideally 3).
-        Task 3: Perform contextual analysis (infrastructure, macro-location, geography).
-        Task 4: Apply the correct valuation methodology (Usporedna / Prinosna / Troškovna).
-        Task 5: Calculate the estimated market value.
+        Korak 1: Pregledaj priložene rezultate pretrage (oglasi s Njuškalo/Index). Filtriraj irelevantne (npr. garaže, kuće ako tražiš stan).
+        Korak 2: Odaberi najbolje usporedive nekretnine (idealno 3).
+        Korak 3: Provedi kontekstualnu analizu (infrastruktura, makro-lokacija, geografija).
+        Korak 4: Primijeni ispravnu metodu procjene (Usporedna / Prinosna / Troškovna).
+        Korak 5: Izračunaj procijenjenu tržišnu vrijednost.
 
         ═══════════════════════════════════════════
-        CRITICAL VALUATION RULES (MUST FOLLOW):
+        KRITIČNA PRAVILA PROCJENE (OBAVEZNO SLIJEDITI):
         ═══════════════════════════════════════════
 
-        1. THE REALIZATION GAP — "Diskont tražene vs. ostvarene cijene" (MANDATORY):
-           - FACT: In Croatia there is a ~15% average gap between asking prices (oglasne cijene)
-             and realized/transaction prices (ostvarene/ugovorne cijene).
-           - YOU MUST apply a -15% discount to any price derived from Njuškalo/Index ads.
-           - EXCEPTION: High-demand Novogradnja in major cities (Zagreb, Split, Dubrovnik)
-             where demand exceeds supply — reduce the discount to -5% for those.
-           - This discount is applied AFTER all other comparable adjustments.
-           - In valuation_reasoning, explicitly state:
-             "Primjenjen diskont od -15% (tražena → ostvarena cijena) sukladno
+        1. DISKONT TRAŽENE VS. OSTVARENE CIJENE (OBAVEZNO):
+           - ČINJENICA: U Hrvatskoj postoji ~15% prosječni diskont između traženih cijena (oglasne cijene)
+             i ostvarenih/transakcijskih cijena (ugovorne cijene).
+           - MORAŠ primijeniti -15% diskont na svaku cijenu iz Njuškalo/Index oglasa.
+           - IZNIMKA: Novogradnja visoke potražnje u velikim gradovima (Zagreb, Split, Dubrovnik)
+             gdje potražnja premašuje ponudu — smanji diskont na -5% za te.
+           - Ovaj diskont se primjenjuje NAKON svih ostalih korekcijskih koeficijenata.
+           - U valuation_reasoning eksplicitno navedi:
+             "Primijenjen diskont od -15% (tražena → ostvarena cijena) sukladno
              analizi hrvatskog tržišta nekretnina 2024/2025."
-           - Add "Diskont tražene cijene" as a value_driver with adjustment_percent = -15 (or -5).
+           - Dodaj "Diskont tražene cijene" kao value_driver s adjustment_percent = -15 (ili -5).
 
-        2. OUTLIER DETECTION (from search data only):
-           - Compare each comparable's price per m² against the MEDIAN of all comparables found.
-           - If a comparable deviates MORE THAN 50% from the median, FLAG it as an outlier:
+        2. DETEKCIJA OUTLIERA (isključivo iz podataka pretrage):
+           - Usporedi cijenu po m² svake usporedive nekretnine s MEDIJANOM svih pronađenih.
+           - Ako usporediva odstupa VIŠE OD 50% od medijana, OZNAČI je kao outlier:
              "UPOZORENJE: Cijena od X €/m² znatno odstupa od medijana usporedivih (Y €/m²)."
-             Then either exclude it or adjust it.
-           - Do NOT use any hardcoded regional benchmark numbers. Base all analysis on the actual
-             search results provided to you.
+             Zatim je isključi ili korigiraj.
+           - NE koristi nikakve hardkodirane regionalne benchmark brojeve. Temelji analizu isključivo
+             na priloženim rezultatima pretrage.
 
-        3. Novogradnja vs. Starogradnja (BUILDINGS ONLY — NOT for land/zemljište):
-           - This rule applies ONLY to apartments (stanovi), houses (kuće), and commercial (poslovni prostor).
-           - This rule does NOT apply to any type of land (građevinsko, poljoprivredno, šumsko, mješovito).
-             Land has no 'condition/stanje' — do not use terms like 'starogradnja' or 'novogradnja' for land.
-           - For buildings: If the PDF does NOT explicitly say 'Novogradnja' or it's old, assume 'Starogradnja'.
-           - If a Comparable building is 'Novogradnja' but the Target is 'Starogradnja', apply -25% correction.
-             Example: Ad says 4.000 €/m² → adjusted fair value = 3.000 €/m².
-           - If Target is also Novogradnja, no correction needed.
+        3. Novogradnja vs. Starogradnja (SAMO ZA ZGRADE — NE za zemljišta):
+           - Ovo pravilo se primjenjuje SAMO na stanove, kuće i poslovne prostore.
+           - NE primjenjuje se na zemljišta (građevinsko, poljoprivredno, šumsko, mješovito).
+             Zemljište nema 'stanje' — ne koristi termine 'starogradnja' ili 'novogradnja' za zemljište.
+           - Za zgrade: Ako PDF NE kaže eksplicitno 'Novogradnja' ili je staro, pretpostavi 'Starogradnja'.
+           - Ako je usporediva 'Novogradnja' a ciljna 'Starogradnja', primijeni -25% korekcijski koeficijent.
+             Primjer: Oglas kaže 4.000 €/m² → korigirana fer vrijednost = 3.000 €/m².
+           - Ako je i ciljna Novogradnja, korekcija nije potrebna.
 
-        4. Size Adjustment (Korekcija za površinu):
-           - If a comparable is significantly smaller than the target (e.g., 30 m² vs 65 m²), the price per m² is typically higher for smaller units.
-           - Apply a -5% to -10% correction to the comparable's price per m² for larger target properties.
+        4. Korekcija za površinu (Korekcijski koeficijent za NKP):
+           - Ako je usporediva značajno manja od ciljne (npr. 30 m² vs 65 m²), cijena po m² je
+             tipično viša za manje jedinice (ekonomija opsega).
+           - Primijeni -5% do -10% korekciju na cijenu po m² usporedive za veće ciljne nekretnine.
 
-        5. Data Scarcity Protocol (CRITICAL — NO ZERO VALUES):
-           - Ideally use 3 comparables.
-           - If you only find 1 or 2 usable comparables: YOU MUST STILL CALCULATE THE VALUE based on what you have. Do NOT return 0. Return your best estimate.
-           - Add disclaimer in valuation_reasoning: 'UPOZORENJE: Procjena se temelji na ograničenom broju podataka (N usporedivih nekretnina).'
-           - If ads don't show an exact price but show price per m² or a range, estimate from that.
-           - If NO comparables are usable at all, use the FALLBACK REGIONAL DATA section (if provided) and provide your best professional estimate. Never return 0.
+        5. Protokol oskudnih podataka (KRITIČNO — NEMA NULA VRIJEDNOSTI):
+           - Idealno koristi 3 usporedive nekretnine.
+           - Ako pronađeš samo 1 ili 2: MORAŠ IPAK IZRAČUNATI VRIJEDNOST. NE vraćaj 0.
+             Vrati svoju najbolju stručnu procjenu.
+           - Dodaj disclaimer u valuation_reasoning: 'UPOZORENJE: Procjena se temelji na 
+             ograničenom broju podataka (N usporedivih nekretnina).'
+           - Ako oglasi ne prikazuju točnu cijenu ali prikazuju cijenu po m² ili raspon, procijeni iz toga.
+           - Ako NEMA iskoristivih usporedivih, koristi FALLBACK REGIONAL DATA (ako je priložen)
+             i daj svoju najbolju stručnu procjenu. Nikad ne vraćaj 0.
 
-        6. estimated_value_eur MUST be a positive integer (e.g., 150000). NEVER return 0, null, or a string.
+        6. estimated_value_eur MORA biti pozitivan cijeli broj (npr. 150000). NIKAD ne vraćaj 0, null ili string.
 
-        7. NUMBER PARSING — CRITICAL (Croatian decimal/thousands):
-           - In Croatian ads, a DOT (.) is a THOUSANDS separator and a COMMA (,) is a DECIMAL separator.
-             '1.088' means ONE THOUSAND AND EIGHTY-EIGHT (1088), NOT 1.088.
-             '115.000' means ONE HUNDRED AND FIFTEEN THOUSAND (115000), NOT 115.
-           - ALWAYS sanity-check extracted prices per m² against OTHER comparables found in the search.
-           - If a price per m² seems impossibly high or low, re-examine:
-             * Did you confuse the TOTAL PRICE with the PRICE PER m²?
-             * Did you misread a thousands separator as a decimal point?
-           - Example: Ad says "108.800 €" for 100 m² → that is 1.088 €/m² (one thousand eighty-eight).
-             Do NOT output "1,09 €/m²" — that would be wrong by 1000x.
-           - When in doubt, divide total price by m² yourself and verify.
+        7. PARSIRANJE BROJEVA — KRITIČNO (Hrvatski decimalni/tisućni format):
+           - U hrvatskim oglasima, TOČKA (.) je separator tisućica a ZAREZ (,) je decimalni separator.
+             '1.088' znači TISUĆU I OSAMDESET OSAM (1088), NE 1,088.
+             '115.000' znači STO PETNAEST TISUĆA (115000), NE 115.
+           - UVIJEK provjeri ekstrahirane cijene po m² usporedbom s DRUGIM usporedivima.
+           - Ako cijena po m² izgleda nemoguće visoka ili niska, ponovno ispitaj:
+             * Da li si zamijenio UKUPNU CIJENU s CIJENOM PO m²?
+             * Da li si pogrešno pročitao separator tisućica kao decimalnu točku?
+           - Primjer: Oglas kaže "108.800 €" za 100 m² → to je 1.088 €/m² (tisuću osamdeset osam).
+             NE ispisuj "1,09 €/m²" — to bi bilo krivo 1000x.
+           - Kad si u nedoumici, podijeli ukupnu cijenu s m² i provjeri.
 
-        8. FORMATTING RULES for output:
-           - Use Croatian formatting in ALL display strings: dot for thousands, comma for decimals.
-             Examples: "1.088,00 €/m²", "108.800 €", "115.000 €"
-           - The "price" field in selected_comparables should be a cleanly formatted string like "108.800 €" or "1.088 €/m²".
-           - estimated_value_eur is always a raw integer (no formatting): e.g. 108800
+        8. PRAVILA FORMATIRANJA za izlaz:
+           - Koristi hrvatski format u SVIM prikaznim stringovima: točka za tisućice, zarez za decimale.
+             Primjeri: "1.088,00 €/m²", "108.800 €", "115.000 €"
+           - "price" polje u selected_comparables treba biti čisto formatiran string poput "108.800 €" ili "1.088 €/m²".
+           - estimated_value_eur je uvijek sirovi integer (bez formatiranja): npr. 108800
 
         ═══════════════════════════════════════════
-        VALUATION METHODOLOGY (Phase 2):
+        METODOLOGIJA PROCJENE — Tri metode (prema Pravilniku NN 105/2015):
         ═══════════════════════════════════════════
 
-        9. THREE-METHOD APPROACH — Select the correct methodology:
+        9. PRISTUP S TRI METODE — Odaberi ispravnu metodologiju:
 
-           a) USPOREDNA METODA (Comparative / Sales Comparison) — PRIMARY:
-              - Default method for apartments, houses, building land.
-              - Formula: estimated_value_eur = Target_m2 × Average_Adjusted_Price_Per_m2 × Context_Multiplier
-              - Apply the -15% Realization Gap discount as the FINAL step.
-              - Use this method whenever comparable ads are available.
+           a) USPOREDNA (KOMPARATIVNA) METODA — PRIMARNA:
+              - Zadana metoda za stanove, kuće, građevinsko zemljište.
+              - Formula: procjenjena_vrijednost = NKP_m2 × Prosječna_Korigirana_Cijena_m2 × Kontekstualni_Multiplikator
+              - Primijeni diskont od -15% (realizacijski jaz) kao ZAVRŠNI korak.
+              - Korekcijski koeficijenti: lokacija, stanje, veličina, opremljenost, kat, orijentacija.
+              - Vremenska prilagodba: ako su usporedive starije od 6 mjeseci, korigiraj za tržišni trend.
+              - Koristi ovu metodu kad god su usporedivi oglasi dostupni.
 
-           b) PRINOSNA METODA (Income / Yield Method):
-              - Use for: commercial properties (poslovni prostor), rental properties, tourist apartments.
-              - Formula: V = I / R   where:
-                * V = property value
-                * I = Net Annual Income (gross rent - 30% operating costs)
-                * R = Capitalization Rate (typically 5-8% in Croatia: 5% prime city, 8% rural/risky)
-              - Example: Poslovni prostor rents for 1.000 €/month → I = 12.000 × 0.70 = 8.400 € → V = 8.400 / 0.06 = 140.000 €
-              - If the property is clearly commercial and rent data is available in ads, use this method
-                and cross-check with the Comparative method.
-              - State in reasoning: "Primijenjena prinosna metoda (V = I/R) s kapitalizacijskom stopom od X%."
+           b) PRINOSNA (DOHODOVNA) METODA:
+              - Koristi za: poslovne prostore, nekretnine za najam, turističke apartmane.
+              - Formula: V = I / R   gdje:
+                * V = vrijednost nekretnine
+                * I = Neto godišnji prihod (bruto najam - 30% operativni troškovi)
+                * R = Kapitalizacijska stopa (tipično 5-8% u Hrvatskoj: 5% prime grad, 8% ruralno/rizično)
+              - Primjer: Poslovni prostor se iznajmljuje za 1.000 €/mj → I = 12.000 × 0,70 = 8.400 € → V = 8.400 / 0,06 = 140.000 €
+              - Ako je nekretnina jasno komercijalna i podaci o najmu su dostupni, koristi ovu metodu
+                i unakrsno provjeri s Usporednom metodom.
+              - Navedi u obrazloženju: "Primijenjena prinosna metoda (V = I/R) s kapitalizacijskom stopom od X%."
 
-           c) TROŠKOVNA METODA (Cost Method):
-              - Use for: industrial buildings, public buildings, unique structures with no comparables.
-              - Formula: V = (New Construction Cost per m² × m²) - Depreciation + Land Value
-              - Estimate construction costs from the search data and your professional knowledge.
-              - Depreciation: 1-2% per year of building age, max 60-70%.
-              - Use only when neither Comparative nor Income methods are feasible.
-              - State in reasoning: "Primijenjena troškovna metoda zbog nedostatka usporedivih nekretnina."
+           c) TROŠKOVNA METODA:
+              - Koristi za: industrijske objekte, javne zgrade, jedinstvene strukture bez usporedivih.
+              - Formula: V = (Cijena nove gradnje po m² × m²) - Amortizacija + Vrijednost zemljišta
+              - Amortizacija: 1-2% godišnje starosti zgrade, max 60-70%.
+              - Koristi samo kad ni Usporedna ni Prinosna metoda nisu izvedive.
+              - Navedi u obrazloženju: "Primijenjena troškovna metoda zbog nedostatka usporedivih nekretnina."
 
-           d) METHOD SELECTION LOGIC:
-              - Residential (stan, kuća) → Usporedna (always)
-              - Commercial with rent data → Prinosna (primary) + Usporedna (cross-check)
-              - Industrial / unique / no comparables → Troškovna
-              - Land → Usporedna with Land-specific rules (see Rule 10)
-              - If two methods are used, take the average of both and note: "Konačna vrijednost je
+           d) LOGIKA ODABIRA METODE:
+              - Stambeno (stan, kuća) → Usporedna (uvijek)
+              - Komercijalno s podacima o najmu → Prinosna (primarna) + Usporedna (unakrsna provjera)
+              - Industrijsko / jedinstveno / bez usporedivih → Troškovna
+              - Zemljište → Usporedna sa specifičnim pravilima za zemljište (vidi Pravilo 10)
+              - Ako su korištene dvije metode, uzmi prosjek i zabilježi: "Konačna vrijednost je
                 prosjek usporedne i prinosne metode."
 
-        10. LAND & AGRICULTURE SPECIFICS:
-            a) Agricultural Land:
-               - If the property is clearly agricultural land, base the valuation on the search results provided.
-               - Agricultural land is typically much cheaper than building land — adjust expectations accordingly.
-               - Do NOT use any hardcoded per-hectare benchmarks. Use only real comparable data.
-               - Example: Agricultural land worth 50.000 € → prenamjena fee = 15.000 € → total investment = 65.000 €.
-               - Add as a value_driver: "Prenamjena (30% naknada)" with the impact description.
-            c) Forestry (Šumsko zemljište):
-               - Value of young forest stands = 1-25% of the mature stand value.
-               - Mature forest: typically valued by wood volume × market price per m³.
-               - If encountered, state this clearly and use conservative estimates.
+        10. RAZLIKE — TRŽIŠNA VS. LIKVIDACIJSKA VRIJEDNOST:
+            - Tržišna vrijednost (fair market value): cijena ostvariva u uobičajenim uvjetima prodaje 
+              s razumnim rokom izlaganja tržištu (3-6 mjeseci).
+            - Likvidacijska vrijednost (forced sale value): cijena ostvariva u prisilnoj prodaji 
+              (ovrha, stečaj) — tipično 70-80% tržišne vrijednosti.
+            - Uvijek procjenjuj TRŽIŠNU VRIJEDNOST, ali u slučaju pravnih tereta (List C: hipoteke, 
+              ovrhe, sudski sporovi) napomeni likvidacijski diskont.
+
+            ZEMLJIŠTA I POLJOPRIVREDA:
+            a) Poljoprivredno zemljište:
+               - Temelji procjenu na priloženim rezultatima pretrage.
+               - Poljoprivredno je tipično znatno jeftinije od građevinskog — prilagodi očekivanja.
+               - NE koristi hardkodirane benchmark-e po hektaru. Koristi samo stvarne usporedive podatke.
+               - Primjer: Poljoprivredno zemljište vrijedi 50.000 € → naknada za prenamjenu = 15.000 € → ukupna investicija = 65.000 €.
+               - Dodaj kao value_driver: "Prenamjena (30% naknada)" s opisom utjecaja.
+            b) Šumsko zemljište:
+               - Vrijednost mlade šume = 1-25% vrijednosti zrele šumske kulture.
+               - Zrela šuma: tipično procjenjivana po volumenu drva × tržišna cijena po m³.
+               - Ako se pojavi, navedi to jasno i koristi konzervativne procjene.
 
         ═══════════════════════════════════════════
-        CONTEXTUAL ANALYSIS RULES (Phase 3):
+        KONTEKSTUALNA ANALIZA (Koeficijent lokacije i infrastruktura):
         ═══════════════════════════════════════════
 
-        11. INFRASTRUCTURE CHECK (from PDF text):
-            Analyze the PDF for infrastructure indicators and assign corrections:
-            a) Access road:
+        11. INFRASTRUKTURA (iz PDF teksta):
+            Analiziraj PDF za infrastrukturne indikatore i dodijeli korekcije:
+            a) Pristupni put:
                - "asfaltirani put" / "asfaltna cesta" → 0% correction (good)
                - "makadamski put" / "neasfaltirani" / "put" (alone) → -5% correction
                - No mention of road → -3% correction (unknown risk)
@@ -442,75 +464,78 @@ public class ValuationService
 
     private const string ListingFeatureExtractionPrompt =
         """
-        You are a Croatian real estate valuation expert (Sudski vještak za procjenu nekretnina).
-        You receive a TARGET PROPERTY description and multiple listing snippets from Croatian portals.
+        PERSONA:
+        Ti si sudski vještak za procjenu nekretnina (Sudski vještak za procjenu nekretnina)
+        s iskustvom u analizi hrvatskog tržišta nekretnina.
+        
+        ZADATAK: Primaš opis CILJNE NEKRETNINE i više oglasnih isječaka s hrvatskih portala.
 
-        For EACH listing, you must:
-        A) Extract features from the listing text.
-        B) Score how SIMILAR this listing is to the TARGET PROPERTY (0.0 to 1.0).
+        Za SVAKI oglas moraš:
+        A) Izvući značajke iz teksta oglasa.
+        B) Ocijeniti koliko je oglas SLIČAN CILJNOJ NEKRETNINI (0.0 do 1.0).
 
-        === DATA FORMAT ===
-        Listings may contain STRUCTURED DATA blocks marked with [STRUCTURED] or [DEEP DIVE].
-        These contain pre-extracted key-value pairs from the detail page (via BrightData or Tavily):
+        === FORMAT PODATAKA ===
+        Oglasi mogu sadržavati STRUKTURIRANE PODATKE označene s [STRUCTURED] ili [DEEP DIVE].
+        Ti sadrže prethodno izvučene parove ključ-vrijednost s detaljne stranice (via BrightData ili Tavily):
           Lokacija, Površina, Stanje, Namjena, Grijanje, Parking, Kat, Broj soba,
           Godina izgradnje, Energetski razred, Okućnica, Tip zemljišta, DetectedLandType, Opis.
-        ALWAYS use these structured fields as your PRIMARY data source — they are more accurate
-        than free-text content. If structured data conflicts with free text, trust the structured data.
+        UVIJEK koristi ova strukturirana polja kao PRIMARNI izvor podataka — točnija su
+        od slobodnog teksta. Ako se strukturirani podaci razlikuju od slobodnog teksta, vjeruj strukturiranima.
 
-        === FEATURE EXTRACTION ===
-        - "has_garage": boolean — garage, parking space, or garažno mjesto? Check "Parking:" field.
-        - "has_renovation": boolean — evidence of renovation? Check "Stanje:" field + text.
+        === EKSTRAKCIJA ZNAČAJKI ===
+        - "has_garage": boolean — garaža, parkirno mjesto ili garažno mjesto? Provjeri "Parking:" polje.
+        - "has_renovation": boolean — dokaz renovacije? Provjeri "Stanje:" polje + tekst.
           (nova fasada, novi krov, termoizolacija, energetska obnova, potpuno renovirano,
           kompletno uređen, novi prozori, nova stolarija, adaptiran)
-        - "has_yard": boolean — yard, garden, or okućnica? Check "Okućnica:" field.
+        - "has_yard": boolean — dvorište, vrt ili okućnica? Provjeri "Okućnica:" polje.
           (dvorište, okućnica, vrt, bašta, parcela uz kuću)
         - "condition": string — "new", "renovated", "good", "original", "needs_work", "unknown"
-          Check "Stanje:" structured field first, then text keywords.
-        - "yard_area_m2": number — Yard size in m² if mentioned, 0 if not
-        - "size_m2": number — Property size in m². Check "Površina:" structured field first.
-        - "year_built": number — Year built. Check "Godina izgradnje:" field. 0 if unknown.
-        - "energy_class": string — Check "Energetski razred:" field. "" if unknown.
-        - "heating": string — Check "Grijanje:" field. "" if unknown.
-        - "floor": string — Check "Kat:" field. "" if unknown.
-        - "rooms": number — Check "Broj soba:" field. 0 if unknown.
-        - "property_type": string — one of: "stan", "kuća", "građevinsko zemljište",
-          "poljoprivredno zemljište", "zemljište", "poslovni prostor", or "unknown"
-          IMPORTANT: For land (zemljište), check "DetectedLandType:" and "Tip zemljišta:" fields first.
-          You MUST distinguish between "građevinsko zemljište" (building land, construction land)
-          and "poljoprivredno zemljište" (agricultural land, oranica, pašnjak, livada, šuma, voćnjak, vinograd).
-          Only use generic "zemljište" if you truly cannot determine the subtype.
+          Provjeri "Stanje:" strukturirano polje prvo, zatim tekst.
+        - "yard_area_m2": number — Površina dvoriš ta u m² ako je navedena, 0 ako nije
+        - "size_m2": number — NKP (Neto korisna površina) nekretnine u m². Provjeri "Površina:" polje prvo.
+        - "year_built": number — Godina izgradnje. Provjeri "Godina izgradnje:". 0 ako nepoznato.
+        - "energy_class": string — Provjeri "Energetski razred:". "" ako nepoznato.
+        - "heating": string — Provjeri "Grijanje:". "" ako nepoznato.
+        - "floor": string — Provjeri "Kat:". "" ako nepoznato.
+        - "rooms": number — Provjeri "Broj soba:". 0 ako nepoznato.
+        - "property_type": string — jedno od: "stan", "kuća", "građevinsko zemljište",
+          "poljoprivredno zemljište", "zemljište", "poslovni prostor", ili "unknown"
+          VAŽNO: Za zemljište, provjeri "DetectedLandType:" i "Tip zemljišta:" polja prvo.
+          MORAŠ razlikovati "građevinsko zemljište" (building land)
+          i "poljoprivredno zemljište" (agricultural land, oranica, pašnjak, livada, šuma, voćnjak, vinograd).
+          Koristi generičko "zemljište" samo ako zaista ne možeš odrediti podtip.
 
-        === SIMILARITY SCORING (0.0 – 1.0) ===
-        Score how comparable this listing is to the TARGET for valuation purposes:
-        - 0.90–1.00: Nearly identical (same neighborhood, same type, similar size ±10%, similar condition)
-        - 0.70–0.89: Very similar (same city area, same type, size ±25%, comparable condition)
-        - 0.50–0.69: Moderately similar (same city, same type, different size or condition)
-        - 0.30–0.49: Weakly similar (different area or slightly different type)
-        - 0.00–0.29: Not comparable (wrong city, wrong type, or completely different property)
+        === OCJENA SLIČNOSTI (0.0 – 1.0) — Koeficijent usporedivosti ===
+        Ocijeni koliko je usporediv ovaj oglas s CILJNOM NEKRETNINOM za potrebe procjene:
+        - 0.90–1.00: Gotovo identično (isti kvart, isti tip, slična NKP ±10%, slično stanje)
+        - 0.70–0.89: Vrlo slično (isti gradski dio, isti tip, NKP ±25%, usporedivo stanje)
+        - 0.50–0.69: Umjereno slično (isti grad, isti tip, različita veličina ili stanje)
+        - 0.30–0.49: Slabo slično (drugi dio grada ili blago drugačiji tip)
+        - 0.00–0.29: Neusporedivo (drugi grad, krivi tip, ili potpuno različita nekretnina)
 
-        SCORING PRIORITIES (in order of importance):
-        1. LOCATION (50%): Same neighborhood > same city zone > same city > different city
-           Check "Lokacija:" structured field for precise location.
-           CRITICAL "PRIME ZONE" RULE: If the TARGET is in "Centar", "Stari Grad", "Grad",
-           or "Donji Grad" — any comparable from a SUBURB (e.g. Barutana, Mejaši, Sirobuja,
-           Dubrava, Sesvete) MUST score ≤0.30 regardless of other factors.
-           Center properties and suburban properties are DIFFERENT MARKETS.
-        2. PROPERTY TYPE (25%): Must be same type (stan≠kuća≠zemljište). Different type = max 0.30
-        3. SIZE (15%): Closer size = higher score. ±10% is excellent, ±50% is poor
-        4. CONDITION & FEATURES (10%): Similar condition/age, heating, energy class = bonus
+        PRIORITETI OCJENJIVANJA (po redoslijedu važnosti):
+        1. LOKACIJA — koeficijent lokacije (50%): Isti kvart > isti gradski dio > isti grad > drugi grad
+           Provjeri "Lokacija:" strukturirano polje za preciznu lokaciju.
+           KRITIČNO PRAVILO "PRIME ZONE": Ako je CILJNA u "Centar", "Stari Grad", "Grad",
+           ili "Donji Grad" — svaka usporediva iz PREDGRAĐA (npr. Barutana, Mejaši, Sirobuja,
+           Dubrava, Sesvete) MORA dobiti ≤0.30 bez obzira na ostale faktore.
+           Centar i predgrađe su RAZLIČITA TRŽIŠTA.
+        2. TIP NEKRETNINE (25%): Mora biti isti tip (stan≠kuća≠zemljište). Različit tip = max 0.30
+        3. POVRŠINA — NKP (15%): Bliža veličina = viša ocjena. ±10% je odlično, ±50% je loše
+        4. STANJE I ZNAČAJKE (10%): Slično stanje/starost, grijanje, energetski razred = bonus
 
-        === SIMILARITY REASON (REQUIRED) ===
-        For each listing, also provide "similarity_reason": a SHORT one-sentence Croatian explanation
-        of WHY the listing is similar/different to the target property.
-        Focus on the most impactful factor (location match, size difference, type match, condition).
-        Examples:
+        === OBRAZLOŽENJE SLIČNOSTI (OBAVEZNO) ===
+        Za svaki oglas navedi "similarity_reason": KRATKO jednorečenično obrazloženje na hrvatskom
+        ZAŠTO je oglas sličan/različit od ciljne nekretnine.
+        Fokusiraj se na najutjecajniji faktor (poklapanje lokacije, razlika u veličini, poklapanje tipa, stanje).
+        Primjeri:
         - "Isti kvart (Trešnjevka), sličan stan 65m², renoviran — odlična usporedba."
         - "Isti grad ali udaljeniji kvart, kuća umjesto stana — slabija usporedba."
         - "Građevinsko zemljište u istom mjestu, slična površina — dobra usporedba."
-        Keep it under 120 characters. Write in Croatian.
+        Drži se ispod 120 znakova. Piši na hrvatskom.
 
-        Return JSON: {"listings": [{"index": 0, "has_garage": true, ..., "similarity_score": 0.75, "similarity_reason": "Isti kvart, sličan stan 60m² — odlična usporedba.", "year_built": 1990, "energy_class": "C", "heating": "plinsko", "floor": "2. kat", "rooms": 3}, ...]}
-        Return ONLY the raw JSON object, no markdown fences.
+        Vrati JSON: {"listings": [{"index": 0, "has_garage": true, ..., "similarity_score": 0.75, "similarity_reason": "Isti kvart, sličan stan 60m² — odlična usporedba.", "year_built": 1990, "energy_class": "C", "heating": "plinsko", "floor": "2. kat", "rooms": 3}, ...]}
+        Vrati ISKLJUČIVO čisti JSON objekt, bez markdown oznaka.
         """;
 
     /// <summary>
