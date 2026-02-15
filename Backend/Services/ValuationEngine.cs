@@ -954,6 +954,21 @@ public class ValuationEngine
             {
                 simScore = Math.Clamp(aiScore, 0.0, 1.0);
                 aiScored++;
+
+                // V38: Cross-city safety cap — if math-based location score is very low
+                // (wrong city/region), cap the AI score to prevent AI hallucination
+                // from overriding geographic reality. A listing from Split cannot be
+                // a good comparable for Zagreb no matter what the AI thinks.
+                double mathLocationCheck = CalculateSimilarityScore(
+                    price, property, marketData.DetectedPropertyType, marketData.RegionName);
+                if (mathLocationCheck <= 0.15 && simScore > 0.25)
+                {
+                    _logger.LogInformation(
+                        "V38 AI Score Cap: {Title} — AI gave {AiScore:F2} but math location={MathScore:F2}, capped to 0.25",
+                        price.SourceTitle.Length > 50 ? price.SourceTitle[..50] : price.SourceTitle,
+                        simScore, mathLocationCheck);
+                    simScore = 0.25;
+                }
             }
             else
             {

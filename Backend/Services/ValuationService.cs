@@ -513,8 +513,17 @@ public class ValuationService
         - 0.30–0.49: Slabo slično (drugi dio grada ili blago drugačiji tip)
         - 0.00–0.29: Neusporedivo (drugi grad, krivi tip, ili potpuno različita nekretnina)
 
+        ████████████████████████████████████████████████████████
+        KRITIČNO PRAVILO — APSOLUTNA ZABRANA USPOREDBE RAZLIČITIH GRADOVA:
+        Ako je CILJNA NEKRETNINA u Zagrebu, a oglas je u Splitu, Rijeci, Osijeku,
+        ili BILO KOJEM drugom gradu → similarity_score MORA biti 0.00.
+        Ovo vrijedi i obrnuto — Split s Dubrovnikom, Rijeka s Pulom, itd.
+        NIKADA ne daj ocjenu iznad 0.10 za oglas iz DRUGOG grada.
+        Samo nekretnine iz ISTOG grada su usporedive za procjenu.
+        ████████████████████████████████████████████████████████
+
         PRIORITETI OCJENJIVANJA (po redoslijedu važnosti):
-        1. LOKACIJA — koeficijent lokacije (50%): Isti kvart > isti gradski dio > isti grad > drugi grad
+        1. LOKACIJA — koeficijent lokacije (50%): Isti kvart > isti gradski dio > isti grad > DRUGI GRAD = 0.00
            Provjeri "Lokacija:" strukturirano polje za preciznu lokaciju.
            KRITIČNO PRAVILO "PRIME ZONE": Ako je CILJNA u "Centar", "Stari Grad", "Grad",
            ili "Donji Grad" — svaka usporediva iz PREDGRAĐA (npr. Barutana, Mejaši, Sirobuja,

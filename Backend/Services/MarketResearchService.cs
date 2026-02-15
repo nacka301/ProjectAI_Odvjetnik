@@ -242,6 +242,79 @@ public class MarketResearchService
     };
 
     // ══════════════════════════════════════════════════════════
+    //  V38: MAJOR CITIES — universal cross-city contamination block
+    //  Any listing from a DIFFERENT major city is automatically rejected.
+    //  This prevents absurdities like comparing Zagreb with Split.
+    // ══════════════════════════════════════════════════════════
+    private static readonly string[] MajorCities =
+    [
+        "zagreb", "split", "rijeka", "osijek", "zadar", "pula",
+        "slavonski brod", "karlovac", "varaždin", "varazdin",
+        "šibenik", "sibenik", "dubrovnik", "bjelovar", "vukovar",
+        "vinkovci", "sisak", "čakovec", "cakovec", "koprivnica",
+        "požega", "pozega", "virovitica", "gospić", "gospic",
+    ];
+
+    /// <summary>
+    /// V38: Resolve which major city a region/neighborhood belongs to.
+    /// Uses BroaderRegion, VillageFallback, and PrestigePeers to trace
+    /// neighborhoods/suburbs back to their parent major city.
+    /// Returns null if not resolvable to a major city.
+    /// </summary>
+    internal static string? ResolveMajorCity(string regionName)
+    {
+        if (string.IsNullOrWhiteSpace(regionName)) return null;
+        var lower = regionName.ToLowerInvariant().Trim();
+
+        // Direct match — the region IS a major city
+        if (MajorCities.Contains(lower)) return lower;
+
+        // Check BroaderRegion mapping (neighborhood → city)
+        if (BroaderRegion.TryGetValue(regionName, out var parent))
+        {
+            var parentLower = parent.ToLowerInvariant();
+            if (MajorCities.Contains(parentLower)) return parentLower;
+            // One more hop for deep nesting (e.g. "Manuš" → "Split")
+            if (BroaderRegion.TryGetValue(parent, out var grandparent))
+            {
+                var gpLower = grandparent.ToLowerInvariant();
+                if (MajorCities.Contains(gpLower)) return gpLower;
+            }
+        }
+
+        // Check VillageFallback mapping
+        if (VillageFallback.TryGetValue(regionName, out var fallbackTown))
+        {
+            var ftLower = fallbackTown.ToLowerInvariant();
+            if (MajorCities.Contains(ftLower)) return ftLower;
+            // One more hop
+            if (BroaderRegion.TryGetValue(fallbackTown, out var fbParent))
+            {
+                var fpLower = fbParent.ToLowerInvariant();
+                if (MajorCities.Contains(fpLower)) return fpLower;
+            }
+        }
+
+        // Check PrestigePeers — if it's a key, try to resolve via BroaderRegion
+        if (PrestigePeers.ContainsKey(regionName))
+        {
+            if (BroaderRegion.TryGetValue(regionName, out var peerParent))
+            {
+                var ppLower = peerParent.ToLowerInvariant();
+                if (MajorCities.Contains(ppLower)) return ppLower;
+            }
+        }
+
+        // Substring check — "Zagreb" inside "Zagreb, Centar" etc.
+        foreach (var city in MajorCities)
+        {
+            if (lower.Contains(city)) return city;
+        }
+
+        return null;
+    }
+
+    // ══════════════════════════════════════════════════════════
     //  VILLAGE / SMALL MUNICIPALITY → NEAREST LARGER TOWN
     //  Unlike BroaderRegion (neighborhoods of a city), these are
     //  independent small places that Njuškalo does NOT have a
@@ -400,6 +473,7 @@ public class MarketResearchService
         _currentSubjectRegion = ExtractRegionName(location);  // Set for City Integrity gate
         _cityIntegrityRejections = 0;          // Reset per-call counters
         _rejectedCityNames.Clear();
+        _currentSubjectMajorCity = ResolveMajorCity(location) ?? ResolveMajorCity(_currentSubjectRegion);  // V38
         var regionName = ExtractRegionName(location);
         var subLocations = ExtractLocationHierarchy(location);
         bool isLand = IsLandType(detectedType);
@@ -2348,6 +2422,9 @@ public class MarketResearchService
     /// <summary>The subject's region name — set per search call for City Integrity checks.</summary>
     private string _currentSubjectRegion = "";
 
+    /// <summary>V38: The subject's resolved major city — for universal cross-city blocking.</summary>
+    private string? _currentSubjectMajorCity;
+
     /// <summary>Track how many listings were rejected by city integrity. Thread-local per search call.</summary>
     private int _cityIntegrityRejections;
     private readonly List<string> _rejectedCityNames = [];
@@ -2412,6 +2489,38 @@ public class MarketResearchService
                     }
                 }
                 if (forbidden) continue;
+            }
+
+            // Gate 0.7: V38 UNIVERSAL CROSS-CITY BLOCK
+            // If the subject is in a known major city, reject any listing that
+            // mentions a DIFFERENT major city. This prevents absurdities like
+            // comparing Zagreb apartments with Split or Osijek listings.
+            if (_currentSubjectMajorCity != null)
+            {
+                bool crossCityForbidden = false;
+                foreach (var city in MajorCities)
+                {
+                    if (city == _currentSubjectMajorCity) continue;
+                    // Check if listing text/URL mentions this OTHER major city
+                    if (combinedLower.Contains(city) ||
+                        r.Url.Contains(city, StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Allow if listing ALSO mentions the subject city
+                        if (combinedLower.Contains(_currentSubjectMajorCity) ||
+                            r.Url.Contains(_currentSubjectMajorCity, StringComparison.OrdinalIgnoreCase))
+                            continue;
+
+                        _logger.LogDebug(
+                            "[{Phase}] REJECTED (V38 Cross-City: subject={Subject}, found={Foreign}): {Title}",
+                            phaseName, _currentSubjectMajorCity, city, Truncate(r.Title, 60));
+                        crossCityForbidden = true;
+                        _cityIntegrityRejections++;
+                        if (!_rejectedCityNames.Contains(city, StringComparer.OrdinalIgnoreCase))
+                            _rejectedCityNames.Add(city);
+                        break;
+                    }
+                }
+                if (crossCityForbidden) continue;
             }
 
             // Gate 1: Must contain a price (number + €)
