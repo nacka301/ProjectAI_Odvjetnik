@@ -21,6 +21,7 @@ public class EvaluateController : ControllerBase
     private readonly SupabaseService _supabaseService;
     private readonly EmailService _emailService;
     private readonly TextAnalysisService _textAnalysisService;
+    private readonly ValuationAgentService _valuationAgentService;
     private readonly ILogger<EvaluateController> _logger;
 
     public EvaluateController(
@@ -31,6 +32,7 @@ public class EvaluateController : ControllerBase
         SupabaseService supabaseService,
         EmailService emailService,
         TextAnalysisService textAnalysisService,
+        ValuationAgentService valuationAgentService,
         ILogger<EvaluateController> logger)
     {
         _valuationService = valuationService;
@@ -40,6 +42,7 @@ public class EvaluateController : ControllerBase
         _supabaseService = supabaseService;
         _emailService = emailService;
         _textAnalysisService = textAnalysisService;
+        _valuationAgentService = valuationAgentService;
         _logger = logger;
     }
 
@@ -447,6 +450,82 @@ public class EvaluateController : ControllerBase
                 .Where(l => engineResult.FinalUsedUrls.Contains(l.Url)).ToList();
             if (filtered.Count > 0)
                 marketData.ActiveListings = filtered;
+        }
+
+        // ── Stage 3A½: AI Agent (God Prompt) ──
+        // Contextual AI analysis of the SUBJECT property description.
+        // Finds things keyword adjustments miss: shape constraints, zoning readiness,
+        // infrastructure gaps, legal red flags, etc.
+        try
+        {
+            _logger.LogInformation("━━━ STAGE 3A½: AI AGENT (GOD PROMPT) ━━━");
+            await SendProgress("agent", "active", "AI agent analizira nekretninu...");
+            ct.ThrowIfCancellationRequested();
+
+            string descriptionText = $"{property.Description} {property.AdditionalNotes} {property.KeyFeatures}".Trim();
+            double benchmarkPrice = engineResult.MarketAverageAsking > 0
+                ? engineResult.MarketAverageAsking
+                : engineResult.CalculatedPricePerM2;
+
+            var agentAdjustments = await _valuationAgentService.AnalyzePropertyAsync(
+                propertyType: marketData.DetectedPropertyType,
+                sizeM2: property.SizeM2,
+                location: property.Location,
+                description: descriptionText,
+                additionalNotes: property.RawText ?? "",
+                benchmarkPricePerM2: benchmarkPrice,
+                existingAdjustments: engineResult.Adjustments);
+
+            if (agentAdjustments.Count > 0)
+            {
+                // Convert agent adjustments to ValuationAdjustment and append
+                foreach (var agentAdj in agentAdjustments)
+                {
+                    engineResult.Adjustments.Add(new ValuationAdjustment
+                    {
+                        Factor = $"🤖 {agentAdj.Factor}",
+                        Description = agentAdj.Reasoning,
+                        Percent = agentAdj.ImpactPercent
+                    });
+                    _logger.LogInformation("    🤖 Agent: {Factor} → {Pct:+0.0;-0.0}%  {Reason}",
+                        agentAdj.Factor, agentAdj.ImpactPercent,
+                        agentAdj.Reasoning.Length > 80 ? agentAdj.Reasoning[..80] + "…" : agentAdj.Reasoning);
+                }
+
+                // Recalculate TotalAdjustmentPercent including agent adjustments
+                double newTotalAdj = engineResult.Adjustments.Sum(a => a.Percent);
+                // Cap at ±40%
+                newTotalAdj = Math.Clamp(newTotalAdj, -40, 40);
+                double oldTotal = engineResult.TotalAdjustmentPercent;
+                engineResult.TotalAdjustmentPercent = Math.Round(newTotalAdj, 1);
+
+                // Recalculate price: start from AfterDiscountPerM2 (post-realization-gap)
+                // and apply the updated total adjustment
+                double basePrice = engineResult.AfterDiscountPerM2 > 0
+                    ? engineResult.AfterDiscountPerM2
+                    : engineResult.MarketAverageAsking;
+                double newPricePerM2 = basePrice * (1 + newTotalAdj / 100.0);
+                engineResult.CalculatedPricePerM2 = Math.Round(newPricePerM2, 0);
+                engineResult.EstimatedValueEur = (int)Math.Round(newPricePerM2 * property.SizeM2);
+
+                engineResult.Pipeline.Add($"Agent: {agentAdjustments.Count} contextual adjustments → total adj {oldTotal:+0.0;-0.0}% → {newTotalAdj:+0.0;-0.0}%");
+
+                _logger.LogInformation("    🤖 Agent recalc: TotalAdj={Adj}%, PriceM2={Price}€, Value={Val}€",
+                    newTotalAdj, engineResult.CalculatedPricePerM2, engineResult.EstimatedValueEur);
+
+                await SendProgress("agent", "done", "AI agent završio",
+                    $"{agentAdjustments.Count} korekcija • ukupno {newTotalAdj:+0.0;-0.0}%");
+            }
+            else
+            {
+                engineResult.Pipeline.Add("Agent: no additional contextual adjustments found");
+                await SendProgress("agent", "done", "AI agent završio", "Nema dodatnih korekcija");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Agent analysis failed — continuing without");
+            await SendProgress("agent", "skipped", "AI agent preskočen", "Greška u analizi");
         }
 
         // ── Stage 3B: AI opinion ──
