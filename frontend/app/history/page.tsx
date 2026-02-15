@@ -5,10 +5,7 @@ import Link from "next/link";
 import {
   ArrowLeft,
   Clock,
-  MapPin,
   Building2,
-  Home,
-  TreePine,
   Search,
   FileDown,
   Eye,
@@ -16,21 +13,49 @@ import {
   ChevronUp,
   AlertTriangle,
   Loader2,
+  ShieldAlert,
+  ScrollText,
+  Gavel,
 } from "lucide-react";
-import { getEvaluations, type EvaluationRow } from "@/lib/supabase";
+import {
+  getRecentActivity,
+  type ActivityItem,
+  type ActivityType,
+  getEvaluations,
+  type EvaluationRow,
+} from "@/lib/supabase";
 import { generateValuationPdf } from "@/lib/generatePdf";
 import type { ValuationResult } from "@/app/wizard/types";
 
-const TYPE_ICONS: Record<string, React.ReactNode> = {
-  Apartment: <Building2 className="h-5 w-5 text-blue-500" />,
-  House: <Home className="h-5 w-5 text-green-500" />,
-  Land: <TreePine className="h-5 w-5 text-amber-600" />,
+// ── Tab definitions ──
+type TabKey = "all" | ActivityType;
+
+const TABS: { key: TabKey; label: string }[] = [
+  { key: "all", label: "Sve" },
+  { key: "valuation", label: "Procjene" },
+  { key: "contract", label: "Ugovori" },
+  { key: "chronology", label: "Kronologije" },
+  { key: "legal", label: "Pravne analize" },
+];
+
+const ACTIVITY_ICONS: Record<ActivityType, React.ReactNode> = {
+  valuation: <Building2 className="h-5 w-5 text-blue-500" />,
+  contract: <ShieldAlert className="h-5 w-5 text-rose-500" />,
+  chronology: <ScrollText className="h-5 w-5 text-violet-500" />,
+  legal: <Gavel className="h-5 w-5 text-amber-500" />,
 };
 
-const TYPE_LABELS: Record<string, string> = {
-  Apartment: "Stan",
-  House: "Kuća",
-  Land: "Zemljište",
+const ACTIVITY_LABELS: Record<ActivityType, string> = {
+  valuation: "Procjena",
+  contract: "Ugovor",
+  chronology: "Kronologija",
+  legal: "Pravna analiza",
+};
+
+const BADGE_COLORS: Record<string, string> = {
+  green: "bg-green-100 text-green-800",
+  amber: "bg-yellow-100 text-yellow-800",
+  red: "bg-red-100 text-red-800",
 };
 
 function formatPrice(n: number) {
@@ -48,18 +73,26 @@ function formatDate(iso: string) {
 }
 
 export default function HistoryPage() {
-  const [evaluations, setEvaluations] = useState<EvaluationRow[]>([]);
+  const [activity, setActivity] = useState<ActivityItem[]>([]);
+  const [evaluationMap, setEvaluationMap] = useState<Map<string, EvaluationRow>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [pdfLoadingId, setPdfLoadingId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<TabKey>("all");
 
   useEffect(() => {
     (async () => {
       try {
-        const data = await getEvaluations(100);
-        setEvaluations(data);
+        const [items, evals] = await Promise.all([
+          getRecentActivity(100),
+          getEvaluations(100),
+        ]);
+        setActivity(items);
+        const map = new Map<string, EvaluationRow>();
+        for (const e of evals) map.set(e.id, e);
+        setEvaluationMap(map);
       } catch {
         setError("Greška pri dohvaćanju povijesti. Provjerite Supabase konfiguraciju.");
       } finally {
@@ -68,19 +101,24 @@ export default function HistoryPage() {
     })();
   }, []);
 
-  const filtered = evaluations.filter((e) => {
+  const filtered = activity.filter((item) => {
+    // Tab filter
+    if (activeTab !== "all" && item.type !== activeTab) return false;
+    // Search filter
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
     return (
-      e.location.toLowerCase().includes(q) ||
-      e.property_type.toLowerCase().includes(q) ||
-      (TYPE_LABELS[e.property_type] || "").toLowerCase().includes(q) ||
-      formatPrice(e.estimated_value).includes(q)
+      item.title.toLowerCase().includes(q) ||
+      item.subtitle.toLowerCase().includes(q) ||
+      (item.badge || "").toLowerCase().includes(q) ||
+      ACTIVITY_LABELS[item.type].toLowerCase().includes(q)
     );
   });
 
-  const handlePdfExport = async (ev: EvaluationRow) => {
-    setPdfLoadingId(ev.id);
+  const handlePdfExport = async (itemId: string) => {
+    const ev = evaluationMap.get(itemId);
+    if (!ev) return;
+    setPdfLoadingId(itemId);
     try {
       const raw = ev.raw_json_output as unknown as ValuationResult;
       await generateValuationPdf({
@@ -105,11 +143,28 @@ export default function HistoryPage() {
 
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900 flex items-center justify-center gap-3">
-            <Clock className="h-8 w-8 text-indigo-600" /> Povijest procjena
+            <Clock className="h-8 w-8 text-indigo-600" /> Povijest predmeta
           </h1>
           <p className="mt-2 text-gray-500">
-            Pregled svih spremljenih procjena tržišne vrijednosti
+            Pregled svih spremljenih analiza i procjena
           </p>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-2 mb-4 flex-wrap">
+          {TABS.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`px-4 py-2 text-sm font-medium rounded-lg transition ${
+                activeTab === tab.key
+                  ? "bg-indigo-600 text-white"
+                  : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
 
         {/* Search */}
@@ -147,9 +202,9 @@ export default function HistoryPage() {
           <div className="text-center py-20">
             <Clock className="h-12 w-12 text-gray-300 mx-auto mb-4" />
             <p className="text-gray-500 font-medium">
-              {searchQuery ? "Nema rezultata za pretragu." : "Još nema spremljenih procjena."}
+              {searchQuery || activeTab !== "all" ? "Nema rezultata za odabrane filtere." : "Još nema spremljenih predmeta."}
             </p>
-            {!searchQuery && (
+            {!searchQuery && activeTab === "all" && (
               <Link href="/wizard" className="mt-4 inline-flex items-center gap-2 text-sm text-blue-600 hover:underline">
                 Pokreni prvu procjenu →
               </Link>
@@ -157,48 +212,48 @@ export default function HistoryPage() {
           </div>
         )}
 
-        {/* Evaluation Cards */}
+        {/* Activity Cards */}
         {!loading && filtered.length > 0 && (
           <div className="space-y-3">
-            {filtered.map((ev) => {
-              const isExpanded = expandedId === ev.id;
-              const raw = ev.raw_json_output as unknown as ValuationResult;
-              const confidence = raw?.math_confidence_score;
+            {filtered.map((item) => {
+              const isExpanded = expandedId === item.id;
+              const isValuation = item.type === "valuation";
+              const ev = isValuation ? evaluationMap.get(item.id) : null;
+              const raw = ev ? (ev.raw_json_output as unknown as ValuationResult) : null;
 
               return (
-                <div key={ev.id} className="rounded-xl bg-white border border-gray-200 overflow-hidden transition hover:border-gray-300 hover:shadow-sm">
+                <div key={item.id} className="rounded-xl bg-white border border-gray-200 overflow-hidden transition hover:border-gray-300 hover:shadow-sm">
                   {/* Summary Row */}
                   <div
                     className="flex items-center gap-4 p-4 cursor-pointer"
-                    onClick={() => setExpandedId(isExpanded ? null : ev.id)}
+                    onClick={() => setExpandedId(isExpanded ? null : item.id)}
                   >
                     <div className="shrink-0">
-                      {TYPE_ICONS[ev.property_type] || <Building2 className="h-5 w-5 text-gray-400" />}
+                      {ACTIVITY_ICONS[item.type]}
                     </div>
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-semibold text-gray-900">
-                          {TYPE_LABELS[ev.property_type] || ev.property_type}
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                          {ACTIVITY_LABELS[item.type]}
                         </span>
                         <span className="text-xs text-gray-400">•</span>
-                        <span className="text-sm text-gray-600 flex items-center gap-1">
-                          <MapPin className="h-3 w-3" />
-                          {ev.location}
+                        <span className="text-sm font-semibold text-gray-900 truncate">
+                          {item.title}
                         </span>
                       </div>
-                      <p className="text-xs text-gray-400 mt-0.5">{formatDate(ev.created_at)}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {formatDate(item.created_at)}
+                        {item.subtitle ? ` · ${item.subtitle}` : ""}
+                      </p>
                     </div>
 
                     <div className="text-right shrink-0">
-                      <p className="text-lg font-bold text-gray-900">{formatPrice(ev.estimated_value)} €</p>
-                      {confidence !== undefined && confidence > 0 && (
+                      {item.badge && (
                         <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                          confidence >= 70 ? "bg-green-100 text-green-800" :
-                          confidence >= 40 ? "bg-yellow-100 text-yellow-800" :
-                          "bg-red-100 text-red-800"
+                          item.badgeColor ? BADGE_COLORS[item.badgeColor] || "bg-gray-100 text-gray-600" : "bg-gray-100 text-gray-600"
                         }`}>
-                          {confidence}/100
+                          {item.badge}
                         </span>
                       )}
                     </div>
@@ -208,10 +263,9 @@ export default function HistoryPage() {
                     </div>
                   </div>
 
-                  {/* Expanded Detail */}
-                  {isExpanded && (
+                  {/* Expanded Detail — only for valuations (they have rich data) */}
+                  {isExpanded && isValuation && raw && (
                     <div className="border-t border-gray-100 bg-gray-50 p-5 space-y-4">
-                      {/* Quick stats */}
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                         {raw?.calculated_price_per_m2 && (
                           <div className="rounded-lg bg-white border border-gray-200 p-3">
@@ -239,7 +293,6 @@ export default function HistoryPage() {
                         )}
                       </div>
 
-                      {/* Price range */}
                       {raw?.price_range && (
                         <div className="rounded-lg bg-white border border-gray-200 p-3">
                           <p className="text-xs text-gray-500 mb-2">Raspon procjene</p>
@@ -253,7 +306,6 @@ export default function HistoryPage() {
                         </div>
                       )}
 
-                      {/* Reasoning excerpt */}
                       {raw?.valuation_reasoning && (
                         <div className="rounded-lg bg-white border border-gray-200 p-3">
                           <p className="text-xs text-gray-500 mb-1">Stručno mišljenje</p>
@@ -261,15 +313,14 @@ export default function HistoryPage() {
                         </div>
                       )}
 
-                      {/* Actions */}
                       <div className="flex items-center gap-3 pt-1">
                         <button
-                          onClick={() => handlePdfExport(ev)}
-                          disabled={pdfLoadingId === ev.id}
+                          onClick={() => handlePdfExport(item.id)}
+                          disabled={pdfLoadingId === item.id}
                           className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50 transition flex items-center gap-1.5"
                         >
                           <FileDown className="h-3.5 w-3.5" />
-                          {pdfLoadingId === ev.id ? "Generiram..." : "Preuzmi PDF"}
+                          {pdfLoadingId === item.id ? "Generiram..." : "Preuzmi PDF"}
                         </button>
                         <Link
                           href="/wizard"
@@ -278,6 +329,20 @@ export default function HistoryPage() {
                           <Eye className="h-3.5 w-3.5" /> Nova procjena
                         </Link>
                       </div>
+                    </div>
+                  )}
+
+                  {/* Expanded Detail — for non-valuation items (simple view) */}
+                  {isExpanded && !isValuation && (
+                    <div className="border-t border-gray-100 bg-gray-50 p-5">
+                      <p className="text-sm text-gray-600">
+                        {item.subtitle}
+                      </p>
+                      {item.badge && (
+                        <p className="text-xs text-gray-400 mt-2">
+                          Status: <span className="font-medium text-gray-700">{item.badge}</span>
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>
@@ -289,7 +354,7 @@ export default function HistoryPage() {
         {/* Count */}
         {!loading && filtered.length > 0 && (
           <p className="text-center text-xs text-gray-400 mt-6">
-            Prikazano {filtered.length} od {evaluations.length} procjena
+            Prikazano {filtered.length} od {activity.length} predmeta
           </p>
         )}
       </div>

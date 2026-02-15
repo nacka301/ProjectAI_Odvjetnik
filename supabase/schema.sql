@@ -82,3 +82,71 @@ CREATE POLICY "service_role_full_access" ON zk_analyses
     FOR ALL USING (auth.role() = 'service_role');
 CREATE POLICY "anon_insert_only" ON zk_analyses
     FOR INSERT WITH CHECK (true);
+
+-- ========================================
+-- Contract Analyses table — stores AI contract risk analyses
+-- ========================================
+
+CREATE TABLE IF NOT EXISTS contract_analyses (
+    id              UUID            DEFAULT uuid_generate_v4() PRIMARY KEY,
+    created_at      TIMESTAMPTZ     DEFAULT now() NOT NULL,
+    document_type   TEXT            NOT NULL DEFAULT '',       -- 'Kupoprodajni ugovor', 'Predugovor', etc.
+    summary         TEXT            NOT NULL DEFAULT '',       -- AI-generated summary
+    overall_risk    TEXT            NOT NULL DEFAULT '',       -- 'VISOK', 'SREDNJI', 'NIZAK'
+    risk_score      INTEGER         NOT NULL DEFAULT 0,        -- 0-100
+    red_flags_count INTEGER         NOT NULL DEFAULT 0,
+    raw_json_output JSONB           NOT NULL DEFAULT '{}'::jsonb
+);
+
+CREATE INDEX IF NOT EXISTS idx_contract_analyses_created_at ON contract_analyses (created_at DESC);
+
+ALTER TABLE contract_analyses ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "service_role_full_access" ON contract_analyses
+    FOR ALL USING (auth.role() = 'service_role');
+CREATE POLICY "anon_select" ON contract_analyses
+    FOR SELECT USING (true);
+
+-- ========================================
+-- Chronologies table — stores timeline extractions
+-- ========================================
+
+CREATE TABLE IF NOT EXISTS chronologies (
+    id                      UUID            DEFAULT uuid_generate_v4() PRIMARY KEY,
+    created_at              TIMESTAMPTZ     DEFAULT now() NOT NULL,
+    total_documents         INTEGER         NOT NULL DEFAULT 0,
+    total_events            INTEGER         NOT NULL DEFAULT 0,
+    date_range              TEXT            NOT NULL DEFAULT '',   -- "01.01.2020 — 15.02.2026"
+    raw_json_output         JSONB           NOT NULL DEFAULT '{}'::jsonb
+);
+
+CREATE INDEX IF NOT EXISTS idx_chronologies_created_at ON chronologies (created_at DESC);
+
+ALTER TABLE chronologies ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "service_role_full_access" ON chronologies
+    FOR ALL USING (auth.role() = 'service_role');
+CREATE POLICY "anon_select" ON chronologies
+    FOR SELECT USING (true);
+
+-- ========================================
+-- Legal Strategies table — stores "Provjeri ishod" analyses
+-- ========================================
+
+CREATE TABLE IF NOT EXISTS legal_strategies (
+    id                  UUID            DEFAULT uuid_generate_v4() PRIMARY KEY,
+    created_at          TIMESTAMPTZ     DEFAULT now() NOT NULL,
+    key_legal_issue     TEXT            NOT NULL DEFAULT '',
+    client_position     TEXT            NOT NULL DEFAULT 'kupac',
+    win_probability     INTEGER         NOT NULL DEFAULT 0,       -- 0-100
+    win_probability_min INTEGER         NOT NULL DEFAULT 0,
+    win_probability_max INTEGER         NOT NULL DEFAULT 0,
+    precedents_count    INTEGER         NOT NULL DEFAULT 0,
+    raw_json_output     JSONB           NOT NULL DEFAULT '{}'::jsonb
+);
+
+CREATE INDEX IF NOT EXISTS idx_legal_strategies_created_at ON legal_strategies (created_at DESC);
+
+ALTER TABLE legal_strategies ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "service_role_full_access" ON legal_strategies
+    FOR ALL USING (auth.role() = 'service_role');
+CREATE POLICY "anon_select" ON legal_strategies
+    FOR SELECT USING (true);

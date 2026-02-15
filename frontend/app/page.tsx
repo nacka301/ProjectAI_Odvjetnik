@@ -5,32 +5,21 @@ import Link from "next/link";
 
 import {
   Search as SearchIcon,
-  Home,
   Scale,
   BookOpen,
   ScrollText,
   Clock,
   Building2,
-  TreePine,
-  MapPin,
-  AlertTriangle,
   ChevronRight,
   Loader2,
-  TrendingDown,
   ShieldAlert,
-  CheckCircle,
-  XCircle,
   ArrowRight,
   Gavel,
 } from "lucide-react";
 import LegalFeed from "@/components/LegalFeed";
-import { getEvaluations, type EvaluationRow } from "@/lib/supabase";
+import { getRecentActivity, type ActivityItem, type ActivityType } from "@/lib/supabase";
 
 // ── Helpers ──
-
-function formatPrice(n: number) {
-  return n.toLocaleString("hr-HR");
-}
 
 function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -44,26 +33,25 @@ function timeAgo(iso: string) {
   return new Date(iso).toLocaleDateString("hr-HR");
 }
 
-const TYPE_ICONS: Record<string, React.ReactNode> = {
-  Apartment: <Building2 className="h-4 w-4 text-blue-500" />,
-  House: <Home className="h-4 w-4 text-green-500" />,
-  Land: <TreePine className="h-4 w-4 text-amber-600" />,
-};
-const TYPE_LABELS: Record<string, string> = {
-  Apartment: "Stan",
-  House: "Kuća",
-  Land: "Zemljište",
+const ACTIVITY_ICONS: Record<ActivityType, React.ReactNode> = {
+  valuation: <Building2 className="h-4 w-4 text-blue-500" />,
+  contract: <ShieldAlert className="h-4 w-4 text-rose-500" />,
+  chronology: <ScrollText className="h-4 w-4 text-violet-500" />,
+  legal: <Gavel className="h-4 w-4 text-amber-500" />,
 };
 
-// ── Types for raw JSON output ──
-interface RawEvaluation {
-  math_confidence_score?: number;
-  confidence_level?: string;
-  calculated_price_per_m2?: number;
-  total_listings_found?: number;
-  usable_price_points?: number;
-  valuation_reasoning?: string;
-}
+const ACTIVITY_LABELS: Record<ActivityType, string> = {
+  valuation: "Procjena",
+  contract: "Ugovor",
+  chronology: "Kronologija",
+  legal: "Pravna analiza",
+};
+
+const BADGE_COLORS: Record<string, string> = {
+  green: "text-green-700 bg-green-50",
+  amber: "text-amber-700 bg-amber-50",
+  red: "text-red-700 bg-red-50",
+};
 
 // ═══════════════════════════════════════════════════════════
 //  Dashboard Component — "Legal Command Center"
@@ -71,15 +59,14 @@ interface RawEvaluation {
 
 export default function Dashboard() {
 
-  const [evaluations, setEvaluations] = useState<EvaluationRow[]>([]);
+  const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
-
 
   useEffect(() => {
     (async () => {
       try {
-        const data = await getEvaluations(20);
-        setEvaluations(data);
+        const data = await getRecentActivity(10);
+        setActivity(data);
       } catch {
         // Silently handle — dashboard still works without history
       } finally {
@@ -87,45 +74,6 @@ export default function Dashboard() {
       }
     })();
   }, []);
-
-
-
-  // ── Status badge for evaluation ──
-  function getStatusBadge(ev: EvaluationRow) {
-    const raw = ev.raw_json_output as unknown as RawEvaluation;
-    const score = raw?.math_confidence_score ?? 0;
-
-    if (score >= 70) {
-      return (
-        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-50 px-2.5 py-1 rounded-full">
-          <CheckCircle className="h-3 w-3" />
-          Pouzdano ({score}/100)
-        </span>
-      );
-    }
-    if (score >= 40) {
-      return (
-        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full">
-          <AlertTriangle className="h-3 w-3" />
-          Ograničeno ({score}/100)
-        </span>
-      );
-    }
-    if (score > 0) {
-      return (
-        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-red-700 bg-red-50 px-2.5 py-1 rounded-full">
-          <XCircle className="h-3 w-3" />
-          Nizak ({score}/100)
-        </span>
-      );
-    }
-    return (
-      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">
-        <TrendingDown className="h-3 w-3" />
-        Procjena
-      </span>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
@@ -281,7 +229,7 @@ export default function Dashboard() {
             )}
 
             {/* Empty state */}
-            {!loading && evaluations.length === 0 && (
+            {!loading && activity.length === 0 && (
               <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
                 <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center mx-auto mb-3">
                   <Clock className="h-6 w-6 text-slate-300" />
@@ -302,92 +250,72 @@ export default function Dashboard() {
             )}
 
             {/* Case table */}
-            {!loading && evaluations.length > 0 && (
+            {!loading && activity.length > 0 && (
               <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                 {/* Table header */}
-                <div className="grid grid-cols-[1fr_auto_auto_44px] gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-[11px] text-slate-400 uppercase tracking-wider font-medium">
+                <div className="grid grid-cols-[1fr_auto_44px] gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-[11px] text-slate-400 uppercase tracking-wider font-medium">
                   <span>Predmet</span>
-                  <span className="w-36 text-center">Status</span>
-                  <span className="w-24 text-right">Vrijednost</span>
+                  <span className="w-28 text-center">Status</span>
                   <span />
                 </div>
 
                 {/* Rows */}
                 <div className="divide-y divide-slate-100">
-                  {evaluations.slice(0, 10).map((ev) => {
-                    const raw =
-                      ev.raw_json_output as unknown as RawEvaluation;
-                    return (
-                      <Link
-                        key={ev.id}
-                        href="/history"
-                        className="grid grid-cols-[1fr_auto_auto_44px] gap-2 items-center px-4 py-3 hover:bg-slate-50 transition group"
-                      >
-                        {/* Left: type + location */}
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
-                            {TYPE_ICONS[ev.property_type] || (
-                              <Building2 className="h-4 w-4 text-slate-400" />
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium text-slate-900 truncate">
-                                {TYPE_LABELS[ev.property_type] ||
-                                  ev.property_type}
-                              </span>
-                              <span className="text-[10px] text-slate-300">
-                                •
-                              </span>
-                              <span className="text-xs text-slate-500 truncate flex items-center gap-1">
-                                <MapPin className="h-3 w-3 shrink-0" />
-                                {ev.location}
-                              </span>
-                            </div>
-                            <span className="text-[11px] text-slate-400">
-                              {timeAgo(ev.created_at)}
-                              {ev.size_m2 ? ` • ${ev.size_m2} m²` : ""}
+                  {activity.slice(0, 12).map((item) => (
+                    <Link
+                      key={item.id}
+                      href="/history"
+                      className="grid grid-cols-[1fr_auto_44px] gap-2 items-center px-4 py-3 hover:bg-slate-50 transition group"
+                    >
+                      {/* Left: type icon + title + subtitle */}
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
+                          {ACTIVITY_ICONS[item.type]}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                              {ACTIVITY_LABELS[item.type]}
+                            </span>
+                            <span className="text-[10px] text-slate-300">•</span>
+                            <span className="text-sm font-medium text-slate-900 truncate">
+                              {item.title}
                             </span>
                           </div>
-                        </div>
-
-                        {/* Status badge */}
-                        <div className="w-36 flex justify-center">
-                          {getStatusBadge(ev)}
-                        </div>
-
-                        {/* Value */}
-                        <div className="w-24 text-right">
-                          <span className="text-sm font-bold text-slate-900">
-                            {formatPrice(ev.estimated_value)} €
+                          <span className="text-[11px] text-slate-400">
+                            {timeAgo(item.created_at)}
+                            {item.subtitle ? ` · ${item.subtitle}` : ""}
                           </span>
-                          {raw?.calculated_price_per_m2 ? (
-                            <span className="block text-[10px] text-slate-400">
-                              {formatPrice(
-                                Math.round(raw.calculated_price_per_m2)
-                              )}{" "}
-                              €/m²
-                            </span>
-                          ) : null}
                         </div>
+                      </div>
 
-                        {/* Arrow */}
-                        <div className="flex justify-center">
-                          <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-slate-500 transition" />
-                        </div>
-                      </Link>
-                    );
-                  })}
+                      {/* Badge */}
+                      <div className="w-28 flex justify-center">
+                        {item.badge && (
+                          <span className={`inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full ${
+                            item.badgeColor ? BADGE_COLORS[item.badgeColor] || "text-slate-500 bg-slate-100" : "text-slate-500 bg-slate-100"
+                          }`}>
+                            {item.badge}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Arrow */}
+                      <div className="flex justify-center">
+                        <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-slate-500 transition" />
+                      </div>
+                    </Link>
+                  ))}
                 </div>
 
                 {/* Footer */}
-                {evaluations.length > 10 && (
+                {activity.length > 12 && (
                   <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-200 text-center">
                     <Link
                       href="/history"
                       className="text-xs text-blue-600 hover:underline"
                     >
-                      Prikaži svih {evaluations.length} predmeta →
+                      Prikaži svih {activity.length} predmeta →
                     </Link>
                   </div>
                 )}
@@ -401,71 +329,26 @@ export default function Dashboard() {
             <LegalFeed />
 
             {/* Quick Stats */}
-            {!loading && evaluations.length > 0 && (
+            {!loading && activity.length > 0 && (
               <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
                 <h3 className="text-[11px] text-slate-400 uppercase tracking-wider font-medium">
                   Brzi pregled
                 </h3>
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-slate-50 rounded-lg p-3 text-center">
-                    <div className="text-xl font-bold text-slate-900">
-                      {evaluations.length}
-                    </div>
-                    <div className="text-[10px] text-slate-400 mt-0.5">
-                      Ukupno procjena
-                    </div>
-                  </div>
-                  <div className="bg-slate-50 rounded-lg p-3 text-center">
-                    <div className="text-xl font-bold text-slate-900">
-                      {
-                        evaluations.filter((e) => {
-                          const r =
-                            e.raw_json_output as unknown as RawEvaluation;
-                          return (r?.math_confidence_score ?? 0) >= 70;
-                        }).length
-                      }
-                    </div>
-                    <div className="text-[10px] text-slate-400 mt-0.5">
-                      Pouzdanih
-                    </div>
-                  </div>
+                  {(["valuation", "contract", "chronology", "legal"] as ActivityType[]).map((t) => {
+                    const count = activity.filter((a) => a.type === t).length;
+                    if (count === 0) return null;
+                    return (
+                      <div key={t} className="bg-slate-50 rounded-lg p-3 flex items-center gap-2">
+                        {ACTIVITY_ICONS[t]}
+                        <div>
+                          <div className="text-lg font-bold text-slate-900">{count}</div>
+                          <div className="text-[10px] text-slate-400">{ACTIVITY_LABELS[t]}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-
-                {/* Top locations */}
-                {(() => {
-                  const locCounts: Record<string, number> = {};
-                  evaluations.forEach((e) => {
-                    const city =
-                      e.location.split(",")[0]?.trim() || e.location;
-                    locCounts[city] = (locCounts[city] || 0) + 1;
-                  });
-                  const top = Object.entries(locCounts)
-                    .sort((a, b) => b[1] - a[1])
-                    .slice(0, 3);
-                  if (top.length === 0) return null;
-                  return (
-                    <div>
-                      <div className="text-[10px] text-slate-400 mb-1.5">
-                        Najčešće lokacije
-                      </div>
-                      <div className="space-y-1">
-                        {top.map(([loc, count]) => (
-                          <div
-                            key={loc}
-                            className="flex items-center justify-between text-xs"
-                          >
-                            <span className="text-slate-600 truncate">
-                              {loc}
-                            </span>
-                            <span className="text-slate-400 shrink-0 ml-2">
-                              {count}×
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })()}
               </div>
             )}
           </div>

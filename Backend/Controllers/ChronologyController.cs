@@ -17,15 +17,18 @@ public class ChronologyController : ControllerBase
 {
     private readonly ChronologyService _chronologyService;
     private readonly PdfService _pdfService;
+    private readonly SupabaseService _supabaseService;
     private readonly ILogger<ChronologyController> _logger;
 
     public ChronologyController(
         ChronologyService chronologyService,
         PdfService pdfService,
+        SupabaseService supabaseService,
         ILogger<ChronologyController> logger)
     {
         _chronologyService = chronologyService;
         _pdfService = pdfService;
+        _supabaseService = supabaseService;
         _logger = logger;
     }
 
@@ -160,6 +163,22 @@ public class ChronologyController : ControllerBase
 
         _logger.LogInformation("Chronology complete: {Docs} docs → {Events} events, {Errors} errors",
             processed, allEvents.Count, errors.Count);
+
+        // Save to Supabase (fire-and-forget)
+        string dateRange = "";
+        if (allEvents.Count > 0)
+        {
+            var first = allEvents.First().DisplayDate;
+            var last = allEvents.Last().DisplayDate;
+            dateRange = first == last ? first : $"{first} — {last}";
+        }
+        _ = _supabaseService.SaveChronologyAsync(new ChronologyRecord
+        {
+            TotalDocuments = processed,
+            TotalEvents = allEvents.Count,
+            DateRange = dateRange,
+            RawJsonOutput = result
+        });
 
         await SendSSE("result", result);
     }

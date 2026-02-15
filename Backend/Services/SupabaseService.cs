@@ -4,8 +4,9 @@ using System.Text.Json;
 namespace Backend.Services;
 
 /// <summary>
-/// Lightweight Supabase REST client for saving evaluations from the backend.
+/// Lightweight Supabase REST client for persisting all module results.
 /// Uses the PostgREST API directly — no heavy SDK needed.
+/// Tables: evaluations, contract_analyses, chronologies, legal_strategies
 /// </summary>
 public class SupabaseService
 {
@@ -14,6 +15,12 @@ public class SupabaseService
     private readonly string? _serviceKey;
     private readonly ILogger<SupabaseService> _logger;
     private readonly bool _isConfigured;
+
+    private static readonly JsonSerializerOptions JsonOpts = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+    };
 
     public SupabaseService(HttpClient httpClient, IConfiguration config, ILogger<SupabaseService> logger)
     {
@@ -30,32 +37,25 @@ public class SupabaseService
 
         if (!_isConfigured)
         {
-            _logger.LogWarning("Supabase is not configured. Evaluation saving is disabled. " +
+            _logger.LogWarning("Supabase is not configured. Data saving is disabled. " +
                 "Set SUPABASE_URL and SUPABASE_SERVICE_KEY environment variables to enable.");
         }
     }
 
-    /// <summary>
-    /// Save an evaluation result to the Supabase 'evaluations' table.
-    /// Returns the UUID of the created row, or null if Supabase is not configured.
-    /// </summary>
-    public async Task<string?> SaveEvaluationAsync(EvaluationRecord record)
+    // ── Generic insert into any table ──
+
+    private async Task<string?> InsertAsync(string table, object record)
     {
         if (!_isConfigured)
         {
-            _logger.LogInformation("Supabase not configured — skipping save.");
+            _logger.LogInformation("Supabase not configured — skipping save to {Table}.", table);
             return null;
         }
 
         try
         {
-            var url = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/evaluations";
-
-            var payload = JsonSerializer.Serialize(record, new JsonSerializerOptions
-            {
-                PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-            });
+            var url = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/{table}";
+            var payload = JsonSerializer.Serialize(record, JsonOpts);
 
             var request = new HttpRequestMessage(HttpMethod.Post, url)
             {
@@ -71,12 +71,11 @@ public class SupabaseService
 
             if (!response.IsSuccessStatusCode)
             {
-                _logger.LogError("Supabase save failed ({Status}): {Body}",
-                    response.StatusCode, responseBody);
+                _logger.LogError("Supabase save to {Table} failed ({Status}): {Body}",
+                    table, response.StatusCode, responseBody);
                 return null;
             }
 
-            // Parse the returned row to get the UUID
             using var doc = JsonDocument.Parse(responseBody);
             if (doc.RootElement.ValueKind == JsonValueKind.Array &&
                 doc.RootElement.GetArrayLength() > 0)
@@ -85,31 +84,74 @@ public class SupabaseService
                 if (firstRow.TryGetProperty("id", out var idProp))
                 {
                     var id = idProp.GetString();
-                    _logger.LogInformation("Evaluation saved to Supabase: {Id}", id);
+                    _logger.LogInformation("Saved to {Table}: {Id}", table, id);
                     return id;
                 }
             }
 
-            _logger.LogInformation("Evaluation saved to Supabase (no ID returned).");
+            _logger.LogInformation("Saved to {Table} (no ID returned).", table);
             return null;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error saving evaluation to Supabase.");
+            _logger.LogError(ex, "Error saving to {Table}.", table);
             return null;
         }
     }
+
+    // ── Public save methods ──
+
+    public Task<string?> SaveEvaluationAsync(EvaluationRecord record)
+        => InsertAsync("evaluations", record);
+
+    public Task<string?> SaveContractAnalysisAsync(ContractAnalysisRecord record)
+        => InsertAsync("contract_analyses", record);
+
+    public Task<string?> SaveChronologyAsync(ChronologyRecord record)
+        => InsertAsync("chronologies", record);
+
+    public Task<string?> SaveLegalStrategyAsync(LegalStrategyRecord record)
+        => InsertAsync("legal_strategies", record);
 }
 
-/// <summary>
-/// Record to insert into the Supabase 'evaluations' table.
-/// Matches the schema.sql columns.
-/// </summary>
+// ═══════════════════════════════════════════════════════════
+//  Record DTOs — match Supabase table columns
+// ═══════════════════════════════════════════════════════════
+
 public class EvaluationRecord
 {
     public string PropertyType { get; set; } = "";
     public string Location { get; set; } = "";
     public double? SizeM2 { get; set; }
     public int? EstimatedValue { get; set; }
+    public object? RawJsonOutput { get; set; }
+}
+
+public class ContractAnalysisRecord
+{
+    public string DocumentType { get; set; } = "";
+    public string Summary { get; set; } = "";
+    public string OverallRisk { get; set; } = "";
+    public int RiskScore { get; set; }
+    public int RedFlagsCount { get; set; }
+    public object? RawJsonOutput { get; set; }
+}
+
+public class ChronologyRecord
+{
+    public int TotalDocuments { get; set; }
+    public int TotalEvents { get; set; }
+    public string DateRange { get; set; } = "";
+    public object? RawJsonOutput { get; set; }
+}
+
+public class LegalStrategyRecord
+{
+    public string KeyLegalIssue { get; set; } = "";
+    public string ClientPosition { get; set; } = "kupac";
+    public int WinProbability { get; set; }
+    public int WinProbabilityMin { get; set; }
+    public int WinProbabilityMax { get; set; }
+    public int PrecedentsCount { get; set; }
     public object? RawJsonOutput { get; set; }
 }

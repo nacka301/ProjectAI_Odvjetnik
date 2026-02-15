@@ -16,15 +16,18 @@ public class ContractController : ControllerBase
 {
     private readonly ContractAnalysisService _contractService;
     private readonly PdfService _pdfService;
+    private readonly SupabaseService _supabaseService;
     private readonly ILogger<ContractController> _logger;
 
     public ContractController(
         ContractAnalysisService contractService,
         PdfService pdfService,
+        SupabaseService supabaseService,
         ILogger<ContractController> logger)
     {
         _contractService = contractService;
         _pdfService = pdfService;
+        _supabaseService = supabaseService;
         _logger = logger;
     }
 
@@ -67,6 +70,18 @@ public class ContractController : ControllerBase
         _logger.LogInformation("Contract text extracted: {Len} chars", pdfText.Length);
 
         var result = await _contractService.AnalyzeContractAsync(pdfText);
+
+        // Save to Supabase (fire-and-forget)
+        _ = _supabaseService.SaveContractAnalysisAsync(new ContractAnalysisRecord
+        {
+            DocumentType = result.DocumentType,
+            Summary = result.Summary,
+            OverallRisk = result.OverallRisk,
+            RiskScore = result.RiskScore,
+            RedFlagsCount = result.RedFlags.Count,
+            RawJsonOutput = result
+        });
+
         return Ok(result);
     }
 
@@ -89,6 +104,18 @@ public class ContractController : ControllerBase
         _logger.LogInformation("Contract text analysis: {Len} chars", request.Text.Length);
 
         var result = await _contractService.AnalyzeContractAsync(request.Text);
+
+        // Save to Supabase (fire-and-forget)
+        _ = _supabaseService.SaveContractAnalysisAsync(new ContractAnalysisRecord
+        {
+            DocumentType = result.DocumentType,
+            Summary = result.Summary,
+            OverallRisk = result.OverallRisk,
+            RiskScore = result.RiskScore,
+            RedFlagsCount = result.RedFlags.Count,
+            RawJsonOutput = result
+        });
+
         return Ok(result);
     }
 }

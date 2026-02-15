@@ -21,15 +21,18 @@ public class LegalController : ControllerBase
 {
     private readonly LegalIntelligenceService _legalService;
     private readonly PdfService _pdfService;
+    private readonly SupabaseService _supabaseService;
     private readonly ILogger<LegalController> _logger;
 
     public LegalController(
         LegalIntelligenceService legalService,
         PdfService pdfService,
+        SupabaseService supabaseService,
         ILogger<LegalController> logger)
     {
         _legalService = legalService;
         _pdfService = pdfService;
+        _supabaseService = supabaseService;
         _logger = logger;
     }
 
@@ -84,8 +87,25 @@ public class LegalController : ControllerBase
             request.ClientPosition);
 
         var result = await _legalService.AnalyzeLegalStrategyAsync(request);
+
+        // Save to Supabase (fire-and-forget)
+        _ = SaveStrategyAsync(result, request.ClientPosition);
+
         return Ok(result);
     }
+
+    /// <summary>Helper: persist strategy result to Supabase.</summary>
+    private Task SaveStrategyAsync(LegalStrategyResult result, string clientPosition)
+        => _supabaseService.SaveLegalStrategyAsync(new LegalStrategyRecord
+        {
+            KeyLegalIssue = result.KeyLegalIssue,
+            ClientPosition = clientPosition,
+            WinProbability = result.WinProbability,
+            WinProbabilityMin = result.WinProbabilityMin,
+            WinProbabilityMax = result.WinProbabilityMax,
+            PrecedentsCount = result.Precedents.Count,
+            RawJsonOutput = result
+        });
 
     /// <summary>
     /// POST /api/legal/strategy/stream — SSE streaming version of legal strategy analysis.
@@ -161,6 +181,9 @@ public class LegalController : ControllerBase
 
             // Final result
             await SseHelpers.SendSSE(Response, "result", result);
+
+            // Save to Supabase (fire-and-forget)
+            _ = SaveStrategyAsync(result, request.ClientPosition);
 
             await SseHelpers.SendSSE(Response, "done", new
             {
@@ -263,6 +286,10 @@ public class LegalController : ControllerBase
             request.CaseDescription = $"{additionalContext}\n\n{combinedText}";
 
         var result = await _legalService.AnalyzeLegalStrategyAsync(request);
+
+        // Save to Supabase (fire-and-forget)
+        _ = SaveStrategyAsync(result, request.ClientPosition);
+
         return Ok(result);
     }
 }
