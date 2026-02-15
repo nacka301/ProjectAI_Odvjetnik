@@ -13,7 +13,7 @@ namespace Backend.Services;
 /// </summary>
 public class ChronologyService
 {
-    private readonly ChatClient _chatClient;
+    private readonly ChatClient _chatClient;  // Fast model — extraction only
     private readonly ILogger<ChronologyService> _logger;
 
     private const string SystemPrompt = """
@@ -68,9 +68,9 @@ public class ChronologyService
         AKO NEMA DATUMA NI DOGAĐAJA, vrati: {"events": []}
         """;
 
-    public ChronologyService(ChatClient chatClient, ILogger<ChronologyService> logger)
+    public ChronologyService(ChatClientProvider clients, ILogger<ChronologyService> logger)
     {
-        _chatClient = chatClient;
+        _chatClient = clients.Fast;  // gpt-5-mini — document event extraction
         _logger = logger;
     }
 

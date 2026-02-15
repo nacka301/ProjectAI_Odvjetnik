@@ -122,7 +122,7 @@ builder.Services.AddRateLimiter(options =>
     };
 });
 
-// OpenAI ChatClient (reads key from config or env var)
+// V35: Multi-model OpenAI routing — Fast (extraction) + Heavy (reasoning)
 var openAiKey = builder.Configuration["OpenAI:ApiKey"]
     ?? Environment.GetEnvironmentVariable("OpenAI__ApiKey")
     ?? Environment.GetEnvironmentVariable("OPENAI_API_KEY")
@@ -130,7 +130,9 @@ var openAiKey = builder.Configuration["OpenAI:ApiKey"]
     ?? throw new InvalidOperationException(
         "OpenAI API key is not configured. Set OpenAI__ApiKey or OPENAI_API_KEY environment variable.");
 
-builder.Services.AddSingleton(new ChatClient("gpt-4o", openAiKey));
+var fastModel = builder.Configuration["OpenAI:FastModel"] ?? "gpt-4o-mini";
+var heavyModel = builder.Configuration["OpenAI:HeavyModel"] ?? "gpt-4o";
+builder.Services.AddSingleton(new ChatClientProvider(openAiKey, fastModel, heavyModel));
 builder.Services.AddScoped<PdfService>();
 builder.Services.AddScoped<ValuationService>();
 builder.Services.AddScoped<TextAnalysisService>();

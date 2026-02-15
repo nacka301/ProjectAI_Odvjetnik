@@ -14,7 +14,7 @@ namespace Backend.Services;
 /// </summary>
 public class ContractAnalysisService
 {
-    private readonly ChatClient _chatClient;
+    private readonly ChatClient _chatClient;  // Heavy model — legal reasoning
     private readonly ILogger<ContractAnalysisService> _logger;
 
     private const string SystemPrompt = """
@@ -94,9 +94,9 @@ public class ContractAnalysisService
         }
         """;
 
-    public ContractAnalysisService(ChatClient chatClient, ILogger<ContractAnalysisService> logger)
+    public ContractAnalysisService(ChatClientProvider clients, ILogger<ContractAnalysisService> logger)
     {
-        _chatClient = chatClient;
+        _chatClient = clients.Heavy;  // gpt-5.2 — legal contract analysis
         _logger = logger;
     }
 

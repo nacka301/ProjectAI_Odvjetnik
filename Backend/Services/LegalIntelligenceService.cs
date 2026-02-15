@@ -13,7 +13,8 @@ namespace Backend.Services;
 /// </summary>
 public class LegalIntelligenceService
 {
-    private readonly ChatClient _chatClient;
+    private readonly ChatClient _fastClient;   // Fast model — feed summaries
+    private readonly ChatClient _heavyClient;  // Heavy model — strategy + precedents
     private readonly ILogger<LegalIntelligenceService> _logger;
 
     // ── System Prompt: Legal Feed Generator ──
@@ -210,9 +211,10 @@ public class LegalIntelligenceService
         }
         """;
 
-    public LegalIntelligenceService(ChatClient chatClient, ILogger<LegalIntelligenceService> logger)
+    public LegalIntelligenceService(ChatClientProvider clients, ILogger<LegalIntelligenceService> logger)
     {
-        _chatClient = chatClient;
+        _fastClient = clients.Fast;    // gpt-5-mini — legal feed generation
+        _heavyClient = clients.Heavy;  // gpt-5.2 — legal strategy + precedent analysis
         _logger = logger;
     }
 
@@ -254,7 +256,7 @@ public class LegalIntelligenceService
                 ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
             };
 
-            ChatCompletion completion = await _chatClient.CompleteChatAsync(messages, options);
+            ChatCompletion completion = await _fastClient.CompleteChatAsync(messages, options);  // Fast: feed summary
             var json = completion.Content[0].Text;
 
             _logger.LogDebug("Legal feed response: {Len} chars", json.Length);
@@ -311,7 +313,7 @@ public class LegalIntelligenceService
                 ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
             };
 
-            ChatCompletion completion = await _chatClient.CompleteChatAsync(messages, options);
+            ChatCompletion completion = await _heavyClient.CompleteChatAsync(messages, options);  // Heavy: strategy
             var json = completion.Content[0].Text;
 
             _logger.LogDebug("Legal strategy response: {Len} chars", json.Length);
@@ -371,7 +373,7 @@ public class LegalIntelligenceService
                 ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
             };
 
-            ChatCompletion completion = await _chatClient.CompleteChatAsync(messages, options);
+            ChatCompletion completion = await _heavyClient.CompleteChatAsync(messages, options);  // Heavy: precedents
             var json = completion.Content[0].Text;
 
             return ParsePrecedentResponse(json);

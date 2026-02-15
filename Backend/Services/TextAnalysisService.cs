@@ -12,7 +12,7 @@ namespace Backend.Services;
 /// </summary>
 public class TextAnalysisService
 {
-    private readonly ChatClient _chatClient;
+    private readonly ChatClient _chatClient;  // Fast model — extraction only
     private readonly ILogger<TextAnalysisService> _logger;
 
     private const string SystemPrompt =
@@ -134,9 +134,9 @@ public class TextAnalysisService
         }
         """;
 
-    public TextAnalysisService(ChatClient chatClient, ILogger<TextAnalysisService> logger)
+    public TextAnalysisService(ChatClientProvider clients, ILogger<TextAnalysisService> logger)
     {
-        _chatClient = chatClient;
+        _chatClient = clients.Fast;  // gpt-5-mini — listing description extraction
         _logger = logger;
     }
 

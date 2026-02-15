@@ -14,7 +14,7 @@ namespace Backend.Services;
 /// </summary>
 public class ValuationAgentService
 {
-    private readonly ChatClient _chatClient;
+    private readonly ChatClient _chatClient;  // Heavy model — complex reasoning
     private readonly ILogger<ValuationAgentService> _logger;
 
     private const string SystemPrompt =
@@ -89,9 +89,9 @@ public class ValuationAgentService
         }
         """;
 
-    public ValuationAgentService(ChatClient chatClient, ILogger<ValuationAgentService> logger)
+    public ValuationAgentService(ChatClientProvider clients, ILogger<ValuationAgentService> logger)
     {
-        _chatClient = chatClient;
+        _chatClient = clients.Heavy;  // gpt-5.2 — contextual property reasoning
         _logger = logger;
     }
 

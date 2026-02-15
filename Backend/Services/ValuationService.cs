@@ -6,7 +6,8 @@ namespace Backend.Services;
 
 public class ValuationService
 {
-    private readonly ChatClient _chatClient;
+    private readonly ChatClient _fastClient;   // Fast model — extraction tasks
+    private readonly ChatClient _heavyClient;  // Heavy model — final narrative
     private readonly ILogger<ValuationService> _logger;
 
     private const string PropertyExtractionPrompt =
@@ -428,9 +429,10 @@ public class ValuationService
         }
         """;
 
-    public ValuationService(ChatClient chatClient, ILogger<ValuationService> logger)
+    public ValuationService(ChatClientProvider clients, ILogger<ValuationService> logger)
     {
-        _chatClient = chatClient;
+        _fastClient = clients.Fast;    // gpt-5-mini — PDF extraction + listing features
+        _heavyClient = clients.Heavy;  // gpt-5.2 — auto-valuation report
         _logger = logger;
     }
 
@@ -566,7 +568,7 @@ public class ValuationService
                 ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
             };
 
-            ChatCompletion completion = await _chatClient.CompleteChatAsync(messages, options);
+            ChatCompletion completion = await _fastClient.CompleteChatAsync(messages, options);  // Fast: listing extraction
             var json = completion.Content[0].Text;
 
             _logger.LogInformation("AI feature extraction completed for {Count} listings", listings.Count);
@@ -761,7 +763,7 @@ public class ValuationService
             ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
         };
 
-        ChatCompletion completion = await _chatClient.CompleteChatAsync(messages, options);
+        ChatCompletion completion = await _fastClient.CompleteChatAsync(messages, options);  // Fast: PDF extraction
         var json = completion.Content[0].Text;
 
         _logger.LogInformation("Property extraction from PDF completed.");
@@ -951,7 +953,7 @@ public class ValuationService
             ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
         };
 
-        ChatCompletion completion = await _chatClient.CompleteChatAsync(messages, options);
+        ChatCompletion completion = await _heavyClient.CompleteChatAsync(messages, options);  // Heavy: final narrative
         var json = completion.Content[0].Text;
 
         _logger.LogInformation("Auto-valuation opinion generated successfully.");

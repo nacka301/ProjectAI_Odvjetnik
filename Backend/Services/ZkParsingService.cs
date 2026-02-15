@@ -208,9 +208,9 @@ public class ZkParsingService
         }
         """;
 
-    public ZkParsingService(ChatClient chatClient, PdfService pdfService, ILogger<ZkParsingService> logger)
+    public ZkParsingService(ChatClientProvider clients, PdfService pdfService, ILogger<ZkParsingService> logger)
     {
-        _chatClient = chatClient;
+        _chatClient = clients.Fast;  // gpt-5-mini — ZK document extraction
         _pdfService = pdfService;
         _logger = logger;
     }
