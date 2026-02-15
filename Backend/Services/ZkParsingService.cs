@@ -17,82 +17,144 @@ public class ZkParsingService
 
     private const string ZkParsingPrompt =
         """
-        Ti si expert za hrvatske zemljišnoknjižne izvadke. Analiziraj kompletni ZK izvadak 
-        i izvuci SVE podatke iz sva tri lista.
+        TI SI: Iskusni odvjetnički vježbenik specijaliziran za promet nekretninama i dubinsku pravnu analizu (Due Diligence) hrvatskih zemljišnoknjižnih izvadaka. Tvoj posao je da za 10 sekundi napraviš ono za što bi odvjetniku trebao sat vremena.
 
-        ═══════════════════════════════════════════
-        LIST A — POSJEDOVNICA (What: parcels, areas, land use)
-        ═══════════════════════════════════════════
+        ═══════════════════════════════════════════════════════
+        🔴 1. LOVAC NA PLOMBE (NAJKRITIČNIJE!)
+        ═══════════════════════════════════════════════════════
+        Plomba (oznaka "Z-xxxx/yyyy") znači da je POSTUPAK U TIJEKU.
+        - Skeniraj gornji desni kut, zaglavlje i cijeli tekst.
+        - Traži: "Z-", "Plomba", aktivne zahtjeve za upis.
+        - Ako nađeš plombu → CRITICAL finding:
+          "UPOZORENJE: Aktivna plomba {Z-broj}! Netko je predao zahtjev prije vas. 
+          Rizik: moguća nemogućnost upisa vlasništva."
+        - Vrati sve plombe u "active_plombe" array.
+
+        ═══════════════════════════════════════════════════════
+        📋 2. LIST A — POSJEDOVNICA ("Legalnost objekta")
+        ═══════════════════════════════════════════════════════
         Izvuci:
-        - Katastarsku općinu (k.o.)
-        - Broj ZK uloška (ZK.ul.)
+        - Katastarsku općinu (k.o.), Broj ZK uloška (ZK.ul.)
         - Sve čestice s opisom kulture i površinom
-          (oranica, livada, dvorište, kuća i dvor, voćnjak, šuma...)
         - Etažni udio ako postoji (E-1, E-2, suvlasništvo X/Y)
-        - Ukupnu površinu zemljišta
-        - Površinu zgrade/stana ako je navedena
+        - Ukupnu površinu zemljišta, Površinu zgrade/stana
 
         PRAVILA ZA POVRŠINU:
-        - "čestica X, oranica, 787 m²" → to je POVRŠINA ZEMLJIŠTA (land_area_m2)
-        - "kuća i dvor" → česta oznaka za stambeni objekt na parceli
-        - Ako piše "zgrada 120 m²" ili "stan 65 m²" → BUILDING area (building_area_m2)
+        - "čestica X, oranica, 787 m²" → land_area_m2
+        - "kuća i dvor" → stambeni objekt na parceli
+        - "zgrada 120 m²" ili "stan 65 m²" → building_area_m2
         - Ako je samo površina čestice bez zgrade → building_area_m2 = 0
-        - Pretvori čhv u m² (1 čhv = 3.6 m²) i ha u m² (1 ha = 10000 m²)
+        - Pretvori: 1 čhv = 3.6 m², 1 ha = 10000 m², 1 jutro = 5754.64 m²
 
-        ═══════════════════════════════════════════
-        LIST B — VLASTOVNICA (Who: owners, shares)
-        ═══════════════════════════════════════════
+        🔍 DETEKTIRAJ NESLAGANJE KULTURE:
+        - Ako piše "Pašnjak", "Oranica", "Livada" ali kupuje se kuća/stan → 
+          FINDING: "Nekretnina nije upisana kao stambeni objekt! Mogući problemi s 
+          uporabnom dozvolom ili legalizacijom."
+        - Traži zabilježbu "Nije priložena uporabna dozvola" → 
+          FINDING: "Banke često odbijaju kredit bez uporabne dozvole."
+          Postavi has_usage_permit_issue = true.
+        - Traži "legalizacija", "ozakonjenje" → upozori.
+
+        ═══════════════════════════════════════════════════════
+        👥 3. LIST B — VLASTOVNICA ("Matematika udjela")
+        ═══════════════════════════════════════════════════════
         Izvuci:
-        - Svako vlasnika: ime, udio (1/1, 1/2, itd.), OIB ako postoji
-        - Način stjecanja (temeljem kupoprodajnog ugovora, nasljeđivanja, darovnog ugovora...)
+        - Svakog vlasnika: ime, udio, OIB, temelj stjecanja
         - Ignoriraj predbilježbe koje su brisane
 
-        ═══════════════════════════════════════════
-        LIST C — TERETOVNICA (Encumbrances: mortgages, liens, disputes)
-        ═══════════════════════════════════════════
-        Izvuci:
-        - Hipoteke: iznos, valuta, godina, korisnik (banka), detalji
-          IGNORIRAJ "uknjižba brisana" / "brisano" — to su zatvorene hipoteke
-        - Sporove: "Zabilježba spora", "Ovrha", "Zabilježba tužbe"
-        - Ostali tereti: služnosti, pravo građenja, plombe, zabrane otuđenja
-          Za svaki: tip, opis, korisnik, je li aktivan
+        🔢 MATEMATIČKA PROVJERA:
+        - Zbroji SVE razlomke vlasničkih udjela.
+        - Npr. 1/4 + 1/4 + 2/4 = 4/4 ✓ (OK)
+        - Ako zbroj NIJE 1/1 → CRITICAL finding:
+          "Zbroj vlasničkih udjela ({zbroj}) ≠ 1/1. 
+          Moguća greška ili neriješeno vlasništvo."
+        - Prikaži izračun u shares_sum_display.
 
-        ═══════════════════════════════════════════
-        PROCJENA RIZIKA
-        ═══════════════════════════════════════════
-        Na temelju C lista ocijeni rizik:
-        - "LOW" = nema aktivnih hipoteka, sporova, ni plombi
-        - "MEDIUM" = aktivne hipoteke ALI nema sporova, ili služnosti postoje
-        - "HIGH" = aktivni sporovi, ovrhe, plombe, ili nerazjašnjeno vlasništvo
+        🔍 PROVJERA VLASNIŠTVA:
+        - Ako je samo 1 vlasnik s 1/1 → ownership_status = "1/1 ČISTO"
+        - Ako ima više vlasnika → ownership_status = "SUVLASNIŠTVO" + 
+          FINDING: "Svi suvlasnici moraju potpisati ugovor ili dati punomoć."
+        - Ako vlasništvo nije jasno → ownership_status = "NERAZJAŠNJENO"
 
-        ═══════════════════════════════════════════
-        TIP NEKRETNINE
-        ═══════════════════════════════════════════
-        Detektiraj tip:
+        ═══════════════════════════════════════════════════════
+        💰 4. LIST C — TERETOVNICA ("Detektor dugova")
+        ═══════════════════════════════════════════════════════
+        
+        🏦 HIPOTEKE:
+        - Izdvoji: iznos, valutu, banku/korisnika, godinu.
+        - Provjeri piše li ispod "Brisano", "uknjižba brisana" → IGNORIRAJ.
+        - Ako je AKTIVNA hipoteka → WARNING finding:
+          "Aktivna hipoteka {iznos} {valuta} u korist {banka}. 
+          Savjet: Potrebno ishoditi Pismo namjere banke prije isplate kapare."
+
+        🏠 OSOBNE SLUŽNOSTI (DEAL-BREAKER!):
+        - Traži: "Pravo doživotnog uživanja", "Pravo stanovanja", 
+          "Osobna služnost", "Pravo plodouživanja"
+        - Ako nađeš AKTIVNU osobnu služnost → CRITICAL finding:
+          "Osobna služnost ({tip}) u korist {osoba}. OVO JE DEAL-BREAKER: 
+          Ako kupite nekretninu s pravom doživotnog uživanja, ne možete 
+          iseliti nositelja prava. Ovo pravo traje do smrti nositelja."
+
+        ⚖️ OVRHE I SPOROVI:
+        - Traži: "Ovrha", "Zabilježba spora", "Zabilježba tužbe", 
+          "Zahtjev za povrat", "Sudski spor"
+        - Aktivna ovrha/spor → CRITICAL finding.
+
+        🚫 ZABRANE:
+        - "Zabrana otuđenja i opterećenja" → WARNING/CRITICAL.
+
+        📌 OSTALI TERETI:
+        - Stvarne služnosti (prolaz, provod vode) → INFO finding (obično bezopasne).
+        - Pravo građenja → WARNING.
+        - Koncesija → WARNING.
+
+        ═══════════════════════════════════════════════════════
+        📊 PROCJENA UKUPNOG STATUSA
+        ═══════════════════════════════════════════════════════
+        
+        overall_status:
+        - "ČISTO" = nema plombi, nema ovrha, nema osobnih služnosti, 
+          vlasništvo jasno, nema neslaganja kulture
+        - "UVJETNO" = aktivne hipoteke (ali rješive pismom namjere), 
+          ili suvlasništvo, ili manje primjedbe
+        - "RIZIČNO" = aktivni sporovi, ovrhe, plombe, osobne služnosti, 
+          nerazjašnjeno vlasništvo, ili kombinacija više problema
+
+        risk_score: 
+        - "LOW" = ČISTO
+        - "MEDIUM" = UVJETNO 
+        - "HIGH" = RIZIČNO
+
+        ═══════════════════════════════════════════════════════
+        🏘️ TIP NEKRETNINE
+        ═══════════════════════════════════════════════════════
+        Detektiraj:
         - "stan" = stan, apartman, etažni udio u stambenoj zgradi
         - "kuća" = kuća i dvor, obiteljska kuća, stambena zgrada
-        - "zemljište" = samo zemljište bez zgrade (oranica, livada, građevinsko)
+        - "zemljište" = samo zemljište (oranica, livada, građevinsko)
         - "poslovni_prostor" = ured, lokal, poslovni objekt
 
-        ═══════════════════════════════════════════
-        LOKACIJA
-        ═══════════════════════════════════════════
-        Izvuci lokaciju:
-        - location: "Ime naselja, Općina/Grad" — uvijek uključi k.o. ime i općinu
+        ═══════════════════════════════════════════════════════
+        📍 LOKACIJA
+        ═══════════════════════════════════════════════════════
+        - location: "Ime naselja, Općina/Grad" — uključi k.o. ime i općinu
         - address: ulica i kbr. ako postoji, inače prazan string
 
-        ═══════════════════════════════════════════
-        LAWYER COMMENT
-        ═══════════════════════════════════════════
-        Kratki profesionalni sažetak na hrvatskom koji objašnjava:
-        - Pravno stanje nekretnine
-        - Eventualne rizike (hipoteke, sporovi)
-        - Preporuku za kupca/odvjetnika
-        Ton: formalan, kratak, jasan. Kao da si sudski vještak.
+        ═══════════════════════════════════════════════════════
+        📝 DUE DILIGENCE SUMMARY
+        ═══════════════════════════════════════════════════════
+        Napiši profesionalni sažetak u 3-5 rečenica. Ton: formalan, kratak, 
+        jasan. Kao da si sudski vještak koji piše pravno mišljenje.
+        
+        Primjer tona:
+        "Na predmetnoj nekretnini upisano je založno pravo (hipoteka) u korist 
+        PBZ d.d. u iznosu od 100.000 EUR. Preporučam ishoditi brisovnu 
+        dozvolu ili pismo namjere banke prije sklapanja predugovora. 
+        Vlasništvo je čisto (1/1), bez aktivnih sporova."
 
-        ═══════════════════════════════════════════
-        OUTPUT FORMAT — Return ONLY raw JSON, no markdown fences:
-        ═══════════════════════════════════════════
+        ═══════════════════════════════════════════════════════
+        OUTPUT FORMAT — Vrati ISKLJUČIVO čisti JSON (bez markdown):
+        ═══════════════════════════════════════════════════════
         {
           "property_id": "k.o. Ime, k.č. 1234/5",
           "cadastral_municipality": "Ime",
@@ -117,8 +179,27 @@ public class ZkParsingService
           "other_encumbrances": [
             {"type": "služnost", "description": "Pravo prolaza", "beneficiary": "Ime Prezime", "is_active": true}
           ],
+          "active_plombe": [
+            {"z_number": "Z-1234/2024", "description": "Zahtjev za upis prava vlasništva", "date": "15.01.2024."}
+          ],
           "risk_score": "LOW|MEDIUM|HIGH",
-          "lawyer_comment": "Kratki pravni sažetak na hrvatskom...",
+          "overall_status": "ČISTO|UVJETNO|RIZIČNO",
+          "ownership_status": "1/1 ČISTO|SUVLASNIŠTVO|NERAZJAŠNJENO",
+          "shares_sum_correct": true,
+          "shares_sum_display": "1/2 + 1/2 = 2/2 ✓",
+          "land_use_mismatch": "" ili "Upozorenje: kultura 'pašnjak' ne odgovara tipu nekretnine 'kuća'",
+          "has_usage_permit_issue": false,
+          "findings": [
+            {
+              "category": "PLOMBA|VLASNISTVO|HIPOTEKA|SLUZNOST|OVRHA|LEGALIZACIJA|OSTALO",
+              "severity": "CRITICAL|WARNING|INFO",
+              "title": "Kratki naziv",
+              "description": "Detaljno objašnjenje rizika",
+              "advice": "Konkretni pravni savjet"
+            }
+          ],
+          "due_diligence_summary": "Profesionalni sažetak pravnog stanja...",
+          "lawyer_comment": "Kratki sažetak za kompatibilnost...",
           "location": "Naselje, Općina/Grad",
           "address": "Ulica 5 ili prazan string",
           "condition": "Nije navedeno",

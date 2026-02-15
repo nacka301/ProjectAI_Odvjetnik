@@ -118,10 +118,10 @@ public class ZkUnifiedController : ControllerBase
             }
 
             var zkSummary = $"{zkResult.PropertyId} • {zkResult.PropertyType} • " +
-                $"Vlasnici: {zkResult.Owners.Count} • Rizik: {zkResult.RiskScore}";
+                $"Vlasnici: {zkResult.Owners.Count} • Status: {zkResult.OverallStatus ?? zkResult.RiskScore}";
             await SendProgress("zk_parsing", "done", "ZK izvadak parsiran", zkSummary);
 
-            // Send ZK analysis result as intermediate data
+            // Send ZK analysis result as intermediate data (includes due diligence findings)
             await SendSSE("zk_analysis", zkResult);
 
             // ── Check if valuation should proceed ──

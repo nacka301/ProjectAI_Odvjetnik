@@ -26,6 +26,14 @@ import {
   BookOpen,
   ChevronDown,
   ChevronUp,
+  AlertOctagon,
+  CircleCheck,
+  CircleAlert,
+  Info,
+  Landmark,
+  Users,
+  Gavel,
+  FileWarning,
 } from "lucide-react";
 import { uploadPdfToStorage, saveEvaluation } from "@/lib/supabase";
 import LocationSelector from "@/components/LocationSelector";
@@ -62,6 +70,20 @@ interface ParcelInfo {
   description: string;
 }
 
+interface PlombaInfo {
+  z_number: string;
+  description: string;
+  date: string;
+}
+
+interface DueDiligenceFinding {
+  category: "PLOMBA" | "VLASNISTVO" | "HIPOTEKA" | "SLUZNOST" | "OVRHA" | "LEGALIZACIJA" | "OSTALO";
+  severity: "CRITICAL" | "WARNING" | "INFO";
+  title: string;
+  description: string;
+  advice: string;
+}
+
 interface ZkParsedResult {
   property_id: string;
   cadastral_municipality: string;
@@ -85,6 +107,16 @@ interface ZkParsedResult {
   condition: string;
   property_state: string;
   yard_area_m2: number;
+  // V31: Due Diligence fields
+  active_plombe?: PlombaInfo[];
+  findings?: DueDiligenceFinding[];
+  overall_status?: "ČISTO" | "UVJETNO" | "RIZIČNO";
+  ownership_status?: string;
+  shares_sum_correct?: boolean;
+  shares_sum_display?: string;
+  land_use_mismatch?: string;
+  has_usage_permit_issue?: boolean;
+  due_diligence_summary?: string;
 }
 
 interface SelectedComparable {
@@ -406,21 +438,6 @@ export default function ZkProcjenaPage() {
 
   // --- Helpers ---
 
-  const riskColor = (score: string) => {
-    switch (score) {
-      case "HIGH": return "bg-red-100 border-red-500 text-red-800";
-      case "MEDIUM": return "bg-yellow-100 border-yellow-500 text-yellow-800";
-      default: return "bg-green-100 border-green-500 text-green-800";
-    }
-  };
-
-  const RiskIcon = ({ score }: { score: string }) =>
-    score === "HIGH" || score === "MEDIUM" ? (
-      <ShieldAlert className="inline-block mr-2 h-5 w-5" />
-    ) : (
-      <ShieldCheck className="inline-block mr-2 h-5 w-5" />
-    );
-
   const StageIcon = ({ status }: { status: string }) => {
     switch (status) {
       case "active": return <Loader2 className="h-5 w-5 animate-spin text-blue-600" />;
@@ -449,10 +466,10 @@ export default function ZkProcjenaPage() {
         <div className="text-center mb-10">
           <h1 className="text-3xl font-bold text-gray-900">
             <BookOpen className="inline-block h-8 w-8 mr-2 text-indigo-600" />
-            ZK Izvadak → Procjena vrijednosti
+            ZK Due Diligence → Procjena vrijednosti
           </h1>
           <p className="mt-2 text-gray-500">
-            Uploadajte ZK izvadak — sustav parsira sve podatke, analizira rizik i automatski procjenjuje tržišnu vrijednost
+            Uploadajte ZK izvadak — sustav provodi dubinsku pravnu analizu, detektira rizike i automatski procjenjuje tržišnu vrijednost
           </p>
         </div>
 
@@ -594,33 +611,263 @@ export default function ZkProcjenaPage() {
           <div className="mb-8 space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                📋 ZK Analiza
+                <Landmark className="h-6 w-6 text-indigo-600" />
+                Izvještaj o pravnom statusu nekretnine
               </h2>
               <button
                 onClick={() => setShowZkDetails(!showZkDetails)}
                 className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1"
               >
                 {showZkDetails ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                {showZkDetails ? "Sakrij" : "Prikaži"}
+                {showZkDetails ? "Sakrij detalje" : "Prikaži detalje"}
               </button>
             </div>
 
-            {/* Risk Score */}
-            <div className={`flex items-center rounded-lg border-l-4 p-4 ${riskColor(zkAnalysis.risk_score)}`}>
-              <RiskIcon score={zkAnalysis.risk_score} />
-              <span className="font-bold text-lg">Rizik: {zkAnalysis.risk_score}</span>
+            {/* ─── OVERALL STATUS TRAFFIC LIGHT ─── */}
+            <div className={`rounded-xl border-2 p-6 ${
+              zkAnalysis.overall_status === "RIZIČNO" ? "border-red-500 bg-red-50" :
+              zkAnalysis.overall_status === "UVJETNO" ? "border-yellow-500 bg-yellow-50" :
+              "border-green-500 bg-green-50"
+            }`}>
+              <div className="flex items-center gap-4">
+                <div className={`flex items-center justify-center h-16 w-16 rounded-full text-3xl ${
+                  zkAnalysis.overall_status === "RIZIČNO" ? "bg-red-200" :
+                  zkAnalysis.overall_status === "UVJETNO" ? "bg-yellow-200" :
+                  "bg-green-200"
+                }`}>
+                  {zkAnalysis.overall_status === "RIZIČNO" ? "🔴" : 
+                   zkAnalysis.overall_status === "UVJETNO" ? "🟡" : "🟢"}
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-3">
+                    <h3 className={`text-2xl font-bold ${
+                      zkAnalysis.overall_status === "RIZIČNO" ? "text-red-800" :
+                      zkAnalysis.overall_status === "UVJETNO" ? "text-yellow-800" :
+                      "text-green-800"
+                    }`}>
+                      {zkAnalysis.overall_status || zkAnalysis.risk_score}
+                    </h3>
+                    <span className={`text-xs font-semibold uppercase px-3 py-1 rounded-full ${
+                      zkAnalysis.risk_score === "HIGH" ? "bg-red-200 text-red-800" :
+                      zkAnalysis.risk_score === "MEDIUM" ? "bg-yellow-200 text-yellow-800" :
+                      "bg-green-200 text-green-800"
+                    }`}>
+                      Rizik: {zkAnalysis.risk_score}
+                    </span>
+                  </div>
+                  <p className={`mt-1 text-sm ${
+                    zkAnalysis.overall_status === "RIZIČNO" ? "text-red-700" :
+                    zkAnalysis.overall_status === "UVJETNO" ? "text-yellow-700" :
+                    "text-green-700"
+                  }`}>
+                    {zkAnalysis.property_id} • {zkAnalysis.property_type}
+                  </p>
+                </div>
+              </div>
             </div>
+
+            {/* ─── PLOMBA ALERT (if any) ─── */}
+            {zkAnalysis.active_plombe && zkAnalysis.active_plombe.length > 0 && (
+              <div className="rounded-xl border-2 border-red-600 bg-red-100 p-5 animate-pulse">
+                <div className="flex items-center gap-3 mb-3">
+                  <AlertOctagon className="h-6 w-6 text-red-700" />
+                  <h3 className="text-lg font-bold text-red-800">
+                    🚨 AKTIVNE PLOMBE DETEKTIRANE!
+                  </h3>
+                </div>
+                <div className="space-y-2">
+                  {zkAnalysis.active_plombe.map((p, i) => (
+                    <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-red-200/60">
+                      <span className="font-mono font-bold text-red-900 whitespace-nowrap">{p.z_number}</span>
+                      <div className="flex-1">
+                        <p className="text-sm text-red-800">{p.description}</p>
+                        {p.date && <p className="text-xs text-red-600 mt-1">Datum: {p.date}</p>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-red-700 mt-3 font-medium">
+                  ⚠️ Plomba znači da je postupak u tijeku. Netko je predao zahtjev za upis prije vas!
+                </p>
+              </div>
+            )}
+
+            {/* ─── DUE DILIGENCE QUICK CHECKS ─── */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Ownership Check */}
+              <div className={`rounded-xl border p-5 ${
+                zkAnalysis.ownership_status === "1/1 ČISTO" ? "border-green-200 bg-green-50" :
+                zkAnalysis.ownership_status === "NERAZJAŠNJENO" ? "border-red-200 bg-red-50" :
+                "border-yellow-200 bg-yellow-50"
+              }`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <Users className={`h-5 w-5 ${
+                    zkAnalysis.ownership_status === "1/1 ČISTO" ? "text-green-600" :
+                    zkAnalysis.ownership_status === "NERAZJAŠNJENO" ? "text-red-600" :
+                    "text-yellow-600"
+                  }`} />
+                  <h4 className="text-sm font-semibold text-gray-700">Vlasništvo</h4>
+                </div>
+                <p className={`text-lg font-bold ${
+                  zkAnalysis.ownership_status === "1/1 ČISTO" ? "text-green-700" :
+                  zkAnalysis.ownership_status === "NERAZJAŠNJENO" ? "text-red-700" :
+                  "text-yellow-700"
+                }`}>
+                  {zkAnalysis.ownership_status || "—"}
+                </p>
+                {zkAnalysis.shares_sum_display && (
+                  <p className="text-xs text-gray-600 mt-1 font-mono">
+                    {zkAnalysis.shares_sum_display}
+                    {zkAnalysis.shares_sum_correct === true && <span className="ml-1 text-green-600">✓</span>}
+                    {zkAnalysis.shares_sum_correct === false && <span className="ml-1 text-red-600">✗</span>}
+                  </p>
+                )}
+              </div>
+
+              {/* Land Use / Legality Check */}
+              <div className={`rounded-xl border p-5 ${
+                zkAnalysis.land_use_mismatch ? "border-yellow-200 bg-yellow-50" :
+                zkAnalysis.has_usage_permit_issue ? "border-red-200 bg-red-50" :
+                "border-green-200 bg-green-50"
+              }`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <FileWarning className={`h-5 w-5 ${
+                    zkAnalysis.land_use_mismatch || zkAnalysis.has_usage_permit_issue ? "text-yellow-600" : "text-green-600"
+                  }`} />
+                  <h4 className="text-sm font-semibold text-gray-700">Legalnost</h4>
+                </div>
+                {zkAnalysis.land_use_mismatch ? (
+                  <p className="text-sm text-yellow-700">{zkAnalysis.land_use_mismatch}</p>
+                ) : zkAnalysis.has_usage_permit_issue ? (
+                  <p className="text-sm text-red-700">Potrebna uporabna dozvola</p>
+                ) : (
+                  <p className="text-lg font-bold text-green-700">Bez primjedbi</p>
+                )}
+                <p className="text-xs text-gray-500 mt-1">Kultura: {zkAnalysis.land_use || "—"}</p>
+              </div>
+
+              {/* Encumbrances Summary */}
+              <div className={`rounded-xl border p-5 ${
+                zkAnalysis.active_disputes.length > 0 ? "border-red-200 bg-red-50" :
+                zkAnalysis.active_mortgages.length > 0 ? "border-yellow-200 bg-yellow-50" :
+                "border-green-200 bg-green-50"
+              }`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <Gavel className={`h-5 w-5 ${
+                    zkAnalysis.active_disputes.length > 0 ? "text-red-600" :
+                    zkAnalysis.active_mortgages.length > 0 ? "text-yellow-600" :
+                    "text-green-600"
+                  }`} />
+                  <h4 className="text-sm font-semibold text-gray-700">Tereti (C list)</h4>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm">
+                    <span className="font-semibold">{zkAnalysis.active_mortgages.length}</span>
+                    <span className="text-gray-600"> hipoteka</span>
+                  </p>
+                  <p className="text-sm">
+                    <span className="font-semibold">{zkAnalysis.active_disputes.length}</span>
+                    <span className="text-gray-600"> sporova/ovrha</span>
+                  </p>
+                  <p className="text-sm">
+                    <span className="font-semibold">{zkAnalysis.other_encumbrances?.filter(e => e.is_active).length || 0}</span>
+                    <span className="text-gray-600"> ostalih tereta</span>
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* ─── DUE DILIGENCE FINDINGS ─── */}
+            {zkAnalysis.findings && zkAnalysis.findings.length > 0 && (
+              <div className="rounded-xl bg-white border border-gray-200 p-6">
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4 flex items-center gap-2">
+                  <ShieldAlert className="h-4 w-4" />
+                  Pravne napomene i upozorenja ({zkAnalysis.findings.length})
+                </h3>
+                <div className="space-y-3">
+                  {[...zkAnalysis.findings]
+                    .sort((a, b) => {
+                      const sev = { CRITICAL: 0, WARNING: 1, INFO: 2 };
+                      return (sev[a.severity] ?? 2) - (sev[b.severity] ?? 2);
+                    })
+                    .map((f, i) => (
+                    <div key={i} className={`p-4 rounded-lg border-l-4 ${
+                      f.severity === "CRITICAL" ? "border-red-500 bg-red-50" :
+                      f.severity === "WARNING" ? "border-yellow-500 bg-yellow-50" :
+                      "border-blue-500 bg-blue-50"
+                    }`}>
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5">
+                          {f.severity === "CRITICAL" ? <AlertOctagon className="h-5 w-5 text-red-600" /> :
+                           f.severity === "WARNING" ? <CircleAlert className="h-5 w-5 text-yellow-600" /> :
+                           <Info className="h-5 w-5 text-blue-600" />}
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className={`text-xs font-bold uppercase px-2 py-0.5 rounded ${
+                              f.severity === "CRITICAL" ? "bg-red-200 text-red-800" :
+                              f.severity === "WARNING" ? "bg-yellow-200 text-yellow-800" :
+                              "bg-blue-200 text-blue-800"
+                            }`}>
+                              {f.severity === "CRITICAL" ? "KRITIČNO" : f.severity === "WARNING" ? "UPOZORENJE" : "INFO"}
+                            </span>
+                            <span className="text-[10px] font-semibold text-gray-400 uppercase">{f.category}</span>
+                          </div>
+                          <h4 className={`text-sm font-bold mt-1 ${
+                            f.severity === "CRITICAL" ? "text-red-800" :
+                            f.severity === "WARNING" ? "text-yellow-800" :
+                            "text-blue-800"
+                          }`}>{f.title}</h4>
+                          <p className="text-sm text-gray-700 mt-1">{f.description}</p>
+                          {f.advice && (
+                            <div className="mt-2 flex items-start gap-1.5 text-xs text-gray-600 bg-white/60 rounded p-2">
+                              <span className="font-semibold text-gray-500 whitespace-nowrap">💡 Savjet:</span>
+                              <span>{f.advice}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ─── DUE DILIGENCE SUMMARY ─── */}
+            {zkAnalysis.due_diligence_summary && (
+              <div className="rounded-xl bg-gradient-to-br from-slate-50 to-indigo-50 border border-indigo-200 p-6">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-indigo-800 uppercase tracking-wide flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4" />
+                    Pravno mišljenje
+                  </h3>
+                  <button
+                    onClick={() => copyToClipboard(zkAnalysis.due_diligence_summary || "")}
+                    className="flex items-center gap-1 text-sm text-indigo-500 hover:text-indigo-700 transition"
+                  >
+                    {copied ? (
+                      <><Check className="h-4 w-4 text-green-600" /> Kopirano</>
+                    ) : (
+                      <><ClipboardCopy className="h-4 w-4" /> Kopiraj</>
+                    )}
+                  </button>
+                </div>
+                <p className="text-gray-800 leading-relaxed whitespace-pre-wrap">{zkAnalysis.due_diligence_summary}</p>
+              </div>
+            )}
+
+            {/* ─── LEGACY LAWYER COMMENT (fallback) ─── */}
+            {!zkAnalysis.due_diligence_summary && zkAnalysis.lawyer_comment && (
+              <div className="rounded-lg bg-white border border-gray-200 p-5">
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                  Komentar odvjetnika
+                </h3>
+                <p className="text-gray-800 leading-relaxed">{zkAnalysis.lawyer_comment}</p>
+              </div>
+            )}
 
             {showZkDetails && (
               <div className="space-y-4">
-                {/* Lawyer Comment */}
-                <div className="rounded-lg bg-white border border-gray-200 p-5">
-                  <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                    Komentar odvjetnika
-                  </h3>
-                  <p className="text-gray-800 leading-relaxed">{zkAnalysis.lawyer_comment}</p>
-                </div>
-
                 {/* Property Info Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   <InfoCard label="Nekretnina" value={zkAnalysis.property_id} />
