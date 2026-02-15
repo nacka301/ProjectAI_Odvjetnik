@@ -877,6 +877,37 @@ public class ValuationService
                 $"═══════════════════════════════════════════\n";
         }
 
+        // V28: Build comparison table block for AI — same numbers shown in the UI.
+        // This prevents the AI from computing its own €/m² values that differ from the table.
+        var compTableBlock = "";
+        if (engineResult is not null && engineResult.UsedComparables?.Count > 0)
+        {
+            var usedComps = engineResult.UsedComparables
+                .Where(c => !c.IsOutlier)
+                .OrderByDescending(c => c.SimilarityScore)
+                .Select((c, i) =>
+                {
+                    double area = c.AreaM2 ?? 0;
+                    double total = c.TotalPrice ?? 0;
+                    var shortTitle = c.Title.Length > 60 ? c.Title[..60] : c.Title;
+                    return $"  Comp #{i + 1}: {shortTitle} | " +
+                           $"Area={area:F0}m² | Price={total:N0}€ | " +
+                           $"€/m²={c.PricePerM2:F0} | Similarity={c.SimilarityScore:P0}";
+                });
+            compTableBlock =
+                $"\n═══════════════════════════════════════════\n" +
+                $"COMPARISON TABLE (EXACT NUMBERS — use THESE in your narrative):\n" +
+                $"═══════════════════════════════════════════\n" +
+                string.Join("\n", usedComps) + "\n" +
+                $"Weighted Median: {engineResult.MarketAverageAsking:F0} €/m²\n" +
+                $"After Discount ({engineResult.RealizationDiscountPercent:F1}%): {engineResult.AfterDiscountPerM2:F0} €/m²\n" +
+                $"After Adjustments ({engineResult.TotalAdjustmentPercent:+0.0;-0.0}%): {engineResult.CalculatedPricePerM2:F0} €/m²\n" +
+                $"\nCRITICAL: When referencing comparable prices in your text,\n" +
+                $"use ONLY the €/m² values from THIS table above.\n" +
+                $"Do NOT recalculate €/m² from the listing content.\n" +
+                $"═══════════════════════════════════════════\n";
+        }
+
         var userMessage =
             $"""
             TARGET PROPERTY (from Land Registry Extract):
@@ -892,6 +923,7 @@ public class ValuationService
             {activeBlock}
             {regionalBlock}
             {contextSection}
+            {compTableBlock}
             {engineOverride}
             """;
 

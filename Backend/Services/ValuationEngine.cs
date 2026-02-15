@@ -1010,7 +1010,10 @@ public class ValuationEngine
 
         // ── 4c½. SIMILARITY FLOOR ──
         // Remove any comparable below 50% similarity — too dissimilar to be useful.
-        const double MinSimilarityThreshold = 0.50;
+        // V28: Raised from 0.50 to 0.55 — below 55% the comp is too dissimilar
+        // to contribute meaningful data. A 55% comp on Trešnjevka-Sjever at 1,864 €/m²
+        // was dragging down center averages from 3,500 to 3,045.
+        const double MinSimilarityThreshold = 0.55;
         {
             var belowFloor = compDetails.Where(c => !c.IsOutlier && c.SimilarityScore < MinSimilarityThreshold).ToList();
             if (belowFloor.Count > 0)
@@ -1063,14 +1066,14 @@ public class ValuationEngine
         }
 
         // ── 4d. Reality Check Cap (HIGH + LOW) ──
-        // V21: SYMMETRIC check — comps priced >50% above OR <50% below median → EXCLUDED.
-        // Previously only high-side was checked, so cheap suburban ruins survived.
+        // V28: Tightened from ±50% to ±40% of median — catches cheap outliers sooner.
+        // A comp at 1,864 €/m² when median is 3,500 = 53% → now caught (< 60% floor).
         if (cleanPrices.Count >= 3)
         {
             var rcPrices = cleanPrices.Select(p => p.PricePerM2).OrderBy(v => v).ToList();
             double rcMedian = rcPrices[rcPrices.Count / 2];
-            double rcCap = rcMedian * 1.50;
-            double rcFloor = rcMedian * 0.50;  // V21: LOW-side check
+            double rcCap = rcMedian * 1.40;    // V28: was 1.50
+            double rcFloor = rcMedian * 0.60;  // V28: was 0.50
             int capped = 0;
 
             var cappedUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -2246,30 +2249,14 @@ public class ValuationEngine
             if (IsRentalListing(text))
                 continue;
 
-            // ── V24: PREFER explicit stored prices from initial parsing + deep dive ──
-            // These are extracted from the actual listing page, not from mixed content text.
-            if (listing.ListedPricePerM2 > 0 && listing.ListedPricePerM2 >= minPpm2 && listing.ListedPricePerM2 <= maxPpm2)
-            {
-                prices.Add(new ExtractedPrice
-                {
-                    PricePerM2 = listing.ListedPricePerM2.Value,
-                    SourceTitle = listing.Title,
-                    SourceUrl = listing.Url,
-                    DetectedCondition = ParseAiCondition(listing.AiCondition) ?? DetectConditionFromText(text),
-                    DetectedYardM2 = listing.AiYardAreaM2 > 0 ? listing.AiYardAreaM2.Value : ExtractYardArea(text),
-                    HasGarage = listing.HasGarage ?? DetectFeature(text, GarageKeywords),
-                    HasRenovation = listing.HasRenovation ?? listing.IsRenovated ?? DetectFeature(text, RenovationKeywords),
-                    HasYard = listing.HasYard ?? DetectFeature(text, YardKeywords),
-                    HasParking = DetectFeature(text, ParkingKeywords),
-                    HasSeaView = DetectFeature(text, SeaViewKeywords),
-                    IsNorthFacing = DetectFeature(text, NorthFacingKeywords),
-                    IsSouthFacing = DetectFeature(text, SouthFacingKeywords),
-                    DetectedSizeM2 = listing.AiSizeM2 > 0 ? listing.AiSizeM2.Value : 0
-                });
-                continue;
-            }
+            // ── V28: ALWAYS compute PricePerM2 = ListedPriceEur / Size when both are available.
+            // This ensures the table's TotalPrice / AreaM2 = RawPricePerM2 (no math disconnect).
+            // Only fall back to ListedPricePerM2 when total price is unknown.
+            // Previous V24 Tier 1 used ListedPricePerM2 directly from the portal, but that
+            // was computed using the LISTING's own area (e.g. 225m²), which doesn't match
+            // the AreaM2 shown in the table → client sees 599,000 / 169 ≠ 2,665. ──
 
-            // V24: If we have a listed total price and a size, calculate per m² from those
+            // Tier 1: ListedPriceEur + known size → compute PricePerM2
             if (listing.ListedPriceEur > 0)
             {
                 double sizeForCalc = listing.AiSizeM2 > 0 ? listing.AiSizeM2.Value : ExtractMainSize(text);
@@ -2294,11 +2281,33 @@ public class ValuationEngine
                             HasSeaView = DetectFeature(text, SeaViewKeywords),
                             IsNorthFacing = DetectFeature(text, NorthFacingKeywords),
                             IsSouthFacing = DetectFeature(text, SouthFacingKeywords),
-                            DetectedSizeM2 = listing.AiSizeM2 > 0 ? listing.AiSizeM2.Value : sizeForCalc
+                            DetectedSizeM2 = sizeForCalc
                         });
                         continue;
                     }
                 }
+            }
+
+            // Tier 2: ListedPricePerM2 only (no total price available) — use portal's €/m²
+            if (listing.ListedPricePerM2 > 0 && listing.ListedPricePerM2 >= minPpm2 && listing.ListedPricePerM2 <= maxPpm2)
+            {
+                prices.Add(new ExtractedPrice
+                {
+                    PricePerM2 = listing.ListedPricePerM2.Value,
+                    SourceTitle = listing.Title,
+                    SourceUrl = listing.Url,
+                    DetectedCondition = ParseAiCondition(listing.AiCondition) ?? DetectConditionFromText(text),
+                    DetectedYardM2 = listing.AiYardAreaM2 > 0 ? listing.AiYardAreaM2.Value : ExtractYardArea(text),
+                    HasGarage = listing.HasGarage ?? DetectFeature(text, GarageKeywords),
+                    HasRenovation = listing.HasRenovation ?? listing.IsRenovated ?? DetectFeature(text, RenovationKeywords),
+                    HasYard = listing.HasYard ?? DetectFeature(text, YardKeywords),
+                    HasParking = DetectFeature(text, ParkingKeywords),
+                    HasSeaView = DetectFeature(text, SeaViewKeywords),
+                    IsNorthFacing = DetectFeature(text, NorthFacingKeywords),
+                    IsSouthFacing = DetectFeature(text, SouthFacingKeywords),
+                    DetectedSizeM2 = listing.AiSizeM2 > 0 ? listing.AiSizeM2.Value : 0
+                });
+                continue;
             }
 
             // ── FALLBACK: Regex extraction from content text (original behavior) ──
@@ -2392,6 +2401,45 @@ public class ValuationEngine
                     }
                 }
             }
+        }
+
+        // ── V28: DEDUPLICATION — remove duplicate listings (same property, different agencies) ──
+        // If two comps have the same €/m² (within 3%) AND same area (within 5%), keep only the first.
+        // This prevents the same property listed by 2 agencies from artificially inflating the sample.
+        if (prices.Count >= 2)
+        {
+            var deduped = new List<ExtractedPrice>();
+            foreach (var p in prices)
+            {
+                bool isDuplicate = deduped.Any(existing =>
+                {
+                    // Same €/m² within 3%
+                    double priceDiff = Math.Abs(existing.PricePerM2 - p.PricePerM2);
+                    bool priceClose = existing.PricePerM2 > 0 && priceDiff / existing.PricePerM2 < 0.03;
+
+                    // Same area within 5%
+                    bool areaClose = false;
+                    if (existing.DetectedSizeM2 > 0 && p.DetectedSizeM2 > 0)
+                    {
+                        double areaDiff = Math.Abs(existing.DetectedSizeM2 - p.DetectedSizeM2);
+                        areaClose = areaDiff / existing.DetectedSizeM2 < 0.05;
+                    }
+
+                    return priceClose && areaClose;
+                });
+
+                if (!isDuplicate)
+                    deduped.Add(p);
+                else
+                    _logger.LogInformation("V28 Dedup: removed duplicate listing '{Title}' ({Ppm2:F0} €/m², {Size:F0} m²)",
+                        p.SourceTitle.Length > 40 ? p.SourceTitle[..40] : p.SourceTitle, p.PricePerM2, p.DetectedSizeM2);
+            }
+
+            if (deduped.Count < prices.Count)
+                _logger.LogInformation("V28 Dedup: {Removed} duplicates removed, {Remaining} unique comps",
+                    prices.Count - deduped.Count, deduped.Count);
+
+            prices = deduped;
         }
 
         return prices;
