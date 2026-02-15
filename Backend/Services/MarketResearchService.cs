@@ -1121,22 +1121,219 @@ public class MarketResearchService
     }
 
     /// <summary>
-    /// Extract listings from a single Njuškalo URL via Tavily Extract API.
+    /// V39: Extract listings from a Njuškalo category URL.
+    /// Tries Tavily Extract first (fast, cheap). If it fails or returns 0 listings
+    /// (cookie wall), falls back to BrightData Playwright browser which handles
+    /// JavaScript rendering and cookie consent.
     /// </summary>
     private async Task<List<ComparableSearchResult>> TryScrapeSingleUrl(string njuskaloUrl)
     {
         _logger.LogInformation("Phase0: Tavily Extract → {Url}", njuskaloUrl);
 
         var extractedText = await ExecuteTavilyExtract(njuskaloUrl);
-        if (string.IsNullOrWhiteSpace(extractedText))
+        List<ComparableSearchResult> listings = [];
+
+        if (!string.IsNullOrWhiteSpace(extractedText))
         {
-            _logger.LogWarning("Phase0: Tavily Extract returned empty for {Url}", njuskaloUrl);
+            listings = ParseNjuskaloExtractedText(extractedText);
+        }
+
+        if (listings.Count > 0)
+        {
+            _logger.LogInformation("Phase0: Tavily parsed {Count} listings from {Url}", listings.Count, njuskaloUrl);
+            return listings;
+        }
+
+        // ── V39: BrightData fallback — Tavily failed (cookie wall / empty) ──
+        if (_brightDataWsEndpoint == null)
+        {
+            _logger.LogWarning("Phase0: Tavily returned 0 listings and BrightData not configured — {Url}", njuskaloUrl);
             return [];
         }
 
-        var listings = ParseNjuskaloExtractedText(extractedText);
-        _logger.LogInformation("Phase0: Tavily parsed {Count} listings from {Url}", listings.Count, njuskaloUrl);
-        return listings;
+        _logger.LogInformation("Phase0: Tavily returned 0 listings, trying BrightData for {Url}", njuskaloUrl);
+        try
+        {
+            var bdListings = await BrightDataScrapeSearchPage(njuskaloUrl);
+            _logger.LogInformation("Phase0: BrightData extracted {Count} listings from {Url}", bdListings.Count, njuskaloUrl);
+            return bdListings;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Phase0: BrightData fallback failed for {Url}", njuskaloUrl);
+            return [];
+        }
+    }
+
+    /// <summary>
+    /// V39: Scrape a Njuškalo CATEGORY/SEARCH page via BrightData Playwright.
+    /// Unlike BrightDataScrape (which extracts data from a single listing page),
+    /// this method extracts individual listing LINKS from a search results page
+    /// (e.g. /prodaja-stanova/zagreb) and returns them as ComparableSearchResult objects.
+    /// Uses JavaScript DOM queries to extract listing titles, URLs, and prices.
+    /// </summary>
+    private async Task<List<ComparableSearchResult>> BrightDataScrapeSearchPage(string searchUrl)
+    {
+        if (string.IsNullOrEmpty(_brightDataWsEndpoint))
+            return [];
+
+        IPlaywright? playwright = null;
+        IBrowser? browser = null;
+        try
+        {
+            playwright = await Playwright.CreateAsync();
+            browser = await playwright.Chromium.ConnectOverCDPAsync(_brightDataWsEndpoint);
+
+            var context = browser.Contexts.Count > 0
+                ? browser.Contexts[0]
+                : await browser.NewContextAsync();
+
+            var page = await context.NewPageAsync();
+
+            await page.GotoAsync(searchUrl, new PageGotoOptions
+            {
+                WaitUntil = WaitUntilState.DOMContentLoaded,
+                Timeout = 45000
+            });
+
+            await page.WaitForTimeoutAsync(2000);
+
+            // Inject consent cookies
+            await page.EvaluateAsync(@"
+                document.cookie = 'didomi_token=eyJ1c2VyX2lkIjoiIiwiY3JlYXRlZCI6IjIwMjQtMDEtMDFUMDA6MDA6MDAuMDAwWiIsInVwZGF0ZWQiOiIyMDI0LTAxLTAxVDAwOjAwOjAwLjAwMFoiLCJ2ZW5kb3JzIjp7ImVuYWJsZWQiOlsiZ29vZ2xlIl19LCJwdXJwb3NlcyI6eyJlbmFibGVkIjpbImdlb2xvY2F0aW9uX2RhdGEiLCJkZXZpY2VfY2hhcmFjdGVyaXN0aWNzIl19LCJ2ZXJzaW9uIjoyfQ==; domain=.njuskalo.hr; path=/; max-age=31536000';
+                document.cookie = 'euconsent-v2=CQIRuQAQIRuQAAHABBENBOFgAAAAAAAAAChQAAAAAAFBIIQACAAFwAUABUADgAIAAeABIAC4AMAAZABDACSAFAALIAXQAvgBhADIAG0ANgAfgBEACLAEiAJcAUYArgBaADEAGiANoAdIA8AB6gD7ATCAmoE1AAA.flgAAAAAAAAA; domain=.njuskalo.hr; path=/; max-age=31536000';
+                document.cookie = 'njuskalo_privacy_policy=accepted; domain=.njuskalo.hr; path=/; max-age=31536000';
+            ");
+
+            await page.ReloadAsync(new PageReloadOptions
+            {
+                WaitUntil = WaitUntilState.DOMContentLoaded,
+                Timeout = 45000
+            });
+
+            await page.WaitForTimeoutAsync(3000);
+
+            // Try clicking consent button if still showing
+            try
+            {
+                var consentSelectors = new[] {
+                    "button:has-text('Slažem se')", "button:has-text('Prihvaćam')",
+                    "button:has-text('Prihvati')", "button:has-text('Accept')",
+                    "#didomi-notice-agree-button"
+                };
+                foreach (var selector in consentSelectors)
+                {
+                    try
+                    {
+                        var btn = page.Locator(selector).First;
+                        if (await btn.IsVisibleAsync())
+                        {
+                            await btn.ClickAsync();
+                            _logger.LogInformation("Phase0-BD: clicked consent '{Selector}' for {Url}", selector, searchUrl);
+                            await page.WaitForTimeoutAsync(2000);
+                            break;
+                        }
+                    }
+                    catch { /* try next */ }
+                }
+            }
+            catch { /* no consent dialog */ }
+
+            // Extract listing data via JavaScript — query Njuškalo's DOM structure
+            var listingData = await page.EvaluateAsync<List<BdListingEntry>>(@"
+                (() => {
+                    const results = [];
+                    // Njuškalo uses .EntityList--Standard or .entity-body for listing cards
+                    const cards = document.querySelectorAll('.EntityList--Standard .EntityList-item--Regular, .entity-body, li.EntityList-item--Regular');
+                    for (const card of cards) {
+                        try {
+                            // Find the listing link
+                            const link = card.querySelector('a.entity-description-title, a.link, h3 a, .entity-title a');
+                            if (!link) continue;
+                            const url = link.href || '';
+                            const title = (link.textContent || '').trim();
+                            if (!url.includes('njuskalo.hr/nekretnine/') && !url.includes('oglas-')) continue;
+                            if (!title || title.length < 5) continue;
+
+                            // Find price
+                            const priceEl = card.querySelector('.price--eur .price--main, .entity-price .price--main, .price-item--main');
+                            const priceText = priceEl ? (priceEl.textContent || '').trim() : '';
+
+                            // Find size
+                            const sizeEl = card.querySelector('.entity-description-main, .entity-features');
+                            const sizeText = sizeEl ? (sizeEl.textContent || '').trim() : '';
+
+                            results.push({ url, title, price: priceText, details: sizeText });
+                        } catch(e) { /* skip card */ }
+                    }
+                    return results;
+                })()
+            ");
+
+            await page.CloseAsync();
+
+            var listings = new List<ComparableSearchResult>();
+            if (listingData == null || listingData.Count == 0)
+            {
+                _logger.LogWarning("Phase0-BD: no listing cards found in DOM for {Url}", searchUrl);
+                return [];
+            }
+
+            foreach (var entry in listingData)
+            {
+                if (string.IsNullOrWhiteSpace(entry.Url) || string.IsNullOrWhiteSpace(entry.Title))
+                    continue;
+
+                // Ensure absolute URL
+                var url = entry.Url.StartsWith("http") ? entry.Url : $"https://www.njuskalo.hr{entry.Url}";
+
+                // Parse price
+                double? listedPrice = null;
+                if (!string.IsNullOrWhiteSpace(entry.Price))
+                {
+                    var priceClean = entry.Price.Replace(".", "").Replace(",", ".");
+                    var priceMatch = Regex.Match(priceClean, @"(\d+(?:\.\d+)?)");
+                    if (priceMatch.Success && double.TryParse(priceMatch.Groups[1].Value,
+                        System.Globalization.CultureInfo.InvariantCulture, out var p) && p > 1000)
+                        listedPrice = p;
+                }
+
+                var content = $"{entry.Title}. {entry.Details}";
+                if (listedPrice.HasValue)
+                    content += $" Cijena: {listedPrice.Value:N0} €";
+
+                listings.Add(new ComparableSearchResult
+                {
+                    Url = url,
+                    Title = entry.Title,
+                    Content = content,
+                    ListedPriceEur = listedPrice,
+                });
+            }
+
+            _logger.LogInformation("Phase0-BD: extracted {Count} listings via Playwright from {Url}",
+                listings.Count, searchUrl);
+            return listings;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Phase0-BD: Playwright scrape failed for {Url}", searchUrl);
+            return [];
+        }
+        finally
+        {
+            if (browser != null) try { await browser.CloseAsync(); } catch { }
+            playwright?.Dispose();
+        }
+    }
+
+    /// <summary>V39: DTO for BrightData search page listing extraction.</summary>
+    private class BdListingEntry
+    {
+        public string Url { get; set; } = "";
+        public string Title { get; set; } = "";
+        public string Price { get; set; } = "";
+        public string Details { get; set; } = "";
     }
 
     // ══════════════════════════════════════════════════════════
@@ -1878,63 +2075,88 @@ public class MarketResearchService
     }
 
     /// <summary>
-    /// Build the Njuškalo search URL using the /search/ endpoint.
-    /// e.g. "kuća" + "Split" → "https://www.njuskalo.hr/search/?keywords=split+kuća"
-    ///      "stan" + "Srebrnjak" (→Zagreb) → "https://www.njuskalo.hr/search/?keywords=zagreb+srebrnjak+stan"
+    /// Build the Njuškalo category URL from property type + location.
+    /// e.g. "građevinsko zemljište" + "Vir" → "https://www.njuskalo.hr/prodaja-zemljista/vir"
+    ///      "stan" + "Srebrnjak" (→Zagreb) → "https://www.njuskalo.hr/prodaja-stanova/zagreb-srebrnjak"
+    /// IMPORTANT: Uses category URLs (/prodaja-stanova/...) NOT /search/?keywords=
+    /// because /search/ is JavaScript-rendered and Tavily Extract cannot scrape it.
+    /// Category pages are server-side rendered and reliably return listing blocks.
     /// </summary>
     private static string? BuildNjuskaloSearchUrl(string detectedType, string regionName, double sizeM2 = 0)
     {
-        if (string.IsNullOrWhiteSpace(regionName))
-            return null;
+        // Find the correct URL slug for this property type
+        string? slug = null;
+        foreach (var (key, value) in NjuskaloTypeSlug)
+        {
+            if (detectedType.Contains(key, StringComparison.OrdinalIgnoreCase))
+            {
+                slug = value;
+                break;
+            }
+        }
 
-        // ── Build keyword list: location(s) + property type ──
-        var keywords = new List<string>();
+        // Default fallback for unknown types
+        slug ??= detectedType.Contains("zemlj", StringComparison.OrdinalIgnoreCase)
+            ? "prodaja-zemljista"
+            : detectedType.Contains("kuć", StringComparison.OrdinalIgnoreCase)
+                ? "prodaja-kuca"
+                : "prodaja-stanova";
 
-        // Add parent city first if this is a neighborhood/village
+        // NEIGHBORHOOD URL: Njuškalo supports neighborhood-level slugs!
+        // Format: "{city-slug}-{neighborhood-slug}" e.g. "osijek-retfala"
+        // Try neighborhood-specific URL first for much better results.
+        string urlRegion = regionName;
+        string? neighborhoodUrl = null;
+
         if (BroaderRegion.TryGetValue(regionName, out var parentCity))
         {
-            keywords.Add(parentCity.ToLowerInvariant());
-            keywords.Add(regionName.ToLowerInvariant());
+            // Build neighborhood-specific URL: osijek-retfala, split-spinut, etc.
+            var citySlug = NormalizeLocationSlug(parentCity);
+            var neighborhoodSlug = NormalizeLocationSlug(regionName);
+            neighborhoodUrl = $"https://www.njuskalo.hr/{slug}/{citySlug}-{neighborhoodSlug}";
+            urlRegion = parentCity; // fallback to city-level
         }
-        else if (VillageFallback.TryGetValue(regionName, out var fallbackTown))
+        // NOTE: VillageFallback is NOT used here anymore.
+        // BuildNjuskaloSearchUrl always tries the original regionName first.
+        // FetchNjuskaloDirectListings handles the fallback to the parent city
+        // only when the primary URL returns empty results.
+
+        var locSlug = NormalizeLocationSlug(urlRegion);
+        if (string.IsNullOrWhiteSpace(locSlug))
+            return null;
+
+        var baseUrl = neighborhoodUrl ?? $"https://www.njuskalo.hr/{slug}/{locSlug}";
+
+        // ── QUERY PARAMETERS: Size filter (±30%) ──
+        // Njuškalo supports livingArea[min]/[max] for houses & apartments,
+        // plotArea[min]/[max] for land. This dramatically improves result quality.
+        var queryParams = new List<string>();
+
+        if (sizeM2 > 10)
         {
-            keywords.Add(fallbackTown.ToLowerInvariant());
-            keywords.Add(regionName.ToLowerInvariant());
+            bool isLand = slug.Contains("zemljist");
+
+            if (!isLand && sizeM2 > 300)
+            {
+                // Houses/apartments NEVER have 300+ m² living area.
+                // If sizeM2 > 300, the AI likely confused plot area with living area.
+                // Skip size filter entirely — downstream similarity scoring will handle it.
+            }
+            else
+            {
+                string sizeParam = isLand ? "plotArea" : "livingArea";
+
+                int minSize = (int)(sizeM2 * 0.70);  // -30%
+                int maxSize = (int)(sizeM2 * 1.30);  // +30%
+
+                queryParams.Add($"{sizeParam}%5Bmin%5D={minSize}");
+                queryParams.Add($"{sizeParam}%5Bmax%5D={maxSize}");
+            }
         }
-        else
-        {
-            keywords.Add(regionName.ToLowerInvariant());
-        }
 
-        // Map detected type to a simple Croatian keyword
-        string typeKeyword;
-        if (detectedType.Contains("stan", StringComparison.OrdinalIgnoreCase))
-            typeKeyword = "stan";
-        else if (detectedType.Contains("kuć", StringComparison.OrdinalIgnoreCase)
-              || detectedType.Contains("kuc", StringComparison.OrdinalIgnoreCase))
-            typeKeyword = "kuća";
-        else if (detectedType.Contains("vila", StringComparison.OrdinalIgnoreCase))
-            typeKeyword = "kuća";
-        else if (detectedType.Contains("vikend", StringComparison.OrdinalIgnoreCase))
-            typeKeyword = "vikendica";
-        else if (detectedType.Contains("zemlj", StringComparison.OrdinalIgnoreCase))
-            typeKeyword = "zemljište";
-        else if (detectedType.Contains("poslov", StringComparison.OrdinalIgnoreCase))
-            typeKeyword = "poslovni prostor";
-        else
-            typeKeyword = detectedType.ToLowerInvariant();
-
-        keywords.Add(typeKeyword);
-
-        // Optionally add size hint as keyword (e.g. "70m2")
-        if (sizeM2 > 10 && sizeM2 <= 300)
-            keywords.Add($"{(int)sizeM2}m2");
-
-        // URL-encode each keyword and join with +
-        var encodedKeywords = string.Join("+",
-            keywords.Select(k => Uri.EscapeDataString(k)));
-
-        return $"https://www.njuskalo.hr/search/?keywords={encodedKeywords}";
+        return queryParams.Count > 0
+            ? $"{baseUrl}?{string.Join("&", queryParams)}"
+            : baseUrl;
     }
 
     /// <summary>
