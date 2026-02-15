@@ -115,6 +115,12 @@ public class ValuationService
         B — Vlastovnica (tko: vlasnici, udjeli — čl. 22.-24. ZZK)
         C — Teretovnica (tereti: hipoteke, služnosti, sporovi — čl. 25.-30. ZZK)
 
+        PRAVNA PRECIZNOST:
+        - NE koristi spekulativne izraze: "moguće je", "može doći do", "vjerojatno",
+          "pretpostavlja se", "postoji mogućnost".
+        - UMJESTO toga koristi: "Na temelju dostavljenog dokumenta utvrđeno je...",
+          "Iz dokumenta proizlazi...", "Na temelju dostavljenog dokumenta nije moguće utvrditi...".
+
         Vrati ISKLJUČIVO čisti JSON objekt, bez markdown oznaka, bez dodatnog teksta.
         """;
 
@@ -449,6 +455,20 @@ public class ValuationService
           ],
           "valuation_reasoning": "Formal legal text explaining the value including: method used, all corrections, -15% realization gap, market data comparison, contextual adjustments, infrastructure analysis, and location factors. Formatted with paragraphs, ready to copy-paste into MS Word."
         }
+
+        PRAVNA PRECIZNOST:
+        - NE koristi spekulativne izraze: "moguće je", "može doći do", "vjerojatno",
+          "pretpostavlja se", "postoji mogućnost".
+        - UMJESTO toga koristi: "Na temelju dostupnih tržišnih podataka utvrđeno je...",
+          "Iz analize proizlazi...", "Na temelju dostavljenog materijala 
+          nije moguće utvrditi...".
+        - UVIJEK navedi pravnu osnovu s NN oznakom.
+
+        GDPR NAPOMENA:
+        U valuation_reasoning na kraju dodaj:
+        "Napomena: Ova procjena ne predstavlja službeni elaborat sudskog vještaka. 
+        Obrada podataka provodi se sukladno Uredbi (EU) 2016/679 (GDPR). 
+        Korisnik potvrđuje da ima pravo na pristup dostavljenom dokumentu."
         """;
 
     public ValuationService(ChatClientProvider clients, ILogger<ValuationService> logger)

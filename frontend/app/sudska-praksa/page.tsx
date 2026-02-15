@@ -1242,11 +1242,14 @@ export default function ProvjeriIshodPage() {
 
       {/* Footer */}
       <footer className="max-w-6xl mx-auto px-4 sm:px-6 pb-6">
-        <div className="border-t border-slate-200 pt-4 flex items-center justify-between text-[11px] text-slate-400">
-          <span>Legal AI Assistant v4.0</span>
-          <span>
-            AI analiza ne zamjenjuje pravni savjet ovlaštenog odvjetnika
-          </span>
+        <div className="border-t border-slate-200 pt-4 text-center space-y-1 text-[11px] text-slate-400">
+          <div className="flex items-center justify-between">
+            <span>Legal AI Assistant v4.0</span>
+            <span>
+              AI analiza ne predstavlja pravni savjet sukladno čl. 1. Zakona o odvjetništvu (NN 9/94, 18/11)
+            </span>
+          </div>
+          <p>Obrada osobnih podataka provodi se sukladno Uredbi (EU) 2016/679 (GDPR). Korisnik potvrđuje da ima pravo na pristup dostavljenom dokumentu.</p>
         </div>
       </footer>
 

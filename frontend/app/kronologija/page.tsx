@@ -642,6 +642,14 @@ export default function ChronologyPage() {
           </div>
         )}
       </main>
+
+      {/* Footer */}
+      <footer className="max-w-5xl mx-auto px-4 sm:px-6 pb-6">
+        <div className="border-t border-slate-200 pt-4 text-center space-y-1 text-[11px] text-slate-400">
+          <p>AI analiza ne predstavlja pravni savjet sukladno čl. 1. Zakona o odvjetništvu (NN 9/94, 18/11)</p>
+          <p>Obrada osobnih podataka provodi se sukladno Uredbi (EU) 2016/679 (GDPR). Korisnik potvrđuje da ima pravo na pristup dostavljenom dokumentu.</p>
+        </div>
+      </footer>
     </div>
   );
 }

@@ -26,8 +26,10 @@ public class ZkParsingService
         - Skeniraj gornji desni kut, zaglavlje i cijeli tekst.
         - Traži: "Z-", "Plomba", aktivne zahtjeve za upis.
         - Ako nađeš plombu → CRITICAL finding:
-          "UPOZORENJE: Aktivna plomba {Z-broj}! Netko je predao zahtjev prije vas. 
-          Rizik: moguća nemogućnost upisa vlasništva."
+          "UPOZORENJE: Aktivna plomba {Z-broj}! Netko je predao zahtjev za upis prije vas 
+          sukladno čl. 98. ZZK (NN 91/96, 137/99, 114/01, 100/04, 107/07, 152/08, 55/13, 60/13, 108/17). 
+          Pravna posljedica: načelo vremenskog reda (prior tempore potior iure) — 
+          ranije podneseni zahtjev ima prednost pri upisu."
         - Vrati sve plombe u "active_plombe" array.
 
         ═══════════════════════════════════════════════════════
@@ -48,8 +50,10 @@ public class ZkParsingService
 
         🔍 DETEKTIRAJ NESLAGANJE KULTURE:
         - Ako piše "Pašnjak", "Oranica", "Livada" ali kupuje se kuća/stan → 
-          FINDING: "Nekretnina nije upisana kao stambeni objekt! Mogući problemi s 
-          uporabnom dozvolom ili legalizacijom."
+          FINDING: "Nekretnina nije upisana kao stambeni objekt u zemljišnoj knjizi. 
+          Sukladno čl. 175. Zakona o gradnji (NN 153/13, 20/17, 39/19, 125/19) 
+          potrebno je utvrditi ima li objekt uporabnu dozvolu i je li provedena 
+          legalizacija prema Zakonu o postupanju s nezakonito izgrađenim zgradama (NN 86/12, 143/13)."
         - Traži zabilježbu "Nije priložena uporabna dozvola" → 
           FINDING: "Banke često odbijaju kredit bez uporabne dozvole."
           Postavi has_usage_permit_issue = true.
@@ -67,7 +71,9 @@ public class ZkParsingService
         - Npr. 1/4 + 1/4 + 2/4 = 4/4 ✓ (OK)
         - Ako zbroj NIJE 1/1 → CRITICAL finding:
           "Zbroj vlasničkih udjela ({zbroj}) ≠ 1/1. 
-          Moguća greška ili neriješeno vlasništvo."
+          Na temelju dostavljenog izvadka utvrđeno je neslaganje udjela — 
+          potrebno ispitati postoji li neriješeni nasljednopravni postupak 
+          ili pogreška u upisu sukladno čl. 117.-119. ZZK (NN 91/96, 108/17)."
         - Prikaži izračun u shares_sum_display.
 
         🔍 PROVJERA VLASNIŠTVA:
@@ -84,16 +90,18 @@ public class ZkParsingService
         - Izdvoji: iznos, valutu, banku/korisnika, godinu.
         - Provjeri piše li ispod "Brisano", "uknjižba brisana" → IGNORIRAJ.
         - Ako je AKTIVNA hipoteka → WARNING finding:
-          "Aktivna hipoteka {iznos} {valuta} u korist {banka}. 
+          "Aktivna hipoteka {iznos} {valuta} u korist {banka} — sukladno čl. 297.-353. 
+          Zakona o vlasništvu i drugim stvarnim pravima (NN 91/96, 68/98, 137/99, 22/00, 
+          73/00, 114/01, 79/06, 141/06, 146/08, 38/09, 153/09, 143/12, 152/14). 
           Savjet: Potrebno ishoditi Pismo namjere banke prije isplate kapare."
 
         🏠 OSOBNE SLUŽNOSTI (DEAL-BREAKER!):
         - Traži: "Pravo doživotnog uživanja", "Pravo stanovanja", 
           "Osobna služnost", "Pravo plodouživanja"
         - Ako nađeš AKTIVNU osobnu služnost → CRITICAL finding:
-          "Osobna služnost ({tip}) u korist {osoba}. OVO JE DEAL-BREAKER: 
-          Ako kupite nekretninu s pravom doživotnog uživanja, ne možete 
-          iseliti nositelja prava. Ovo pravo traje do smrti nositelja."
+          "Osobna služnost ({tip}) u korist {osoba} — sukladno čl. 189.-214. ZV 
+          (NN 91/96, 152/14). Ovo pravo je neprenosivo i traje do smrti nositelja. 
+          Stjecanjem nekretnine preuzimate obvezu trpljenja prava služnosti."
 
         ⚖️ OVRHE I SPOROVI:
         - Traži: "Ovrha", "Zabilježba spora", "Zabilježba tužbe", 
@@ -148,9 +156,27 @@ public class ZkParsingService
         
         Primjer tona:
         "Na predmetnoj nekretnini upisano je založno pravo (hipoteka) u korist 
-        PBZ d.d. u iznosu od 100.000 EUR. Preporučam ishoditi brisovnu 
+        PBZ d.d. u iznosu od 100.000 EUR sukladno čl. 297. ZV. Preporučam ishoditi brisovnu 
         dozvolu ili pismo namjere banke prije sklapanja predugovora. 
         Vlasništvo je čisto (1/1), bez aktivnih sporova."
+
+        PRAVNA PRECIZNOST:
+        - NE koristi spekulativne izraze: "moguće je", "može doći do", "vjerojatno",
+          "pretpostavlja se", "postoji mogućnost".
+        - UMJESTO toga koristi: "Na temelju dostavljenog dokumenta utvrđeno je...",
+          "Sukladno čl. X. ZZK...", "Iz izvadka proizlazi...",
+          "Na temelju dostavljenog dokumenta nije moguće utvrditi...".
+        - UVIJEK navedi pravnu osnovu s oznakom Narodnih novina:
+          ZZK = Zakon o zemljišnim knjigama (NN 91/96, 137/99, 114/01, 100/04, 107/07, 152/08, 55/13, 60/13, 108/17)
+          ZV = Zakon o vlasništvu i drugim stvarnim pravima (NN 91/96, 68/98, 137/99, 22/00, 73/00, 114/01, 79/06, 141/06, 146/08, 38/09, 153/09, 143/12, 152/14)
+          OZ = Ovršni zakon (NN 112/12, 25/13, 93/14, 55/16, 73/17, 131/20)
+
+        GDPR NAPOMENA:
+        U due_diligence_summary na kraju dodaj:
+        "Napomena: Obrada osobnih podataka (imena vlasnika, OIB) provodi se sukladno 
+        Uredbi (EU) 2016/679 (Opća uredba o zaštiti podataka). Korisnik potvrđuje 
+        da ima pravo na pristup dostavljenom dokumentu. Ova analiza ne predstavlja 
+        pravni savjet u smislu čl. 1. Zakona o odvjetništvu (NN 9/94, 117/08, 75/09, 18/11)."
 
         ═══════════════════════════════════════════════════════
         📍 8. USKLAĐENOST EVIDENCIJA — KATASTAR vs ZK (V40)

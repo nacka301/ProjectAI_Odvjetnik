@@ -88,6 +88,13 @@ public class ValuationAgentService
         - Ako nema ničeg neuobičajenog, vrati prazan niz korekcija.
         - Maksimalna ukupna korekcija iz ove analize: ±40%.
         - Koristi stručnu terminologiju sudskog vještačenja.
+        - NE koristi spekulativne izraze: "moguće je", "može doći do", "vjerojatno".
+          Umjesto toga koristi: "Na temelju dostavljenih podataka utvrđeno je...",
+          "Iz opisa nekretnine proizlazi...", "Na temelju dostavljenog materijala 
+          nije moguće utvrditi...".
+        - UVIJEK navedi pravnu osnovu s NN oznakom kada citiraš zakon.
+        - Ova procjena ne predstavlja pravni savjet niti službeno vještačenje.
+          Obrada podataka provodi se sukladno Uredbi (EU) 2016/679 (GDPR).
 
         Vrati ISKLJUČIVO čisti JSON, bez markdown oznaka:
         {

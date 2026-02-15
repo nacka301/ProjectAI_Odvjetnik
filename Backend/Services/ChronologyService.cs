@@ -29,7 +29,7 @@ public class ChronologyService
         1. **DATUMI — KLASIFIKACIJA:**
            - EKSPLICITNI datumi (npr. "12.03.2023.", "12. ožujka 2023.") → confidence=High
            - IMPLICITNI datumi (npr. "prošli petak", "sljedeći utorak") → pretvori u datum 
-             ako je moguće, inače ostavi originalni tekst → confidence=Medium
+             ukoliko se točan datum može odrediti iz konteksta dokumenta, inače ostavi originalni tekst → confidence=Medium
            - KONTEKSTUALNI datumi ("rok od 30 dana", "u roku 8 dana od primitka") → 
              izračunaj od datuma dokumenta → confidence=Medium
            - AKO NEMA DATUMA → confidence=Low, ali ipak izvuci opis radnje
@@ -43,7 +43,8 @@ public class ChronologyService
            - Ako u mailu od 15.05. piše "Sastanak je bio 10.05." → DVA zasebna događaja
            - Svaki potpis, slanje, primitak, rok, odluka, dostava = zaseban događaj
            - PREKLUZIVNI ROKOVI: Identificiraj rokove nakon kojih se gubi pravo na radnju 
-             (npr. žalba u roku 15 dana, tužba u roku 30 dana, brisovna tužba iz čl. 150. ZZK)
+             (npr. žalba u roku 15 dana, tužba u roku 30 dana, brisovna tužba iz čl. 150. ZZK, 
+             NN 91/96, 108/17)
            - MATERIJALNI DOKAZI: Označi koji dokumenti su relevantni za dokazni postupak 
              i na kojoj su strani tereta dokazivanja (onus probandi)
            - PRAVOMOĆNOST i OVRŠNOST: Označi odluke koje su postale pravomoćne ili ovršne
@@ -59,11 +60,23 @@ public class ChronologyService
         5. **POUZDANOST (confidence):**
            - "High" = datum eksplicitno naveden u tekstu (🟢)
            - "Medium" = datum izveden iz konteksta, npr. "sljedeći utorak" (🟡)
-           - "Low" = AI pretpostavlja datum ili je OCR nejasan (🔴)
+           - "Low" = Datum nije izričito naveden u tekstu — izveden je iz nepotpunih podataka ili je OCR nejasan (🔴)
 
         6. **OCR PROBLEMI:**
            - Ako je tekst nejasan (loš OCR), ipak pokušaj izvući što možeš
            - Označi takve događaje s confidence="Low"
+
+        7. **PRAVNA PRECIZNOST:**
+           - NE koristi spekulativne izraze: "moguće je", "može doći do", "vjerojatno",
+             "pretpostavlja se", "postoji mogućnost".
+           - UMJESTO toga koristi: "Na temelju dostavljenog dokumenta utvrđeno je...",
+             "Iz dokumenta proizlazi...", "Na temelju dostavljenog dokumenta nije moguće utvrditi...".
+           - UVIJEK uz zakonski članak navedi NN oznaku.
+
+        8. **GDPR:**
+           - Ova analiza ne predstavlja pravni savjet sukladno čl. 1. Zakona o odvjetništvu 
+             (NN 9/94, 117/08, 75/09, 18/11).
+           - Obrada osobnih podataka provodi se sukladno Uredbi (EU) 2016/679 (GDPR).
 
         IZLAZNI FORMAT — vrati ISKLJUČIVO čisti JSON objekt (bez markdown fencing-a):
         {

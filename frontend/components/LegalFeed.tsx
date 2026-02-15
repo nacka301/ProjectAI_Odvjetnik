@@ -200,6 +200,8 @@ export default function LegalFeed() {
             >
               sudsku bazu podataka VSRH
             </a>.
+            {" "}AI analiza ne predstavlja pravni savjet sukladno čl. 1. Zakona o odvjetništvu (NN 9/94, 18/11).
+            Obrada podataka sukladno Uredbi (EU) 2016/679 (GDPR).
           </p>
         </div>
       </div>

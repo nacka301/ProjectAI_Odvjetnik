@@ -24,10 +24,26 @@ public class ContractAnalysisService
 
         TVOJA ULOGA: Izvanredna revizija ugovora (Contract Audit)
         Ne tražiš "greške" — tražiš:
-        - Nedostatke u bitnim sastojcima ugovora (essentialia negotii) sukladno čl. 269. ZOO
+        - Nedostatke u bitnim sastojcima ugovora (essentialia negotii) sukladno čl. 269. ZOO (NN 35/05, 41/08, 125/11, 78/15, 29/18)
         - Povrede prisilnih propisa (ius cogens) — čl. 322. ZOO (ništetnost)
         - Rizike od ništetnosti (čl. 322.-328. ZOO) ili pobojnosti (čl. 330.-335. ZOO)
         - Nesuglasje s načelom savjesnosti i poštenja (čl. 4. ZOO)
+
+        PRAVNA PRECIZNOST:
+        - NE koristi spekulativne izraze: "moguće je", "može doći do", "vjerojatno",
+          "pretpostavlja se", "postoji mogućnost".
+        - UMJESTO toga koristi: "Na temelju dostavljenog ugovora utvrđeno je...",
+          "Sukladno čl. X. ZOO...", "Iz ugovora proizlazi...",
+          "Na temelju dostavljenog dokumenta nije moguće utvrditi...".
+        - UVIJEK uz zakonski članak navedi NN oznaku.
+
+        ZAKONSKI OKVIR (NN reference):
+        - ZOO = Zakon o obveznim odnosima (NN 35/05, 41/08, 125/11, 78/15, 29/18)
+        - ZZK = Zakon o zemljišnim knjigama (NN 91/96, 137/99, 114/01, 100/04, 107/07, 152/08, 55/13, 60/13, 108/17)
+        - ZV = Zakon o vlasništvu i drugim stvarnim pravima (NN 91/96, 68/98, 137/99, 22/00, 73/00, 114/01, 79/06, 141/06, 146/08, 38/09, 153/09, 143/12, 152/14)
+        - ObZ = Obiteljski zakon (NN 103/15, 98/19, 47/20)
+        - Zakon o osobnom identifikacijskom broju (NN 60/08, 0/12)
+        - Zakon o gradnji (NN 153/13, 20/17, 39/19, 125/19)
 
         METODOLOGIJA — Syllogismus Iuridicus:
         Za svaki identificirani rizik primijeni trodijelni pravni silogizam:
@@ -65,7 +81,7 @@ public class ContractAnalysisService
              za posljedice neispunjenja. Pravilo dvostrukog vraćanja (čl. 304. st. 2. ZOO).
            - POREZ NA PROMET NEKRETNINA: Tko snosi financijsku obvezu? (Zakonska je obveza kupca, 
              ali ugovorne strane mogu regulirati ekonomski teret.)
-           - ENERGETSKI CERTIFIKAT: Obveza prodavatelja po Zakonu o gradnji (čl. 59.).
+           - ENERGETSKI CERTIFIKAT: Obveza prodavatelja po Zakonu o gradnji (čl. 59., NN 153/13, 20/17, 39/19, 125/19).
            - REZ REŽIJA: Razgraničenje troškova na dan primopredaje (possessio).
            - UGOVORNA KAZNA (čl. 350.-356. ZOO): Nedostatak ugovorne kazne za zakašnjenje s 
              predajom u posjed — preporučljivo ugraditi kao instrument osiguranja ispunjenja.
@@ -87,7 +103,15 @@ public class ContractAnalysisService
         - Budi strog — in dubio pro emptore (u slučaju sumnje, štiti kupca).
         - Citiraj sporne dijelove ugovora kao dokaz (quoted_text).
         - Koristi stručni hrvatski pravni jezik s latinskim izrazima gdje je primjereno.
-        - Uvijek navedi pravnu osnovu: članak zakona + kraticu (npr. "čl. 303. st. 1. ZOO").
+        - Uvijek navedi pravnu osnovu: članak zakona + kratica + NN oznaka (npr. "čl. 303. st. 1. ZOO, NN 35/05").
+
+        GDPR NAPOMENA:
+        - Obrada osobnih podataka sadržanih u ugovoru (OIB, imena stranaka, adrese) 
+          zahtijeva izričitu privolu korisnika sukladno Uredbi (EU) 2016/679 (GDPR).
+        - Korisnik je odgovoran za anonimizaciju osjetljivih podataka, 
+          osim ako je izričita privola dana.
+        - Ova analiza ne predstavlja pravni savjet u smislu 
+          čl. 1. Zakona o odvjetništvu (NN 9/94, 117/08, 75/09, 18/11).
 
         VAŽNO — FORMAT ODGOVORA:
         Vrati ISKLJUČIVO čisti JSON (bez markdown fencing-a), u ovoj strukturi:
@@ -143,7 +167,7 @@ public class ContractAnalysisService
                 Summary = "Tekst je prekratak za analizu.",
                 OverallRisk = "Nepoznat",
                 RiskScore = 0,
-                Disclaimer = "Ovo je AI pomoćna analiza i ne zamjenjuje pravni savjet ovlaštenog odvjetnika. Prije potpisa konzultirajte se sa stručnjakom."
+                Disclaimer = "Ovo je AI pomoćna analiza i ne zamjenjuje pravni savjet ovlaštenog odvjetnika sukladno čl. 1. Zakona o odvjetništvu (NN 9/94, 117/08, 75/09, 18/11). Obrada osobnih podataka iz ugovora provodi se sukladno Uredbi (EU) 2016/679 (GDPR). Korisnik potvrđuje da ima pravo na pristup dostavljenom dokumentu i odgovoran je za anonimizaciju osjetljivih podataka osim ako je izričita privola dana. Prije potpisa konzultirajte se sa stručnjakom."
             };
         }
 
@@ -190,7 +214,7 @@ public class ContractAnalysisService
                 Summary = $"AI analiza nije uspjela: {ex.Message}",
                 OverallRisk = "Nepoznat",
                 RiskScore = 0,
-                Disclaimer = "Ovo je AI pomoćna analiza i ne zamjenjuje pravni savjet ovlaštenog odvjetnika. Prije potpisa konzultirajte se sa stručnjakom."
+                Disclaimer = "Ovo je AI pomoćna analiza i ne zamjenjuje pravni savjet ovlaštenog odvjetnika sukladno čl. 1. Zakona o odvjetništvu (NN 9/94, 117/08, 75/09, 18/11). Obrada osobnih podataka iz ugovora provodi se sukladno Uredbi (EU) 2016/679 (GDPR). Korisnik potvrđuje da ima pravo na pristup dostavljenom dokumentu i odgovoran je za anonimizaciju osjetljivih podataka osim ako je izričita privola dana. Prije potpisa konzultirajte se sa stručnjakom."
             };
         }
     }
@@ -199,7 +223,7 @@ public class ContractAnalysisService
     {
         var result = new ContractAnalysisResult
         {
-            Disclaimer = "Ovo je AI pomoćna analiza i ne zamjenjuje pravni savjet ovlaštenog odvjetnika. Prije potpisa konzultirajte se sa stručnjakom."
+            Disclaimer = "Ovo je AI pomoćna analiza i ne zamjenjuje pravni savjet ovlaštenog odvjetnika sukladno čl. 1. Zakona o odvjetništvu (NN 9/94, 117/08, 75/09, 18/11). Obrada osobnih podataka iz ugovora provodi se sukladno Uredbi (EU) 2016/679 (GDPR). Korisnik potvrđuje da ima pravo na pristup dostavljenom dokumentu i odgovoran je za anonimizaciju osjetljivih podataka osim ako je izričita privola dana. Prije potpisa konzultirajte se sa stručnjakom."
         };
 
         using var doc = JsonDocument.Parse(json);
