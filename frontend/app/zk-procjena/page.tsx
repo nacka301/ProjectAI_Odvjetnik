@@ -107,6 +107,7 @@ interface UsedComparableV4 {
   price_per_m2: number;
   similarity_score: number;
   is_outlier: boolean;
+  outlier_reason?: string;
   // BrightData-enriched fields
   total_price?: number;
   area_m2?: number;
@@ -870,6 +871,9 @@ export default function ZkProcjenaPage() {
                                 <h4 className="text-sm font-semibold text-gray-900 truncate">{c.title}</h4>
                                 {c.is_outlier && (
                                   <span className="text-[10px] font-bold uppercase tracking-wider bg-red-100 text-red-700 px-2 py-0.5 rounded-full">Outlier</span>
+                                )}
+                                {c.is_outlier && c.outlier_reason && (
+                                  <span className="text-[10px] text-red-500 italic">{c.outlier_reason}</span>
                                 )}
                               </div>
                               <div className="flex items-center gap-3 mt-1">

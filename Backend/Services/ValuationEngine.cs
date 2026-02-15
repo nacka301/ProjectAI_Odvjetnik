@@ -817,7 +817,10 @@ public class ValuationEngine
 
                         // Mark as outliers in compDetails
                         foreach (var cd in compDetails.Where(c => excludeUrls.Contains(c.Url)))
+                        {
                             cd.IsOutlier = true;
+                            cd.OutlierReason = "Prigradska zona — subjekt je u premium zoni";
+                        }
 
                         var excludedNames = string.Join(", ",
                             zoneExcluded.Select(e => e.SourceTitle.Length > 30 ? e.SourceTitle[..30] : e.SourceTitle));
@@ -1051,6 +1054,7 @@ public class ValuationEngine
                 PricePerM2 = Math.Round(price.PricePerM2, 0),
                 SimilarityScore = 0,
                 IsOutlier = true,
+                OutlierReason = "Statistički outlier (IQR metoda)",
                 AreaM2 = olisting?.AiSizeM2 ?? (price.DetectedSizeM2 > 0 ? price.DetectedSizeM2 : null),
                 Rooms = olisting?.AiRooms,
                 Floor = olisting?.AiFloor,
@@ -1073,7 +1077,10 @@ public class ValuationEngine
             {
                 var belowFloorUrls = new HashSet<string>(belowFloor.Select(c => c.Url), StringComparer.OrdinalIgnoreCase);
                 foreach (var cd in belowFloor)
+                {
                     cd.IsOutlier = true;
+                    cd.OutlierReason = $"Sličnost ispod praga ({cd.SimilarityScore:P0} < {MinSimilarityThreshold:P0})";
+                }
 
                 cleanPrices = cleanPrices
                     .Where(p => !belowFloorUrls.Contains(p.SourceUrl))
@@ -1107,6 +1114,7 @@ public class ValuationEngine
             foreach (var cd in ranked.Skip(MaxCompsForValuation))
             {
                 cd.IsOutlier = true;
+                cd.OutlierReason = $"Top-{MaxCompsForValuation} limit — preniska sličnost";
                 trimmed++;
             }
 
@@ -1135,6 +1143,7 @@ public class ValuationEngine
                 if (cd.PricePerM2 > rcCap)
                 {
                     cd.IsOutlier = true;
+                    cd.OutlierReason = $"Cijena previsoka ({cd.PricePerM2:F0} €/m² > {rcCap:F0} €/m² cap)";
                     cappedUrls.Add(cd.Url);
                     capped++;
                     _logger.LogDebug(
@@ -1145,6 +1154,7 @@ public class ValuationEngine
                 else if (cd.PricePerM2 < rcFloor)
                 {
                     cd.IsOutlier = true;
+                    cd.OutlierReason = $"Cijena preniska ({cd.PricePerM2:F0} €/m² < {rcFloor:F0} €/m² floor)";
                     cappedUrls.Add(cd.Url);
                     capped++;
                     _logger.LogDebug(
@@ -1210,7 +1220,10 @@ public class ValuationEngine
                         var cheapUrls = new HashSet<string>(
                             cheapComps.Select(c => c.Url), StringComparer.OrdinalIgnoreCase);
                         foreach (var cd in cheapComps)
+                        {
                             cd.IsOutlier = true;
+                            cd.OutlierReason = $"Zonski raspon >2× — subjekt je u premium zoni";
+                        }
                         cleanPrices = cleanPrices
                             .Where(p => !cheapUrls.Contains(p.SourceUrl)).ToList();
 
@@ -3235,6 +3248,7 @@ public class UsedComparable
     public double PricePerM2 { get; set; }
     public double SimilarityScore { get; set; }
     public bool IsOutlier { get; set; }
+    public string? OutlierReason { get; set; }
 
     // V10: BrightData-enriched fields for frontend display
     public double? TotalPrice { get; set; }

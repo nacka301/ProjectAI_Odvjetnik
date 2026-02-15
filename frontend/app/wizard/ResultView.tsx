@@ -389,6 +389,9 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
                           {c.is_outlier && (
                             <span className="text-[10px] font-bold uppercase tracking-wider bg-red-100 text-red-700 px-2 py-0.5 rounded-full">Outlier</span>
                           )}
+                          {c.is_outlier && c.outlier_reason && (
+                            <span className="text-[10px] text-red-500 italic">{c.outlier_reason}</span>
+                          )}
                         </div>
                         <div className="flex items-center gap-4 mt-1.5">
                           <span className="text-sm font-bold text-blue-700">{formatPrice(Math.round(c.price_per_m2))} €/m²</span>

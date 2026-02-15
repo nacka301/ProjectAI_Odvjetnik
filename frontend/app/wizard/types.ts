@@ -98,6 +98,7 @@ export interface UsedComparable {
   price_per_m2: number;
   similarity_score: number;
   is_outlier: boolean;
+  outlier_reason?: string;
   total_price?: number;
   area_m2?: number;
   rooms?: number;
