@@ -139,6 +139,7 @@ builder.Services.AddScoped<ContractAnalysisService>();
 builder.Services.AddScoped<ChronologyService>();
 builder.Services.AddScoped<ValuationEngine>();
 builder.Services.AddScoped<ZkParsingService>();
+builder.Services.AddScoped<LegalIntelligenceService>();
 builder.Services.AddHttpClient<EmailService>();
 builder.Services.AddHttpClient<MarketResearchService>(client =>
 {

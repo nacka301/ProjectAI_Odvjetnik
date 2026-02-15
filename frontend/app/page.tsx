@@ -23,7 +23,9 @@ import {
   CheckCircle,
   XCircle,
   ArrowRight,
+  Gavel,
 } from "lucide-react";
+import LegalFeed from "@/components/LegalFeed";
 import { getEvaluations, type EvaluationRow } from "@/lib/supabase";
 
 // ── Helpers ──
@@ -195,7 +197,7 @@ export default function Dashboard() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
         {/* ═══════════ 1. ACTION BAR ═══════════ */}
         <section>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
             {/* Nova Procjena */}
             <Link
               href="/wizard"
@@ -268,6 +270,25 @@ export default function Dashboard() {
                 </h3>
                 <p className="text-xs text-slate-400 mt-1 leading-relaxed">
                   Slaganje spisa iz dokumenata
+                </p>
+              </div>
+            </Link>
+
+            {/* Provjeri Ishod */}
+            <Link
+              href="/sudska-praksa"
+              className="group relative bg-white rounded-xl border border-slate-200 p-5 hover:border-amber-400 hover:shadow-md transition overflow-hidden"
+            >
+              <div className="absolute top-0 right-0 w-20 h-20 bg-amber-50 rounded-bl-[40px] -mr-2 -mt-2 group-hover:bg-amber-100 transition" />
+              <div className="relative">
+                <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center mb-3 group-hover:bg-amber-200 transition">
+                  <Gavel className="h-5 w-5 text-amber-600" />
+                </div>
+                <h3 className="font-semibold text-slate-900 text-sm">
+                  Provjeri Ishod
+                </h3>
+                <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                  AI prognoza na sudu + sudska praksa
                 </p>
               </div>
             </Link>
@@ -475,6 +496,9 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
+
+            {/* Legal Intelligence Feed */}
+            <LegalFeed />
 
             {/* Quick Stats */}
             {!loading && evaluations.length > 0 && (
