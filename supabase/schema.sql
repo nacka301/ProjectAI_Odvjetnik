@@ -69,17 +69,22 @@ CREATE INDEX IF NOT EXISTS idx_zk_analyses_created_at ON zk_analyses (created_at
 
 -- evaluations
 ALTER TABLE evaluations ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "service_role_full_access" ON evaluations;
 CREATE POLICY "service_role_full_access" ON evaluations
     FOR ALL USING (auth.role() = 'service_role');
+DROP POLICY IF EXISTS "anon_insert_only" ON evaluations;
 CREATE POLICY "anon_insert_only" ON evaluations
     FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "anon_select" ON evaluations;
 CREATE POLICY "anon_select" ON evaluations
     FOR SELECT USING (true);
 
 -- zk_analyses
 ALTER TABLE zk_analyses ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "service_role_full_access" ON zk_analyses;
 CREATE POLICY "service_role_full_access" ON zk_analyses
     FOR ALL USING (auth.role() = 'service_role');
+DROP POLICY IF EXISTS "anon_insert_only" ON zk_analyses;
 CREATE POLICY "anon_insert_only" ON zk_analyses
     FOR INSERT WITH CHECK (true);
 
@@ -101,8 +106,10 @@ CREATE TABLE IF NOT EXISTS contract_analyses (
 CREATE INDEX IF NOT EXISTS idx_contract_analyses_created_at ON contract_analyses (created_at DESC);
 
 ALTER TABLE contract_analyses ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "service_role_full_access" ON contract_analyses;
 CREATE POLICY "service_role_full_access" ON contract_analyses
     FOR ALL USING (auth.role() = 'service_role');
+DROP POLICY IF EXISTS "anon_select" ON contract_analyses;
 CREATE POLICY "anon_select" ON contract_analyses
     FOR SELECT USING (true);
 
@@ -122,8 +129,10 @@ CREATE TABLE IF NOT EXISTS chronologies (
 CREATE INDEX IF NOT EXISTS idx_chronologies_created_at ON chronologies (created_at DESC);
 
 ALTER TABLE chronologies ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "service_role_full_access" ON chronologies;
 CREATE POLICY "service_role_full_access" ON chronologies
     FOR ALL USING (auth.role() = 'service_role');
+DROP POLICY IF EXISTS "anon_select" ON chronologies;
 CREATE POLICY "anon_select" ON chronologies
     FOR SELECT USING (true);
 
@@ -146,7 +155,9 @@ CREATE TABLE IF NOT EXISTS legal_strategies (
 CREATE INDEX IF NOT EXISTS idx_legal_strategies_created_at ON legal_strategies (created_at DESC);
 
 ALTER TABLE legal_strategies ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "service_role_full_access" ON legal_strategies;
 CREATE POLICY "service_role_full_access" ON legal_strategies
     FOR ALL USING (auth.role() = 'service_role');
+DROP POLICY IF EXISTS "anon_select" ON legal_strategies;
 CREATE POLICY "anon_select" ON legal_strategies
     FOR SELECT USING (true);
