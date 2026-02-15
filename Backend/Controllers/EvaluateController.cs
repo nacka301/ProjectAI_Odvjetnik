@@ -20,6 +20,7 @@ public class EvaluateController : ControllerBase
     private readonly ValuationEngine _valuationEngine;
     private readonly SupabaseService _supabaseService;
     private readonly EmailService _emailService;
+    private readonly TextAnalysisService _textAnalysisService;
     private readonly ILogger<EvaluateController> _logger;
 
     public EvaluateController(
@@ -29,6 +30,7 @@ public class EvaluateController : ControllerBase
         ValuationEngine valuationEngine,
         SupabaseService supabaseService,
         EmailService emailService,
+        TextAnalysisService textAnalysisService,
         ILogger<EvaluateController> logger)
     {
         _valuationService = valuationService;
@@ -37,6 +39,7 @@ public class EvaluateController : ControllerBase
         _valuationEngine = valuationEngine;
         _supabaseService = supabaseService;
         _emailService = emailService;
+        _textAnalysisService = textAnalysisService;
         _logger = logger;
     }
 
@@ -362,6 +365,49 @@ public class EvaluateController : ControllerBase
                 "Engine koristi keyword fallback");
         }
 
+        // ── Stage 2.7: Sherlock — Semantic Description Analysis ──
+        _logger.LogInformation("━━━ STAGE 2.7: SHERLOCK — TEXT ANALYSIS ━━━  {Count} oglasa",
+            marketData.ActiveListings.Count);
+        await SendProgress("sherlock", "active", "Sherlock analizira opise oglasa...");
+        ct.ThrowIfCancellationRequested();
+        try
+        {
+            // Build batch of listings that have deep-dived content (meaningful text to analyze)
+            var toAnalyze = marketData.ActiveListings
+                .Select((l, i) => (Index: i, Listing: l))
+                .Where(x => x.Listing.Content.Length > 100)
+                .Select(x => (x.Index, x.Listing.Content))
+                .ToList();
+
+            if (toAnalyze.Count > 0)
+            {
+                var sherlockResults = await _textAnalysisService.AnalyzeBatchAsync(toAnalyze);
+                foreach (var (idx, attrs) in sherlockResults)
+                {
+                    if (idx >= 0 && idx < marketData.ActiveListings.Count)
+                        marketData.ActiveListings[idx].SherlockAttributes = attrs;
+                }
+
+                int analyzed = sherlockResults.Count;
+                int urgent = sherlockResults.Values.Count(a => a.IsUrgent);
+                int landOverrides = sherlockResults.Values.Count(a => a.ActualLandType != Backend.Models.ActualLandType.Unknown);
+                await SendProgress("sherlock", "done", "Sherlock analiza gotova",
+                    $"{analyzed} analizirano • {urgent} hitno • {landOverrides} tip zemljišta");
+
+                _logger.LogInformation("    ✅ STAGE 2.7 DONE: {Analyzed} analyzed, {Urgent} urgent, {LandOverrides} land-type overrides",
+                    analyzed, urgent, landOverrides);
+            }
+            else
+            {
+                await SendProgress("sherlock", "skipped", "Sherlock preskočen", "Nema dovoljno teksta za analizu");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Sherlock analysis failed — continuing without");
+            await SendProgress("sherlock", "skipped", "Sherlock preskočen", "Greška u analizi teksta");
+        }
+
         // ── Stage 3A: Engine ──
         _logger.LogInformation("━━━ STAGE 3A: DETERMINISTIC ENGINE ━━━  Tip={Type}, Oglasi={Count}",
             marketData.DetectedPropertyType, marketData.ActiveListings.Count);
@@ -442,6 +488,33 @@ public class EvaluateController : ControllerBase
         {
             // Engine had 0 usable comparables — fall back to AI estimate
             finalValue = (int)Math.Round(aiResult.EstimatedValueEur);
+        }
+
+        // ── V29: Enrich engine comps with AI titles/URLs ──
+        // The engine's UsedComparables often have raw scraping titles ("Nekretnine-AD - Njuškalo")
+        // while the AI's SelectedComparables have proper human-readable titles.
+        // Cross-match by URL and adopt the AI's Title + Url when matched.
+        if (engineResult.UsedComparables?.Count > 0 && aiResult.SelectedComparables?.Count > 0)
+        {
+            foreach (var engineComp in engineResult.UsedComparables)
+            {
+                // Try to find a matching AI comparable by URL overlap
+                var aiMatch = aiResult.SelectedComparables.FirstOrDefault(ai =>
+                    !string.IsNullOrEmpty(ai.Url) && !string.IsNullOrEmpty(engineComp.Url) &&
+                    (ai.Url == engineComp.Url ||
+                     ai.Url.Contains(engineComp.Url, StringComparison.OrdinalIgnoreCase) ||
+                     engineComp.Url.Contains(ai.Url, StringComparison.OrdinalIgnoreCase)));
+
+                if (aiMatch != null && !string.IsNullOrWhiteSpace(aiMatch.Title))
+                {
+                    _logger.LogInformation("V29: Engine comp '{Old}' → AI title '{New}'",
+                        engineComp.Title?.Length > 40 ? engineComp.Title[..40] : engineComp.Title,
+                        aiMatch.Title.Length > 40 ? aiMatch.Title[..40] : aiMatch.Title);
+                    engineComp.Title = aiMatch.Title;
+                    if (!string.IsNullOrEmpty(aiMatch.Url))
+                        engineComp.Url = aiMatch.Url;
+                }
+            }
         }
 
         // ── Build response ──

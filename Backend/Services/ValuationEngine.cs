@@ -837,6 +837,12 @@ public class ValuationEngine
         }
 
         // ── 4b++. V13: CROSS-TYPE HARD EXCLUSION ──
+        // Build URL→ComparableSearchResult lookup for enriched fields (needed by Sherlock + similarity)
+        var listingLookup = marketData.ActiveListings
+            .Where(l => !string.IsNullOrEmpty(l.Url))
+            .GroupBy(l => l.Url, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
         // Stan ≠ Kuća ≠ Zemljište — NIKAD ne uspoređivati različite tipove.
         // If subject is House, ALL apartment comps are EXCLUDED (and vice versa).
         // V15: Also excludes land sub-type mismatch (poljopriv. vs građevinsko).
@@ -872,6 +878,28 @@ public class ValuationEngine
                     || compText.Contains("vinograd") || compText.Contains("voćnjak"));
                 bool compIsBuildLand = compIsLand && (compText.Contains("građevinsk")
                     || compText.Contains("gradjevinsk"));
+
+                // V29 Sherlock: "Text Authority Rule" — Sherlock overrides scraper's land type
+                ComparableSearchResult? sherlockListing = null;
+                if (!string.IsNullOrEmpty(p.SourceUrl))
+                    listingLookup.TryGetValue(p.SourceUrl, out sherlockListing);
+
+                if (sherlockListing?.SherlockAttributes != null)
+                {
+                    var landType = sherlockListing.SherlockAttributes.ActualLandType;
+                    if (landType == Models.ActualLandType.Agricultural)
+                    {
+                        compIsAgriLand = true;
+                        compIsBuildLand = false;
+                        compIsLand = true;
+                    }
+                    else if (landType == Models.ActualLandType.Building)
+                    {
+                        compIsBuildLand = true;
+                        compIsAgriLand = false;
+                        compIsLand = true;
+                    }
+                }
 
                 bool mismatch = false;
                 string reason = "";
@@ -914,12 +942,6 @@ public class ValuationEngine
             .Where(l => l.AiSimilarityScore.HasValue && !string.IsNullOrEmpty(l.Url))
             .ToDictionary(l => l.Url, l => l.AiSimilarityScore!.Value, StringComparer.OrdinalIgnoreCase);
 
-        // Build URL→ComparableSearchResult lookup for enriched fields
-        var listingLookup = marketData.ActiveListings
-            .Where(l => !string.IsNullOrEmpty(l.Url))
-            .GroupBy(l => l.Url, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
-
         int aiScored = 0, mathFallbackScored = 0;
 
         foreach (var price in cleanPrices)
@@ -942,6 +964,37 @@ public class ValuationEngine
             ComparableSearchResult? listing = null;
             if (!string.IsNullOrEmpty(price.SourceUrl))
                 listingLookup.TryGetValue(price.SourceUrl, out listing);
+
+            // V29 Sherlock: Similarity Boosting/Penalizing based on text analysis
+            if (listing?.SherlockAttributes != null)
+            {
+                var attrs = listing.SherlockAttributes;
+
+                // Garage match bonus: subject has garage AND comp has garage → +5%
+                bool subjectHasGarage = property.Description != null &&
+                    (property.Description.Contains("garaž", StringComparison.OrdinalIgnoreCase) ||
+                     property.Description.Contains("garaz", StringComparison.OrdinalIgnoreCase));
+                if (subjectHasGarage && attrs.HasGarage)
+                    simScore = Math.Min(simScore + 0.05, 1.0);
+
+                // Condition mismatch penalty: subject is renovated AND comp is ruin → -30%
+                bool subjectIsRenovated = property.PropertyState is "renovated" or "new" or "good";
+                if (subjectIsRenovated && attrs.RenovationStatus == Models.RenovationStatus.Ruin)
+                    simScore = Math.Max(simScore - 0.30, 0.0);
+
+                // Urgent listing penalty: urgent sales often have below-market prices → -5%
+                if (attrs.IsUrgent)
+                    simScore = Math.Max(simScore - 0.05, 0.0);
+
+                // Super-Extractor: Major damages → strong penalty (unreliable comp)
+                if (attrs.MajorDamages.Any(d => d is "StaticIssue" or "RoofLeak"))
+                    simScore = Math.Max(simScore - 0.20, 0.0);
+
+                // Super-Extractor: Legal risk → comps with legalization issues are less comparable
+                if (attrs.LegalStatus == Models.LegalStatus.LegalizationNeeded)
+                    simScore = Math.Max(simScore - 0.15, 0.0);
+            }
+            simScore = Math.Clamp(simScore, 0.0, 1.0);
 
             // V20: Per-comparable correction (individual adjustment)
             var (corrPct, corrReason) = CalculatePerCompCorrection(property, listing, price, marketData.DetectedPropertyType);
@@ -2066,10 +2119,26 @@ public class ValuationEngine
         }
 
         // ── 2. CONDITION ADJUSTMENT (buildings only) ──
+        // V29 Sherlock: "Text Authority Rule" — Sherlock's RenovationStatus overrides scraper's AiCondition
         if (!isLand)
         {
+            string? effectiveCondition = listing?.AiCondition;
+            if (listing?.SherlockAttributes != null &&
+                listing.SherlockAttributes.RenovationStatus != Models.RenovationStatus.Unknown)
+            {
+                effectiveCondition = listing.SherlockAttributes.RenovationStatus switch
+                {
+                    Models.RenovationStatus.New => "new",
+                    Models.RenovationStatus.Renovated => "renovated",
+                    Models.RenovationStatus.Livable => "good",
+                    Models.RenovationStatus.NeedsAdaptation => "needs_work",
+                    Models.RenovationStatus.Ruin => "needs_work",
+                    _ => effectiveCondition
+                };
+            }
+
             int subjectCond = ParseConditionLevel(subject.PropertyState);
-            int compCond = ParseConditionLevel(listing?.AiCondition);
+            int compCond = ParseConditionLevel(effectiveCondition);
             if (subjectCond > 0 && compCond > 0 && subjectCond != compCond)
             {
                 int condDiff = compCond - subjectCond; // positive = comp is BETTER
@@ -2104,12 +2173,14 @@ public class ValuationEngine
         }
 
         // ── 4. GARAGE ADJUSTMENT (buildings only) ──
+        // V29 Sherlock: SherlockAttributes.HasGarage overrides scraper's HasGarage
         if (!isLand)
         {
             bool subjectHasGarage = subject.Description != null &&
                 (subject.Description.Contains("garaž", StringComparison.OrdinalIgnoreCase) ||
                  subject.Description.Contains("garaz", StringComparison.OrdinalIgnoreCase));
-            bool compHasGarage = listing?.HasGarage == true || price.HasGarage;
+            bool compHasGarage = listing?.SherlockAttributes?.HasGarage == true
+                || listing?.HasGarage == true || price.HasGarage;
 
             if (compHasGarage && !subjectHasGarage)
             {
@@ -2143,8 +2214,48 @@ public class ValuationEngine
             }
         }
 
-        // ── CAP: ±25% ──
-        correction = Math.Clamp(correction, -25, 25);
+        // ── 6. COMMERCIAL POTENTIAL ADJUSTMENT (Super-Extractor) ──
+        if (listing?.SherlockAttributes != null)
+        {
+            var sa = listing.SherlockAttributes;
+
+            // Commercial potential → comp has commercial value the subject doesn't → adjust DOWN
+            if (sa.CommercialPotential != "None" && !string.IsNullOrEmpty(sa.CommercialPotential))
+            {
+                correction -= 15;
+                reasons.Add($"Komercijalni potencijal ({sa.CommercialPotential}) -15%");
+            }
+
+            // Major damages → structural problems devalue the comp → adjust UP (comp is worse)
+            if (sa.MajorDamages.Any(d => d is "StaticIssue" or "RoofLeak"))
+            {
+                correction += 20;
+                reasons.Add("Oštećenja +20%");
+            }
+
+            // Legal risk: legalization needed → significant discount
+            if (sa.LegalStatus == Models.LegalStatus.LegalizationNeeded)
+            {
+                correction += 30;
+                reasons.Add("Legalizacija +30%");
+            }
+        }
+
+        // ── 7. ELEVATOR ADJUSTMENT (apartments, Floor > 3 without elevator) ──
+        if (!isLand && listing?.SherlockAttributes != null)
+        {
+            var sa = listing.SherlockAttributes;
+            // Parse comp floor from AiFloor string
+            int compFloor = ParseFloorNumber(listing.AiFloor);
+            if (compFloor > 3 && !sa.HasElevator)
+            {
+                correction += 10;
+                reasons.Add($"Bez dizala ({compFloor}. kat) +10%");
+            }
+        }
+
+        // ── CAP: ±35% (raised from ±25% for Super-Extractor rules) ──
+        correction = Math.Clamp(correction, -35, 35);
         string reasonStr = reasons.Count > 0 ? string.Join(", ", reasons) : "";
         return (Math.Round(correction, 1), reasonStr);
     }
@@ -2182,6 +2293,20 @@ public class ValuationEngine
             "new" => "novogradnja",
             _ => condition
         };
+    }
+
+    /// <summary>
+    /// Parse floor number from AiFloor string (e.g. "3", "4. kat", "prizemlje" → 0).
+    /// Returns 0 if unknown or ground floor.
+    /// </summary>
+    private static int ParseFloorNumber(string? floor)
+    {
+        if (string.IsNullOrWhiteSpace(floor)) return 0;
+        var lower = floor.Trim().ToLowerInvariant();
+        if (lower is "prizemlje" or "suteren" or "ground" or "p" or "0") return 0;
+        // Extract first number from strings like "3", "4. kat", "5/8"
+        var match = System.Text.RegularExpressions.Regex.Match(lower, @"\d+");
+        return match.Success && int.TryParse(match.Value, out var n) ? n : 0;
     }
 
     /// <summary>Try to estimate the subject property's year of construction from description text.</summary>

@@ -2996,6 +2996,9 @@ public class ComparableSearchResult
     public string? AiHeating { get; set; }           // Grijanje type
     public string? AiFloor { get; set; }             // Kat / Etaža
     public int? AiRooms { get; set; }                // Broj soba
+
+    // V29 Sherlock: Structured attributes extracted from description text via LLM
+    public Models.ListingAttributes? SherlockAttributes { get; set; }
 }
 
 public class MarketResearchResult
