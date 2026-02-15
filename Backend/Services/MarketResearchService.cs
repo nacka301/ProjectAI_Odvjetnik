@@ -2491,27 +2491,73 @@ public class MarketResearchService
                 if (forbidden) continue;
             }
 
-            // Gate 0.7: V38 UNIVERSAL CROSS-CITY BLOCK
+            // Gate 0.6: V39 CATEGORY PAGE FILTER — reject Njuškalo search/listing pages
+            // URLs like /prodaja-stanova, /prodaja-stanova/osijek, /prodaja-kuca/zagreb
+            // are NOT individual listings — they're search result pages that get deep-dived
+            // and produce data from random listings on that page.
+            {
+                var urlLower = r.Url.ToLowerInvariant();
+                bool isCategoryPage = urlLower.Contains("njuskalo.hr/") &&
+                    !urlLower.Contains("/nekretnine/") &&
+                    !urlLower.Contains("oglas-") &&
+                    (urlLower.Contains("/prodaja-stanova") ||
+                     urlLower.Contains("/prodaja-kuca") ||
+                     urlLower.Contains("/prodaja-zemljista") ||
+                     urlLower.Contains("/iznajmljivanje") ||
+                     urlLower.Contains("/poslovni-prostori") ||
+                     // Bare /prodaja-stanova or /prodaja-stanova/city without listing ID
+                     Regex.IsMatch(urlLower, @"njuskalo\.hr/prodaja-[a-z]+(/[a-z\-]+)?/?$"));
+                if (isCategoryPage)
+                {
+                    _logger.LogInformation(
+                        "[{Phase}] REJECTED (V39 Category Page — not an individual listing): {Url}",
+                        phaseName, Truncate(r.Url, 80));
+                    continue;
+                }
+            }
+
+            // Gate 0.7: V38/V39 UNIVERSAL CROSS-CITY BLOCK
             // If the subject is in a known major city, reject any listing that
-            // mentions a DIFFERENT major city. This prevents absurdities like
-            // comparing Zagreb apartments with Split or Osijek listings.
+            // mentions a DIFFERENT major city in its URL. Tavily content snippets
+            // often include cross-city navigation text ("Zagreb, Split, Rijeka...")
+            // so we ONLY trust the URL for cross-city detection.
             if (_currentSubjectMajorCity != null)
             {
                 bool crossCityForbidden = false;
+                var urlLowerForCity = r.Url.ToLowerInvariant();
                 foreach (var city in MajorCities)
                 {
                     if (city == _currentSubjectMajorCity) continue;
-                    // Check if listing text/URL mentions this OTHER major city
-                    if (combinedLower.Contains(city) ||
-                        r.Url.Contains(city, StringComparison.OrdinalIgnoreCase))
-                    {
-                        // Allow if listing ALSO mentions the subject city
-                        if (combinedLower.Contains(_currentSubjectMajorCity) ||
-                            r.Url.Contains(_currentSubjectMajorCity, StringComparison.OrdinalIgnoreCase))
-                            continue;
 
-                        _logger.LogDebug(
-                            "[{Phase}] REJECTED (V38 Cross-City: subject={Subject}, found={Foreign}): {Title}",
+                    // V39: Check URL ONLY — content is unreliable (Tavily includes navigation text)
+                    bool urlMentionsForeignCity = urlLowerForCity.Contains(city);
+                    if (!urlMentionsForeignCity) continue;
+
+                    // V39: If URL mentions a foreign city, reject UNCONDITIONALLY.
+                    // Previously we allowed if content also mentioned subject city,
+                    // but that let through Njuškalo pages with cross-city navigation.
+                    _logger.LogInformation(
+                        "[{Phase}] REJECTED (V39 Cross-City URL: subject={Subject}, url-city={Foreign}): {Title}",
+                        phaseName, _currentSubjectMajorCity, city, Truncate(r.Title, 60));
+                    crossCityForbidden = true;
+                    _cityIntegrityRejections++;
+                    if (!_rejectedCityNames.Contains(city, StringComparer.OrdinalIgnoreCase))
+                        _rejectedCityNames.Add(city);
+                    break;
+                }
+                if (crossCityForbidden) continue;
+
+                // V39: Secondary content check — if URL is clean but TITLE mentions
+                // a different major city (e.g., "Split, Mejaši - stan"), also reject.
+                // Title is more reliable than Content (which has Tavily snippets).
+                var titleLower = r.Title.ToLowerInvariant();
+                foreach (var city in MajorCities)
+                {
+                    if (city == _currentSubjectMajorCity) continue;
+                    if (titleLower.Contains(city))
+                    {
+                        _logger.LogInformation(
+                            "[{Phase}] REJECTED (V39 Cross-City Title: subject={Subject}, title-city={Foreign}): {Title}",
                             phaseName, _currentSubjectMajorCity, city, Truncate(r.Title, 60));
                         crossCityForbidden = true;
                         _cityIntegrityRejections++;

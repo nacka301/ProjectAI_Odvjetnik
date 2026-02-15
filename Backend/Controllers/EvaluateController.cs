@@ -565,8 +565,25 @@ public class EvaluateController : ControllerBase
         }
         else if (engineResult.EstimatedValueEur <= 0 && aiResult.EstimatedValueEur > 0)
         {
-            // Engine had 0 usable comparables — fall back to AI estimate
-            finalValue = (int)Math.Round(aiResult.EstimatedValueEur);
+            // V39: Engine had 0 usable comps — DO NOT blindly trust AI estimate.
+            // The AI gets ALL raw listings (including cross-city junk) and can hallucinate.
+            // Only accept AI value if engine had SOME comps that just scored low.
+            if (engineResult.UsablePricePoints > 0)
+            {
+                finalValue = (int)Math.Round(aiResult.EstimatedValueEur);
+                _logger.LogWarning("V39: Engine value=0 but {Comps} usable points — using AI fallback {Value}€",
+                    engineResult.UsablePricePoints, finalValue);
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "V39: Engine=0€ with 0 usable comps — AI suggested {AiValue}€ but REJECTING (no valid comparables)",
+                    aiResult.EstimatedValueEur);
+                finalValue = 0; // Signal to frontend: no valid valuation possible
+                finalReasoning = "UPOZORENJE: Nije pronađen nijedan valjan usporedivi oglas za ovu nekretninu u zadanoj lokaciji. " +
+                    "Sustav ne može izraditi pouzdanu procjenu tržišne vrijednosti bez relevantnih usporedivih prodaja. " +
+                    "Preporučamo angažiranje ovlaštenog sudskog vještaka za procjenu vrijednosti.";
+            }
         }
 
         // ── V29: Enrich engine comps with AI titles/URLs ──
