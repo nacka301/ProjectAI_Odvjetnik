@@ -15,11 +15,15 @@ import {
   Scale,
   Quote,
   BookOpen,
+  ClipboardCheck,
+  Link2,
+  ListChecks,
+  Calculator,
 } from "lucide-react";
 import { NormBadge, CitedNormsList, TemporalDatePicker } from "@/components/NormBadge";
 import { type CitedNorm } from "@/lib/normApi";
 
-// ── Types matching backend ContractAnalysisResult ──
+// ── Types matching backend ContractAnalysisResult (V49) ──
 
 interface ContractIssue {
   title: string;
@@ -35,6 +39,33 @@ interface SuggestedAmendment {
   rationale: string;
 }
 
+// V49: Structured checklist item
+interface ChecklistItem {
+  category: string;
+  check: string;
+  status: string; // UREĐENO | DJELOMIČNO | NIJE_UREĐENO
+  risk: string;   // NIZAK | SREDNJI | VISOK
+  finding: string;
+  article_ref?: string | null;
+  recommendation?: string | null;
+}
+
+// V49: Cross-article structural analysis
+interface CrossArticleIssue {
+  title: string;
+  linked_articles: string[];
+  description: string;
+  risk: string;
+}
+
+// V49: Mandatory clause detector
+interface MandatoryClauseCheck {
+  clause: string;
+  present: boolean;
+  importance: string; // KRITIČNO | PREPORUČENO
+  description: string;
+}
+
 interface ContractAnalysisResult {
   document_type: string;
   summary: string;
@@ -44,6 +75,11 @@ interface ContractAnalysisResult {
   warnings: ContractIssue[];
   positives: string[];
   suggested_amendments: SuggestedAmendment[];
+  // V49: New sections
+  checklist?: ChecklistItem[];
+  cross_article_issues?: CrossArticleIssue[];
+  mandatory_clauses?: MandatoryClauseCheck[];
+  risk_score_breakdown?: string[];
   cited_norms?: CitedNorm[];
   disclaimer: string;
 }
@@ -132,9 +168,36 @@ export default function ContractAnalysisPage() {
   };
 
   const riskBarColor = (score: number) => {
-    if (score >= 70) return "bg-red-500";
-    if (score >= 40) return "bg-amber-500";
+    if (score >= 60) return "bg-red-500";
+    if (score >= 30) return "bg-amber-500";
     return "bg-green-500";
+  };
+
+  // V49: Status badge styling for checklist
+  const statusBadge = (status: string) => {
+    switch (status) {
+      case "UREĐENO":
+        return "bg-green-100 text-green-800 border-green-200";
+      case "DJELOMIČNO":
+        return "bg-amber-100 text-amber-800 border-amber-200";
+      case "NIJE_UREĐENO":
+        return "bg-red-100 text-red-800 border-red-200";
+      default:
+        return "bg-gray-100 text-gray-800 border-gray-200";
+    }
+  };
+
+  const riskBadge = (risk: string) => {
+    switch (risk?.toUpperCase()) {
+      case "VISOK":
+        return "bg-red-100 text-red-700";
+      case "SREDNJI":
+        return "bg-amber-100 text-amber-700";
+      case "NIZAK":
+        return "bg-green-100 text-green-700";
+      default:
+        return "bg-gray-100 text-gray-600";
+    }
   };
 
   return (
@@ -344,6 +407,137 @@ export default function ContractAnalysisPage() {
               </div>
             </div>
 
+            {/* V49: ✅ Revizijska kontrolna lista (Checklist) */}
+            {result.checklist && result.checklist.length > 0 && (
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="bg-slate-50 px-6 py-3 border-b border-gray-200 flex items-center gap-2">
+                  <ClipboardCheck className="h-5 w-5 text-slate-700" />
+                  <h2 className="font-bold text-slate-800">
+                    Revizijska kontrolna lista ({result.checklist.length})
+                  </h2>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-50 text-left text-xs text-gray-500 uppercase tracking-wide">
+                        <th className="px-4 py-2">Kategorija</th>
+                        <th className="px-4 py-2">Provjera</th>
+                        <th className="px-4 py-2 text-center">Status</th>
+                        <th className="px-4 py-2 text-center">Rizik</th>
+                        <th className="px-4 py-2">Nalaz</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {result.checklist.map((item, i) => (
+                        <tr key={i} className="hover:bg-gray-50/50">
+                          <td className="px-4 py-3 font-medium text-gray-800 whitespace-nowrap">
+                            {item.category}
+                          </td>
+                          <td className="px-4 py-3 text-gray-700">
+                            {item.check}
+                            {item.article_ref && (
+                              <span className="ml-1 text-xs text-indigo-500">({item.article_ref})</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold border ${statusBadge(item.status)}`}>
+                              {item.status.replace("_", " ")}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${riskBadge(item.risk)}`}>
+                              {item.risk}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-gray-600 max-w-xs">
+                            <p>{item.finding}</p>
+                            {item.recommendation && (
+                              <p className="mt-1 text-xs text-amber-700 italic">
+                                💡 {item.recommendation}
+                              </p>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* V49: 🔗 Cross-Article strukturni rizici */}
+            {result.cross_article_issues && result.cross_article_issues.length > 0 && (
+              <div className="bg-white rounded-xl border border-purple-200 shadow-sm overflow-hidden">
+                <div className="bg-purple-50 px-6 py-3 border-b border-purple-200 flex items-center gap-2">
+                  <Link2 className="h-5 w-5 text-purple-600" />
+                  <h2 className="font-bold text-purple-800">
+                    Strukturni rizici — međučlanska analiza ({result.cross_article_issues.length})
+                  </h2>
+                </div>
+                <div className="divide-y divide-purple-100">
+                  {result.cross_article_issues.map((issue, i) => (
+                    <div key={i} className="px-6 py-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <h3 className="font-semibold text-purple-800">{issue.title}</h3>
+                        <span className={`shrink-0 px-2 py-0.5 rounded text-xs font-semibold ${riskBadge(issue.risk)}`}>
+                          {issue.risk}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {issue.linked_articles.map((art, j) => (
+                          <span key={j} className="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full font-medium">
+                            {art}
+                          </span>
+                        ))}
+                      </div>
+                      <p className="text-sm text-gray-700 mt-2 leading-relaxed">{issue.description}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* V49: 📋 Obvezne zaštitne klauzule */}
+            {result.mandatory_clauses && result.mandatory_clauses.length > 0 && (
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="bg-slate-50 px-6 py-3 border-b border-gray-200 flex items-center gap-2">
+                  <ListChecks className="h-5 w-5 text-slate-700" />
+                  <h2 className="font-bold text-slate-800">
+                    Obvezne zaštitne klauzule
+                  </h2>
+                </div>
+                <div className="divide-y divide-gray-100">
+                  {result.mandatory_clauses.map((mc, i) => (
+                    <div key={i} className="px-6 py-3 flex items-start gap-3">
+                      <div className="mt-0.5">
+                        {mc.present ? (
+                          <CheckCircle className="h-5 w-5 text-green-500" />
+                        ) : (
+                          <AlertCircle className="h-5 w-5 text-red-500" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium text-gray-800">{mc.clause}</span>
+                          <span className={`text-xs px-1.5 py-0.5 rounded font-semibold ${
+                            mc.importance === "KRITIČNO" 
+                              ? "bg-red-100 text-red-700" 
+                              : "bg-blue-100 text-blue-700"
+                          }`}>
+                            {mc.importance}
+                          </span>
+                          <span className={`text-xs font-medium ${mc.present ? "text-green-600" : "text-red-600"}`}>
+                            {mc.present ? "PRISUTNO" : "NEDOSTAJE"}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-500 mt-1">{mc.description}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* 🔴 Red Flags */}
             {result.red_flags.length > 0 && (
               <div className="bg-white rounded-xl border border-red-200 shadow-sm overflow-hidden">
@@ -518,6 +712,32 @@ export default function ContractAnalysisPage() {
                 </div>
                 <div className="px-6 py-4">
                   <CitedNormsList norms={result.cited_norms} variant="cards" />
+                </div>
+              </div>
+            )}
+
+            {/* V49: 📊 Risk Score Breakdown */}
+            {result.risk_score_breakdown && result.risk_score_breakdown.length > 0 && (
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="bg-gray-50 px-6 py-3 border-b border-gray-200 flex items-center gap-2">
+                  <Calculator className="h-5 w-5 text-gray-600" />
+                  <h2 className="font-bold text-gray-800">
+                    Struktura ocjene rizika ({result.risk_score}/100)
+                  </h2>
+                </div>
+                <ul className="divide-y divide-gray-100">
+                  {result.risk_score_breakdown.map((line, i) => (
+                    <li key={i} className="px-6 py-2 text-sm text-gray-700 font-mono">
+                      {line.startsWith("-") ? (
+                        <span className="text-green-600">{line}</span>
+                      ) : (
+                        <span className="text-red-600">{line}</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                <div className="px-6 py-2 bg-gray-50 border-t border-gray-200 text-sm font-bold text-gray-800 font-mono">
+                  = {result.risk_score}/100 → {result.overall_risk}
                 </div>
               </div>
             )}

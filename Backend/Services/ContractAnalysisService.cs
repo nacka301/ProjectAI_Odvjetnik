@@ -5,29 +5,34 @@ using OpenAI.Chat;
 namespace Backend.Services;
 
 /// <summary>
-/// AI Contract Analyzer — "The Legal Scholar"
-/// Performs izvanredna revizija (extraordinary review) of real estate contracts
-/// through the lens of Croatian obligatory and property law, applying
-/// Syllogismus Iuridicus to every clause.
+/// V49: AI Contract Auditor — "The Legal Auditor"
+/// Two-pass architecture:
+///   Pass 1 (AI): Structured audit checklist — mandatory elements, cross-article analysis, missing clauses
+///   Pass 2 (Engine): Deterministic risk scoring from audit findings
+/// 
+/// Replaces the old "free thinking" approach with a strict legal auditor methodology.
 /// </summary>
 public class ContractAnalysisService
 {
     private readonly ChatClient _chatClient;  // Heavy model — legal reasoning
     private readonly ILogger<ContractAnalysisService> _logger;
 
-    private const string SystemPrompt = """
-        PERSONA:
-        Ti si vrhunski pravni stručnjak s doktoratom iz pravnih znanosti (dr.sc.iur.) i 25 godina 
-        iskustva u hrvatskom pravosuđu — posebice u prometu nekretnina, stvarnom pravu i obveznom pravu.
-        Tvoj ton je akademski precizan, autoritativan, ali i praktičan.
-        Obraćaš se kolegici koristeći stručnu terminologiju jer ona to razumije.
+    private const string Disclaimer =
+        "Ovo je AI pomoćna analiza i ne zamjenjuje pravni savjet ovlaštenog odvjetnika sukladno " +
+        "čl. 1. Zakona o odvjetništvu (NN 9/94, 117/08, 75/09, 18/11). " +
+        "Obrada osobnih podataka iz ugovora provodi se sukladno Uredbi (EU) 2016/679 (GDPR). " +
+        "Korisnik potvrđuje da ima pravo na pristup dostavljenom dokumentu i odgovoran je za " +
+        "anonimizaciju osjetljivih podataka osim ako je izričita privola dana. " +
+        "Prije potpisa konzultirajte se sa stručnjakom.";
 
-        TVOJA ULOGA: Izvanredna revizija ugovora (Contract Audit)
-        Ne tražiš "greške" — tražiš:
-        - Nedostatke u bitnim sastojcima ugovora (essentialia negotii) sukladno čl. 269. ZOO (NN 35/05, 41/08, 125/11, 78/15, 29/18)
-        - Povrede prisilnih propisa (ius cogens) — čl. 322. ZOO (ništetnost)
-        - Rizike od ništetnosti (čl. 322.-328. ZOO) ili pobojnosti (čl. 330.-335. ZOO)
-        - Nesuglasje s načelom savjesnosti i poštenja (čl. 4. ZOO)
+    // ══════════════════════════════════════════════════════════
+    //  V49: AUDITOR PROMPT — Strict legal checklist methodology
+    // ══════════════════════════════════════════════════════════
+    private const string AuditorPrompt = """
+        PERSONA:
+        Ti si PRAVNI REVIZOR ugovora o nekretninama s doktoratom iz pravnih znanosti (dr.sc.iur.)
+        i 25 godina iskustva u hrvatskom pravosuđu. Radiš kao forenzički auditor ugovora —
+        ne "čitaš" ugovor, nego ga KONTROLIRAŠ prema striktnoj metodologiji.
 
         PRAVNA PRECIZNOST:
         - NE koristi spekulativne izraze: "moguće je", "može doći do", "vjerojatno",
@@ -45,95 +50,142 @@ public class ContractAnalysisService
         - Zakon o osobnom identifikacijskom broju (NN 60/08, 0/12)
         - Zakon o gradnji (NN 153/13, 20/17, 39/19, 125/19)
 
-        METODOLOGIJA — Syllogismus Iuridicus:
-        Za svaki identificirani rizik primijeni trodijelni pravni silogizam:
-        1. MAIOR (pravna norma): Koji članak zakona se primjenjuje?
-        2. MINOR (činjenično stanje): Što u ugovoru pada pod tu normu?
-        3. CONCLUSIO (pravna posljedica): Koja je pravna posljedica za stranku?
+        ████████████████████████████████████████████████████████
+        METODOLOGIJA — OBVEZNA 4 KORAKA REVIZIJE
+        ████████████████████████████████████████████████████████
 
-        TVOJ ZADATAK:
-        Detaljno analiziraj priloženi tekst ugovora kroz sljedeće pravne institute:
+        KORAK 1: PROVJERA TERETA I OSIGURANJA
+        Za svaku od sljedećih točaka odgovori sa STATUS i NALAZ:
+        a) Postoji li teret na nekretnini (hipoteka, služnost, plodouživanje)?
+        b) Ako postoji teret — postoji li mehanizam brisanja s rokom?
+        c) Postoji li mehanizam osiguranja kupca (escrow, fiducija, uvjetna isplata)?
+        d) Jesu li rokovi plaćanja i brisanja tereta međusobno povezani i usklađeni?
+        e) Je li isplata uvjetovana brisanjem tereta?
 
-        1. **KVALIFIKACIJA PRAVNOG POSLA (Vrsta dokumenta):**
-           - Predugovor (čl. 268. ZOO) — obvezuje li bitne sastojke glavnog ugovora?
-           - Glavni ugovor o kupoprodaji nekretnine (čl. 376.-377. ZOO) — pisani oblik kao pretpostavka valjanosti
-           - Aneks ugovora — je li poštivan oblik glavnog ugovora (čl. 286. st. 2. ZOO)?
+        KORAK 2: PROVJERA KAPARE I PLAĆANJA
+        a) Je li kapara simetrično uređena za obje strane (dvostruko vraćanje)?
+        b) Je li jasno je li kapara ili odustatnina (čl. 303. vs čl. 306. ZOO)?
+        c) Postoje li posljedice neispunjenja za OBJE strane?
+        d) Ide li isplata direktno prodavatelju ili kroz zaštićeni mehanizam?
+        e) Postoji li zaštita kupca prije brisanja tereta?
 
-        2. **🔴 NEDOSTACI BITNIH SASTOJAKA — Ništetnost / Pobojnost (Critical):**
-           - TABULARNA ISPRAVA (Clausula Intabulandi): Nedostatak bezuvjetne tabularne izjave 
-             onemogućuje uknjižbu prava vlasništva (čl. 52.-55. ZZK). Je li uvjetna? Je li vezana 
-             isključivo uz isplatu cijene ili nameće dodatne uvjete?
-           - IMENOVANJE STRANAKA: Nedostatak OIB-a stranaka — čl. 36. st. 3. Zakona o osobnom 
-             identifikacijskom broju. Bez OIB-a javni bilježnik neće ovjeriti potpis.
-           - PREDMET OBVEZE (čl. 269. ZOO): Nedostatak precizne oznake nekretnine — katastarska 
-             općina, broj katastarske čestice, broj ZK uloška. Bez toga ugovor nije provediv u 
-             zemljišnoj knjizi (čl. 32. ZZK).
-           - CIJENA: Nedostatak određene ili odredive cijene (čl. 384. ZOO za kupoprodaju).
-           - ROK ISPLATE i STUPANJE U POSJED: Nedostatak roka = neodređena obveza, rizik spora.
-           - ZAŠTITA OD EVIKCIJE (čl. 430.-437. ZOO): Nedostatak izjave prodavatelja da je 
-             nekretnina slobodna od prava trećih i tereta.
-           - BRAČNA STEČEVINA (čl. 36. Obiteljskog zakona): Ako je nekretnina stečena u braku, 
-             nedostaje li suglasnost supružnika? Raspolaganje bračnom stečevinom bez suglasnosti = pobojnost.
+        KORAK 3: PROVJERA PRIJENOSA VLASNIŠTVA
+        a) Je li clausula intabulandi bezuvjetna?
+        b) Je li prijenos moguć bez ikakvih tereta?
+        c) Postoji li OIB obiju stranaka?
+        d) Postoji li precizna oznaka nekretnine (k.o., k.č.br., ZK uložak)?
+        e) Ako je nekretnina bračna stečevina — postoji li suglasnost supružnika?
 
-        3. **🟡 AKCESORNA PITANJA i DISPOZITIVNE ODREDBE (Warnings):**
-           - KAPARA vs. ODUSTATNINA (čl. 303.-306. ZOO): Je li ugovorna kapara pravilno 
-             kvalificirana? Razlikovanje kapare (čl. 303.) od odustatnine (čl. 306.) — ključno 
-             za posljedice neispunjenja. Pravilo dvostrukog vraćanja (čl. 304. st. 2. ZOO).
-           - POREZ NA PROMET NEKRETNINA: Tko snosi financijsku obvezu? (Zakonska je obveza kupca, 
-             ali ugovorne strane mogu regulirati ekonomski teret.)
-           - ENERGETSKI CERTIFIKAT: Obveza prodavatelja po Zakonu o gradnji (čl. 59., NN 153/13, 20/17, 39/19, 125/19).
-           - REZ REŽIJA: Razgraničenje troškova na dan primopredaje (possessio).
-           - UGOVORNA KAZNA (čl. 350.-356. ZOO): Nedostatak ugovorne kazne za zakašnjenje s 
-             predajom u posjed — preporučljivo ugraditi kao instrument osiguranja ispunjenja.
-           - ROKOVI: Jesu li primjereni? Prekluzivni rokovi (rok nakon kojeg se gubi pravo na 
-             radnju) moraju biti jasno definirani.
-           - SOLIDARNA ODGOVORNOST: Ako postoji više prodavatelja, regulira li ugovor solidarnost?
+        KORAK 4: PROVJERA ZAŠTITNIH KLAUZULA
+        a) Postoji li izjava o ispražnjenju nekretnine i rok?
+        b) Postoji li ugovorna kazna za zakašnjenje?
+        c) Postoji li klauzula o naknadi štete?
+        d) Postoji li raskidni uvjet?
+        e) Postoji li energetski certifikat?
+        f) Postoji li razgraničenje režijskih troškova?
 
-        4. **✅ POZITIVNE STRANE (Well-Drafted Provisions):**
-           - Pravilno definirani elementi koji su u korist kupca i predstavljaju dobru pravnu praksu.
+        ████████████████████████████████████████████████████████
+        OBVEZNA CROSS-ARTICLE ANALIZA
+        ████████████████████████████████████████████████████████
 
-        5. **📝 PRIJEDLOG IZMJENA — KONKRETNE FORMULACIJE (Amendments):**
-           - Za svaki rizik predloži exact formulaciju članka kakvu bi iskusan odvjetnik napisao.
-           - Objasni ratio legis (smisao zakona) iza svake predložene izmjene.
-           - Koristi termine: akcesornost, solidarna odgovornost, tabularna isprava, prekluzivni rok.
+        Ne analiziraj članke izolirano!
+        Obavezno provjeri jesu li sljedeći članci međusobno usklađeni:
+        - Članci o plaćanju ↔ članci o hipoteci/teretu
+        - Članci o plaćanju ↔ clausula intabulandi
+        - Članci o hipoteci ↔ clausula intabulandi
+        - Rokovi plaćanja ↔ rokovi predaje u posjed ↔ rokovi brisanja tereta
+        Ako NISU usklađeni, označi to kao STRUKTURNI RIZIK.
 
-        UPUTE ZA RAZMIŠLJANJE:
-        - OCR kvaliteta: Ako je tekst nejasan, upozori i označi confidence = Low.
-        - Nedostatak OIB-a ili oznake čestice → KRITIČAN rizik (ugovor neprovediv u ZK).
-        - Budi strog — in dubio pro emptore (u slučaju sumnje, štiti kupca).
-        - Citiraj sporne dijelove ugovora kao dokaz (quoted_text).
-        - Koristi stručni hrvatski pravni jezik s latinskim izrazima gdje je primjereno.
-        - Uvijek navedi pravnu osnovu: članak zakona + kratica + NN oznaka (npr. "čl. 303. st. 1. ZOO, NN 35/05").
+        ████████████████████████████████████████████████████████
+        OBVEZNE ZAŠTITNE KLAUZULE — PROVJERA PRISUTNOSTI
+        ████████████████████████████████████████████████████████
+
+        Provjeri postoje li sljedeće zaštitne klauzule u ugovoru:
+        1. Escrow ili uvjetna isplata — KRITIČNO
+        2. Mehanizam brisanja hipoteke s rokom — KRITIČNO (ako postoji hipoteka)
+        3. Dvostruka kapara (čl. 304. st. 2. ZOO) — KRITIČNO
+        4. Raskidni uvjet — PREPORUČENO
+        5. Klauzula o naknadi štete — PREPORUČENO
+        6. Izjava o ispražnjenju nekretnine — PREPORUČENO
+        7. Ugovorna kazna za zakašnjenje — PREPORUČENO
+        8. Energetski certifikat — PREPORUČENO
+        9. Razgraničenje režijskih troškova — PREPORUČENO
+        10. Suglasnost supružnika (ako primjenjivo) — KRITIČNO
+
+        Ako neka nedostaje, navedi je kao PROPUST — čak i ako ugovor izgleda uredno.
+
+        ████████████████████████████████████████████████████████
+        ZABRANA GENERIČKIH RIZIKA
+        ████████████████████████████████████████████████████████
+
+        Zabranjeno je navoditi generičke rizike poput:
+        - "mogući sudski spor"
+        - "nejasnoće u ugovoru"
+        - "potencijalni problemi"
+        - "možda postoji rizik"
+
+        Svaki rizik MORA biti:
+        1. Vezan uz KONKRETAN članak ugovora (citiraj ga)
+        2. Citirati TOČAN dio teksta iz ugovora (quoted_text)
+        3. Objasniti KONKRETNU pravnu posljedicu (ne apstraktnu)
+        4. Koristiti Syllogismus Iuridicus: MAIOR (norma) → MINOR (činjenica) → CONCLUSIO (posljedica)
+
+        ████████████████████████████████████████████████████████
 
         GDPR NAPOMENA:
-        - Obrada osobnih podataka sadržanih u ugovoru (OIB, imena stranaka, adrese) 
-          zahtijeva izričitu privolu korisnika sukladno Uredbi (EU) 2016/679 (GDPR).
-        - Korisnik je odgovoran za anonimizaciju osjetljivih podataka, 
-          osim ako je izričita privola dana.
-        - Ova analiza ne predstavlja pravni savjet u smislu 
-          čl. 1. Zakona o odvjetništvu (NN 9/94, 117/08, 75/09, 18/11).
+        Obrada osobnih podataka sadržanih u ugovoru (OIB, imena stranaka, adrese)
+        zahtijeva izričitu privolu korisnika sukladno Uredbi (EU) 2016/679 (GDPR).
 
         VAŽNO — FORMAT ODGOVORA:
-        Vrati ISKLJUČIVO čisti JSON (bez markdown fencing-a), u ovoj strukturi:
+        Vrati ISKLJUČIVO čisti JSON (bez markdown fencing-a) u ovoj strukturi:
         {
-          "document_type": "Predugovor / Glavni Ugovor / ...",
+          "document_type": "Predugovor / Glavni Ugovor / Aneks",
           "summary": "Kratki opis ugovora u jednoj rečenici",
-          "overall_risk": "Visok / Srednji / Nizak",
-          "risk_score": 75,
+
+          "checklist": [
+            {
+              "category": "Tereti i hipoteke",
+              "check": "Postoji li teret na nekretnini?",
+              "status": "UREĐENO | DJELOMIČNO | NIJE_UREĐENO",
+              "risk": "NIZAK | SREDNJI | VISOK",
+              "finding": "Konkretno što je utvrđeno u ugovoru",
+              "article_ref": "čl. 7",
+              "recommendation": "Preporuka — obavezno ako status ≠ UREĐENO, null ako UREĐENO"
+            }
+          ],
+
+          "cross_article_issues": [
+            {
+              "title": "Naslov strukturnog rizika",
+              "linked_articles": ["čl. 3", "čl. 7", "čl. 10"],
+              "description": "Opis neusklađenosti s pravnim silogizmom",
+              "risk": "NIZAK | SREDNJI | VISOK"
+            }
+          ],
+
+          "mandatory_clauses": [
+            {
+              "clause": "Escrow / uvjetna isplata",
+              "present": false,
+              "importance": "KRITIČNO | PREPORUČENO",
+              "description": "Objašnjenje zašto je ova klauzula važna ili što nedostaje"
+            }
+          ],
+
           "red_flags": [
             {
               "title": "Kratki naziv rizika",
-              "description": "Detaljno objašnjenje s pravnim silogizmom (MAIOR-MINOR-CONCLUSIO)",
-              "quoted_text": "Citirani tekst iz ugovora (ako postoji)",
+              "description": "MAIOR: [pravna norma]. MINOR: [činjenica iz ugovora]. CONCLUSIO: [pravna posljedica].",
+              "quoted_text": "Citirani tekst iz ugovora (OBAVEZNO)",
               "legal_basis": "čl. 303. st. 1. ZOO"
             }
           ],
           "warnings": [
             {
               "title": "Kratki naziv upozorenja",
-              "description": "Objašnjenje s ratio legis",
-              "quoted_text": "Citirani tekst (opcionalno)",
-              "legal_basis": "čl. XX. ZZK (opcionalno)"
+              "description": "Objašnjenje s pravnom osnovom",
+              "quoted_text": "Citirani tekst (OBAVEZNO)",
+              "legal_basis": "čl. XX. ZOO"
             }
           ],
           "positives": ["Pozitivna strana 1", "Pozitivna strana 2"],
@@ -143,18 +195,6 @@ public class ContractAnalysisService
               "current_text": "Trenutni tekst članka",
               "proposed_text": "Predloženi tekst koji štiti kupca",
               "rationale": "Ratio legis — zašto je ova izmjena pravno nužna"
-            }
-          ],
-          "cited_norms": [
-            {
-              "abbreviation": "ZOO",
-              "full_name": "Zakon o obveznim odnosima",
-              "article": "čl. 322.",
-              "paragraph": "st. 1.",
-              "point": "",
-              "nn_reference": "NN 35/05, 41/08, 125/11, 78/15, 29/18",
-              "status": "VAŽEĆI",
-              "formatted_citation": "čl. 322. st. 1. Zakona o obveznim odnosima (NN 35/05, 41/08, 125/11, 78/15, 29/18)"
             }
           ]
         }
@@ -167,7 +207,9 @@ public class ContractAnalysisService
     }
 
     /// <summary>
-    /// Analyze a contract text and return structured legal analysis.
+    /// V49: Two-pass contract analysis.
+    /// Pass 1: AI audit — structured checklist + cross-article + mandatory clauses
+    /// Pass 2: Deterministic risk scoring from audit findings
     /// </summary>
     public async Task<ContractAnalysisResult> AnalyzeContractAsync(string contractText)
     {
@@ -179,7 +221,7 @@ public class ContractAnalysisService
                 Summary = "Tekst je prekratak za analizu.",
                 OverallRisk = "Nepoznat",
                 RiskScore = 0,
-                Disclaimer = "Ovo je AI pomoćna analiza i ne zamjenjuje pravni savjet ovlaštenog odvjetnika sukladno čl. 1. Zakona o odvjetništvu (NN 9/94, 117/08, 75/09, 18/11). Obrada osobnih podataka iz ugovora provodi se sukladno Uredbi (EU) 2016/679 (GDPR). Korisnik potvrđuje da ima pravo na pristup dostavljenom dokumentu i odgovoran je za anonimizaciju osjetljivih podataka osim ako je izričita privola dana. Prije potpisa konzultirajte se sa stručnjakom."
+                Disclaimer = Disclaimer
             };
         }
 
@@ -188,17 +230,19 @@ public class ContractAnalysisService
 
         try
         {
-            _logger.LogInformation("Contract analysis: {Len} chars", text.Length);
+            _logger.LogInformation("V49 Contract audit: {Len} chars", text.Length);
 
+            // ── PASS 1: AI AUDIT ──
             var messages = new List<ChatMessage>
             {
-                new SystemChatMessage(SystemPrompt),
+                new SystemChatMessage(AuditorPrompt),
                 new UserChatMessage(
                     $"""
-                    Molim te, napravi stručnu pravnu analizu ovog teksta ugovora.
-                    Ako nađeš rizičan članak, citiraj ga i objasni zašto je opasan.
-                    Budi posebno pažljiv na tabularne izjave, rokove, oznake čestica i OIB-eve.
-                    
+                    PROVEDI STRUČNU PRAVNU REVIZIJU ovog ugovora.
+                    Slijedi sva 4 koraka revizije, provjeri cross-article usklađenost,
+                    i provjeri sve obvezne zaštitne klauzule.
+                    Svaki rizik MORA citirati konkretan tekst iz ugovora.
+
                     TEKST UGOVORA:
                     {text}
                     """)
@@ -213,42 +257,192 @@ public class ContractAnalysisService
             ChatCompletion completion = await _chatClient.CompleteChatAsync(messages, options);
             var json = completion.Content[0].Text;
 
-            _logger.LogDebug("Contract AI response: {Json}", json.Length > 500 ? json[..500] + "…" : json);
+            _logger.LogDebug("V49 Contract AI audit response: {Len} chars", json.Length);
 
-            return ParseResponse(json);
+            // ── Parse AI audit output ──
+            var result = ParseAuditResponse(json);
+
+            // ── PASS 2: DETERMINISTIC RISK SCORING ──
+            ComputeRiskScore(result);
+
+            _logger.LogInformation(
+                "V49 Contract audit complete: type={Type}, risk={Risk}({Score}), " +
+                "checklist={CL}, cross={CA}, mandatory={MC}, flags={Flags}, warnings={Warn}",
+                result.DocumentType, result.OverallRisk, result.RiskScore,
+                result.Checklist.Count, result.CrossArticleIssues.Count,
+                result.MandatoryClauses.Count, result.RedFlags.Count, result.Warnings.Count);
+
+            return result;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Contract analysis failed");
+            _logger.LogError(ex, "V49 Contract audit failed");
             return new ContractAnalysisResult
             {
                 DocumentType = "Greška",
                 Summary = $"AI analiza nije uspjela: {ex.Message}",
                 OverallRisk = "Nepoznat",
                 RiskScore = 0,
-                Disclaimer = "Ovo je AI pomoćna analiza i ne zamjenjuje pravni savjet ovlaštenog odvjetnika sukladno čl. 1. Zakona o odvjetništvu (NN 9/94, 117/08, 75/09, 18/11). Obrada osobnih podataka iz ugovora provodi se sukladno Uredbi (EU) 2016/679 (GDPR). Korisnik potvrđuje da ima pravo na pristup dostavljenom dokumentu i odgovoran je za anonimizaciju osjetljivih podataka osim ako je izričita privola dana. Prije potpisa konzultirajte se sa stručnjakom."
+                Disclaimer = Disclaimer
             };
         }
     }
 
-    private ContractAnalysisResult ParseResponse(string json)
+    // ══════════════════════════════════════════════════════════
+    //  PASS 2: DETERMINISTIC RISK SCORING ENGINE
+    // ══════════════════════════════════════════════════════════
+    /// <summary>
+    /// V49: Compute risk score mathematically from audit findings.
+    /// No AI guessing — pure formula.
+    /// </summary>
+    private void ComputeRiskScore(ContractAnalysisResult result)
     {
-        var result = new ContractAnalysisResult
+        int score = 0;
+        var breakdown = new List<string>();
+
+        // ── Checklist items ──
+        foreach (var item in result.Checklist)
         {
-            Disclaimer = "Ovo je AI pomoćna analiza i ne zamjenjuje pravni savjet ovlaštenog odvjetnika sukladno čl. 1. Zakona o odvjetništvu (NN 9/94, 117/08, 75/09, 18/11). Obrada osobnih podataka iz ugovora provodi se sukladno Uredbi (EU) 2016/679 (GDPR). Korisnik potvrđuje da ima pravo na pristup dostavljenom dokumentu i odgovoran je za anonimizaciju osjetljivih podataka osim ako je izričita privola dana. Prije potpisa konzultirajte se sa stručnjakom."
+            switch (item.Risk?.ToUpperInvariant())
+            {
+                case "VISOK":
+                    score += 15;
+                    breakdown.Add($"+15 Checklist VISOK: {item.Check}");
+                    break;
+                case "SREDNJI":
+                    score += 7;
+                    breakdown.Add($"+7 Checklist SREDNJI: {item.Check}");
+                    break;
+                // NIZAK = 0 points
+            }
+        }
+
+        // ── Mandatory clauses missing ──
+        foreach (var mc in result.MandatoryClauses)
+        {
+            if (!mc.Present)
+            {
+                int pts = mc.Importance?.ToUpperInvariant() == "KRITIČNO" ? 15 : 5;
+                score += pts;
+                breakdown.Add($"+{pts} Nedostaje: {mc.Clause} ({mc.Importance})");
+            }
+        }
+
+        // ── Cross-article structural issues ──
+        foreach (var ca in result.CrossArticleIssues)
+        {
+            int pts = ca.Risk?.ToUpperInvariant() == "VISOK" ? 12 : 5;
+            score += pts;
+            breakdown.Add($"+{pts} Strukturni: {ca.Title}");
+        }
+
+        // ── Red flags ──
+        score += result.RedFlags.Count * 10;
+        if (result.RedFlags.Count > 0)
+            breakdown.Add($"+{result.RedFlags.Count * 10} Crvene zastavice ({result.RedFlags.Count}×10)");
+
+        // ── Warnings ──
+        score += result.Warnings.Count * 3;
+        if (result.Warnings.Count > 0)
+            breakdown.Add($"+{result.Warnings.Count * 3} Upozorenja ({result.Warnings.Count}×3)");
+
+        // ── Positives reduce risk slightly ──
+        int bonus = Math.Min(result.Positives.Count * 2, 10);
+        if (bonus > 0)
+        {
+            score -= bonus;
+            breakdown.Add($"-{bonus} Pozitivne strane ({result.Positives.Count}×2, max -10)");
+        }
+
+        // Clamp to 0-100
+        score = Math.Clamp(score, 0, 100);
+
+        // Determine risk level
+        result.RiskScore = score;
+        result.OverallRisk = score switch
+        {
+            >= 60 => "Visok",
+            >= 30 => "Srednji",
+            _ => "Nizak"
         };
+        result.RiskScoreBreakdown = breakdown;
+        result.Disclaimer = Disclaimer;
+
+        _logger.LogInformation("V49 Risk score: {Score}/100 ({Level}) from {Items} breakdown items",
+            score, result.OverallRisk, breakdown.Count);
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  JSON PARSER — AI audit output → structured models
+    // ══════════════════════════════════════════════════════════
+    private ContractAnalysisResult ParseAuditResponse(string json)
+    {
+        var result = new ContractAnalysisResult { Disclaimer = Disclaimer };
 
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
 
-        // Document type
+        // Document metadata
         result.DocumentType = GetString(root, "document_type", "Nepoznato");
         result.Summary = GetString(root, "summary", "");
-        result.OverallRisk = GetString(root, "overall_risk", "Srednji");
-        result.RiskScore = root.TryGetProperty("risk_score", out var rs) && rs.ValueKind == JsonValueKind.Number
-            ? rs.GetInt32() : 50;
 
-        // Red flags
+        // ── V49: Checklist ──
+        if (root.TryGetProperty("checklist", out var clArray) && clArray.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in clArray.EnumerateArray())
+            {
+                result.Checklist.Add(new ChecklistItem
+                {
+                    Category = GetString(item, "category"),
+                    Check = GetString(item, "check"),
+                    Status = GetString(item, "status", "NIJE_UREĐENO"),
+                    Risk = GetString(item, "risk", "SREDNJI"),
+                    Finding = GetString(item, "finding"),
+                    ArticleRef = GetStringOrNull(item, "article_ref"),
+                    Recommendation = GetStringOrNull(item, "recommendation")
+                });
+            }
+        }
+
+        // ── V49: Cross-article issues ──
+        if (root.TryGetProperty("cross_article_issues", out var caArray) && caArray.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in caArray.EnumerateArray())
+            {
+                var issue = new CrossArticleIssue
+                {
+                    Title = GetString(item, "title"),
+                    Description = GetString(item, "description"),
+                    Risk = GetString(item, "risk", "SREDNJI")
+                };
+                if (item.TryGetProperty("linked_articles", out var laArray) && laArray.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var la in laArray.EnumerateArray())
+                    {
+                        if (la.ValueKind == JsonValueKind.String)
+                            issue.LinkedArticles.Add(la.GetString() ?? "");
+                    }
+                }
+                result.CrossArticleIssues.Add(issue);
+            }
+        }
+
+        // ── V49: Mandatory clauses ──
+        if (root.TryGetProperty("mandatory_clauses", out var mcArray) && mcArray.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in mcArray.EnumerateArray())
+            {
+                result.MandatoryClauses.Add(new MandatoryClauseCheck
+                {
+                    Clause = GetString(item, "clause"),
+                    Present = item.TryGetProperty("present", out var p) && p.ValueKind == JsonValueKind.True,
+                    Importance = GetString(item, "importance", "PREPORUČENO"),
+                    Description = GetString(item, "description")
+                });
+            }
+        }
+
+        // ── Red flags ──
         if (root.TryGetProperty("red_flags", out var rfArray) && rfArray.ValueKind == JsonValueKind.Array)
         {
             foreach (var item in rfArray.EnumerateArray())
@@ -263,7 +457,7 @@ public class ContractAnalysisService
             }
         }
 
-        // Warnings
+        // ── Warnings ──
         if (root.TryGetProperty("warnings", out var wArray) && wArray.ValueKind == JsonValueKind.Array)
         {
             foreach (var item in wArray.EnumerateArray())
@@ -278,7 +472,7 @@ public class ContractAnalysisService
             }
         }
 
-        // Positives
+        // ── Positives ──
         if (root.TryGetProperty("positives", out var pArray) && pArray.ValueKind == JsonValueKind.Array)
         {
             foreach (var item in pArray.EnumerateArray())
@@ -288,7 +482,7 @@ public class ContractAnalysisService
             }
         }
 
-        // Suggested amendments
+        // ── Suggested amendments ──
         if (root.TryGetProperty("suggested_amendments", out var saArray) && saArray.ValueKind == JsonValueKind.Array)
         {
             foreach (var item in saArray.EnumerateArray())
@@ -303,9 +497,10 @@ public class ContractAnalysisService
             }
         }
 
-        _logger.LogInformation("Contract parsed: type={Type}, risk={Risk}({Score}), flags={Flags}, warnings={Warnings}",
-            result.DocumentType, result.OverallRisk, result.RiskScore,
-            result.RedFlags.Count, result.Warnings.Count);
+        _logger.LogInformation(
+            "V49 Audit parsed: type={Type}, checklist={CL}, cross={CA}, mandatory={MC}, flags={RF}, warnings={W}",
+            result.DocumentType, result.Checklist.Count, result.CrossArticleIssues.Count,
+            result.MandatoryClauses.Count, result.RedFlags.Count, result.Warnings.Count);
 
         return result;
     }
