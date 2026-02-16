@@ -3,11 +3,12 @@ using OpenAI.Chat;
 namespace Backend.Services;
 
 /// <summary>
-/// V35: Multi-model ChatClient provider — routes tasks to the optimal OpenAI model.
+/// V50: Multi-model ChatClient provider — routes tasks to the optimal OpenAI model.
 /// 
 /// Routing philosophy:
-///   Fast  (gpt-5-mini)  = extraction, classification, summaries — cheap &amp; fast
-///   Heavy (gpt-5.2)     = complex reasoning, legal strategy, final reports
+///   Fast      (gpt-4o-mini) = extraction, classification, summaries — cheap &amp; fast
+///   Heavy     (gpt-4o)      = complex reasoning, legal strategy, final reports
+///   Reasoning (o1-preview)  = deep logical reasoning, trap detection, second opinion
 ///
 /// Task → Model mapping:
 ///   ExtractPropertyInfo (PDF)           → Fast
@@ -17,7 +18,8 @@ namespace Backend.Services;
 ///   ZkParsingService (ZK extraction)    → Fast
 ///   Legal Feed (dashboard summary)      → Fast
 ///   ValuationAgent (contextual report)  → Heavy
-///   ContractAnalysis (legal reasoning)  → Heavy
+///   ContractAnalysis Pass 1 (audit)     → Heavy
+///   ContractAnalysis Pass 2 (traps)     → Reasoning  ← NEW
 ///   Legal Strategy (precedent ranking)  → Heavy
 ///   Precedent Search (RAG simulation)   → Heavy
 ///   Auto-Valuation (final narrative)    → Heavy
@@ -39,16 +41,29 @@ public class ChatClientProvider
     public ChatClient Heavy { get; }
 
     /// <summary>
+    /// Reasoning model — for deep logical reasoning and trap detection.
+    /// Uses o1-preview chain-of-thought for catching subtle contractual traps.
+    /// </summary>
+    public ChatClient Reasoning { get; }
+
+    /// <summary>
     /// Model identifiers for logging/diagnostics.
     /// </summary>
     public string FastModel { get; }
     public string HeavyModel { get; }
+    public string ReasoningModel { get; }
 
-    public ChatClientProvider(string apiKey, string fastModel = "gpt-4o-mini", string heavyModel = "gpt-4o")
+    public ChatClientProvider(
+        string apiKey,
+        string fastModel = "gpt-4o-mini",
+        string heavyModel = "gpt-4o",
+        string reasoningModel = "o1-preview")
     {
         FastModel = fastModel;
         HeavyModel = heavyModel;
+        ReasoningModel = reasoningModel;
         Fast = new ChatClient(fastModel, apiKey);
         Heavy = new ChatClient(heavyModel, apiKey);
+        Reasoning = new ChatClient(reasoningModel, apiKey);
     }
 }

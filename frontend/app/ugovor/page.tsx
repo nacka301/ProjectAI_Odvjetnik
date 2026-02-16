@@ -8,6 +8,7 @@ import {
   FileText,
   AlertTriangle,
   AlertCircle,
+  AlertOctagon,
   CheckCircle,
   PenLine,
   Shield,
@@ -66,6 +67,25 @@ interface MandatoryClauseCheck {
   description: string;
 }
 
+// V50: Logical trap detected by o1-preview deep reasoning
+interface LogicalTrap {
+  title: string;
+  articles: string[];
+  quoted_text: string;
+  explanation: string;
+  legal_basis: string;
+  severity: string; // KRITIČNO | VISOK | SREDNJI
+}
+
+// V50: Deviation from ideal contract template
+interface IdealContractDeviation {
+  element: string;
+  ideal_text: string;
+  actual_text: string;
+  severity: string;
+  recommendation: string;
+}
+
 interface ContractAnalysisResult {
   document_type: string;
   summary: string;
@@ -80,6 +100,9 @@ interface ContractAnalysisResult {
   cross_article_issues?: CrossArticleIssue[];
   mandatory_clauses?: MandatoryClauseCheck[];
   risk_score_breakdown?: string[];
+  // V50: Deep reasoning sections
+  logical_traps?: LogicalTrap[];
+  ideal_contract_deviations?: IdealContractDeviation[];
   cited_norms?: CitedNorm[];
   disclaimer: string;
 }
@@ -385,12 +408,18 @@ export default function ContractAnalysisPage() {
               </div>
 
               {/* Stats */}
-              <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-gray-100">
+              <div className="grid grid-cols-4 gap-4 mt-4 pt-4 border-t border-gray-100">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-red-600">
                     {result.red_flags.length}
                   </div>
                   <div className="text-xs text-gray-400">Crvene zastavice</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-red-800">
+                    {result.logical_traps?.length ?? 0}
+                  </div>
+                  <div className="text-xs text-gray-400">Zamke (o1)</div>
                 </div>
                 <div className="text-center">
                   <div className="text-2xl font-bold text-amber-600">
@@ -531,6 +560,104 @@ export default function ContractAnalysisPage() {
                           </span>
                         </div>
                         <p className="text-sm text-gray-500 mt-1">{mc.description}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* V50: 🪤 Logičke zamke — o1-preview deep reasoning */}
+            {result.logical_traps && result.logical_traps.length > 0 && (
+              <div className="bg-white rounded-xl border border-red-300 shadow-sm overflow-hidden">
+                <div className="bg-red-100 px-6 py-3 border-b border-red-300 flex items-center gap-2">
+                  <AlertOctagon className="h-5 w-5 text-red-700" />
+                  <h2 className="font-bold text-red-900">
+                    🪤 Logičke zamke — dubinska analiza ({result.logical_traps.length})
+                  </h2>
+                  <span className="ml-auto text-[10px] bg-red-200 text-red-800 px-2 py-0.5 rounded-full font-semibold uppercase">o1-preview</span>
+                </div>
+                <div className="divide-y divide-red-100">
+                  {result.logical_traps.map((trap, i) => (
+                    <div key={i} className="px-6 py-4">
+                      <div className="flex items-start gap-3">
+                        <span className={`mt-0.5 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold ${
+                          trap.severity === "KRITIČNO" ? "bg-red-600 text-white"
+                          : trap.severity === "VISOK" ? "bg-red-100 text-red-800"
+                          : "bg-yellow-100 text-yellow-800"
+                        }`}>
+                          {trap.severity}
+                        </span>
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-gray-900">{trap.title}</h3>
+                          {trap.articles.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {trap.articles.map((art, j) => (
+                                <span key={j} className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">{art}</span>
+                              ))}
+                            </div>
+                          )}
+                          {trap.quoted_text && (
+                            <blockquote className="mt-2 border-l-3 border-red-300 pl-3 text-sm text-red-700 italic bg-red-50 py-1">
+                              &ldquo;{trap.quoted_text}&rdquo;
+                            </blockquote>
+                          )}
+                          <p className="text-sm text-gray-700 mt-2 leading-relaxed">{trap.explanation}</p>
+                          {trap.legal_basis && (
+                            <p className="text-xs text-blue-600 mt-1 font-medium">📜 {trap.legal_basis}</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* V50: 📋 Usporedba s idealnim ugovorom — RAG */}
+            {result.ideal_contract_deviations && result.ideal_contract_deviations.length > 0 && (
+              <div className="bg-white rounded-xl border border-indigo-200 shadow-sm overflow-hidden">
+                <div className="bg-indigo-50 px-6 py-3 border-b border-indigo-200 flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-indigo-600" />
+                  <h2 className="font-bold text-indigo-900">
+                    Usporedba s idealnim ugovorom ({result.ideal_contract_deviations.length} devijacija)
+                  </h2>
+                  <span className="ml-auto text-[10px] bg-indigo-200 text-indigo-800 px-2 py-0.5 rounded-full font-semibold uppercase">RAG</span>
+                </div>
+                <div className="divide-y divide-indigo-100">
+                  {result.ideal_contract_deviations.map((dev, i) => (
+                    <div key={i} className="px-6 py-4">
+                      <div className="flex items-start gap-3">
+                        <span className={`mt-0.5 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold ${
+                          dev.severity === "KRITIČNO" ? "bg-red-100 text-red-800"
+                          : dev.severity === "VISOK" ? "bg-orange-100 text-orange-800"
+                          : dev.severity === "SREDNJI" ? "bg-yellow-100 text-yellow-800"
+                          : "bg-gray-100 text-gray-600"
+                        }`}>
+                          {dev.severity}
+                        </span>
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-gray-900">{dev.element}</h3>
+                          <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div className="rounded-lg bg-green-50 border border-green-200 p-3">
+                              <p className="text-[10px] font-bold text-green-700 uppercase mb-1">Idealni ugovor</p>
+                              <p className="text-sm text-green-800">{dev.ideal_text}</p>
+                            </div>
+                            <div className={`rounded-lg p-3 ${
+                              dev.actual_text === "NEDOSTAJE" 
+                                ? "bg-red-50 border border-red-200" 
+                                : "bg-amber-50 border border-amber-200"
+                            }`}>
+                              <p className={`text-[10px] font-bold uppercase mb-1 ${
+                                dev.actual_text === "NEDOSTAJE" ? "text-red-700" : "text-amber-700"
+                              }`}>Vaš ugovor</p>
+                              <p className={`text-sm ${
+                                dev.actual_text === "NEDOSTAJE" ? "text-red-800 font-bold" : "text-amber-800"
+                              }`}>{dev.actual_text}</p>
+                            </div>
+                          </div>
+                          <p className="text-sm text-indigo-700 mt-2">💡 {dev.recommendation}</p>
+                        </div>
                       </div>
                     </div>
                   ))}

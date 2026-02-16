@@ -3,7 +3,7 @@ namespace Backend.Models;
 /// <summary>
 /// Result of AI contract analysis — structured legal audit
 /// of a Croatian real estate contract (Predugovor / Glavni Ugovor).
-/// V49: Two-pass architecture — AI audit → deterministic scoring.
+/// V50: Three-pass architecture — AI audit → o1 deep reasoning → deterministic scoring.
 /// </summary>
 public class ContractAnalysisResult
 {
@@ -43,11 +43,58 @@ public class ContractAnalysisResult
     /// <summary>V49: Breakdown of how risk score was computed</summary>
     public List<string> RiskScoreBreakdown { get; set; } = [];
 
+    /// <summary>V50: o1-preview deep reasoning — logical traps and inconsistencies</summary>
+    public List<LogicalTrap> LogicalTraps { get; set; } = [];
+
+    /// <summary>V50: Deviations from ideal contract template (RAG comparison)</summary>
+    public List<IdealContractDeviation> IdealContractDeviations { get; set; } = [];
+
     /// <summary>V42: All norms cited in this analysis — structured for validity badges</summary>
     public List<CitedNorm> CitedNorms { get; set; } = [];
 
     /// <summary>Legal disclaimer (always present)</summary>
     public string Disclaimer { get; set; } = "";
+}
+
+/// <summary>V50: Logical trap detected by o1-preview deep reasoning pass.</summary>
+public class LogicalTrap
+{
+    /// <summary>Short name of the trap</summary>
+    public string Title { get; set; } = "";
+
+    /// <summary>Which articles create the trap</summary>
+    public List<string> Articles { get; set; } = [];
+
+    /// <summary>Quoted text from the contract that creates the trap</summary>
+    public string QuotedText { get; set; } = "";
+
+    /// <summary>Detailed explanation: why this is harmful to the buyer</summary>
+    public string Explanation { get; set; } = "";
+
+    /// <summary>Legal basis — relevant ZOO/ZV/ZZK article</summary>
+    public string LegalBasis { get; set; } = "";
+
+    /// <summary>Severity: KRITIČNO | VISOK | SREDNJI</summary>
+    public string Severity { get; set; } = "VISOK";
+}
+
+/// <summary>V50: Deviation from the ideal contract template.</summary>
+public class IdealContractDeviation
+{
+    /// <summary>Which element of the ideal contract is missing or deviating</summary>
+    public string Element { get; set; } = "";
+
+    /// <summary>What the ideal contract should contain</summary>
+    public string IdealText { get; set; } = "";
+
+    /// <summary>What the actual contract says (or "NEDOSTAJE" if missing)</summary>
+    public string ActualText { get; set; } = "";
+
+    /// <summary>Severity: KRITIČNO | VISOK | SREDNJI | NIZAK</summary>
+    public string Severity { get; set; } = "SREDNJI";
+
+    /// <summary>Concrete recommendation for fixing this deviation</summary>
+    public string Recommendation { get; set; } = "";
 }
 
 public class ContractIssue

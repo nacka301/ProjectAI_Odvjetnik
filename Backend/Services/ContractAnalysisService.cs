@@ -5,16 +5,16 @@ using OpenAI.Chat;
 namespace Backend.Services;
 
 /// <summary>
-/// V49: AI Contract Auditor — "The Legal Auditor"
-/// Two-pass architecture:
-///   Pass 1 (AI): Structured audit checklist — mandatory elements, cross-article analysis, missing clauses
-///   Pass 2 (Engine): Deterministic risk scoring from audit findings
-/// 
-/// Replaces the old "free thinking" approach with a strict legal auditor methodology.
+/// V50: AI Contract Auditor — "The Legal Auditor" with Deep Reasoning
+/// Three-pass architecture:
+///   Pass 1 (Heavy/gpt-4o): Structured audit checklist — mandatory elements, cross-article analysis, missing clauses
+///   Pass 2 (Reasoning/o1-preview): Deep logical reasoning — trap detection, RAG comparison with ideal contract
+///   Pass 3 (Engine): Deterministic risk scoring from all findings
 /// </summary>
 public class ContractAnalysisService
 {
-    private readonly ChatClient _chatClient;  // Heavy model — legal reasoning
+    private readonly ChatClient _auditClient;     // Heavy model — structured audit (Pass 1)
+    private readonly ChatClient _reasoningClient;  // Reasoning model — deep logic (Pass 2)
     private readonly ILogger<ContractAnalysisService> _logger;
 
     private const string Disclaimer =
@@ -26,7 +26,74 @@ public class ContractAnalysisService
         "Prije potpisa konzultirajte se sa stručnjakom.";
 
     // ══════════════════════════════════════════════════════════
-    //  V49: AUDITOR PROMPT — Strict legal checklist methodology
+    //  IDEAL CONTRACT TEMPLATE — RAG reference for comparison
+    // ══════════════════════════════════════════════════════════
+    private const string IdealContractTemplate = """
+        IDEALNI KUPOPRODAJNI UGOVOR ZA NEKRETNINU — REFERENTNI PREDLOŽAK
+
+        Ovaj predložak sadrži sve elemente koje kvalitetan kupoprodajni ugovor
+        za nekretninu u Republici Hrvatskoj MORA sadržavati radi zaštite kupca.
+
+        1. IDENTIFIKACIJA STRANAKA
+           - Puno ime i prezime / naziv tvrtke obiju stranaka
+           - OIB obiju stranaka (čl. 7. Zakona o OIB-u, NN 60/08)
+           - Adresa prebivališta / sjedišta
+           - Ako je bračna stečevina: suglasnost supružnika (čl. 37. ObZ)
+
+        2. PREDMET UGOVORA — NEKRETNINA
+           - Katastarska općina i katastarski broj (k.o., k.č.br.)
+           - Zemijšnoknjižni uložak (ZK uložak)
+           - Etažna jedinica (ako primjenjivo) — točna oznaka E-xx
+           - Površina u m² (korisna/neto)
+           - Adresa nekretnine
+           - Izjava prodavatelja da je nekretnina slobodna od tereta
+             ili popis tereta s mehanizmom brisanja
+
+        3. CIJENA I PLAĆANJE
+           - Ukupna cijena u EUR (jasno navedena)
+           - Dinamika plaćanja (kapara + ostatak) s točnim rokovima
+           - Kapara: jasno definirano da je KAPARA, ne odustatnina (čl. 303. ZOO)
+           - Dvostruko vraćanje kapare ako prodavatelj odustane (čl. 304. st. 2. ZOO)
+           - Zaštićeni mehanizam plaćanja: escrow račun / javnobilježnički polog / 
+             uvjetna isplata (ne direktna isplata prodavatelju prije brisanja tereta)
+
+        4. TERETI I HIPOTEKE
+           - Izjava o postojećim teretima (hipoteka, služnost, plodouživanje)
+           - Mehanizam brisanja s KONKRETNIM rokom (npr. 30 dana od potpisa)
+           - Isplata UVJETOVANA brisanjem tereta — ne obrnuto
+           - Brisovnica: obveza prodavatelja da ishodi brisovnicu
+           - Blockain: ako postoji hipoteka, ostatak kupoprodajne cijene ide
+             direktno banci za otplatu kredita, ne prodavatelju
+
+        5. CLAUSULA INTABULANDI
+           - Bezuvjetna clausula intabulandi
+           - Ovjerena kod javnog bilježnika
+           - Bez dodatnih uvjeta osim plaćanja cijene
+           - Jasno navedeno da je kupac ovlašten izvršiti upis vlasništva
+             u zemljišnu knjigu bez daljnje suglasnosti prodavatelja
+
+        6. PRIJENOS POSJEDA (Predaja nekretnine)
+           - Rok predaje nekretnine u posjed kupcu
+           - Obveza ispražnjenja nekretnine (osobe i stvari)
+           - Razgraničenje režijskih troškova (datum prijelaza)
+           - Primopredajni zapisnik
+
+        7. ZAŠTITNE KLAUZULE
+           - Raskidni uvjet (jednostrani raskid ako prodavatelj ne ispuni obvezu)
+           - Ugovorna kazna za zakašnjenje (npr. 0,5% mjesečno)
+           - Klauzula o naknadi štete
+           - Energetski certifikat (obveza prema Zakonu o gradnji)
+           - Izjava o legalnosti gradnje (uporabna dozvola)
+
+        8. ZAVRŠNE ODREDBE
+           - Mjerodavno pravo: RH
+           - Nadležni sud
+           - Broj primjeraka
+           - Troškovi javnog bilježnika i poreza (tko snosi)
+        """;
+
+    // ══════════════════════════════════════════════════════════
+    //  PASS 1: AUDITOR PROMPT — gpt-4o structured audit
     // ══════════════════════════════════════════════════════════
     private const string AuditorPrompt = """
         PERSONA:
@@ -202,14 +269,66 @@ public class ContractAnalysisService
 
     public ContractAnalysisService(ChatClientProvider clients, ILogger<ContractAnalysisService> logger)
     {
-        _chatClient = clients.Heavy;  // gpt-5.2 — legal contract analysis
+        _auditClient = clients.Heavy;        // gpt-4o — structured audit (Pass 1)
+        _reasoningClient = clients.Reasoning; // o1-preview — deep reasoning (Pass 2)
         _logger = logger;
     }
 
+    // ══════════════════════════════════════════════════════════
+    //  PASS 2: o1-preview DEEP REASONING PROMPT
+    // ══════════════════════════════════════════════════════════
+    private const string DeepReasoningPrompt = """
+        Ti si forenzički pravni analitičar specijaliziran za otkrivanje SKRIVENIH ZAMKI
+        u ugovorima o nekretninama prema hrvatskom pravu.
+
+        Tvoj zadatak je pronaći:
+        1. LOGIČKE NEKONZISTENCIJE — članci koji si međusobno proturječe
+        2. ŠTETNE KOMBINACIJE — članci koji pojedinačno izgledaju normalno,
+           ali u kombinaciji stvaraju zamku za kupca
+        3. PREŠUTNI RIZICI — situacije koje ugovor NE pokriva, a trebao bi
+        4. SKRIVENE ZAMKE — formulacije koje izgledaju standardno, ali pravno
+           omogućuju prodavatelju da izbjegne obveze
+
+        ANALIZU PROVEDI PREMA ZOO (NN 35/05, 41/08, 125/11, 78/15, 29/18),
+        ZZK (NN 91/96 i naknadne izmjene), ZV (NN 91/96 i naknadne izmjene).
+
+        Također usporedi ugovor s IDEALNIM KUPOPRODAJNIM UGOVOROM i navedi
+        sve značajne devijacije.
+
+        Svaka zamka MORA:
+        - Citirati KONKRETAN tekst iz ugovora (quoted_text)
+        - Navesti KOJE članke ugovora zahvaća
+        - Objasniti ZAŠTO je to štetno za kupca s pravnom osnovom
+
+        FORMAT ODGOVORA — ISKLJUČIVO čisti JSON (bez markdown fencing-a):
+        {
+          "logical_traps": [
+            {
+              "title": "Kratki naziv zamke",
+              "articles": ["čl. 3", "čl. 7"],
+              "quoted_text": "Citirani tekst iz ugovora koji stvara zamku",
+              "explanation": "Detaljna analiza: zašto je ovo zamka za kupca",
+              "legal_basis": "čl. 303. ZOO (NN 35/05)",
+              "severity": "KRITIČNO | VISOK | SREDNJI"
+            }
+          ],
+          "ideal_contract_deviations": [
+            {
+              "element": "Naziv elementa idealnog ugovora koji nedostaje/odstupa",
+              "ideal_text": "Što bi idealan ugovor sadržavao",
+              "actual_text": "Što stvarni ugovor kaže (ili NEDOSTAJE)",
+              "severity": "KRITIČNO | VISOK | SREDNJI | NIZAK",
+              "recommendation": "Konkretna preporuka za kupca"
+            }
+          ]
+        }
+        """;
+
     /// <summary>
-    /// V49: Two-pass contract analysis.
-    /// Pass 1: AI audit — structured checklist + cross-article + mandatory clauses
-    /// Pass 2: Deterministic risk scoring from audit findings
+    /// V50: Three-pass contract analysis.
+    /// Pass 1 (gpt-4o):     AI audit — structured checklist + cross-article + mandatory clauses
+    /// Pass 2 (o1-preview):  Deep reasoning — logical traps + ideal contract comparison
+    /// Pass 3 (Engine):      Deterministic risk scoring from all findings
     /// </summary>
     public async Task<ContractAnalysisResult> AnalyzeContractAsync(string contractText)
     {
@@ -230,10 +349,10 @@ public class ContractAnalysisService
 
         try
         {
-            _logger.LogInformation("V49 Contract audit: {Len} chars", text.Length);
+            _logger.LogInformation("V50 Contract analysis: {Len} chars — 3-pass (audit + reasoning + scoring)", text.Length);
 
-            // ── PASS 1: AI AUDIT ──
-            var messages = new List<ChatMessage>
+            // ── PASS 1 (gpt-4o): Structured Audit ──
+            var auditMessages = new List<ChatMessage>
             {
                 new SystemChatMessage(AuditorPrompt),
                 new UserChatMessage(
@@ -248,35 +367,73 @@ public class ContractAnalysisService
                     """)
             };
 
-            var options = new ChatCompletionOptions
+            var auditOptions = new ChatCompletionOptions
             {
-                Temperature = 0.0f,  // Law does not tolerate creativity!
+                Temperature = 0.0f,
                 ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
             };
 
-            ChatCompletion completion = await _chatClient.CompleteChatAsync(messages, options);
-            var json = completion.Content[0].Text;
+            // ── PASS 2 (o1-preview): Deep Reasoning — runs in PARALLEL with Pass 1 ──
+            var reasoningMessages = new List<ChatMessage>
+            {
+                new UserChatMessage(
+                    $"""
+                    {DeepReasoningPrompt}
 
-            _logger.LogDebug("V49 Contract AI audit response: {Len} chars", json.Length);
+                    ════════════════════════════════════════════════
+                    IDEALNI REFERENTNI UGOVOR (za usporedbu):
+                    ════════════════════════════════════════════════
+                    {IdealContractTemplate}
 
-            // ── Parse AI audit output ──
-            var result = ParseAuditResponse(json);
+                    ════════════════════════════════════════════════
+                    UGOVOR ZA ANALIZU:
+                    ════════════════════════════════════════════════
+                    {text}
+                    """)
+            };
 
-            // ── PASS 2: DETERMINISTIC RISK SCORING ──
+            // o1-preview does NOT support temperature or system messages
+            var reasoningOptions = new ChatCompletionOptions
+            {
+                ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
+            };
+
+            // Run both passes in parallel for maximum speed
+            _logger.LogInformation("V50 Starting parallel passes: Pass 1 (gpt-4o audit) + Pass 2 (o1-preview reasoning)");
+            var auditTask = _auditClient.CompleteChatAsync(auditMessages, auditOptions);
+            var reasoningTask = _reasoningClient.CompleteChatAsync(reasoningMessages, reasoningOptions);
+
+            await Task.WhenAll(auditTask, reasoningTask);
+
+            var auditJson = auditTask.Result.Value.Content[0].Text;
+            var reasoningJson = reasoningTask.Result.Value.Content[0].Text;
+
+            _logger.LogDebug("V50 Pass 1 audit: {Len} chars", auditJson.Length);
+            _logger.LogDebug("V50 Pass 2 reasoning: {Len} chars", reasoningJson.Length);
+
+            // ── Parse Pass 1: Audit output ──
+            var result = ParseAuditResponse(auditJson);
+
+            // ── Parse Pass 2: Deep reasoning output ──
+            ParseReasoningResponse(reasoningJson, result);
+
+            // ── PASS 3: DETERMINISTIC RISK SCORING ──
             ComputeRiskScore(result);
 
             _logger.LogInformation(
-                "V49 Contract audit complete: type={Type}, risk={Risk}({Score}), " +
-                "checklist={CL}, cross={CA}, mandatory={MC}, flags={Flags}, warnings={Warn}",
+                "V50 Contract analysis complete: type={Type}, risk={Risk}({Score}), " +
+                "checklist={CL}, cross={CA}, mandatory={MC}, flags={Flags}, warnings={Warn}, " +
+                "traps={Traps}, deviations={Dev}",
                 result.DocumentType, result.OverallRisk, result.RiskScore,
                 result.Checklist.Count, result.CrossArticleIssues.Count,
-                result.MandatoryClauses.Count, result.RedFlags.Count, result.Warnings.Count);
+                result.MandatoryClauses.Count, result.RedFlags.Count, result.Warnings.Count,
+                result.LogicalTraps.Count, result.IdealContractDeviations.Count);
 
             return result;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "V49 Contract audit failed");
+            _logger.LogError(ex, "V50 Contract analysis failed");
             return new ContractAnalysisResult
             {
                 DocumentType = "Greška",
@@ -289,10 +446,10 @@ public class ContractAnalysisService
     }
 
     // ══════════════════════════════════════════════════════════
-    //  PASS 2: DETERMINISTIC RISK SCORING ENGINE
+    //  PASS 3: DETERMINISTIC RISK SCORING ENGINE
     // ══════════════════════════════════════════════════════════
     /// <summary>
-    /// V49: Compute risk score mathematically from audit findings.
+    /// V50: Compute risk score mathematically from ALL findings (audit + reasoning).
     /// No AI guessing — pure formula.
     /// </summary>
     private void ComputeRiskScore(ContractAnalysisResult result)
@@ -313,7 +470,6 @@ public class ContractAnalysisService
                     score += 7;
                     breakdown.Add($"+7 Checklist SREDNJI: {item.Check}");
                     break;
-                // NIZAK = 0 points
             }
         }
 
@@ -346,6 +502,33 @@ public class ContractAnalysisService
         if (result.Warnings.Count > 0)
             breakdown.Add($"+{result.Warnings.Count * 3} Upozorenja ({result.Warnings.Count}×3)");
 
+        // ── V50: Logical traps from o1-preview ──
+        foreach (var trap in result.LogicalTraps)
+        {
+            int pts = trap.Severity?.ToUpperInvariant() switch
+            {
+                "KRITIČNO" => 18,
+                "VISOK" => 12,
+                _ => 6
+            };
+            score += pts;
+            breakdown.Add($"+{pts} 🪤 Zamka (o1): {trap.Title} ({trap.Severity})");
+        }
+
+        // ── V50: Ideal contract deviations ──
+        foreach (var dev in result.IdealContractDeviations)
+        {
+            int pts = dev.Severity?.ToUpperInvariant() switch
+            {
+                "KRITIČNO" => 10,
+                "VISOK" => 6,
+                "SREDNJI" => 3,
+                _ => 1
+            };
+            score += pts;
+            breakdown.Add($"+{pts} 📋 Devijacija: {dev.Element} ({dev.Severity})");
+        }
+
         // ── Positives reduce risk slightly ──
         int bonus = Math.Min(result.Positives.Count * 2, 10);
         if (bonus > 0)
@@ -368,12 +551,73 @@ public class ContractAnalysisService
         result.RiskScoreBreakdown = breakdown;
         result.Disclaimer = Disclaimer;
 
-        _logger.LogInformation("V49 Risk score: {Score}/100 ({Level}) from {Items} breakdown items",
+        _logger.LogInformation("V50 Risk score: {Score}/100 ({Level}) from {Items} breakdown items",
             score, result.OverallRisk, breakdown.Count);
     }
 
     // ══════════════════════════════════════════════════════════
-    //  JSON PARSER — AI audit output → structured models
+    //  PASS 2 PARSER — o1-preview reasoning output → structured models
+    // ══════════════════════════════════════════════════════════
+    private void ParseReasoningResponse(string json, ContractAnalysisResult result)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            // ── Logical traps ──
+            if (root.TryGetProperty("logical_traps", out var trapsArray) && trapsArray.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in trapsArray.EnumerateArray())
+                {
+                    var trap = new LogicalTrap
+                    {
+                        Title = GetString(item, "title"),
+                        QuotedText = GetString(item, "quoted_text"),
+                        Explanation = GetString(item, "explanation"),
+                        LegalBasis = GetString(item, "legal_basis"),
+                        Severity = GetString(item, "severity", "VISOK")
+                    };
+                    if (item.TryGetProperty("articles", out var artArray) && artArray.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var a in artArray.EnumerateArray())
+                        {
+                            if (a.ValueKind == JsonValueKind.String)
+                                trap.Articles.Add(a.GetString() ?? "");
+                        }
+                    }
+                    result.LogicalTraps.Add(trap);
+                }
+            }
+
+            // ── Ideal contract deviations ──
+            if (root.TryGetProperty("ideal_contract_deviations", out var devArray) && devArray.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in devArray.EnumerateArray())
+                {
+                    result.IdealContractDeviations.Add(new IdealContractDeviation
+                    {
+                        Element = GetString(item, "element"),
+                        IdealText = GetString(item, "ideal_text"),
+                        ActualText = GetString(item, "actual_text"),
+                        Severity = GetString(item, "severity", "SREDNJI"),
+                        Recommendation = GetString(item, "recommendation")
+                    });
+                }
+            }
+
+            _logger.LogInformation("V50 Reasoning parsed: traps={Traps}, deviations={Dev}",
+                result.LogicalTraps.Count, result.IdealContractDeviations.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "V50 Failed to parse o1-preview reasoning output — continuing without deep analysis");
+            // Non-fatal: Pass 1 audit results are still valid
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  PASS 1 PARSER — AI audit output → structured models
     // ══════════════════════════════════════════════════════════
     private ContractAnalysisResult ParseAuditResponse(string json)
     {
@@ -498,7 +742,7 @@ public class ContractAnalysisService
         }
 
         _logger.LogInformation(
-            "V49 Audit parsed: type={Type}, checklist={CL}, cross={CA}, mandatory={MC}, flags={RF}, warnings={W}",
+            "V50 Audit parsed: type={Type}, checklist={CL}, cross={CA}, mandatory={MC}, flags={RF}, warnings={W}",
             result.DocumentType, result.Checklist.Count, result.CrossArticleIssues.Count,
             result.MandatoryClauses.Count, result.RedFlags.Count, result.Warnings.Count);
 

@@ -132,7 +132,8 @@ var openAiKey = builder.Configuration["OpenAI:ApiKey"]
 
 var fastModel = builder.Configuration["OpenAI:FastModel"] ?? "gpt-4o-mini";
 var heavyModel = builder.Configuration["OpenAI:HeavyModel"] ?? "gpt-4o";
-builder.Services.AddSingleton(new ChatClientProvider(openAiKey, fastModel, heavyModel));
+var reasoningModel = builder.Configuration["OpenAI:ReasoningModel"] ?? "o1-preview";
+builder.Services.AddSingleton(new ChatClientProvider(openAiKey, fastModel, heavyModel, reasoningModel));
 builder.Services.AddScoped<PdfService>();
 builder.Services.AddScoped<ValuationService>();
 builder.Services.AddScoped<TextAnalysisService>();
