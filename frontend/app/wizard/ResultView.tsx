@@ -292,28 +292,20 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
             </div>
           )}
 
-          {/* V48: Unified price structure — merges Adjustments + Value Drivers + Discount */}
+          {/* V48: Unified price structure — merges Adjustments + Value Drivers */}
           {(() => {
-            // Build unified list of all price factors
+            // Build unified list of all price factors (EXCLUDING realization discount —
+            // discount is already shown in the table footer as a separate step)
             const factors: { name: string; desc: string; pct: number }[] = [];
 
-            // 1. Realization discount (always first, if present)
-            if (result.realization_discount_percent) {
-              factors.push({
-                name: "Diskont tražene cijene",
-                desc: `Prilagodba s tražene na realnu transakcijsku cijenu (tržišni prosjek${result.realization_gap_reasoning ? `: ${result.realization_gap_reasoning}` : ""}).`,
-                pct: -Math.abs(result.realization_discount_percent),
-              });
-            }
-
-            // 2. Engine adjustments (garage, renovation, condition, etc.)
+            // 1. Engine adjustments (garage, renovation, condition, etc.)
             if (result.adjustments?.length) {
               for (const a of result.adjustments) {
                 factors.push({ name: a.factor, desc: a.description, pct: a.percent });
               }
             }
 
-            // 3. AI value drivers (deduplicated — skip if already covered by adjustments)
+            // 2. AI value drivers (deduplicated — skip if already covered by adjustments)
             if (result.value_drivers?.length) {
               const existingNames = new Set(factors.map(f => f.name.toLowerCase()));
               for (const d of result.value_drivers) {
@@ -327,7 +319,8 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
 
             if (factors.length === 0) return null;
 
-            const totalPct = factors.reduce((sum, f) => sum + f.pct, 0);
+            // V48e: Use backend's authoritative total — matches the table footer's "Σ Korekcija"
+            const totalPct = result.total_adjustment_percent ?? factors.reduce((sum, f) => sum + f.pct, 0);
 
             return (
               <div className="rounded-xl bg-white border border-gray-200 p-6">
