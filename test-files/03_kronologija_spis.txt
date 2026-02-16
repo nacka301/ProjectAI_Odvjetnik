@@ -1,0 +1,95 @@
+SPIS PREDMETA: P-2025/00342
+Općinski građanski sud u Zagrebu
+Sudac: mr.sc. Ivana Petković
+====================================
+
+DOKUMENT 1 — TUŽBA
+Datum: 15. ožujka 2025.
+Tužitelj: Ana Kovačević, OIB: 69435151530
+Tuženik: Marko Horvat, OIB: 12345678903
+
+Ana Kovačević podnosi tužbu protiv Marka Horvata radi raskida kupoprodajnog 
+ugovora od 20. prosinca 2024. i povrata kapare u iznosu od 22.000,00 EUR.
+Tužiteljica tvrdi da je Prodavatelj prešutio postojanje hipoteke na nekretnini
+te da nekretnina ima pravne nedostatke suprotno jamstvima iz ugovora.
+
+---
+
+DOKUMENT 2 — ODGOVOR NA TUŽBU
+Datum: 10. travnja 2025.
+Tuženik: Marko Horvat
+
+Tuženik osporava tužbeni zahtjev u cijelosti. Navodi da je hipoteka bila 
+poznata kupcu prije potpisa ugovora jer je navedena u čl. 7 Ugovora.
+Tuženik predlaže odbijanje tužbenog zahtjeva i naknadu troškova postupka.
+
+---
+
+DOKUMENT 3 — ZK IZVADAK
+Datum: 25. prosinca 2024.
+Općinski sud u Zagrebu, Zemljišnoknjižni odjel
+
+ZK uložak 12345, k.o. Centar
+Čestica: 5678/1
+Vlasnik: Marko Horvat, OIB: 12345678903, udio 1/1
+Teret: Hipoteka u korist Zagrebačke banke d.d., iznos 50.000 EUR, 
+       upisana 15.03.2020., Z-12345/2020
+
+---
+
+DOKUMENT 4 — PROCJENA SUDSKOG VJEŠTAKA 
+Datum: 20. lipnja 2025.
+Vještak: dr.sc. Petar Novak, stalni sudski vještak za graditeljstvo
+
+Vještak utvrđuje da tržišna vrijednost stana na adresi Heinzelova 44, Zagreb,
+iznosi 215.000 EUR na dan procjene, što je 5.000 EUR manje od ugovorene cijene.
+Stan ima ukupnu površinu 72 m², nalazi se na 3. katu, izgrađen 2010. godine.
+Stanje stana je dobro, bez vidljivih nedostataka.
+
+---
+
+DOKUMENT 5 — ZAPISNIK S ROČIŠTA
+Datum: 15. rujna 2025.
+Sudac: mr.sc. Ivana Petković
+
+Prisutni: punomoćnik tužiteljice odvj. Marija Babić, 
+          punomoćnik tuženika odvj. Ivan Radić
+
+Tužiteljica ostaje kod tužbenog zahtjeva. Tuženik predlaže mirno rješenje —
+spreman je vratiti 15.000 EUR od kapare. Tužiteljica odbija ponudu.
+Sud zakazuje završno ročište za 20.11.2025.
+
+---
+
+DOKUMENT 6 — PRESUDA (prvostupanjska)
+Datum: 20. studenog 2025.
+Sudac: mr.sc. Ivana Petković
+
+PRESUDA:
+I. Tužbeni zahtjev se ODBIJA.
+II. Tužiteljica je dužna tuženiku naknaditi troškove postupka 
+    u iznosu od 3.500 EUR u roku od 15 dana.
+
+OBRAZLOŽENJE:
+Sud utvrđuje da je hipoteka bila izričito navedena u čl. 7 Kupoprodajnog ugovora
+te da se Prodavatelj obvezao brisati je prije predaje u posjed. Budući da 
+rok za predaju (čl. 5) još nije istekao, Prodavatelj nije u zakašnjenju.
+Tužiteljica nije dokazala da je prodavatelj prešutio pravne nedostatke.
+
+---
+
+DOKUMENT 7 — ŽALBA
+Datum: 10. prosinca 2025.
+Tužiteljica: Ana Kovačević, putem odvj. Marije Babić
+
+Tužiteljica ulaže žalbu na presudu P-2025/00342 od 20.11.2025. 
+Razlozi žalbe: pogrešno utvrđeno činjenično stanje, pogrešna primjena 
+materijalnog prava (čl. 357. ZOO — odgovornost za pravne nedostatke).
+
+---
+
+DOKUMENT 8 — DOPUNA ŽALBE
+Datum: 5. siječnja 2026.
+Tužiteljica prilaže novi dokaz — dopis Zagrebačke banke od 02.01.2026.
+u kojem banka potvrđuje da hipoteka NEĆE biti brisana jer tuženik 
+ima nepodmirene obveze prema banci u iznosu od 35.000 EUR.

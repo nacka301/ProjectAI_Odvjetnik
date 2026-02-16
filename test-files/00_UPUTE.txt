@@ -1,0 +1,86 @@
+KAKO KORISTITI TEST DATOTEKE — PravoTek v5.0
+==============================================
+
+Sve test datoteke koriste ISTI pravni slučaj (kupoprodaja stana u Zagrebu)
+da možeš pratiti kako se podaci povezuju između modula.
+
+═══════════════════════════════════════════
+1. PROCJENA NEKRETNINE (http://localhost:3000/wizard)
+═══════════════════════════════════════════
+Datoteka: 01_procjena_nekretnine.txt
+Kako: Kopiraj tekst → Zalijepi u "Tekst oglasa" polje
+Ili: Pretvori u PDF i uploadaj
+Grad: Split | Kvart: Bačvice
+Očekivano: Procjena oko 250-300k EUR za 85m² stan u Splitu
+
+═══════════════════════════════════════════
+2. ANALIZA UGOVORA (http://localhost:3000/ugovor)
+═══════════════════════════════════════════
+Datoteka: 02_kupoprodajni_ugovor.txt
+Kako: Kopiraj tekst → Zalijepi u polje za tekst ugovora
+Očekivano: 
+  - Prepoznaje "Kupoprodajni ugovor"
+  - Detektira HIPOTEKU od 50.000 EUR kao crvenu zastavu
+  - Upozorava na čl. 4 (stroga klauzula o kapari)
+  - Rizik: SREDNJI do VISOK
+
+═══════════════════════════════════════════
+3. KRONOLOGIJA SPISA (http://localhost:3000/kronologija)
+═══════════════════════════════════════════
+Datoteka: 03_kronologija_spis.txt
+Kako: Kopiraj tekst → Zalijepi u polje
+Očekivano:
+  - 8 dokumenata detektirano
+  - Timeline od ožujka 2025. do siječnja 2026.
+  - Ključni datumi: tužba, odgovor, vještačenje, presuda, žalba
+
+═══════════════════════════════════════════
+4. ZK & SUDSKA PRAKSA (http://localhost:3000/zk-procjena)
+═══════════════════════════════════════════
+Datoteka: 04_zk_izvadak.txt
+Kako: Kopiraj tekst → Zalijepi u ZK polje
+Očekivano:
+  - Vlasnik: Marko Horvat, udio 1/1
+  - 3 tereta: Hipoteka, Zabilježba spora, Služnost prolaza
+  - 1 plomba: Ovrha Porezne uprave 
+  - Rizik: VISOK (hipoteka + spor + ovrha)
+
+═══════════════════════════════════════════
+5. SUDSKA PRAKSA — "Provjeri Ishod" (http://localhost:3000/sudska-praksa)
+═══════════════════════════════════════════
+Datoteka: 05_sudska_praksa_upit.txt
+Kako: Kopiraj tekst → Zalijepi u "Opis situacije"
+Pozicija: Kupac
+Očekivano:
+  - Analiza šanse uspjeha (vjerojatnost %)
+  - Relevantni članci ZOO (čl. 303, 357-367)
+  - Audit trail (AI Act transparencija)
+  - Sudske presude kao reference
+
+═══════════════════════════════════════════
+6. FISKALIZACIJA 2.0 (http://localhost:3000/fiskalizacija)
+═══════════════════════════════════════════
+Nema datoteke — ručni unos:
+  Modul: Analiza Ugovora
+  Izdavatelj:
+    Naziv: Odvjetnički ured Babić
+    OIB: 12345678903
+    Adresa: Ilica 1, 10000 Zagreb
+    IBAN: HR1234567890123456789
+  Klijent:
+    Naziv: Ana Kovačević  
+    OIB: 69435151530
+    Adresa: Vukovarska 58, 21000 Split
+  Iznos: 500 EUR neto
+  PDV: 25%
+  Rok: 30 dana
+Očekivano: UBL 2.1 XML račun, bruto 625 EUR
+
+═══════════════════════════════════════════
+NAPOMENA
+═══════════════════════════════════════════
+- Backend mora biti pokrenut: cd Backend && dotnet run
+- Frontend mora biti pokrenut: cd frontend && npm run dev
+- Backend: http://localhost:5078
+- Frontend: http://localhost:3000
+- Svi OIB-ovi su testni (12345678903, 69435151530) ali prolaze ISO 7064 validaciju

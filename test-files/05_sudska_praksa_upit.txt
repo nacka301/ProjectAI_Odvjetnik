@@ -1,0 +1,32 @@
+OPIS PRAVNOG PROBLEMA
+=====================
+
+Klijent: Ana Kovačević
+Pozicija: Kupac
+
+ČINJENIČNO STANJE:
+
+Dana 20. prosinca 2024. Ana Kovačević sklopila je kupoprodajni ugovor 
+s Markom Horvatom za stan u Zagrebu, Heinzelova 44, po cijeni od 220.000 EUR.
+Ana je uplatila kaparu od 22.000 EUR.
+
+U ugovoru (čl. 7) navedeno je da na stanu postoji hipoteka od 50.000 EUR
+u korist Zagrebačke banke, te da se prodavatelj obvezuje brisati hipoteku 
+prije predaje stana u posjed (rok 90 dana — čl. 5).
+
+Međutim, Ana je naknadno saznala:
+1. Prodavatelj ima nepodmireni dug prema banci od 35.000 EUR
+2. Banka je odbila brisanje hipoteke
+3. Na nekretnini je upisana zabilježba spora (P-2025/00342)  
+4. Upisana je i nova plomba za ovrhu Porezne uprave
+
+PRAVNO PITANJE:
+Može li Ana raskinuti ugovor i dobiti povrat kapare (22.000 EUR) 
+s obzirom na to da prodavatelj nije u mogućnosti ispuniti svoju 
+obvezu brisanja hipoteke i predaje neopterećene nekretnine?
+
+RELEVANTNI PROPISI:
+- Zakon o obveznim odnosima (ZOO): čl. 357-367 (odgovornost za pravne nedostatke),
+  čl. 368-374 (zastara), čl. 303-304 (kapara)
+- Zakon o vlasništvu (ZV): čl. 30-35 (stjecanje vlasništva)
+- Zakon o zemljišnim knjigama (ZZK): čl. 55, 68 (tereti, brisanje)

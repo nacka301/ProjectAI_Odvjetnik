@@ -199,6 +199,99 @@ public class MarketResearchService
         { "Trstenik", "Split" },
         { "Pujanke", "Split" }, { "Ravne njive", "Split" },
         { "Mejaši", "Split" }, { "Mejasi", "Split" },
+        // ══════════════════════════════════════════════════════════
+        //  V48: ALL frontend settlements → parent city mapping
+        //  Ensures BuildNjuskaloSearchUrl generates correct neighborhood URLs
+        //  e.g. "Bačvice" → "Split" → njuskalo.hr/prodaja-stanova/split-bacvice
+        // ══════════════════════════════════════════════════════════
+        // ── V48: Zagreb — neighborhoods ──
+        { "Brezovica", "Zagreb" }, { "Buzin", "Zagreb" },
+        { "Donja Dubrava", "Zagreb" }, { "Dubrava", "Zagreb" },
+        { "Folnegovićevo", "Zagreb" }, { "Folnegovicevo", "Zagreb" },
+        { "Gajnice", "Zagreb" }, { "Gornja Dubrava", "Zagreb" },
+        { "Jankomir", "Zagreb" }, { "Jarun", "Zagreb" },
+        { "Klara", "Zagreb" }, { "Kozari Bok", "Zagreb" },
+        { "Lučko", "Zagreb" }, { "Lucko", "Zagreb" },
+        { "Maksimir", "Zagreb" },
+        { "Malešnica", "Zagreb" }, { "Malesnica", "Zagreb" },
+        { "Medveščak", "Zagreb" }, { "Medvescak", "Zagreb" },
+        { "Novi Zagreb - istok", "Zagreb" }, { "Novi Zagreb istok", "Zagreb" },
+        { "Novi Zagreb - zapad", "Zagreb" }, { "Novi Zagreb zapad", "Zagreb" },
+        { "Peščenica - Žitnjak", "Zagreb" }, { "Pescenica - Zitnjak", "Zagreb" }, { "Pescenica", "Zagreb" },
+        { "Podsljeme", "Zagreb" },
+        { "Podsused - Vrapče", "Zagreb" }, { "Podsused - Vrapce", "Zagreb" }, { "Podsused", "Zagreb" },
+        { "Prečko", "Zagreb" }, { "Precko", "Zagreb" },
+        { "Rudeš", "Zagreb" }, { "Rudes", "Zagreb" },
+        { "Savski Gaj", "Zagreb" },
+        { "Sloboština", "Zagreb" }, { "Slobostina", "Zagreb" },
+        { "Sopot", "Zagreb" }, { "Stenjevec", "Zagreb" },
+        { "Stupnik", "Zagreb" }, { "Sveta Klara", "Zagreb" },
+        { "Travno", "Zagreb" },
+        { "Trešnjevka - jug", "Zagreb" }, { "Tresnjevka - jug", "Zagreb" },
+        { "Trešnjevka - sjever", "Zagreb" }, { "Tresnjevka - sjever", "Zagreb" },
+        { "Trešnjevka", "Zagreb" }, { "Tresnjevka", "Zagreb" },
+        { "Trnje", "Zagreb" }, { "Utrina", "Zagreb" },
+        { "Volovčica", "Zagreb" }, { "Volovcica", "Zagreb" },
+        { "Voltino", "Zagreb" },
+        { "Zapruđe", "Zagreb" }, { "Zaprudje", "Zagreb" },
+        { "Črnomerec", "Zagreb" }, { "Crnomerec", "Zagreb" },
+        { "Špansko", "Zagreb" }, { "Spansko", "Zagreb" },
+        // ── V48: Split — missing neighborhoods ──
+        { "Bačvice", "Split" }, { "Bacvice", "Split" },
+        { "Bol", "Split" }, { "Duilovo", "Split" },
+        { "Firule", "Split" }, { "Kocunar", "Split" },
+        { "Lokve", "Split" },
+        { "Manuš", "Split" }, { "Manus", "Split" },
+        { "Meje", "Split" }, { "Mertojak", "Split" },
+        { "Neslanovac", "Split" }, { "Plokite", "Split" },
+        { "Sirobuja", "Split" }, { "Skalice", "Split" },
+        { "Smokvin", "Split" }, { "Spinut", "Split" },
+        { "Varoš", "Split" }, { "Varos", "Split" },
+        { "Visoka", "Split" },
+        { "Šine", "Split" }, { "Sine", "Split" },
+        { "Žnjan", "Split" }, { "Znjan", "Split" },
+        // ── V48: Rijeka — missing neighborhoods ──
+        { "Banderovo", "Rijeka" }, { "Belveder", "Rijeka" },
+        { "Bulevard", "Rijeka" }, { "Drenova", "Rijeka" },
+        { "Gornja Vežica", "Rijeka" }, { "Gornja Vezica", "Rijeka" },
+        { "Kantrida", "Rijeka" }, { "Krimeja", "Rijeka" },
+        { "Krnjevo", "Rijeka" }, { "Mlaka", "Rijeka" },
+        { "Pašac", "Rijeka" }, { "Pasac", "Rijeka" },
+        { "Pećine", "Rijeka" }, { "Pecine", "Rijeka" },
+        { "Podmurvice", "Rijeka" },
+        { "Srdoči", "Rijeka" }, { "Srdoci", "Rijeka" },
+        { "Vežica", "Rijeka" }, { "Vezica", "Rijeka" },
+        { "Škurinje", "Rijeka" }, { "Skurinje", "Rijeka" },
+        { "Škurinjsko Plase", "Rijeka" }, { "Skurinjsko Plase", "Rijeka" },
+        // ── V48: Osijek — missing neighborhoods ──
+        { "Brijest", "Osijek" }, { "Klisa", "Osijek" },
+        { "Vijenac Slavka Kolara", "Osijek" },
+        // ── V48: Zadar — missing neighborhoods ──
+        { "Bokanjac", "Zadar" }, { "Crno", "Zadar" },
+        { "Dračevac", "Zadar" }, { "Dracevac", "Zadar" },
+        { "Gaženica", "Zadar" }, { "Gazenica", "Zadar" },
+        { "Jazine", "Zadar" }, { "Kolovare", "Zadar" },
+        { "Poluotok", "Zadar" }, { "Puntamika", "Zadar" },
+        { "Relja", "Zadar" }, { "Stanovi", "Zadar" },
+        { "Voštarnica", "Zadar" }, { "Vostarnica", "Zadar" },
+        // ── V48: Dubrovnik — missing neighborhoods ──
+        { "Babin Kuk", "Dubrovnik" }, { "Cavtat", "Dubrovnik" },
+        { "Mlini", "Dubrovnik" }, { "Plat", "Dubrovnik" },
+        { "Srebreno", "Dubrovnik" },
+        { "Čilipi", "Dubrovnik" }, { "Cilipi", "Dubrovnik" },
+        { "Župa Dubrovačka", "Dubrovnik" }, { "Zupa Dubrovacka", "Dubrovnik" },
+        // ── V48: Pula — missing neighborhoods ──
+        { "Fažana", "Pula" }, { "Fazana", "Pula" },
+        { "Ližnjan", "Pula" }, { "Liznjan", "Pula" },
+        { "Marčana", "Pula" }, { "Marcana", "Pula" },
+        { "Premantura", "Pula" }, { "Verudela", "Pula" },
+        { "Vodnjan", "Pula" },
+        { "Šišan", "Pula" }, { "Sisan", "Pula" },
+        { "Štinjan", "Pula" }, { "Stinjan", "Pula" },
+        // ── V48: Šibenik — missing neighborhoods ──
+        { "Crnica", "Šibenik" }, { "Jadrija", "Šibenik" },
+        { "Martinska", "Šibenik" }, { "Pirovac", "Šibenik" },
+        { "Raslina", "Šibenik" }, { "Solaris", "Šibenik" },
     };
 
     // ══════════════════════════════════════════════════════════
@@ -1238,6 +1331,21 @@ public class MarketResearchService
                 }
             }
             catch { /* no consent dialog */ }
+
+            // V48: Wait for actual listing elements to appear in DOM
+            // (fixed timeout alone was unreliable — consent popup delays vary)
+            try
+            {
+                await page.WaitForSelectorAsync(
+                    ".EntityList-item--Regular, .entity-body, .EntityList--Standard",
+                    new() { Timeout = 8000 });
+                _logger.LogInformation("Phase0-BD: listing elements detected in DOM for {Url}", searchUrl);
+            }
+            catch
+            {
+                _logger.LogWarning("Phase0-BD: no listing elements appeared within 8s for {Url}", searchUrl);
+                // Continue anyway — DOM extraction will return empty list gracefully
+            }
 
             // Extract listing data via JavaScript — query Njuškalo's DOM structure
             var listingData = await page.EvaluateAsync<List<BdListingEntry>>(@"

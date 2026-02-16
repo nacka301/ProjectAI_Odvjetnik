@@ -1,0 +1,83 @@
+ZEMLJIŠNOKNJIŽNI IZVADAK
+========================
+
+Općinski sud u Zagrebu
+Zemljišnoknjižni odjel
+Datum izdavanja: 14. veljače 2026.
+
+KATASTARSKA OPĆINA: CENTAR
+ZK ULOŽAK BROJ: 12345
+
+═══════════════════════════
+A) POSJEDOVNICA (POPISNI LIST)
+═══════════════════════════
+
+Katastarska čestica: 5678/1
+Naziv: KUĆA I DVORIŠTE
+Adresa: Heinzelova 44, Zagreb
+Površina zemljišta: 350 m²
+Površina zgrade: 420 m² (6 katova)
+
+Etažna jedinica (E-12):
+Stan na 3. katu, površine 72 m²
+Sastoji se od: 3 sobe, kuhinja, kupaonica, hodnik, balkon
+
+═══════════════════════════
+B) VLASTOVNICA
+═══════════════════════════
+
+Rbr. 1.
+VLASNIK: Marko Horvat
+OIB: 12345678903
+Udio: 1/1 (cijeli stan E-12)
+Pravna osnova: Kupoprodajni ugovor od 15.01.2018., ovjeren kod javnog bilježnika
+Upis: Z-5432/2018 od 20.01.2018.
+
+═══════════════════════════
+C) TERETOVNICA
+═══════════════════════════
+
+Rbr. 1.
+HIPOTEKA (dobrovoljno založno pravo)
+Vjerovnik: Zagrebačka banka d.d., OIB: 92963223473
+Iznos: 50.000,00 EUR
+Kamatna stopa: 3,5% godišnje
+Rok otplate: do 15.03.2030.
+Pravna osnova: Ugovor o kreditu br. KR-2020/12345
+Upis: Z-12345/2020 od 15.03.2020.
+
+Rbr. 2.
+ZABILJEŽBA SPORA
+Predmet: P-2025/00342
+Sud: Općinski građanski sud u Zagrebu
+Tužitelj: Ana Kovačević
+Tuženik: Marko Horvat
+Predmet spora: Raskid kupoprodajnog ugovora
+Upis: Z-78901/2025 od 20.03.2025.
+
+Rbr. 3.
+SLUŽNOST PROLAZA
+Ovlaštenik: Ivana Jurić, OIB: 98765432109
+Opis: Pravo pješačkog prolaza preko zajedničkog dvorišta k.č. 5678/1
+Pravna osnova: Ugovor o služnosti od 10.05.2019.
+Upis: Z-33333/2019 od 15.05.2019.
+
+═══════════════════════════
+PLOMBE (neriješeni zahtjevi)
+═══════════════════════════
+
+Plomba Z-11111/2026 od 05.02.2026.
+Zahtjev za upis zabilježbe ovrhe
+Predlagatelj: Porezna uprava, Područni ured Zagreb
+Dužnik: Marko Horvat
+
+═══════════════════════════
+NAPOMENE
+═══════════════════════════
+
+- Nekretnina se nalazi u zoni zaštićene kulturne baštine (Rješenje Ministarstva kulture)
+- Energetski certifikat: razred B
+- Upravitelj zgrade: Stan-uprava d.o.o., Zagreb, Savska 25
+
+Ovaj izvadak vrijedi na dan izdavanja.
+Izdao: Josip Matić, zemljišnoknjižni referent
