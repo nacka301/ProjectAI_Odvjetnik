@@ -107,6 +107,9 @@ public class LegalStrategyResult
     /// <summary>V42: All norms cited in this analysis — structured for validity badges</summary>
     public List<CitedNorm> CitedNorms { get; set; } = [];
 
+    /// <summary>V45: AI Act Audit Trail — transparent log showing which articles drove each conclusion</summary>
+    public List<AuditLogEntry> AuditTrail { get; set; } = [];
+
     /// <summary>Legal disclaimer</summary>
     public string Disclaimer { get; set; } =
         "Ova AI analiza temelji se na općim načelima sudske prakse i ne zamjenjuje pravni savjet ovlaštenog odvjetnika. " +
@@ -197,6 +200,35 @@ public class StrategicRecommendation
 
     /// <summary>Deadline or timing guidance</summary>
     public string Timing { get; set; } = "";
+}
+
+/// <summary>
+/// V45: AI Act Compliance Audit Log Entry.
+/// Each entry documents exactly which legal article drove a specific AI conclusion,
+/// fulfilling EU AI Act (Uredba EU 2024/1689) transparency requirements for high-risk AI.
+/// </summary>
+public class AuditLogEntry
+{
+    /// <summary>Sequential step number in the reasoning chain</summary>
+    public int Step { get; set; }
+
+    /// <summary>The AI action/conclusion at this step</summary>
+    public string Action { get; set; } = "";
+
+    /// <summary>The specific legal article that grounds this conclusion (e.g. "čl. 368. ZOO")</summary>
+    public string LegalBasis { get; set; } = "";
+
+    /// <summary>Full citation with NN reference</summary>
+    public string Citation { get; set; } = "";
+
+    /// <summary>Why this article applies to the specific facts</summary>
+    public string Reasoning { get; set; } = "";
+
+    /// <summary>Confidence in this reasoning step: "VISOKO", "SREDNJE", "NISKO"</summary>
+    public string Confidence { get; set; } = "SREDNJE";
+
+    /// <summary>ISO 8601 timestamp of when this step was generated</summary>
+    public string Timestamp { get; set; } = "";
 }
 
 /// <summary>

@@ -215,3 +215,41 @@ CREATE POLICY "service_role_full_access" ON norm_amendments
 DROP POLICY IF EXISTS "anon_select" ON norm_amendments;
 CREATE POLICY "anon_select" ON norm_amendments
     FOR SELECT USING (true);
+
+-- ========================================
+-- V45: AI Act Compliance — Audit Logs
+-- Stores the transparent reasoning trail for each legal strategy analysis.
+-- Fulfils EU AI Act (Uredba EU 2024/1689) Article 13 — Transparency requirements
+-- for high-risk AI systems used in legal/judicial contexts.
+-- ========================================
+
+-- Add audit_trail JSONB column to legal_strategies (stores the full audit trail per analysis)
+ALTER TABLE legal_strategies ADD COLUMN IF NOT EXISTS audit_trail JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+-- Standalone audit_logs table — for cross-module, queryable audit history
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id                  UUID            DEFAULT uuid_generate_v4() PRIMARY KEY,
+    created_at          TIMESTAMPTZ     DEFAULT now() NOT NULL,
+    module              TEXT            NOT NULL DEFAULT 'legal_strategy',   -- Which module generated this
+    analysis_id         UUID,                                               -- FK to the parent analysis (legal_strategies.id, etc.)
+    step                INTEGER         NOT NULL DEFAULT 1,
+    action              TEXT            NOT NULL DEFAULT '',                  -- What the AI concluded
+    legal_basis         TEXT            NOT NULL DEFAULT '',                  -- čl. 368. ZOO
+    citation            TEXT            NOT NULL DEFAULT '',                  -- Full citation with NN
+    reasoning           TEXT            NOT NULL DEFAULT '',                  -- Why this article applies
+    confidence          TEXT            NOT NULL DEFAULT 'SREDNJE',           -- VISOKO / SREDNJE / NISKO
+    model_used          TEXT            NOT NULL DEFAULT 'gpt-4o',            -- Which AI model
+    model_temperature   NUMERIC(3, 2)   NOT NULL DEFAULT 0.10                -- Temperature setting used
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_module ON audit_logs (module);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_analysis_id ON audit_logs (analysis_id);
+
+ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "service_role_full_access" ON audit_logs;
+CREATE POLICY "service_role_full_access" ON audit_logs
+    FOR ALL USING (auth.role() = 'service_role');
+DROP POLICY IF EXISTS "anon_select" ON audit_logs;
+CREATE POLICY "anon_select" ON audit_logs
+    FOR SELECT USING (true);

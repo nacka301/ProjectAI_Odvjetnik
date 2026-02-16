@@ -28,6 +28,8 @@ import {
   ArrowRight,
   Info,
   BarChart3,
+  ClipboardList,
+  Send,
 } from "lucide-react";
 import PrecedentSidebar from "@/components/PrecedentSidebar";
 import { NormBadge, CitedNormsList, TemporalDatePicker, CitationModeToggle } from "@/components/NormBadge";
@@ -84,6 +86,17 @@ interface ConfidenceFactor {
   explanation: string;
 }
 
+// V45: AI Act Audit Log Entry
+interface AuditLogEntry {
+  step: number;
+  action: string;
+  legal_basis: string;
+  citation: string;
+  reasoning: string;
+  confidence: string; // "VISOKO" | "SREDNJE" | "NISKO"
+  timestamp: string;
+}
+
 interface LegalStrategyResult {
   key_legal_issue: string;
   sub_issues: string[];
@@ -103,6 +116,7 @@ interface LegalStrategyResult {
   estimated_duration: string;
   estimated_cost: string;
   cited_norms?: CitedNorm[];
+  audit_trail?: AuditLogEntry[];  // V45: AI Act transparency
   disclaimer: string;
 }
 
@@ -1266,6 +1280,83 @@ export default function ProvjeriIshodPage() {
                     temporalResults={temporalResults}
                     variant="cards"
                   />
+                </div>
+              </div>
+            )}
+
+            {/* ═══ V45: AI ACT AUDIT LOG ═══ */}
+            {result.audit_trail && result.audit_trail.length > 0 && (
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="bg-gradient-to-r from-slate-800 to-slate-700 px-6 py-4 flex items-center gap-3">
+                  <ClipboardList className="h-5 w-5 text-blue-400" />
+                  <div>
+                    <h3 className="font-bold text-white">Audit Log — Transparentnost AI Odluka</h3>
+                    <p className="text-[10px] text-slate-400 mt-0.5">
+                      Sukladno Uredbi (EU) 2024/1689 o umjetnoj inteligenciji (AI Act), čl. 13. — Transparentnost
+                    </p>
+                  </div>
+                  <span className="ml-auto text-xs font-mono text-slate-400">
+                    {result.audit_trail.length} koraka
+                  </span>
+                </div>
+
+                <div className="divide-y divide-slate-100">
+                  {result.audit_trail.map((entry, i) => (
+                    <div key={i} className="px-6 py-4 hover:bg-slate-50 transition">
+                      <div className="flex items-start gap-4">
+                        {/* Step number */}
+                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0 mt-0.5">
+                          <span className="text-xs font-bold text-slate-600">{entry.step}</span>
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          {/* Action */}
+                          <p className="text-sm font-semibold text-slate-800 mb-1">
+                            {entry.action}
+                          </p>
+
+                          {/* Legal basis + confidence */}
+                          <div className="flex items-center gap-2 flex-wrap mb-2">
+                            {entry.legal_basis && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-100 text-indigo-800">
+                                {entry.legal_basis}
+                              </span>
+                            )}
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                              entry.confidence === "VISOKO" ? "bg-green-100 text-green-800" :
+                              entry.confidence === "NISKO" ? "bg-red-100 text-red-800" :
+                              "bg-yellow-100 text-yellow-800"
+                            }`}>
+                              Pouzdanost: {entry.confidence}
+                            </span>
+                          </div>
+
+                          {/* Citation */}
+                          {entry.citation && (
+                            <p className="text-xs text-indigo-600 font-medium mb-1">
+                              📎 {entry.citation}
+                            </p>
+                          )}
+
+                          {/* Reasoning */}
+                          {entry.reasoning && (
+                            <p className="text-xs text-slate-600 leading-relaxed">
+                              {entry.reasoning}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* AI Act compliance footer */}
+                <div className="px-6 py-3 bg-slate-50 border-t border-slate-200">
+                  <p className="text-[10px] text-slate-400 leading-relaxed">
+                    🇪🇺 Ovaj audit log generiran je automatski radi sukladnosti s Uredbom (EU) 2024/1689
+                    o utvrđivanju usklađenih pravila o umjetnoj inteligenciji (AI Act). Visokorizični AI
+                    sustavi u pravnom sektoru moraju osigurati transparentnost u donošenju odluka (čl. 13.-14.).
+                  </p>
                 </div>
               </div>
             )}

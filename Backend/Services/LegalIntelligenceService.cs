@@ -144,6 +144,18 @@ public class LegalIntelligenceService
         - Korisnik potvrđuje da ima pravo na pristup dostavljenom dokumentu.
         - Ova analiza ne predstavlja pravni savjet u smislu Zakona o odvjetništvu.
 
+        6. AUDIT LOG — EU AI ACT SUKLADNOST (Uredba EU 2024/1689)
+           Hrvatski pravni AI sustavi mogu biti klasificirani kao "visokorizični" prema čl. 6.
+           Uredbe o umjetnoj inteligenciji (EU AI Act).
+           Za SVAKI zaključak koji donosiš, dokumentiraj TOČNO koji članak zakona je temelj:
+           - Step = redni broj koraka razmišljanja
+           - Action = što si zaključio (npr. "Utvrdio da se radi o raskidu ugovora")
+           - Legal basis = članak (npr. "čl. 368. ZOO")
+           - Citation = puni citat s NN (npr. "čl. 368. Zakona o obveznim odnosima (NN 35/05, 29/18)")
+           - Reasoning = zašto se baš taj članak primjenjuje na ove činjenice
+           - Confidence = VISOKO/SREDNJE/NISKO — koliko si siguran u ovu subsumpciju
+           Generiraj 4-8 audit log unosa koji prate tvoj tok razmišljanja.
+
         IZLAZNI FORMAT — vrati ISKLJUČIVO čisti JSON:
         {
           "key_legal_issue": "Opis ključnog pravnog pitanja",
@@ -214,6 +226,16 @@ public class LegalIntelligenceService
               "nn_reference": "NN 35/05, 41/08, 125/11, 78/15, 29/18",
               "status": "VAŽEĆI",
               "formatted_citation": "čl. 368. Zakona o obveznim odnosima (NN 35/05, 41/08, 125/11, 78/15, 29/18)"
+            }
+          ],
+          "audit_trail": [
+            {
+              "step": 1,
+              "action": "Identificirano pravno pitanje: raskid ugovora zbog neispunjenja",
+              "legal_basis": "čl. 368. ZOO",
+              "citation": "čl. 368. Zakona o obveznim odnosima (NN 35/05, 29/18)",
+              "reasoning": "Kupac je ispunio svoju obvezu (uplatio kaparu), ali prodavatelj nije predao nekretninu u ugovorenom roku.",
+              "confidence": "VISOKO"
             }
           ]
         }
@@ -683,11 +705,51 @@ public class LegalIntelligenceService
                 }
             }
 
+            // V42: Cited norms
+            if (root.TryGetProperty("cited_norms", out var cn) && cn.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in cn.EnumerateArray())
+                {
+                    result.CitedNorms.Add(new CitedNorm
+                    {
+                        Abbreviation = GetStr(item, "abbreviation"),
+                        FullName = GetStr(item, "full_name"),
+                        Article = GetStr(item, "article"),
+                        Paragraph = GetStr(item, "paragraph"),
+                        Point = GetStr(item, "point"),
+                        NnReference = GetStr(item, "nn_reference"),
+                        Status = GetStr(item, "status", "VAŽEĆI"),
+                        FormattedCitation = GetStr(item, "formatted_citation"),
+                        NnUrl = GetStr(item, "nn_url")
+                    });
+                }
+            }
+
+            // V45: Audit trail — AI Act transparency
+            if (root.TryGetProperty("audit_trail", out var at) && at.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in at.EnumerateArray())
+                {
+                    result.AuditTrail.Add(new AuditLogEntry
+                    {
+                        Step = item.TryGetProperty("step", out var step) && step.ValueKind == JsonValueKind.Number
+                            ? step.GetInt32() : result.AuditTrail.Count + 1,
+                        Action = GetStr(item, "action"),
+                        LegalBasis = GetStr(item, "legal_basis"),
+                        Citation = GetStr(item, "citation"),
+                        Reasoning = GetStr(item, "reasoning"),
+                        Confidence = GetStr(item, "confidence", "SREDNJE"),
+                        Timestamp = DateTime.UtcNow.ToString("o")
+                    });
+                }
+            }
+
             _logger.LogInformation(
-                "Legal strategy parsed: issue='{Issue}', win={Min}-{Win}-{Max}%, precedents={P} ({F}+/{N}n/{U}-), risks={R}",
+                "Legal strategy parsed: issue='{Issue}', win={Min}-{Win}-{Max}%, precedents={P} ({F}+/{N}n/{U}-), risks={R}, audit={A}",
                 result.KeyLegalIssue.Length > 50 ? result.KeyLegalIssue[..50] + "…" : result.KeyLegalIssue,
                 result.WinProbabilityMin, result.WinProbability, result.WinProbabilityMax,
-                result.Precedents.Count, favorable, neutral, unfavorable, result.Risks.Count);
+                result.Precedents.Count, favorable, neutral, unfavorable, result.Risks.Count,
+                result.AuditTrail.Count);
         }
         catch (Exception ex)
         {

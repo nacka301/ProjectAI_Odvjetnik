@@ -22,6 +22,7 @@ import {
   Sparkles,
   CircleHelp,
   Eye,
+  Send,
 } from "lucide-react";
 import LegalFeed from "@/components/LegalFeed";
 import { getRecentActivity, type ActivityItem, type ActivityType } from "@/lib/supabase";
@@ -575,22 +576,22 @@ export default function Dashboard() {
             {!loading && activity.length > 0 && (
               <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                 {/* Table header */}
-                <div className="grid grid-cols-[1fr_auto_44px] gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-[11px] text-slate-400 uppercase tracking-wider font-medium">
+                <div className="grid grid-cols-[1fr_auto_auto_44px] gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-[11px] text-slate-400 uppercase tracking-wider font-medium">
                   <span>Predmet</span>
                   <span className="w-28 text-center">Status</span>
+                  <span className="w-24 text-center">e-Sud</span>
                   <span />
                 </div>
 
                 {/* Rows */}
                 <div className="divide-y divide-slate-100">
                   {activity.slice(0, 12).map((item) => (
-                    <Link
+                    <div
                       key={item.id}
-                      href="/history"
-                      className="grid grid-cols-[1fr_auto_44px] gap-2 items-center px-4 py-3 hover:bg-slate-50 transition group"
+                      className="grid grid-cols-[1fr_auto_auto_44px] gap-2 items-center px-4 py-3 hover:bg-slate-50 transition group"
                     >
                       {/* Left: type icon + title + subtitle */}
-                      <div className="flex items-center gap-3 min-w-0">
+                      <Link href="/history" className="flex items-center gap-3 min-w-0">
                         <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
                           {ACTIVITY_ICONS[item.type]}
                         </div>
@@ -609,7 +610,7 @@ export default function Dashboard() {
                             {item.subtitle ? ` · ${item.subtitle}` : ""}
                           </span>
                         </div>
-                      </div>
+                      </Link>
 
                       {/* Badge */}
                       <div className="w-28 flex justify-center">
@@ -622,11 +623,29 @@ export default function Dashboard() {
                         )}
                       </div>
 
-                      {/* Arrow */}
-                      <div className="flex justify-center">
-                        <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-slate-500 transition" />
+                      {/* e-Komunikacija button */}
+                      <div className="w-24 flex justify-center">
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            alert(
+                              `📤 e-Komunikacija\n\nPredmet "${item.title}" pripremljen za slanje na sud putem sustava e-Komunikacija.\n\nOva funkcionalnost zahtijeva integraciju s FINA e-Komunikacija sustavom i aktivnu odvjetničku pametnu karticu.`
+                            );
+                          }}
+                          className="inline-flex items-center gap-1 text-[10px] font-medium text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2 py-1.5 rounded-lg transition whitespace-nowrap"
+                          title="Pošalji u e-Komunikaciju (e-Sud)"
+                        >
+                          <Send className="h-3 w-3" />
+                          e-Sud
+                        </button>
                       </div>
-                    </Link>
+
+                      {/* Arrow */}
+                      <Link href="/history" className="flex justify-center">
+                        <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-slate-500 transition" />
+                      </Link>
+                    </div>
                   ))}
                 </div>
 
