@@ -1388,7 +1388,7 @@ export default function ProvjeriIshodPage() {
       <footer className="max-w-6xl mx-auto px-4 sm:px-6 pb-6">
         <div className="border-t border-slate-200 pt-4 text-center space-y-1 text-[11px] text-slate-400">
           <div className="flex items-center justify-between">
-            <span>Legal AI Assistant v4.0</span>
+            <span>PravoTek v4.0</span>
             <span>
               AI analiza ne predstavlja pravni savjet sukladno čl. 1. Zakona o odvjetništvu (NN 9/94, 18/11)
             </span>

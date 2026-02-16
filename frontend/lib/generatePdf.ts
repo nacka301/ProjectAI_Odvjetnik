@@ -40,7 +40,7 @@ export async function generateValuationPdf({ result, propertyType, location, are
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
   doc.text(`Datum: ${new Date().toLocaleDateString("hr-HR")}`, margin, 28);
-  doc.text("Legal AI Assistant — Automatizirana tržišna procjena", margin, 34);
+  doc.text("PravoTek — Automatizirana tržišna procjena", margin, 34);
 
   y = 48;
 
@@ -274,7 +274,7 @@ export async function generateValuationPdf({ result, propertyType, location, are
     doc.setFontSize(7);
     doc.setTextColor(150, 150, 150);
     doc.setFont("helvetica", "normal");
-    doc.text("Legal AI Assistant — Automatizirana tržišna procjena nekretnina", margin, pageH - 9);
+    doc.text("PravoTek — Automatizirana tržišna procjena nekretnina", margin, pageH - 9);
     doc.text(`Stranica ${i} / ${totalPages}`, pageW - margin, pageH - 9, { align: "right" });
     doc.text("Ovaj izvještaj je generiran automatski i ne predstavlja službenu procjenu ovlaštenog sudskog vještaka.", margin, pageH - 5);
   }

@@ -268,7 +268,7 @@ const FEATURE_CARDS: FeatureCard[] = [
 ];
 
 // ═══════════════════════════════════════════════════════════
-//  Dashboard Component — "Educational Legal Command Center"
+//  Dashboard Component — "PravoTek — Pravna Inteligencija"
 // ═══════════════════════════════════════════════════════════
 
 export default function Dashboard() {
@@ -281,13 +281,13 @@ export default function Dashboard() {
 
   // Check if first visit (tour hasn't been seen)
   useEffect(() => {
-    const seen = localStorage.getItem("legalai_tour_seen");
+    const seen = localStorage.getItem("pravotek_tour_seen");
     if (!seen) setShowTour(true);
   }, []);
 
   // Check if banner was dismissed
   useEffect(() => {
-    const dismissed = localStorage.getItem("legalai_banner_dismissed");
+    const dismissed = localStorage.getItem("pravotek_banner_dismissed");
     if (dismissed) setBannerDismissed(true);
   }, []);
 
@@ -306,13 +306,13 @@ export default function Dashboard() {
 
   const dismissBanner = () => {
     setBannerDismissed(true);
-    localStorage.setItem("legalai_banner_dismissed", "1");
+    localStorage.setItem("pravotek_banner_dismissed", "1");
   };
 
   const endTour = useCallback(() => {
     setShowTour(false);
     setTourStep(0);
-    localStorage.setItem("legalai_tour_seen", "1");
+    localStorage.setItem("pravotek_tour_seen", "1");
   }, []);
 
   const nextTourStep = useCallback(() => {
@@ -363,9 +363,9 @@ export default function Dashboard() {
               <Scale className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h1 className="text-lg font-bold tracking-tight">Legal AI</h1>
+              <h1 className="text-lg font-bold tracking-tight">PravoTek</h1>
               <p className="text-[10px] text-slate-400 uppercase tracking-widest">
-                Command Center
+                Pravna Inteligencija
               </p>
             </div>
           </div>
@@ -700,7 +700,7 @@ export default function Dashboard() {
       <footer className="max-w-7xl mx-auto px-4 sm:px-6 pb-6">
         <div className="border-t border-slate-200 pt-4 text-center space-y-1 text-[11px] text-slate-400">
           <div className="flex items-center justify-between">
-            <span>Legal AI Assistant v2.0</span>
+            <span>PravoTek v2.0</span>
             <span>
               AI analiza ne predstavlja pravni savjet sukladno čl. 1. Zakona o odvjetništvu (NN 9/94, 18/11)
             </span>

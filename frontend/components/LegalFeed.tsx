@@ -83,7 +83,7 @@ export default function LegalFeed() {
           </div>
           <div>
             <h3 className="text-xs font-bold text-slate-800 tracking-wide">
-              Legal Intelligence Feed
+              PravoTek — Sudska Praksa
             </h3>
             <p className="text-[10px] text-slate-500">
               Najnovija sudska praksa za nekretnine
