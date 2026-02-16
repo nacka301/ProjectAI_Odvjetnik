@@ -23,6 +23,7 @@ import {
   CircleHelp,
   Eye,
   Send,
+  Receipt,
 } from "lucide-react";
 import LegalFeed from "@/components/LegalFeed";
 import { getRecentActivity, type ActivityItem, type ActivityType } from "@/lib/supabase";
@@ -46,6 +47,7 @@ const ACTIVITY_ICONS: Record<ActivityType, React.ReactNode> = {
   contract: <ShieldAlert className="h-4 w-4 text-rose-500" />,
   chronology: <ScrollText className="h-4 w-4 text-violet-500" />,
   legal: <Gavel className="h-4 w-4 text-amber-500" />,
+  invoice: <Receipt className="h-4 w-4 text-teal-500" />,
 };
 
 const ACTIVITY_LABELS: Record<ActivityType, string> = {
@@ -53,6 +55,7 @@ const ACTIVITY_LABELS: Record<ActivityType, string> = {
   contract: "Ugovor",
   chronology: "Kronologija",
   legal: "Pravna analiza",
+  invoice: "e-Račun",
 };
 
 const BADGE_COLORS: Record<string, string> = {
@@ -66,23 +69,28 @@ const BADGE_COLORS: Record<string, string> = {
 const TOUR_STEPS = [
   {
     target: "card-procjena",
-    title: "1/4 · Tržišna Procjena",
+    title: "1/5 · Tržišna Procjena",
     text: "Ovdje izračunavate realnu vrijednost nekretnine. Unesite podatke ili zalijepite link oglasa.",
   },
   {
     target: "card-ugovor",
-    title: "2/4 · Analiza Ugovora",
+    title: "2/5 · Analiza Ugovora",
     text: "Učitajte nacrt ugovora — AI pronalazi pravne zamke i predlaže sigurnije klauzule.",
   },
   {
     target: "card-kronologija",
-    title: "3/4 · Kronologija Spisa",
+    title: "3/5 · Kronologija Spisa",
     text: "Ubacite sve dokumente odjednom — AI slaže interaktivnu kronologiju za pripremu tužbe.",
   },
   {
     target: "card-zk",
-    title: "4/4 · ZK & Sudska Praksa",
+    title: "4/5 · ZK & Sudska Praksa",
     text: "AI tumači ZK izvadak i traži relevantnu sudsku praksu za Vaš slučaj.",
+  },
+  {
+    target: "card-fiskalizacija",
+    title: "5/5 · Fiskalizacija 2.0",
+    text: "Generirajte e-račun (UBL 2.1) izravno povezan s predmetom — spremno za e-Račun sustav.",
   },
 ];
 
@@ -264,6 +272,19 @@ const FEATURE_CARDS: FeatureCard[] = [
     description: "Analiza tereta i povezivanje činjenica s presudama Vrhovnog suda.",
     howItWorks:
       "AI tumači ZK izvadak (terete, plombe) i traži relevantnu sudsku praksu za Vaš slučaj.",
+  },
+  {
+    id: "card-fiskalizacija",
+    href: "/fiskalizacija",
+    icon: <Receipt className="h-6 w-6" />,
+    iconBg: "bg-teal-100 group-hover:bg-teal-200",
+    iconColor: "text-teal-600",
+    accentBorder: "hover:border-teal-400",
+    accentBg: "bg-teal-50 group-hover:bg-teal-100",
+    title: "Fiskalizacija 2.0",
+    description: "Automatska izrada e-računa (UBL 2.1) iz analiziranih predmeta.",
+    howItWorks:
+      "Unesite podatke stranaka i iznos — PravoTek generira UBL 2.1 XML e-račun povezan s predmetom, spreman za slanje putem e-Račun sustava.",
   },
 ];
 

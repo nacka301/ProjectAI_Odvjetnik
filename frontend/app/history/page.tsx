@@ -16,6 +16,7 @@ import {
   ShieldAlert,
   ScrollText,
   Gavel,
+  Receipt,
 } from "lucide-react";
 import {
   getRecentActivity,
@@ -36,6 +37,7 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "contract", label: "Ugovori" },
   { key: "chronology", label: "Kronologije" },
   { key: "legal", label: "Pravne analize" },
+  { key: "invoice", label: "e-Računi" },
 ];
 
 const ACTIVITY_ICONS: Record<ActivityType, React.ReactNode> = {
@@ -43,6 +45,7 @@ const ACTIVITY_ICONS: Record<ActivityType, React.ReactNode> = {
   contract: <ShieldAlert className="h-5 w-5 text-rose-500" />,
   chronology: <ScrollText className="h-5 w-5 text-violet-500" />,
   legal: <Gavel className="h-5 w-5 text-amber-500" />,
+  invoice: <Receipt className="h-5 w-5 text-teal-500" />,
 };
 
 const ACTIVITY_LABELS: Record<ActivityType, string> = {
@@ -50,6 +53,7 @@ const ACTIVITY_LABELS: Record<ActivityType, string> = {
   contract: "Ugovor",
   chronology: "Kronologija",
   legal: "Pravna analiza",
+  invoice: "e-Račun",
 };
 
 const BADGE_COLORS: Record<string, string> = {

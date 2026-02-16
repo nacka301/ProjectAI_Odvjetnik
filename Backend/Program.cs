@@ -143,6 +143,7 @@ builder.Services.AddScoped<ValuationEngine>();
 builder.Services.AddScoped<ZkParsingService>();
 builder.Services.AddScoped<LegalIntelligenceService>();
 builder.Services.AddSingleton<NormValidityService>();
+builder.Services.AddScoped<InvoiceService>();
 builder.Services.AddHttpClient<EmailService>();
 builder.Services.AddHttpClient<MarketResearchService>(client =>
 {

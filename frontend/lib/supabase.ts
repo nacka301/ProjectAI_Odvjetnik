@@ -212,10 +212,43 @@ export async function getLegalStrategies(limit = 50): Promise<LegalStrategyRow[]
 }
 
 // ═══════════════════════════════════════════════════════════
+//  Invoice (e-Račun) rows
+// ═══════════════════════════════════════════════════════════
+
+export interface InvoiceRow {
+  id: string;
+  created_at: string;
+  invoice_number: string;
+  client_name: string;
+  client_oib: string;
+  gross_amount: number;
+  module: string;
+  status: string;
+  case_reference?: string;
+}
+
+export async function getInvoices(limit = 50): Promise<InvoiceRow[]> {
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from("invoices")
+    .select("id,created_at,invoice_number,client_name,client_oib,gross_amount,module,status,case_reference")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error("Supabase invoices error:", error.message);
+    return [];
+  }
+
+  return (data as InvoiceRow[]) ?? [];
+}
+
+// ═══════════════════════════════════════════════════════════
 //  Unified Activity Feed — all modules combined
 // ═══════════════════════════════════════════════════════════
 
-export type ActivityType = "valuation" | "contract" | "chronology" | "legal";
+export type ActivityType = "valuation" | "contract" | "chronology" | "legal" | "invoice";
 
 export interface ActivityItem {
   id: string;
@@ -231,11 +264,12 @@ export interface ActivityItem {
  * Fetch recent activity from ALL module tables, merged and sorted by date.
  */
 export async function getRecentActivity(limitPerTable = 10): Promise<ActivityItem[]> {
-  const [evals, contracts, chronos, legals] = await Promise.all([
+  const [evals, contracts, chronos, legals, invoices] = await Promise.all([
     getEvaluations(limitPerTable),
     getContractAnalyses(limitPerTable),
     getChronologies(limitPerTable),
     getLegalStrategies(limitPerTable),
+    getInvoices(limitPerTable),
   ]);
 
   const items: ActivityItem[] = [];
@@ -286,6 +320,18 @@ export async function getRecentActivity(limitPerTable = 10): Promise<ActivityIte
       subtitle: `Vjerojatnost: ${l.win_probability}% (${l.win_probability_min}–${l.win_probability_max}%)`,
       badge: `${l.win_probability}%`,
       badgeColor: l.win_probability >= 60 ? "green" : l.win_probability >= 35 ? "amber" : "red",
+    });
+  }
+
+  for (const inv of invoices) {
+    items.push({
+      id: inv.id,
+      created_at: inv.created_at,
+      type: "invoice",
+      title: `Račun ${inv.invoice_number}`,
+      subtitle: `${inv.client_name} · ${inv.gross_amount?.toLocaleString("hr-HR")} €`,
+      badge: inv.status,
+      badgeColor: inv.status === "SENT" ? "green" : inv.status === "DRAFT" ? "amber" : "green",
     });
   }
 

@@ -253,3 +253,46 @@ CREATE POLICY "service_role_full_access" ON audit_logs
 DROP POLICY IF EXISTS "anon_select" ON audit_logs;
 CREATE POLICY "anon_select" ON audit_logs
     FOR SELECT USING (true);
+
+-- ========================================
+-- V47: Fiskalizacija 2.0 — e-Invoices
+-- UBL 2.1 compliant electronic invoices for Croatian B2B e-invoicing.
+-- Effective 01.01.2026 per Zakon o elektroničkom izdavanju računa.
+-- Links invoices to PravoTek AI analysis modules.
+-- ========================================
+
+CREATE TABLE IF NOT EXISTS invoices (
+    id                  UUID            DEFAULT uuid_generate_v4() PRIMARY KEY,
+    created_at          TIMESTAMPTZ     DEFAULT now() NOT NULL,
+    invoice_number      TEXT            NOT NULL UNIQUE,             -- YYYY-NNNNN format
+    issue_date          TEXT            NOT NULL DEFAULT '',          -- ISO 8601
+    due_date            TEXT            NOT NULL DEFAULT '',          -- ISO 8601
+    issuer_name         TEXT            NOT NULL DEFAULT '',
+    issuer_oib          TEXT            NOT NULL DEFAULT '',          -- 11-digit OIB
+    client_name         TEXT            NOT NULL DEFAULT '',
+    client_oib          TEXT            NOT NULL DEFAULT '',          -- 11-digit OIB
+    net_amount          NUMERIC(12, 2)  NOT NULL DEFAULT 0,
+    pdv_rate            NUMERIC(5, 2)   NOT NULL DEFAULT 25,
+    pdv_amount          NUMERIC(12, 2)  NOT NULL DEFAULT 0,
+    gross_amount        NUMERIC(12, 2)  NOT NULL DEFAULT 0,
+    module              TEXT            NOT NULL DEFAULT 'legal',     -- valuation, contract, chronology, legal
+    analysis_id         UUID,                                        -- FK to linked analysis
+    case_reference      TEXT,                                         -- Predmet/case number
+    status              TEXT            NOT NULL DEFAULT 'DRAFT',     -- DRAFT, ISSUED, SENT, PAID, CANCELLED
+    ubl_xml             TEXT            NOT NULL DEFAULT '',          -- Full UBL 2.1 XML
+    raw_json_output     JSONB           NOT NULL DEFAULT '{}'::jsonb
+);
+
+CREATE INDEX IF NOT EXISTS idx_invoices_created_at ON invoices (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_invoices_invoice_number ON invoices (invoice_number);
+CREATE INDEX IF NOT EXISTS idx_invoices_client_oib ON invoices (client_oib);
+CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices (status);
+CREATE INDEX IF NOT EXISTS idx_invoices_module ON invoices (module);
+
+ALTER TABLE invoices ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "service_role_full_access" ON invoices;
+CREATE POLICY "service_role_full_access" ON invoices
+    FOR ALL USING (auth.role() = 'service_role');
+DROP POLICY IF EXISTS "anon_select" ON invoices;
+CREATE POLICY "anon_select" ON invoices
+    FOR SELECT USING (true);
