@@ -301,47 +301,71 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
             </div>
           )}
 
-          {/* Adjustments — full breakdown with descriptions */}
-          {result.adjustments && result.adjustments.length > 0 && (
-            <div className="rounded-xl bg-white border border-gray-200 p-6">
-              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                <TrendingUp className="h-4 w-4" /> Korekcije primijenjene na procjenu
-              </h3>
-              <div className="space-y-2">
-                {result.adjustments.map((a, i) => (
-                  <div key={i} className={`flex items-start justify-between p-3 rounded-lg border ${a.percent > 0 ? "bg-green-50/50 border-green-100" : a.percent < 0 ? "bg-red-50/50 border-red-100" : "bg-gray-50 border-gray-100"}`}>
-                    <div className="flex-1 min-w-0">
-                      <span className={`text-sm font-semibold ${a.percent > 0 ? "text-green-800" : a.percent < 0 ? "text-red-800" : "text-gray-700"}`}>{a.factor}</span>
-                      <p className="text-xs text-gray-500 mt-0.5">{a.description}</p>
-                    </div>
-                    <span className={`ml-4 text-sm font-bold whitespace-nowrap ${a.percent > 0 ? "text-green-600" : a.percent < 0 ? "text-red-600" : "text-gray-400"}`}>
-                      {a.percent > 0 ? "+" : ""}{a.percent.toFixed(1)}%
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* V48: Unified price structure — merges Adjustments + Value Drivers + Discount */}
+          {(() => {
+            // Build unified list of all price factors
+            const factors: { name: string; desc: string; pct: number }[] = [];
 
-          {/* Value Drivers */}
-          {result.value_drivers?.length > 0 && (
-            <div className="rounded-xl bg-white border border-gray-200 p-6">
-              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">AI Faktori vrijednosti</h3>
-              <div className="space-y-2">
-                {result.value_drivers.map((d, i) => (
-                  <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition">
-                    <div className="flex-1 min-w-0">
-                      <span className="text-sm font-medium text-gray-800">{d.factor}</span>
-                      <p className="text-xs text-gray-500 mt-0.5">{d.impact}</p>
+            // 1. Realization discount (always first, if present)
+            if (result.realization_discount_percent) {
+              factors.push({
+                name: "Diskont tražene cijene",
+                desc: `Prilagodba s tražene na realnu transakcijsku cijenu (tržišni prosjek${result.realization_gap_reasoning ? `: ${result.realization_gap_reasoning}` : ""}).`,
+                pct: -Math.abs(result.realization_discount_percent),
+              });
+            }
+
+            // 2. Engine adjustments (garage, renovation, condition, etc.)
+            if (result.adjustments?.length) {
+              for (const a of result.adjustments) {
+                factors.push({ name: a.factor, desc: a.description, pct: a.percent });
+              }
+            }
+
+            // 3. AI value drivers (deduplicated — skip if already covered by adjustments)
+            if (result.value_drivers?.length) {
+              const existingNames = new Set(factors.map(f => f.name.toLowerCase()));
+              for (const d of result.value_drivers) {
+                const key = d.factor.toLowerCase();
+                if (!existingNames.has(key)) {
+                  factors.push({ name: d.factor, desc: d.impact, pct: d.adjustment_percent });
+                  existingNames.add(key);
+                }
+              }
+            }
+
+            if (factors.length === 0) return null;
+
+            const totalPct = factors.reduce((sum, f) => sum + f.pct, 0);
+
+            return (
+              <div className="rounded-xl bg-white border border-gray-200 p-6">
+                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4" /> Struktura formiranja cijene
+                </h3>
+                <div className="space-y-2">
+                  {factors.map((f, i) => (
+                    <div key={i} className={`flex items-start justify-between p-3 rounded-lg border ${f.pct > 0 ? "bg-green-50/50 border-green-100" : f.pct < 0 ? "bg-red-50/50 border-red-100" : "bg-gray-50 border-gray-100"}`}>
+                      <div className="flex-1 min-w-0">
+                        <span className={`text-sm font-semibold ${f.pct > 0 ? "text-green-800" : f.pct < 0 ? "text-red-800" : "text-gray-700"}`}>{f.name}</span>
+                        <p className="text-xs text-gray-500 mt-0.5">{f.desc}</p>
+                      </div>
+                      <span className={`ml-4 text-sm font-bold whitespace-nowrap ${f.pct > 0 ? "text-green-600" : f.pct < 0 ? "text-red-600" : "text-gray-400"}`}>
+                        {f.pct > 0 ? "+" : ""}{f.pct.toFixed(1)}%
+                      </span>
                     </div>
-                    <span className={`ml-4 text-sm font-bold whitespace-nowrap ${d.adjustment_percent > 0 ? "text-green-600" : d.adjustment_percent < 0 ? "text-red-600" : "text-gray-400"}`}>
-                      {d.adjustment_percent > 0 ? "+" : ""}{d.adjustment_percent}%
-                    </span>
-                  </div>
-                ))}
+                  ))}
+                </div>
+                {/* Total */}
+                <div className={`mt-3 flex items-center justify-between p-3 rounded-lg border-2 ${totalPct > 0 ? "border-green-300 bg-green-50" : totalPct < 0 ? "border-red-300 bg-red-50" : "border-gray-300 bg-gray-50"}`}>
+                  <span className="text-sm font-bold text-gray-700">Σ Ukupni utjecaj</span>
+                  <span className={`text-sm font-bold ${totalPct > 0 ? "text-green-700" : totalPct < 0 ? "text-red-700" : "text-gray-500"}`}>
+                    {totalPct > 0 ? "+" : ""}{totalPct.toFixed(1)}%
+                  </span>
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Property Summary */}
           {result.target_property_summary && (

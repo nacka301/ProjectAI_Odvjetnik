@@ -97,6 +97,7 @@ export interface UsedComparable {
   url: string;
   price_per_m2: number;
   similarity_score: number;
+  similarity_reason?: string;  // V48: AI/math explanation of similarity
   is_outlier: boolean;
   outlier_reason?: string;
   total_price?: number;
@@ -131,6 +132,7 @@ export interface ComparisonTableRow {
   correction_percent: number;
   adjusted_price_per_m2: number;
   similarity_score: number;
+  similarity_reason?: string;  // V48: AI/math explanation of similarity
   deep_dive_status?: string;
   correction_reason?: string;
 }
