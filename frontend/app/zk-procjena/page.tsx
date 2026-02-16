@@ -302,7 +302,9 @@ const INITIAL_STAGES: StreamStage[] = [
 // --- Component ---
 
 export default function ZkProcjenaPage() {
+  const [mode, setMode] = useState<"pdf" | "text">("pdf");
   const [file, setFile] = useState<File | null>(null);
+  const [textInput, setTextInput] = useState("");
   const [dragOver, setDragOver] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const [stages, setStages] = useState<StreamStage[]>([]);
@@ -358,7 +360,8 @@ export default function ZkProcjenaPage() {
   // --- Run Unified ZK → Valuation ---
 
   const runUnified = async () => {
-    if (!file) return;
+    if (mode === "pdf" && !file) return;
+    if (mode === "text" && (!textInput.trim() || textInput.trim().length < 50)) return;
 
     setError(null);
     setZkAnalysis(null);
@@ -366,22 +369,32 @@ export default function ZkProcjenaPage() {
     setStages(INITIAL_STAGES.map((s) => ({ ...s })));
     setIsStreaming(true);
 
-    // Upload PDF to Supabase Storage (non-blocking)
-    const pdfUrlPromise = uploadPdfToStorage(file);
+    // Upload PDF to Supabase Storage (non-blocking, only for PDF mode)
+    const pdfUrlPromise = mode === "pdf" && file ? uploadPdfToStorage(file) : Promise.resolve(null);
 
     const state = { result: null as UnifiedResult | null };
     const controller = new AbortController();
     abortRef.current = controller;
 
     try {
-      const url = `${API_BASE}/api/zk/stream`;
-      const formData = new FormData();
-      formData.append("file", file);
-      if (city.trim()) formData.append("city", city.trim());
-      if (neighborhood.trim()) formData.append("neighborhood", neighborhood.trim());
-      if (email.trim()) formData.append("email", email.trim());
+      let url: string;
+      let body: FormData;
 
-      const response = await fetch(url, { method: "POST", body: formData, signal: controller.signal });
+      if (mode === "text") {
+        url = `${API_BASE}/api/zk/stream-text`;
+        body = new FormData();
+        body.append("text", textInput.trim());
+      } else {
+        url = `${API_BASE}/api/zk/stream`;
+        body = new FormData();
+        body.append("file", file!);
+      }
+
+      if (city.trim()) body.append("city", city.trim());
+      if (neighborhood.trim()) body.append("neighborhood", neighborhood.trim());
+      if (email.trim()) body.append("email", email.trim());
+
+      const response = await fetch(url, { method: "POST", body: body, signal: controller.signal });
 
       if (!response.ok || !response.body) {
         throw new Error(`HTTP ${response.status}`);
@@ -494,6 +507,8 @@ export default function ZkProcjenaPage() {
   const reset = () => {
     abortRef.current?.abort();
     setFile(null);
+    setTextInput("");
+    setMode("pdf");
     setCity("");
     setNeighborhood("");
     setEmail("");
@@ -555,6 +570,32 @@ export default function ZkProcjenaPage() {
         {/* ===================== UPLOAD ===================== */}
         {!isLoading && !hasResult && (
           <div className="space-y-6">
+            {/* Mode Toggle */}
+            <div className="flex justify-center gap-2">
+              <button
+                onClick={() => setMode("pdf")}
+                className={`px-5 py-2.5 rounded-lg text-sm font-medium transition ${
+                  mode === "pdf"
+                    ? "bg-indigo-600 text-white shadow-sm"
+                    : "bg-white text-gray-600 border border-gray-300 hover:bg-gray-50"
+                }`}
+              >
+                <Upload className="inline h-4 w-4 mr-1.5 -mt-0.5" />
+                PDF Upload
+              </button>
+              <button
+                onClick={() => setMode("text")}
+                className={`px-5 py-2.5 rounded-lg text-sm font-medium transition ${
+                  mode === "text"
+                    ? "bg-indigo-600 text-white shadow-sm"
+                    : "bg-white text-gray-600 border border-gray-300 hover:bg-gray-50"
+                }`}
+              >
+                <FileText className="inline h-4 w-4 mr-1.5 -mt-0.5" />
+                Tekst
+              </button>
+            </div>
+
             {/* Location Override — using shared LocationSelector combobox */}
             <LocationSelector
               city={city}
@@ -579,38 +620,51 @@ export default function ZkProcjenaPage() {
             </div>
 
             {/* PDF Drop Zone */}
-            <div
-              onDrop={onDrop}
-              onDragOver={onDragOver}
-              onDragLeave={onDragLeave}
-              className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-12 transition-colors cursor-pointer ${
-                dragOver
-                  ? "border-indigo-500 bg-indigo-50"
-                  : "border-gray-300 bg-white hover:border-gray-400"
-              }`}
-            >
-              <Upload className="h-12 w-12 text-gray-400 mb-4" />
-              <p className="text-gray-600 font-medium text-lg">
-                Povucite ZK izvadak (PDF) ovdje
-              </p>
-              <p className="text-gray-400 mt-1">
-                ili{" "}
-                <label className="text-indigo-600 underline cursor-pointer">
-                  odaberite datoteku
-                  <input
-                    type="file"
-                    accept=".pdf"
-                    className="hidden"
-                    onChange={onFileChange}
-                  />
-                </label>
-              </p>
-              <p className="text-xs text-gray-400 mt-3">
-                Max 10 MB • Sustav automatski parsira ZK, analizira rizik i procjenjuje vrijednost
-              </p>
-            </div>
+            {mode === "pdf" && (
+              <div
+                onDrop={onDrop}
+                onDragOver={onDragOver}
+                onDragLeave={onDragLeave}
+                className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-12 transition-colors cursor-pointer ${
+                  dragOver
+                    ? "border-indigo-500 bg-indigo-50"
+                    : "border-gray-300 bg-white hover:border-gray-400"
+                }`}
+              >
+                <Upload className="h-12 w-12 text-gray-400 mb-4" />
+                <p className="text-gray-600 font-medium text-lg">
+                  Povucite ZK izvadak (PDF) ovdje
+                </p>
+                <p className="text-gray-400 mt-1">
+                  ili{" "}
+                  <label className="text-indigo-600 underline cursor-pointer">
+                    odaberite datoteku
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      className="hidden"
+                      onChange={onFileChange}
+                    />
+                  </label>
+                </p>
+                <p className="text-xs text-gray-400 mt-3">
+                  Max 10 MB • Sustav automatski parsira ZK, analizira rizik i procjenjuje vrijednost
+                </p>
+              </div>
+            )}
 
-            {file && (
+            {/* Text Input */}
+            {mode === "text" && (
+              <textarea
+                value={textInput}
+                onChange={(e) => setTextInput(e.target.value)}
+                placeholder="Zalijepite tekst ZK izvatka ovdje... (A list, B list, C list)"
+                className="w-full h-72 rounded-xl border border-gray-300 p-4 text-sm text-gray-800 resize-y focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none bg-white"
+              />
+            )}
+
+            {/* PDF file selected — analyze button */}
+            {mode === "pdf" && file && (
               <div className="flex items-center justify-between rounded-lg bg-white border border-gray-200 p-4">
                 <div className="flex items-center gap-3">
                   <FileText className="h-5 w-5 text-indigo-600" />
@@ -621,6 +675,19 @@ export default function ZkProcjenaPage() {
                     ({(file.size / 1024).toFixed(0)} KB)
                   </span>
                 </div>
+                <button
+                  onClick={runUnified}
+                  className="rounded-lg bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition flex items-center gap-2"
+                >
+                  <BookOpen className="h-4 w-4" />
+                  Analiziraj i procijeni
+                </button>
+              </div>
+            )}
+
+            {/* Text mode — analyze button */}
+            {mode === "text" && textInput.trim().length >= 50 && (
+              <div className="flex justify-end">
                 <button
                   onClick={runUnified}
                   className="rounded-lg bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition flex items-center gap-2"

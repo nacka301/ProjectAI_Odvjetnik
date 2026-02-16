@@ -117,102 +117,7 @@ public class ZkUnifiedController : ControllerBase
                 return;
             }
 
-            var zkSummary = $"{zkResult.PropertyId} • {zkResult.PropertyType} • " +
-                $"Vlasnici: {zkResult.Owners.Count} • Status: {zkResult.OverallStatus ?? zkResult.RiskScore}";
-            await SendProgress("zk_parsing", "done", "ZK izvadak parsiran", zkSummary);
-
-            // Send ZK analysis result as intermediate data (includes due diligence findings)
-            await SendSSE("zk_analysis", zkResult);
-
-            // ── Check if valuation should proceed ──
-            if (skipValuation)
-            {
-                _logger.LogInformation("Valuation skipped by request");
-                await SendSSE("complete", new UnifiedZkValuationResult
-                {
-                    ZkAnalysis = zkResult,
-                    ValuationAttempted = false,
-                    ValuationSkipReason = "Korisnik odabrao samo analizu"
-                });
-                return;
-            }
-
-            // ────────────────────────────────────────────────────
-            // STAGE 1: Convert ZK → ExtractedPropertyInfo
-            // ────────────────────────────────────────────────────
-            await SendProgress("reading", "active", "Pripremam podatke za procjenu...");
-
-            ExtractedPropertyInfo property;
-            try
-            {
-                property = ZkParsingService.ToPropertyInfo(zkResult, rawPdfText);
-
-                // Location override if provided
-                if (!string.IsNullOrWhiteSpace(city) || !string.IsNullOrWhiteSpace(neighborhood))
-                {
-                    string overrideLocation;
-                    if (!string.IsNullOrWhiteSpace(neighborhood) && !string.IsNullOrWhiteSpace(city))
-                        overrideLocation = $"{neighborhood.Trim()}, {city.Trim()}";
-                    else if (!string.IsNullOrWhiteSpace(neighborhood))
-                        overrideLocation = neighborhood.Trim();
-                    else
-                        overrideLocation = city!.Trim();
-
-                    _logger.LogInformation("Location override: {From} → {To}",
-                        property.Location, overrideLocation);
-                    property.Location = overrideLocation;
-                }
-            }
-            catch (Exception ex)
-            {
-                await SendProgress("reading", "error", "Priprema podataka", ex.Message);
-                await SendError("reading", $"Greška: {ex.Message}");
-                return;
-            }
-
-            // Check if we have enough data to valuate
-            bool canValuate = true;
-            string? skipReason = null;
-
-            if (string.IsNullOrWhiteSpace(property.Location))
-            {
-                canValuate = false;
-                skipReason = "Lokacija nepoznata — nije moguća tržišna pretraga";
-            }
-            else if (property.SizeM2 == 0 && zkResult.PropertyType is not "zemljište")
-            {
-                // We can still try — engine handles size=0 with limitations
-                _logger.LogWarning("Building area unknown — valuation will have limited accuracy");
-            }
-
-            await SendProgress("reading", "done", "Podaci pripremljeni",
-                $"{property.Description}, {property.SizeM2} m², {property.Location}");
-
-            if (!canValuate)
-            {
-                await SendSSE("complete", new UnifiedZkValuationResult
-                {
-                    ZkAnalysis = zkResult,
-                    ValuationAttempted = false,
-                    ValuationSkipReason = skipReason
-                });
-                return;
-            }
-
-            // ────────────────────────────────────────────────────
-            // STAGES 2-4: Run the full valuation pipeline
-            // (same logic as EvaluateController.RunStreamingPipelineAsync)
-            // ────────────────────────────────────────────────────
-            var valuationResult = await RunValuationPipelineAsync(
-                property, rawPdfText, zkResult, email, ct);
-
-            // ── Final combined result ──
-            await SendSSE("complete", new UnifiedZkValuationResult
-            {
-                ZkAnalysis = zkResult,
-                Valuation = valuationResult,
-                ValuationAttempted = true
-            });
+            await RunUnifiedPipeline(zkResult, rawPdfText, city, neighborhood, email, skipValuation, ct);
         }
         catch (OperationCanceledException)
         {
@@ -223,6 +128,172 @@ public class ZkUnifiedController : ControllerBase
             _logger.LogError(ex, "ZK unified pipeline error");
             await SendError("unknown", $"Neočekivana greška: {ex.Message}");
         }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  POST /api/zk/stream-text — ZK parse from pasted text + valuation (SSE)
+    // ══════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// V49c: SSE streaming from raw text (copy-paste) instead of PDF upload.
+    /// Same pipeline as /stream but skips PDF extraction.
+    /// </summary>
+    [HttpPost("stream-text")]
+    [EnableRateLimiting("valuation")]
+    public async Task UnifiedStreamText(
+        [FromForm] string? text = null,
+        [FromForm] string? city = null,
+        [FromForm] string? neighborhood = null,
+        [FromForm] string? email = null,
+        [FromForm] bool skipValuation = false)
+    {
+        SetupSSEHeaders();
+        var ct = HttpContext.RequestAborted;
+
+        if (string.IsNullOrWhiteSpace(text) || text.Trim().Length < 50)
+        {
+            await SendError("validation", "Tekst ZK izvatka mora imati barem 50 znakova.");
+            return;
+        }
+
+        _logger.LogInformation("=== ZK Text Stream: {Len} chars ===", text.Length);
+
+        try
+        {
+            // ────────────────────────────────────────────────────
+            // STAGE 0: Parse ZK text (skip PDF extraction)
+            // ────────────────────────────────────────────────────
+            await SendProgress("zk_parsing", "active", "Parsiram ZK izvadak iz teksta...");
+
+            ZkParsedResult zkResult;
+            try
+            {
+                zkResult = await _zkParsingService.ParseZkTextAsync(text.Trim());
+            }
+            catch (Exception ex)
+            {
+                await SendProgress("zk_parsing", "error", "Parsiranje ZK-a", ex.Message);
+                await SendError("zk_parsing", $"Greška: {ex.Message}");
+                return;
+            }
+
+            await RunUnifiedPipeline(zkResult, text.Trim(), city, neighborhood, email, skipValuation, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogInformation("Client disconnected during ZK text pipeline");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ZK text pipeline error");
+            await SendError("unknown", $"Neočekivana greška: {ex.Message}");
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  Shared pipeline: ZK result → valuation
+    // ══════════════════════════════════════════════════════════
+
+    private async Task RunUnifiedPipeline(
+        ZkParsedResult zkResult, string rawText,
+        string? city, string? neighborhood, string? email,
+        bool skipValuation, CancellationToken ct)
+    {
+        var zkSummary = $"{zkResult.PropertyId} • {zkResult.PropertyType} • " +
+            $"Vlasnici: {zkResult.Owners.Count} • Status: {zkResult.OverallStatus ?? zkResult.RiskScore}";
+        await SendProgress("zk_parsing", "done", "ZK izvadak parsiran", zkSummary);
+
+        // Send ZK analysis result as intermediate data (includes due diligence findings)
+        await SendSSE("zk_analysis", zkResult);
+
+        // ── Check if valuation should proceed ──
+        if (skipValuation)
+        {
+            _logger.LogInformation("Valuation skipped by request");
+            await SendSSE("complete", new UnifiedZkValuationResult
+            {
+                ZkAnalysis = zkResult,
+                ValuationAttempted = false,
+                ValuationSkipReason = "Korisnik odabrao samo analizu"
+            });
+            return;
+        }
+
+        // ────────────────────────────────────────────────────
+        // STAGE 1: Convert ZK → ExtractedPropertyInfo
+        // ────────────────────────────────────────────────────
+        await SendProgress("reading", "active", "Pripremam podatke za procjenu...");
+
+        ExtractedPropertyInfo property;
+        try
+        {
+            property = ZkParsingService.ToPropertyInfo(zkResult, rawText);
+
+            // Location override if provided
+            if (!string.IsNullOrWhiteSpace(city) || !string.IsNullOrWhiteSpace(neighborhood))
+            {
+                string overrideLocation;
+                if (!string.IsNullOrWhiteSpace(neighborhood) && !string.IsNullOrWhiteSpace(city))
+                    overrideLocation = $"{neighborhood.Trim()}, {city.Trim()}";
+                else if (!string.IsNullOrWhiteSpace(neighborhood))
+                    overrideLocation = neighborhood.Trim();
+                else
+                    overrideLocation = city!.Trim();
+
+                _logger.LogInformation("Location override: {From} → {To}",
+                    property.Location, overrideLocation);
+                property.Location = overrideLocation;
+            }
+        }
+        catch (Exception ex)
+        {
+            await SendProgress("reading", "error", "Priprema podataka", ex.Message);
+            await SendError("reading", $"Greška: {ex.Message}");
+            return;
+        }
+
+        // Check if we have enough data to valuate
+        bool canValuate = true;
+        string? skipReason = null;
+
+        if (string.IsNullOrWhiteSpace(property.Location))
+        {
+            canValuate = false;
+            skipReason = "Lokacija nepoznata — nije moguća tržišna pretraga";
+        }
+        else if (property.SizeM2 == 0 && zkResult.PropertyType is not "zemljište")
+        {
+            // We can still try — engine handles size=0 with limitations
+            _logger.LogWarning("Building area unknown — valuation will have limited accuracy");
+        }
+
+        await SendProgress("reading", "done", "Podaci pripremljeni",
+            $"{property.Description}, {property.SizeM2} m², {property.Location}");
+
+        if (!canValuate)
+        {
+            await SendSSE("complete", new UnifiedZkValuationResult
+            {
+                ZkAnalysis = zkResult,
+                ValuationAttempted = false,
+                ValuationSkipReason = skipReason
+            });
+            return;
+        }
+
+        // ────────────────────────────────────────────────────
+        // STAGES 2-4: Run the full valuation pipeline
+        // ────────────────────────────────────────────────────
+        var valuationResult = await RunValuationPipelineAsync(
+            property, rawText, zkResult, email, ct);
+
+        // ── Final combined result ──
+        await SendSSE("complete", new UnifiedZkValuationResult
+        {
+            ZkAnalysis = zkResult,
+            Valuation = valuationResult,
+            ValuationAttempted = true
+        });
     }
 
     /// <summary>
