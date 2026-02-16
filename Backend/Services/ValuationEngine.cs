@@ -1081,11 +1081,14 @@ public class ValuationEngine
         }
 
         // ── 4c½. SIMILARITY FLOOR ──
-        // Remove any comparable below 50% similarity — too dissimilar to be useful.
-        // V28: Raised from 0.50 to 0.55 — below 55% the comp is too dissimilar
-        // to contribute meaningful data. A 55% comp on Trešnjevka-Sjever at 1,864 €/m²
-        // was dragging down center averages from 3,500 to 3,045.
-        const double MinSimilarityThreshold = 0.55;
+        // Remove any comparable below minimum similarity — too dissimilar to be useful.
+        // V28: Raised from 0.50 to 0.55
+        // V48: Lowered from 0.55 to 0.45 — the math-fallback location scorer gives
+        //      only 0.25 when comp URL doesn't contain exact neighborhood text
+        //      (e.g. "split-bacvice" doesn't match "bačvice" due to diacritics).
+        //      With V48 BroaderRegion fix, comps are now geo-relevant, so we can
+        //      afford a lower threshold. AI scoring still gates quality above this.
+        const double MinSimilarityThreshold = 0.45;
         {
             var belowFloor = compDetails.Where(c => !c.IsOutlier && c.SimilarityScore < MinSimilarityThreshold).ToList();
             if (belowFloor.Count > 0)
@@ -1471,28 +1474,47 @@ public class ValuationEngine
         string compText = $"{comp.SourceTitle} {comp.SourceUrl}".ToLowerInvariant();
         string targetLoc = target.Location.ToLowerInvariant().Trim();
 
-        var locParts = targetLoc.Split(new[] { ',', '-', '/' }, StringSplitOptions.RemoveEmptyEntries)
+        // V48: Also strip Croatian diacritics for matching against URL slugs
+        // "bačvice" → "bacvice" so it matches njuskalo URL "split-bacvice"
+        string compTextNorm = StripDiacritics(compText);
+        string targetLocNorm = StripDiacritics(targetLoc);
+
+        var locParts = targetLocNorm.Split(new[] { ',', '-', '/' }, StringSplitOptions.RemoveEmptyEntries)
             .Select(s => s.Trim())
             .Where(s => s.Length > 2)
             .ToList();
 
-        // ── Location (max 0.70) — 70% of total ──
-        bool isExactNeighborhood = locParts.Count >= 2
-            && compText.Contains(locParts[0]);
+        // Also keep original-diacritics parts for title matching
+        var locPartsOrig = targetLoc.Split(new[] { ',', '-', '/' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(s => s.Trim())
+            .Where(s => s.Length > 2)
+            .ToList();
 
-        if (locParts.Count >= 2 && compText.Contains(locParts[^1]) && compText.Contains(locParts[0]))
+        // V48: Match helper — checks both diacritics and stripped versions
+        bool ContainsPart(string text, string textNorm, string partOrig, string partNorm)
+            => text.Contains(partOrig) || textNorm.Contains(partNorm);
+
+        // ── Location (max 0.70) — 70% of total ──
+        bool neighborhoodInComp = locParts.Count >= 2
+            && ContainsPart(compText, compTextNorm, locPartsOrig[0], locParts[0]);
+        bool cityInComp = locParts.Count >= 2
+            && ContainsPart(compText, compTextNorm, locPartsOrig[^1], locParts[^1]);
+
+        if (neighborhoodInComp && cityInComp)
         {
             score += 0.70; // Same neighborhood + city = full score
         }
-        else if (isExactNeighborhood)
+        else if (neighborhoodInComp)
         {
             score += 0.60; // Neighborhood match without city context
         }
-        else if (locParts.Any(part => compText.Contains(part)))
+        else if (locPartsOrig.Select((part, i) => ContainsPart(compText, compTextNorm, part, locParts[i])).Any(x => x))
         {
             score += 0.25; // Same city but WRONG neighborhood
         }
-        else if (!string.IsNullOrEmpty(regionName) && compText.Contains(regionName.ToLowerInvariant()))
+        else if (!string.IsNullOrEmpty(regionName) &&
+                 (compText.Contains(regionName.ToLowerInvariant()) ||
+                  compTextNorm.Contains(StripDiacritics(regionName.ToLowerInvariant()))))
         {
             score += 0.15; // Same region only
         }
@@ -1547,6 +1569,13 @@ public class ValuationEngine
         // Total max = 0.70 + 0.20 + 0.10 = 1.00
         return Math.Clamp(score, 0.0, 1.0);
     }
+
+    /// <summary>V48: Strip Croatian diacritics for URL slug matching.
+    /// "bačvice" → "bacvice", "trešnjevka" → "tresnjevka"</summary>
+    private static string StripDiacritics(string text)
+        => text.Replace("č", "c").Replace("ć", "c")
+               .Replace("đ", "d").Replace("ð", "d")
+               .Replace("š", "s").Replace("ž", "z");
 
     private bool IsSimilarType(string targetType, string compText)
     {
