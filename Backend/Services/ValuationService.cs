@@ -644,7 +644,22 @@ public class ValuationService
                     target.AiYardAreaM2 = item.TryGetProperty("yard_area_m2", out var ya) ? ya.GetDouble() : 0;
                     target.AiSizeM2 = item.TryGetProperty("size_m2", out var sz) ? sz.GetDouble() : 0;
                     target.AiPropertyType = item.TryGetProperty("property_type", out var pt) ? pt.GetString() : "unknown";
-                    target.AiSimilarityScore = item.TryGetProperty("similarity_score", out var ss) ? ss.GetDouble() : null;
+
+                    // V48: Robust similarity_score parsing — handle both number and string
+                    if (item.TryGetProperty("similarity_score", out var ss))
+                    {
+                        if (ss.ValueKind == System.Text.Json.JsonValueKind.Number)
+                        {
+                            target.AiSimilarityScore = ss.GetDouble();
+                        }
+                        else if (ss.ValueKind == System.Text.Json.JsonValueKind.String &&
+                                 double.TryParse(ss.GetString(), System.Globalization.NumberStyles.Float,
+                                 System.Globalization.CultureInfo.InvariantCulture, out var parsed))
+                        {
+                            target.AiSimilarityScore = parsed;
+                        }
+                    }
+
                     target.AiSimilarityReason = item.TryGetProperty("similarity_reason", out var sr) && sr.ValueKind == System.Text.Json.JsonValueKind.String
                         ? sr.GetString() : null;
 

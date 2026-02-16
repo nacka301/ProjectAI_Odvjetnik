@@ -950,10 +950,12 @@ public class ValuationEngine
         foreach (var price in cleanPrices)
         {
             double simScore;
+            bool usedAiScore = false;
             if (aiScoreLookup.TryGetValue(price.SourceUrl, out var aiScore))
             {
                 simScore = Math.Clamp(aiScore, 0.0, 1.0);
                 aiScored++;
+                usedAiScore = true;
 
                 // V38: Cross-city safety cap — if math-based location score is very low
                 // (wrong city/region), cap the AI score to prevent AI hallucination
@@ -1014,6 +1016,12 @@ public class ValuationEngine
             }
             simScore = Math.Clamp(simScore, 0.0, 1.0);
 
+            // V48: Log scoring method per listing
+            _logger.LogInformation("Similarity: {Method} {Score:P0} — {Title}",
+                usedAiScore ? "🤖 AI" : "📐 Math",
+                simScore,
+                price.SourceTitle.Length > 50 ? price.SourceTitle[..50] : price.SourceTitle);
+
             // V20: Per-comparable correction (individual adjustment)
             var (corrPct, corrReason) = CalculatePerCompCorrection(property, listing, price, marketData.DetectedPropertyType);
 
@@ -1023,6 +1031,13 @@ public class ValuationEngine
                 : listing?.AiSizeM2 > 0
                     ? Math.Round(price.PricePerM2 * listing.AiSizeM2!.Value, 0)
                     : price.DetectedSizeM2 > 0 ? Math.Round(price.PricePerM2 * price.DetectedSizeM2, 0) : null;
+
+            // V48: Generate similarity reason for math-fallback (AI provides its own)
+            string? similarityReason = listing?.AiSimilarityReason;
+            if (string.IsNullOrEmpty(similarityReason) && !usedAiScore)
+            {
+                similarityReason = GenerateMathSimilarityReason(simScore, price, property);
+            }
 
             compDetails.Add(new UsedComparable
             {
@@ -1044,7 +1059,7 @@ public class ValuationEngine
                 HasGarage = listing?.HasGarage ?? (price.HasGarage ? true : null),
                 HasParking = price.HasParking ? true : null,
                 YardAreaM2 = listing?.AiYardAreaM2 > 0 ? listing.AiYardAreaM2 : (price.DetectedYardM2 > 0 ? price.DetectedYardM2 : null),
-                SimilarityReason = listing?.AiSimilarityReason,
+                SimilarityReason = similarityReason,
                 DeepDiveStatus = listing?.DeepDiveStatus,
                 // V20: Per-comparable correction
                 CorrectionPercent = corrPct,
@@ -1576,6 +1591,35 @@ public class ValuationEngine
         => text.Replace("č", "c").Replace("ć", "c")
                .Replace("đ", "d").Replace("ð", "d")
                .Replace("š", "s").Replace("ž", "z");
+
+    /// <summary>V48: Generate a Croatian similarity reason for math-fallback scoring.
+    /// Provides useful context when AI feature extraction didn't produce one.</summary>
+    private static string GenerateMathSimilarityReason(
+        double score, ExtractedPrice comp, ExtractedPropertyInfo target)
+    {
+        string locInfo = target.Location.Contains(",")
+            ? target.Location.Split(',')[0].Trim()
+            : target.Location;
+
+        string sizeInfo = "";
+        if (target.SizeM2 > 0 && comp.DetectedSizeM2 > 0)
+        {
+            double diff = Math.Abs(target.SizeM2 - comp.DetectedSizeM2);
+            double pct = diff / target.SizeM2 * 100;
+            sizeInfo = pct < 15 ? $", slična površina ({comp.DetectedSizeM2:F0}m²)"
+                     : pct < 30 ? $", umjerena razlika u površini ({comp.DetectedSizeM2:F0}m²)"
+                     : $", različita površina ({comp.DetectedSizeM2:F0}m²)";
+        }
+
+        return score switch
+        {
+            >= 0.80 => $"Vrlo dobra usporedba — blizu lokacije {locInfo}{sizeInfo}.",
+            >= 0.60 => $"Dobra usporedba — isti kvart ili blizina{sizeInfo}.",
+            >= 0.45 => $"Umjerena usporedba — isti grad{sizeInfo}.",
+            >= 0.25 => $"Slabija usporedba — udaljeniji dio grada{sizeInfo}.",
+            _ => $"Niska usporedivost — različita lokacija{sizeInfo}."
+        };
+    }
 
     private bool IsSimilarType(string targetType, string compText)
     {

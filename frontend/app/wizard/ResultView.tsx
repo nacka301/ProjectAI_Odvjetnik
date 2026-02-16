@@ -188,11 +188,14 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
                         </td>
                         <td className="py-2.5 pr-3 text-right font-bold text-blue-700">{formatPrice(Math.round(row.adjusted_price_per_m2))} €</td>
                         <td className="py-2.5 text-right">
-                          <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold cursor-help ${
                             row.similarity_score >= 70 ? "bg-green-100 text-green-800" :
                             row.similarity_score >= 40 ? "bg-yellow-100 text-yellow-800" :
                             "bg-red-100 text-red-800"
-                          }`}>{row.similarity_score}%</span>
+                          }`} title={row.similarity_reason || undefined}>{row.similarity_score}%</span>
+                          {row.similarity_reason && (
+                            <div className="text-[9px] text-gray-400 max-w-[150px] whitespace-normal text-right mt-0.5">{row.similarity_reason}</div>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -425,6 +428,10 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
                         backgroundColor: (c.similarity_score <= 1 ? c.similarity_score : c.similarity_score / 100) >= 0.7 ? "#22c55e" : (c.similarity_score <= 1 ? c.similarity_score : c.similarity_score / 100) >= 0.4 ? "#eab308" : "#ef4444"
                       }} />
                     </div>
+                    {/* V48: Similarity reason — AI explanation of why this comp is similar/different */}
+                    {c.similarity_reason && (
+                      <div className="mt-1.5 text-[11px] text-gray-500 italic">💡 {c.similarity_reason}</div>
+                    )}
                     {/* Per-comp correction */}
                     {!c.is_outlier && c.correction_percent !== undefined && c.correction_percent !== 0 && (
                       <div className={`mt-2 text-xs px-3 py-1.5 rounded-md ${c.correction_percent > 0 ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
