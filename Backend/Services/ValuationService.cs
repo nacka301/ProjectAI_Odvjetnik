@@ -131,11 +131,11 @@ public class ValuationService
         graditeljstvo i procjenu nekretnina) s REV certifikacijom prema TEGOVA/IVS standardima.
         Primjenjuješ metodologiju prema Pravilniku o metodama procjene vrijednosti nekretnina 
         (NN 105/2015) i Zakonu o procjeni vrijednosti nekretnina (NN 78/2015).
-        MORAŠ korigirati Njuškalo/Index tražene cijene za -15% da dobiješ ostvarene (transakcijske) vrijednosti.
+        MORAŠ korigirati Njuškalo/Index tražene cijene za realizacijski diskont (postotak naveden u COMPARISON TABLE bloku) da dobiješ ostvarene (transakcijske) vrijednosti.
         Tvoj cilj je UVIJEK dati numeričku procjenu. Nikad ne vraćaj 0.
 
         Korak 1: Pregledaj priložene rezultate pretrage (oglasi s Njuškalo/Index). Filtriraj irelevantne (npr. garaže, kuće ako tražiš stan).
-        Korak 2: Odaberi najbolje usporedive nekretnine (idealno 3).
+        Korak 2: Koristi SVE usporedive nekretnine iz COMPARISON TABLE bloka (ne biraj samo 3 — navedi SVE).
         Korak 3: Provedi kontekstualnu analizu (infrastruktura, makro-lokacija, geografija).
         Korak 4: Primijeni ispravnu metodu procjene (Usporedna / Prinosna / Troškovna).
         Korak 5: Izračunaj procijenjenu tržišnu vrijednost.
@@ -145,16 +145,15 @@ public class ValuationService
         ═══════════════════════════════════════════
 
         1. DISKONT TRAŽENE VS. OSTVARENE CIJENE (OBAVEZNO):
-           - ČINJENICA: U Hrvatskoj postoji ~15% prosječni diskont između traženih cijena (oglasne cijene)
+           - ČINJENICA: U Hrvatskoj postoji diskont između traženih cijena (oglasne cijene)
              i ostvarenih/transakcijskih cijena (ugovorne cijene).
-           - MORAŠ primijeniti -15% diskont na svaku cijenu iz Njuškalo/Index oglasa.
-           - IZNIMKA: Novogradnja visoke potražnje u velikim gradovima (Zagreb, Split, Dubrovnik)
-             gdje potražnja premašuje ponudu — smanji diskont na -5% za te.
-           - Ovaj diskont se primjenjuje NAKON svih ostalih korekcijskih koeficijenata.
-           - U valuation_reasoning eksplicitno navedi:
-             "Primijenjen diskont od -15% (tražena → ostvarena cijena) sukladno
-             analizi hrvatskog tržišta nekretnina 2024/2025."
-           - Dodaj "Diskont tražene cijene" kao value_driver s adjustment_percent = -15 (ili -5).
+           - Diskont je VEĆ izračunat od strane engine-a i prikazan u COMPARISON TABLE bloku.
+           - KORISTI ISKLJUČIVO postotak diskonta iz COMPARISON TABLE bloka ("After Discount" red).
+           - NE SMISLJAJ vlastiti postotak diskonta. NE koristi hardkodirano -15%.
+           - U valuation_reasoning navedi TOČAN diskont iz tablice, npr:
+             "Primijenjen diskont od -X.X% (tražena → ostvarena cijena) sukladno
+             analizi hrvatskog tržišta nekretnina."
+           - Dodaj "Diskont tražene cijene" kao value_driver s adjustment_percent = TOČAN postotak iz tablice.
 
         2. DETEKCIJA OUTLIERA (isključivo iz podataka pretrage):
            - Usporedi cijenu po m² svake usporedive nekretnine s MEDIJANOM svih pronađenih.
@@ -217,7 +216,7 @@ public class ValuationService
            a) USPOREDNA (KOMPARATIVNA) METODA — PRIMARNA:
               - Zadana metoda za stanove, kuće, građevinsko zemljište.
               - Formula: procjenjena_vrijednost = NKP_m2 × Prosječna_Korigirana_Cijena_m2 × Kontekstualni_Multiplikator
-              - Primijeni diskont od -15% (realizacijski jaz) kao ZAVRŠNI korak.
+              - Primijeni realizacijski diskont (postotak iz COMPARISON TABLE) kao ZAVRŠNI korak.
               - Korekcijski koeficijenti: lokacija, stanje, veličina, opremljenost, kat, orijentacija.
               - Vremenska prilagodba: ako su usporedive starije od 6 mjeseci, korigiraj za tržišni trend.
               - Koristi ovu metodu kad god su usporedivi oglasi dostupni.
@@ -422,11 +421,16 @@ public class ValuationService
         - Explain your reasoning for selecting each comparable and how it relates to the target property.
         - In the valuation_reasoning, structure the text with CLEAR NUMERIC TRANSPARENCY:
           a) Start with a brief introduction of the property and method used.
-          b) For EACH comparable, state: raw asking price, size, €/m², and any correction applied.
-          c) State the weighted average/median €/m² after corrections.
-          d) State the realization gap discount applied and the final €/m².
-          e) State the final estimated value = final €/m² × target size.
-          f) End with a professional conclusion referencing market conditions.
+          b) List ALL comparables from the COMPARISON TABLE — not just 3, ALL of them.
+             For each, state: raw asking price, size, €/m², and similarity score.
+          c) State the weighted median €/m² EXACTLY as shown in the COMPARISON TABLE.
+          d) State the realization discount % EXACTLY as shown in the COMPARISON TABLE (After Discount line).
+          e) List EACH adjustment by name and percentage from the "Applied Adjustments" section.
+             State the total adjustment % and the resulting €/m² (After Adjustments line).
+          f) State the final estimated value = final €/m² × target size.
+          g) End with a professional conclusion referencing market conditions.
+          CRITICAL: ALL NUMBERS MUST MATCH the COMPARISON TABLE block EXACTLY.
+          Do NOT compute your own averages, discounts, or adjustments — use the engine values.
         - NOTE: The server will ALSO provide a separate structured comparison table and price range
           to the frontend. Your narrative should reference the numbers but does not need to format tables.
         - For LAND (zemljište): Do NOT mention 'starogradnja', 'novogradnja', or 'stanje objekta'.
@@ -449,11 +453,11 @@ public class ValuationService
           "value_drivers": [
               {
                 "factor": "Factor name in Croatian (e.g. Diskont tražene cijene, Infrastruktura, Prenamjena)",
-                "impact": "Impact description (e.g. -15% tražena → ostvarena cijena)",
+                "impact": "Impact description (e.g. -X% tražena → ostvarena cijena — use EXACT % from COMPARISON TABLE)",
                 "adjustment_percent": number (e.g. 0, -5, -15, +15 — the % adjustment applied)
               }
           ],
-          "valuation_reasoning": "Formal legal text explaining the value including: method used, all corrections, -15% realization gap, market data comparison, contextual adjustments, infrastructure analysis, and location factors. Formatted with paragraphs, ready to copy-paste into MS Word."
+          "valuation_reasoning": "Formal legal text explaining the value. MUST reference ALL comparables from the COMPARISON TABLE (not just 3), the EXACT discount %, EACH adjustment by name and %, and the final value. ALL numbers must match the COMPARISON TABLE block. Formatted with paragraphs, ready to copy-paste into MS Word."
         }
 
         PRAVNA PRECIZNOST:
@@ -900,7 +904,7 @@ public class ValuationService
             (string.IsNullOrEmpty(marketData.Note) ? "" : $"- NAPOMENA: {marketData.Note}\n") +
             $"\nINSTRUCTION: Base your valuation ONLY on the search results above. " +
             $"Do NOT use any memorized or hardcoded benchmark prices. " +
-            $"Apply -15% realization gap to asking prices to estimate transaction values.\n";
+            $"Apply the realization gap discount (exact % provided in the COMPARISON TABLE) to asking prices.\n";
 
         // ── ENGINE OVERRIDE: inject the deterministic value so the LLM MUST use it ──
         var engineOverride = "";
