@@ -116,6 +116,103 @@ public class ZkParsingService
         - Pravo građenja → WARNING.
         - Koncesija → WARNING.
 
+        Za SVAKI teret u "other_encumbrances" OBAVEZNO popuni V44 polja:
+        - risk_type: "FIDUCIJA", "OSOBNA_SLUZNOST", "STVARNA_SLUZNOST", 
+          "ZABRANA_OTUDENJA", "PRAVO_GRADENJA", "KONCESIJA", "OVRHA", "PRAVO_PRVOKUPA", "OSTALO"
+        - legal_basis: Navedi čl. + zakon + NN (npr. "čl. 297. ZV (NN 91/96, 152/14)")
+        - blocks_sale: true ako sprečava prodaju
+        - blocks_construction: true ako sprečava gradnju
+        - year_registered: godina upisa (0 ako nepoznato)
+        - is_historical: true ako je upis prije 1991. ili potječe iz socijalističkog razdoblja
+
+        ═══════════════════════════════════════════════════════
+        🔬 5. OCR 2.0 — NAPREDNA ANALIZA PLOMBI I TERETA
+        ═══════════════════════════════════════════════════════
+        Ovo je NAJVAŽNIJI dio analize. Ne čitaj samo tekst — prepoznaj specifične
+        pravne obrasce koji mogu spriječiti prodaju ili gradnju.
+
+        📌 5a. KLASIFIKACIJA PLOMBI:
+        Za svaku plombu u "active_plombe" popuni V44 polja:
+        - plomba_type: "VLASNISTVO" (prijedlog za upis vlasništva), 
+          "HIPOTEKA" (upis/brisanje hipoteke), "OVRHA" (ovrha/zabrana),
+          "BRISANJE" (zahtjev za brisanje tereta — pozitivno!),
+          "ZABILJEŽBA" (zabilježba spora/tužbe), "OSTALO"
+        - risk_level: "CRITICAL" (blokira prodaju), "WARNING" (odgađa),
+          "INFO" (rutinska radnja, npr. brisanje stare hipoteke)
+        - blocks_sale: true/false
+        
+        PRIMJERI KLASIFIKACIJE:
+        "Z-1234/2024 Prijedlog za upis prava vlasništva" → plomba_type="VLASNISTVO", risk_level="CRITICAL", blocks_sale=true
+        "Z-5678/2024 Prijedlog za brisanje hipoteke" → plomba_type="BRISANJE", risk_level="INFO", blocks_sale=false
+        "Z-9999/2024 Prijedlog za zabilježbu ovrhe" → plomba_type="OVRHA", risk_level="CRITICAL", blocks_sale=true
+
+        📌 5b. DETEKCIJA FIDUCIJA (SKRIVENI VLASNICI):
+        Fiducija = prijenos vlasništva radi osiguranja (lat. fiducia cum creditore).
+        Traži u C listu:
+        - "Fiducijarni prijenos", "Fiducija", "prijenos radi osiguranja"
+        - "Ugovor o prijenosu vlasništva radi osiguranja"
+        - "Fiducijarno vlasništvo"
+        - "Prijenos vlasništva na Banku/Kreditora radi osiguranja tražbine"
+        Ako nađeš → CRITICAL finding kategorija "FIDUCIJA":
+          "Fiducijarni prijenos vlasništva u korist {korisnik} — sukladno 
+          čl. 34. Zakona o vlasništvu i drugim stvarnim pravima (NN 91/96, 152/14).
+          UPOZORENJE: Pravi vlasnik je fiducijar (banka/kreditor) — prodavatelj 
+          NIJE puni vlasnik dok se fiducija ne razriješi! Potrebno ishoditi izjavu 
+          fiducijara o suglasnosti za prodaju."
+        U other_encumbrances dodaj s risk_type="FIDUCIJA", blocks_sale=true.
+
+        📌 5c. DETEKCIJA POVIJESNIH TERETA (PRE-1991, SOCIJALIZAM):
+        Traži stare zapise koji ukazuju na socijalističko razdoblje:
+        - "Društveno vlasništvo", "Društveno poduzeće", "SOUR", "RO", "OUR"
+        - "OOUR", "Radnički savjet", "Radna organizacija"
+        - "JNA", "Vojska", "Narodna obrana", "SFRJ", "SRH"
+        - "Pravo korištenja", "Pravo upravljanja" (socijalističko)
+        - "Zadružna svojina", "Zadruga"
+        - Upisi stariji od 30+ godina bez ažuriranja
+        - Pretvorba, privatizacija, "Zakon o pretvorbi"
+        
+        Ako nađeš → Dodaj u "historical_encumbrances":
+        {
+          "type": "SOCIJALIZAM" | "STARI_TERET" | "FIDUCIJA" | "NEIDENTIFICIRANO",
+          "original_text": "(kopiraj originalni tekst iz ZK)",
+          "interpretation": "(objasni što ovo znači za modernog kupca)",
+          "estimated_year": 1985,
+          "still_legally_relevant": true/false,
+          "blocks_sale": "DA" | "NE" | "MOGUĆE",
+          "blocks_construction": "DA" | "NE" | "MOGUĆE",
+          "resolution": "(što učiniti — npr. 'Pokrenuti postupak brisanja pred sudom')",
+          "legal_basis": "čl. X. Zakona Y (NN Z)"
+        }
+        
+        VAŽNO: Stari teret ≠ neaktivan teret! 
+        "Služnost prolaza iz 1965." može i danas blokirati gradnju.
+        "Pravo korištenja" iz SFRJ-a → provjeriti je li provedena pretvorba.
+
+        📌 5d. DETEKCIJA ZABRANA I OGRANIČENJA:
+        - "Zabrana otuđenja i opterećenja" → blocks_sale=true, risk_type="ZABRANA_OTUDENJA"
+        - "Zabrana raspolaganja" → blocks_sale=true
+        - "Predbilježba" (aktivna, ne brisana) → blocks_sale=true ako je za vlasništvo
+        - "Pravo prvokupa" → WARNING, blocks_sale nije potpuna ali odgađa
+          Sukladno čl. 379.-384. ZV — nositelj prava prvokupa mora se izjasniti.
+
+        📌 5e. ENCUMBRANCE RISK MATRIX:
+        Na kraju, generiraj "encumbrance_risk_matrix" s prebrojenim rizicima:
+        {
+          "total_active": (broj aktivnih tereta),
+          "blocking_sale": (koliko ih blokira prodaju),
+          "blocking_construction": (koliko ih blokira gradnju),
+          "fiduciary_count": (koliko fiducija),
+          "personal_servitude_count": (osobne služnosti),
+          "historical_count": (povijesni tereti),
+          "enforcement_count": (ovrhe/sporovi),
+          "overall_risk": "ČISTO" | "UVJETNO" | "BLOKIRANO",
+          "summary": "Jednorečenični sažetak stanja tereta"
+        }
+        overall_risk logika:
+        - "BLOKIRANO" = ima fiduciju, osobnu služnost, aktivni spor/ovrhu, ili zabranu otuđenja
+        - "UVJETNO" = samo hipoteke (rješive), ili samo stvarne služnosti, ili samo pravo prvokupa
+        - "ČISTO" = nema aktivnih tereta ili samo INFO razina
+
         ═══════════════════════════════════════════════════════
         📊 PROCJENA UKUPNOG STATUSA
         ═══════════════════════════════════════════════════════
@@ -125,8 +222,8 @@ public class ZkParsingService
           vlasništvo jasno, nema neslaganja kulture
         - "UVJETNO" = aktivne hipoteke (ali rješive pismom namjere), 
           ili suvlasništvo, ili manje primjedbe
-        - "RIZIČNO" = aktivni sporovi, ovrhe, plombe, osobne služnosti, 
-          nerazjašnjeno vlasništvo, ili kombinacija više problema
+        - "RIZIČNO" = aktivni sporovi, ovrhe, plombe, osobne služnosti, fiducije,
+          nerazjašnjeno vlasništvo, zabrane otuđenja, ili kombinacija više problema
 
         risk_score: 
         - "LOW" = ČISTO
@@ -234,11 +331,25 @@ public class ZkParsingService
           ],
           "active_disputes": ["Zabilježba spora radi utvrđivanja prava vlasništva"],
           "other_encumbrances": [
-            {"type": "služnost", "description": "Pravo prolaza", "beneficiary": "Ime Prezime", "is_active": true}
+            {"type": "služnost", "description": "Pravo prolaza", "beneficiary": "Ime Prezime", "is_active": true, "risk_type": "OSOBNA_SLUZNOST", "legal_basis": "čl. 196. ZV", "blocks_sale": false, "blocks_construction": false, "year_registered": 2015, "is_historical": false}
           ],
           "active_plombe": [
-            {"z_number": "Z-1234/2024", "description": "Zahtjev za upis prava vlasništva", "date": "15.01.2024."}
+            {"z_number": "Z-1234/2024", "description": "Zahtjev za upis prava vlasništva", "date": "15.01.2024.", "plomba_type": "VLASNISTVO", "risk_level": "CRITICAL", "blocks_sale": true}
           ],
+          "historical_encumbrances": [
+            {"type": "DRUSTVENO_VLASNISTVO", "original_text": "Pravo korištenja temeljem rješenja SO Pakrac", "interpretation": "Socijalistička era — pravo korištenja konvertirano u vlasništvo po ZV", "estimated_year": 1978, "still_legally_relevant": false, "blocks_sale": "NE", "blocks_construction": "NE", "resolution": "Konvertirano u pravo vlasništva temeljem čl. 360. ZV", "legal_basis": "čl. 360. ZV"}
+          ],
+          "encumbrance_risk_matrix": {
+            "total_active": 2,
+            "blocking_sale": 0,
+            "blocking_construction": 0,
+            "fiduciary_count": 0,
+            "personal_servitude_count": 1,
+            "historical_count": 1,
+            "enforcement_count": 0,
+            "overall_risk": "ČISTO",
+            "summary": "Nema blokirajućih tereta. Jedna osobna služnost i jedan povijesni upis koji nije pravno relevantan."
+          },
           "risk_score": "LOW|MEDIUM|HIGH",
           "overall_status": "ČISTO|UVJETNO|RIZIČNO",
           "ownership_status": "1/1 ČISTO|SUVLASNIŠTVO|NERAZJAŠNJENO",
@@ -248,7 +359,7 @@ public class ZkParsingService
           "has_usage_permit_issue": false,
           "findings": [
             {
-              "category": "PLOMBA|VLASNISTVO|HIPOTEKA|SLUZNOST|OVRHA|LEGALIZACIJA|KATASTAR|OSTALO",
+              "category": "PLOMBA|VLASNISTVO|HIPOTEKA|SLUZNOST|OVRHA|LEGALIZACIJA|KATASTAR|FIDUCIJA|ZABRANA|OSTALO",
               "severity": "CRITICAL|WARNING|INFO",
               "title": "Kratki naziv",
               "description": "Detaljno objašnjenje rizika",

@@ -520,6 +520,395 @@ public class ZkAnalysisModelsTests
     }
 
     // ══════════════════════════════════════════════════════════
+    //  V44: OCR 2.0 — PlombaInfo enhanced fields
+    // ══════════════════════════════════════════════════════════
+
+    [Fact]
+    public void PlombaInfo_V44_DefaultValues()
+    {
+        var plomba = new PlombaInfo();
+
+        Assert.Equal(string.Empty, plomba.PlombaType);
+        Assert.Equal("CRITICAL", plomba.RiskLevel);
+        Assert.True(plomba.BlocksSale);
+    }
+
+    [Theory]
+    [InlineData("VLASNISTVO")]
+    [InlineData("HIPOTEKA")]
+    [InlineData("OVRHA")]
+    [InlineData("BRISANJE")]
+    [InlineData("ZABILJEŽBA")]
+    [InlineData("OSTALO")]
+    public void PlombaInfo_V44_AllPlombaTypesValid(string plombaType)
+    {
+        var plomba = new PlombaInfo
+        {
+            ZNumber = "Z-100/2024",
+            PlombaType = plombaType,
+            RiskLevel = "WARNING",
+            BlocksSale = false
+        };
+
+        Assert.Equal(plombaType, plomba.PlombaType);
+    }
+
+    [Fact]
+    public void PlombaInfo_V44_SerializesNewFields()
+    {
+        var plomba = new PlombaInfo
+        {
+            ZNumber = "Z-999/2025",
+            Description = "Fiducija",
+            Date = "01.06.2025.",
+            PlombaType = "OVRHA",
+            RiskLevel = "CRITICAL",
+            BlocksSale = true
+        };
+
+        var json = JsonSerializer.Serialize(plomba, SnakeCaseOptions);
+
+        Assert.Contains("\"plomba_type\":\"OVRHA\"", json);
+        Assert.Contains("\"risk_level\":\"CRITICAL\"", json);
+        Assert.Contains("\"blocks_sale\":true", json);
+    }
+
+    [Fact]
+    public void PlombaInfo_V44_DeserializesFromSnakeCase()
+    {
+        var json = """{"z_number":"Z-111/2024","description":"Test","date":"","plomba_type":"BRISANJE","risk_level":"INFO","blocks_sale":false}""";
+        var plomba = JsonSerializer.Deserialize<PlombaInfo>(json, SnakeCaseOptions);
+
+        Assert.NotNull(plomba);
+        Assert.Equal("BRISANJE", plomba!.PlombaType);
+        Assert.Equal("INFO", plomba.RiskLevel);
+        Assert.False(plomba.BlocksSale);
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  V44: OCR 2.0 — EncumbranceInfo enhanced fields
+    // ══════════════════════════════════════════════════════════
+
+    [Fact]
+    public void EncumbranceInfo_V44_DefaultValues()
+    {
+        var enc = new EncumbranceInfo();
+
+        Assert.Equal(string.Empty, enc.RiskType);
+        Assert.Equal(string.Empty, enc.LegalBasis);
+        Assert.False(enc.BlocksSale);
+        Assert.False(enc.BlocksConstruction);
+        Assert.Equal(0, enc.YearRegistered);
+        Assert.False(enc.IsHistorical);
+    }
+
+    [Theory]
+    [InlineData("FIDUCIJA")]
+    [InlineData("OSOBNA_SLUZNOST")]
+    [InlineData("STVARNA_SLUZNOST")]
+    [InlineData("ZABRANA_OTUDENJA")]
+    [InlineData("PRAVO_GRADENJA")]
+    [InlineData("KONCESIJA")]
+    [InlineData("OVRHA")]
+    [InlineData("PRAVO_PRVOKUPA")]
+    [InlineData("OSTALO")]
+    public void EncumbranceInfo_V44_AllRiskTypesValid(string riskType)
+    {
+        var enc = new EncumbranceInfo
+        {
+            Type = "test",
+            RiskType = riskType
+        };
+
+        Assert.Equal(riskType, enc.RiskType);
+    }
+
+    [Fact]
+    public void EncumbranceInfo_V44_FiducijaScenario()
+    {
+        var enc = new EncumbranceInfo
+        {
+            Type = "fiducijarni prijenos",
+            Description = "Fiducijarni prijenos vlasništva radi osiguranja tražbine",
+            Beneficiary = "XY Kredit d.o.o.",
+            IsActive = true,
+            RiskType = "FIDUCIJA",
+            LegalBasis = "čl. 34. ZV",
+            BlocksSale = true,
+            BlocksConstruction = false,
+            YearRegistered = 2019,
+            IsHistorical = false
+        };
+
+        Assert.Equal("FIDUCIJA", enc.RiskType);
+        Assert.True(enc.BlocksSale);
+        Assert.False(enc.BlocksConstruction);
+        Assert.Equal(2019, enc.YearRegistered);
+    }
+
+    [Fact]
+    public void EncumbranceInfo_V44_SerializesNewFields()
+    {
+        var enc = new EncumbranceInfo
+        {
+            Type = "zabrana otuđenja",
+            RiskType = "ZABRANA_OTUDENJA",
+            LegalBasis = "čl. 35. ZV",
+            BlocksSale = true,
+            BlocksConstruction = true,
+            YearRegistered = 2022,
+            IsHistorical = false
+        };
+
+        var json = JsonSerializer.Serialize(enc, SnakeCaseOptions);
+
+        Assert.Contains("\"risk_type\":\"ZABRANA_OTUDENJA\"", json);
+        Assert.Contains("\"legal_basis\":", json);
+        Assert.Contains("\"blocks_sale\":true", json);
+        Assert.Contains("\"blocks_construction\":true", json);
+        Assert.Contains("\"year_registered\":2022", json);
+        Assert.Contains("\"is_historical\":false", json);
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  V44: OCR 2.0 — HistoricalEncumbrance
+    // ══════════════════════════════════════════════════════════
+
+    [Fact]
+    public void HistoricalEncumbrance_DefaultValues()
+    {
+        var h = new HistoricalEncumbrance();
+
+        Assert.Equal(string.Empty, h.Type);
+        Assert.Equal(string.Empty, h.OriginalText);
+        Assert.Equal(string.Empty, h.Interpretation);
+        Assert.Equal(0, h.EstimatedYear);
+        Assert.False(h.StillLegallyRelevant);
+        Assert.Equal("MOGUĆE", h.BlocksSale);  // default = cautious
+        Assert.Equal("NE", h.BlocksConstruction);
+        Assert.Equal(string.Empty, h.Resolution);
+        Assert.Equal(string.Empty, h.LegalBasis);
+    }
+
+    [Fact]
+    public void HistoricalEncumbrance_SocialistEraScenario()
+    {
+        var h = new HistoricalEncumbrance
+        {
+            Type = "DRUSTVENO_VLASNISTVO",
+            OriginalText = "Pravo korištenja temeljem rješenja SO Pakrac br. 123/78",
+            Interpretation = "Socijalistička era — pravo korištenja konvertirano u vlasništvo po ZV",
+            EstimatedYear = 1978,
+            StillLegallyRelevant = false,
+            BlocksSale = "NE",
+            BlocksConstruction = "NE",
+            Resolution = "Konvertirano u pravo vlasništva temeljem čl. 360. ZV",
+            LegalBasis = "čl. 360. ZV"
+        };
+
+        Assert.Equal("DRUSTVENO_VLASNISTVO", h.Type);
+        Assert.Equal(1978, h.EstimatedYear);
+        Assert.False(h.StillLegallyRelevant);
+        Assert.Equal("NE", h.BlocksSale);
+    }
+
+    [Fact]
+    public void HistoricalEncumbrance_StillRelevantScenario()
+    {
+        var h = new HistoricalEncumbrance
+        {
+            Type = "PRAVO_KORISTENJA",
+            OriginalText = "Pravo korištenja — nekonvertirano",
+            Interpretation = "Staro pravo korištenja koje nikad nije konvertirano u vlasništvo",
+            EstimatedYear = 1985,
+            StillLegallyRelevant = true,
+            BlocksSale = "MOGUĆE",
+            BlocksConstruction = "DA",
+            Resolution = "",
+            LegalBasis = "čl. 360. ZV"
+        };
+
+        Assert.True(h.StillLegallyRelevant);
+        Assert.Equal("MOGUĆE", h.BlocksSale);
+        Assert.Equal("DA", h.BlocksConstruction);
+    }
+
+    [Fact]
+    public void HistoricalEncumbrance_SerializesCorrectly()
+    {
+        var h = new HistoricalEncumbrance
+        {
+            Type = "JNA_VLASNISTVO",
+            OriginalText = "Vojni objekt — JNA",
+            EstimatedYear = 1980,
+            StillLegallyRelevant = false,
+            BlocksSale = "NE"
+        };
+
+        var json = JsonSerializer.Serialize(h, SnakeCaseOptions);
+
+        Assert.Contains("\"type\":\"JNA_VLASNISTVO\"", json);
+        Assert.Contains("\"original_text\":\"Vojni objekt", json);
+        Assert.Contains("\"estimated_year\":1980", json);
+        Assert.Contains("\"still_legally_relevant\":false", json);
+        Assert.Contains("\"blocks_sale\":\"NE\"", json);
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  V44: OCR 2.0 — EncumbranceRiskSummary
+    // ══════════════════════════════════════════════════════════
+
+    [Fact]
+    public void EncumbranceRiskSummary_DefaultValues()
+    {
+        var m = new EncumbranceRiskSummary();
+
+        Assert.Equal(0, m.TotalActive);
+        Assert.Equal(0, m.BlockingSale);
+        Assert.Equal(0, m.BlockingConstruction);
+        Assert.Equal(0, m.FiduciaryCount);
+        Assert.Equal(0, m.PersonalServitudeCount);
+        Assert.Equal(0, m.HistoricalCount);
+        Assert.Equal(0, m.EnforcementCount);
+        Assert.Equal("ČISTO", m.OverallRisk);  // default = clean
+        Assert.Equal(string.Empty, m.Summary);
+    }
+
+    [Fact]
+    public void EncumbranceRiskSummary_CleanProperty()
+    {
+        var m = new EncumbranceRiskSummary
+        {
+            TotalActive = 0,
+            BlockingSale = 0,
+            BlockingConstruction = 0,
+            OverallRisk = "ČISTO",
+            Summary = "Nekretnina nema aktivnih tereta."
+        };
+
+        Assert.Equal("ČISTO", m.OverallRisk);
+        Assert.Equal(0, m.TotalActive);
+    }
+
+    [Fact]
+    public void EncumbranceRiskSummary_BlockedProperty()
+    {
+        var m = new EncumbranceRiskSummary
+        {
+            TotalActive = 4,
+            BlockingSale = 2,
+            BlockingConstruction = 1,
+            FiduciaryCount = 1,
+            PersonalServitudeCount = 1,
+            HistoricalCount = 1,
+            EnforcementCount = 1,
+            OverallRisk = "BLOKIRANO",
+            Summary = "Fiducija + ovrha blokiraju prodaju. Osobna služnost i povijesni teret prisutni."
+        };
+
+        Assert.Equal("BLOKIRANO", m.OverallRisk);
+        Assert.Equal(2, m.BlockingSale);
+        Assert.Equal(1, m.FiduciaryCount);
+        Assert.Equal(1, m.EnforcementCount);
+    }
+
+    [Fact]
+    public void EncumbranceRiskSummary_SerializesToSnakeCase()
+    {
+        var m = new EncumbranceRiskSummary
+        {
+            TotalActive = 3,
+            BlockingSale = 1,
+            FiduciaryCount = 1,
+            OverallRisk = "UVJETNO",
+            Summary = "Jedna fiducija blokira prodaju."
+        };
+
+        var json = JsonSerializer.Serialize(m, SnakeCaseOptions);
+
+        Assert.Contains("\"total_active\":3", json);
+        Assert.Contains("\"blocking_sale\":1", json);
+        Assert.Contains("\"fiduciary_count\":1", json);
+        Assert.Contains("\"overall_risk\":\"UVJETNO\"", json);
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  V44: ZkParsedResult — new fields integration
+    // ══════════════════════════════════════════════════════════
+
+    [Fact]
+    public void ZkParsedResult_V44_HistoricalEncumbrances_EmptyByDefault()
+    {
+        var result = new ZkParsedResult();
+        Assert.Empty(result.HistoricalEncumbrances);
+        Assert.Null(result.EncumbranceRiskMatrix);
+    }
+
+    [Fact]
+    public void ZkParsedResult_V44_FullScenario_Serialization()
+    {
+        var result = CreatePropertyWithFiducija();
+        var json = JsonSerializer.Serialize(result, SnakeCaseOptions);
+
+        Assert.Contains("\"historical_encumbrances\"", json);
+        Assert.Contains("\"encumbrance_risk_matrix\"", json);
+        Assert.Contains("\"risk_type\":\"FIDUCIJA\"", json);
+        Assert.Contains("\"blocks_sale\":true", json);
+        Assert.Contains("BLOKIRANO", json);
+    }
+
+    [Fact]
+    public void ZkParsedResult_V44_DeserializesWithNewFields()
+    {
+        var original = CreatePropertyWithFiducija();
+        var json = JsonSerializer.Serialize(original, SnakeCaseOptions);
+        var deserialized = JsonSerializer.Deserialize<ZkParsedResult>(json, SnakeCaseOptions);
+
+        Assert.NotNull(deserialized);
+        Assert.Single(deserialized!.HistoricalEncumbrances);
+        Assert.NotNull(deserialized.EncumbranceRiskMatrix);
+        Assert.Equal("BLOKIRANO", deserialized.EncumbranceRiskMatrix!.OverallRisk);
+        Assert.Equal(1, deserialized.EncumbranceRiskMatrix.FiduciaryCount);
+        Assert.Equal("FIDUCIJA", deserialized.OtherEncumbrances[0].RiskType);
+    }
+
+    [Fact]
+    public void ZkParsedResult_V44_BackwardCompatible_OldJsonWorks()
+    {
+        // Old JSON without V44 fields should still deserialize correctly
+        var oldJson = """
+        {
+          "property_id": "k.o. Test, k.č. 1/1",
+          "property_type": "kuća",
+          "owners": [],
+          "active_mortgages": [],
+          "active_disputes": [],
+          "other_encumbrances": [
+            {"type": "služnost", "description": "Prolaz", "beneficiary": "N/A", "is_active": true}
+          ],
+          "active_plombe": [
+            {"z_number": "Z-1/2024", "description": "Test", "date": "01.01.2024."}
+          ],
+          "findings": [],
+          "parcels": [],
+          "risk_score": "LOW"
+        }
+        """;
+
+        var result = JsonSerializer.Deserialize<ZkParsedResult>(oldJson, SnakeCaseOptions);
+
+        Assert.NotNull(result);
+        // V44 fields default gracefully
+        Assert.Empty(result!.HistoricalEncumbrances);
+        Assert.Null(result.EncumbranceRiskMatrix);
+        // Old encumbrance/plomba fields still work
+        Assert.Single(result.OtherEncumbrances);
+        Assert.Equal(string.Empty, result.OtherEncumbrances[0].RiskType);
+        Assert.Single(result.ActivePlombe);
+        Assert.Equal(string.Empty, result.ActivePlombe[0].PlombaType);
+    }
+
+    // ══════════════════════════════════════════════════════════
     //  Test Data Factories — reusable across tests
     // ══════════════════════════════════════════════════════════
 
@@ -781,5 +1170,149 @@ public class ZkAnalysisModelsTests
         LawyerComment = "Rizično — plomba + hipoteka + suvlasništvo.",
         Location = "Centar, Zagreb",
         Address = "Ilica 42"
+    };
+
+    /// <summary>V44: Nekretnina s fiducijarnim prijenosom i povijesnim teretom</summary>
+    public static ZkParsedResult CreatePropertyWithFiducija() => new()
+    {
+        PropertyId = "k.o. Trnje, k.č. 2222/1",
+        PropertyType = "kuća",
+        LandAreaM2 = 600,
+        Owners = [new OwnerInfo { Name = "Josip Josipović", Share = "1/1" }],
+        RiskScore = "HIGH",
+        OverallStatus = "RIZIČNO",
+        OwnershipStatus = "1/1 ČISTO",
+        SharesSumCorrect = true,
+        OtherEncumbrances =
+        [
+            new EncumbranceInfo
+            {
+                Type = "fiducijarni prijenos",
+                Description = "Fiducijarni prijenos vlasništva radi osiguranja tražbine od 200.000 EUR",
+                Beneficiary = "Micro Kredit d.o.o.",
+                IsActive = true,
+                RiskType = "FIDUCIJA",
+                LegalBasis = "čl. 34. ZV",
+                BlocksSale = true,
+                BlocksConstruction = false,
+                YearRegistered = 2021,
+                IsHistorical = false
+            }
+        ],
+        HistoricalEncumbrances =
+        [
+            new HistoricalEncumbrance
+            {
+                Type = "DRUSTVENO_VLASNISTVO",
+                OriginalText = "Pravo korištenja — SO Trnje br. 456/82",
+                Interpretation = "Socijalističko pravo korištenja konvertirano u vlasništvo",
+                EstimatedYear = 1982,
+                StillLegallyRelevant = false,
+                BlocksSale = "NE",
+                BlocksConstruction = "NE",
+                Resolution = "Konvertirano temeljem čl. 360. ZV",
+                LegalBasis = "čl. 360. ZV"
+            }
+        ],
+        EncumbranceRiskMatrix = new EncumbranceRiskSummary
+        {
+            TotalActive = 2,
+            BlockingSale = 1,
+            BlockingConstruction = 0,
+            FiduciaryCount = 1,
+            PersonalServitudeCount = 0,
+            HistoricalCount = 1,
+            EnforcementCount = 0,
+            OverallRisk = "BLOKIRANO",
+            Summary = "Fiducijarni prijenos blokira prodaju. Jedan povijesni teret bez pravne relevantnosti."
+        },
+        ActivePlombe =
+        [
+            new PlombaInfo
+            {
+                ZNumber = "Z-800/2025",
+                Description = "Zahtjev za upis fiducije",
+                Date = "15.03.2025.",
+                PlombaType = "VLASNISTVO",
+                RiskLevel = "CRITICAL",
+                BlocksSale = true
+            }
+        ],
+        Findings =
+        [
+            new DueDiligenceFinding
+            {
+                Category = "FIDUCIJA",
+                Severity = "CRITICAL",
+                Title = "Fiducijarni prijenos vlasništva",
+                Description = "Fiducijarni prijenos u korist Micro Kredit d.o.o. — formalno vlasnik nije prodavatelj!",
+                Advice = "Bez obavijesti fiducijara i njegova pristanka, kupnja nije moguća. DEAL-BREAKER."
+            }
+        ],
+        DueDiligenceSummary = "Fiducija u korist Micro Kredit d.o.o. blokira prodaju. Povijesni teret iz 1982. konvertiran u vlasništvo."
+    };
+
+    /// <summary>V44: Nekretnina s povijesnim teretima iz socijalizma</summary>
+    public static ZkParsedResult CreatePropertyWithHistoricalEncumbrances() => new()
+    {
+        PropertyId = "k.o. Pakrac, k.č. 3333/5",
+        PropertyType = "kuća",
+        LandAreaM2 = 1200,
+        Owners = [new OwnerInfo { Name = "Stipe Stipić", Share = "1/1" }],
+        RiskScore = "MEDIUM",
+        OverallStatus = "UVJETNO",
+        OwnershipStatus = "1/1 ČISTO",
+        SharesSumCorrect = true,
+        HistoricalEncumbrances =
+        [
+            new HistoricalEncumbrance
+            {
+                Type = "DRUSTVENO_VLASNISTVO",
+                OriginalText = "Pravo korištenja temeljem rješenja SO Pakrac",
+                Interpretation = "Konvertirano u vlasništvo po ZV",
+                EstimatedYear = 1978,
+                StillLegallyRelevant = false,
+                BlocksSale = "NE",
+                BlocksConstruction = "NE",
+                Resolution = "Konvertirano čl. 360. ZV",
+                LegalBasis = "čl. 360. ZV"
+            },
+            new HistoricalEncumbrance
+            {
+                Type = "SOUR_VLASNISTVO",
+                OriginalText = "SOUR 'Energoinvest' — pravo korištenja",
+                Interpretation = "Bivši SOUR — potrebno provjeriti pravni slijed",
+                EstimatedYear = 1985,
+                StillLegallyRelevant = true,
+                BlocksSale = "MOGUĆE",
+                BlocksConstruction = "NE",
+                Resolution = "",
+                LegalBasis = "čl. 360.-366. ZV"
+            }
+        ],
+        EncumbranceRiskMatrix = new EncumbranceRiskSummary
+        {
+            TotalActive = 2,
+            BlockingSale = 0,
+            BlockingConstruction = 0,
+            FiduciaryCount = 0,
+            PersonalServitudeCount = 0,
+            HistoricalCount = 2,
+            EnforcementCount = 0,
+            OverallRisk = "UVJETNO",
+            Summary = "Dva povijesna upisa. Jedan konvertiran, drugi zahtijeva provjeru pravnog slijeda."
+        },
+        Findings =
+        [
+            new DueDiligenceFinding
+            {
+                Category = "OSTALO",
+                Severity = "WARNING",
+                Title = "Nekonvertirano pravo korištenja (SOUR)",
+                Description = "Pravo korištenja iz 1985. vezano uz SOUR 'Energoinvest' nije konvertirano.",
+                Advice = "Provjerite pravni slijed i pokrenite postupak konverzije ako je primjenjivo."
+            }
+        ],
+        DueDiligenceSummary = "Dva povijesna tereta iz socijalizma. Jedan razriješen, drugi zahtijeva provjeru."
     };
 }

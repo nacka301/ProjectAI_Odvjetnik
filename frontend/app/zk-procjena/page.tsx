@@ -34,6 +34,10 @@ import {
   Users,
   Gavel,
   FileWarning,
+  Lock,
+  History,
+  ShieldX,
+  BarChart3,
 } from "lucide-react";
 import { uploadPdfToStorage, saveEvaluation } from "@/lib/supabase";
 import LocationSelector from "@/components/LocationSelector";
@@ -61,6 +65,13 @@ interface EncumbranceInfo {
   description: string;
   beneficiary: string;
   is_active: boolean;
+  // V44: OCR 2.0
+  risk_type?: "FIDUCIJA" | "OSOBNA_SLUZNOST" | "STVARNA_SLUZNOST" | "ZABRANA_OTUDENJA" | "PRAVO_GRADENJA" | "KONCESIJA" | "OVRHA" | "PRAVO_PRVOKUPA" | "OSTALO";
+  legal_basis?: string;
+  blocks_sale?: boolean;
+  blocks_construction?: boolean;
+  year_registered?: number;
+  is_historical?: boolean;
 }
 
 interface ParcelInfo {
@@ -74,10 +85,40 @@ interface PlombaInfo {
   z_number: string;
   description: string;
   date: string;
+  // V44: OCR 2.0
+  plomba_type?: "VLASNISTVO" | "HIPOTEKA" | "OVRHA" | "BRISANJE" | "ZABILJEŽBA" | "OSTALO";
+  risk_level?: "CRITICAL" | "WARNING" | "INFO";
+  blocks_sale?: boolean;
+}
+
+// V44: Historical encumbrance (OCR 2.0)
+interface HistoricalEncumbrance {
+  type: string;
+  original_text: string;
+  interpretation: string;
+  estimated_year: number;
+  still_legally_relevant: boolean;
+  blocks_sale: string; // "DA" | "NE" | "MOGUĆE"
+  blocks_construction: string;
+  resolution: string;
+  legal_basis: string;
+}
+
+// V44: Encumbrance risk matrix summary
+interface EncumbranceRiskSummary {
+  total_active: number;
+  blocking_sale: number;
+  blocking_construction: number;
+  fiduciary_count: number;
+  personal_servitude_count: number;
+  historical_count: number;
+  enforcement_count: number;
+  overall_risk: "ČISTO" | "UVJETNO" | "BLOKIRANO";
+  summary: string;
 }
 
 interface DueDiligenceFinding {
-  category: "PLOMBA" | "VLASNISTVO" | "HIPOTEKA" | "SLUZNOST" | "OVRHA" | "LEGALIZACIJA" | "KATASTAR" | "OSTALO";
+  category: "PLOMBA" | "VLASNISTVO" | "HIPOTEKA" | "SLUZNOST" | "OVRHA" | "LEGALIZACIJA" | "KATASTAR" | "FIDUCIJA" | "ZABRANA" | "OSTALO";
   severity: "CRITICAL" | "WARNING" | "INFO";
   title: string;
   description: string;
@@ -144,6 +185,9 @@ interface ZkParsedResult {
   due_diligence_summary?: string;
   // V40: Katastar vs ZK
   katastar_uskladjenost?: KatastarComparison;
+  // V44: OCR 2.0
+  historical_encumbrances?: HistoricalEncumbrance[];
+  encumbrance_risk_matrix?: EncumbranceRiskSummary;
 }
 
 interface SelectedComparable {
@@ -707,6 +751,32 @@ export default function ZkProcjenaPage() {
                     <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-red-200/60">
                       <span className="font-mono font-bold text-red-900 whitespace-nowrap">{p.z_number}</span>
                       <div className="flex-1">
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          {p.plomba_type && (
+                            <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${
+                              p.plomba_type === "OVRHA" ? "bg-red-300 text-red-900" :
+                              p.plomba_type === "HIPOTEKA" ? "bg-orange-200 text-orange-800" :
+                              p.plomba_type === "BRISANJE" ? "bg-green-200 text-green-800" :
+                              "bg-red-200 text-red-800"
+                            }`}>
+                              {p.plomba_type}
+                            </span>
+                          )}
+                          {p.risk_level && (
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                              p.risk_level === "CRITICAL" ? "bg-red-900 text-white" :
+                              p.risk_level === "WARNING" ? "bg-yellow-200 text-yellow-800" :
+                              "bg-blue-200 text-blue-800"
+                            }`}>
+                              {p.risk_level === "CRITICAL" ? "KRITIČNO" : p.risk_level === "WARNING" ? "UPOZORENJE" : "INFO"}
+                            </span>
+                          )}
+                          {p.blocks_sale && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-red-900 text-white flex items-center gap-1">
+                              <Lock className="h-3 w-3" /> BLOKIRA PRODAJU
+                            </span>
+                          )}
+                        </div>
                         <p className="text-sm text-red-800">{p.description}</p>
                         {p.date && <p className="text-xs text-red-600 mt-1">Datum: {p.date}</p>}
                       </div>
@@ -928,6 +998,151 @@ export default function ZkProcjenaPage() {
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* ═══ V44: ENCUMBRANCE RISK MATRIX ═══ */}
+            {zkAnalysis.encumbrance_risk_matrix && (
+              <div className={`rounded-xl border-2 p-6 ${
+                zkAnalysis.encumbrance_risk_matrix.overall_risk === "BLOKIRANO" ? "border-red-500 bg-red-50" :
+                zkAnalysis.encumbrance_risk_matrix.overall_risk === "UVJETNO" ? "border-yellow-500 bg-yellow-50" :
+                "border-green-500 bg-green-50"
+              }`}>
+                <div className="flex items-center gap-3 mb-4">
+                  <BarChart3 className={`h-6 w-6 ${
+                    zkAnalysis.encumbrance_risk_matrix.overall_risk === "BLOKIRANO" ? "text-red-600" :
+                    zkAnalysis.encumbrance_risk_matrix.overall_risk === "UVJETNO" ? "text-yellow-600" :
+                    "text-green-600"
+                  }`} />
+                  <div className="flex-1">
+                    <h3 className="text-lg font-bold text-gray-800">
+                      🛡️ Matrica rizika tereta
+                    </h3>
+                    <p className="text-xs text-gray-500">OCR 2.0 — napredna analiza svih tereta i ograničenja</p>
+                  </div>
+                  <span className={`text-xs font-bold uppercase px-3 py-1 rounded-full ${
+                    zkAnalysis.encumbrance_risk_matrix.overall_risk === "BLOKIRANO" ? "bg-red-200 text-red-800" :
+                    zkAnalysis.encumbrance_risk_matrix.overall_risk === "UVJETNO" ? "bg-yellow-200 text-yellow-800" :
+                    "bg-green-200 text-green-800"
+                  }`}>
+                    {zkAnalysis.encumbrance_risk_matrix.overall_risk}
+                  </span>
+                </div>
+
+                {/* Metric grid */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                  <div className="rounded-lg bg-white/70 p-3 text-center">
+                    <p className="text-2xl font-bold text-gray-900">{zkAnalysis.encumbrance_risk_matrix.total_active}</p>
+                    <p className="text-[10px] font-semibold text-gray-500 uppercase">Ukupno aktivni</p>
+                  </div>
+                  <div className={`rounded-lg p-3 text-center ${zkAnalysis.encumbrance_risk_matrix.blocking_sale > 0 ? "bg-red-100" : "bg-white/70"}`}>
+                    <p className={`text-2xl font-bold ${zkAnalysis.encumbrance_risk_matrix.blocking_sale > 0 ? "text-red-700" : "text-gray-900"}`}>
+                      {zkAnalysis.encumbrance_risk_matrix.blocking_sale}
+                    </p>
+                    <p className="text-[10px] font-semibold text-gray-500 uppercase">Blokira prodaju</p>
+                  </div>
+                  <div className={`rounded-lg p-3 text-center ${zkAnalysis.encumbrance_risk_matrix.blocking_construction > 0 ? "bg-orange-100" : "bg-white/70"}`}>
+                    <p className={`text-2xl font-bold ${zkAnalysis.encumbrance_risk_matrix.blocking_construction > 0 ? "text-orange-700" : "text-gray-900"}`}>
+                      {zkAnalysis.encumbrance_risk_matrix.blocking_construction}
+                    </p>
+                    <p className="text-[10px] font-semibold text-gray-500 uppercase">Blokira gradnju</p>
+                  </div>
+                  <div className={`rounded-lg p-3 text-center ${zkAnalysis.encumbrance_risk_matrix.fiduciary_count > 0 ? "bg-purple-100" : "bg-white/70"}`}>
+                    <p className={`text-2xl font-bold ${zkAnalysis.encumbrance_risk_matrix.fiduciary_count > 0 ? "text-purple-700" : "text-gray-900"}`}>
+                      {zkAnalysis.encumbrance_risk_matrix.fiduciary_count}
+                    </p>
+                    <p className="text-[10px] font-semibold text-gray-500 uppercase">Fiducije</p>
+                  </div>
+                </div>
+
+                {/* Secondary metrics */}
+                <div className="flex flex-wrap gap-3 mb-4">
+                  {zkAnalysis.encumbrance_risk_matrix.personal_servitude_count > 0 && (
+                    <span className="text-xs px-3 py-1 rounded-full bg-blue-100 text-blue-800 font-semibold">
+                      {zkAnalysis.encumbrance_risk_matrix.personal_servitude_count} osobna služnost
+                    </span>
+                  )}
+                  {zkAnalysis.encumbrance_risk_matrix.historical_count > 0 && (
+                    <span className="text-xs px-3 py-1 rounded-full bg-amber-100 text-amber-800 font-semibold">
+                      {zkAnalysis.encumbrance_risk_matrix.historical_count} povijesni upis
+                    </span>
+                  )}
+                  {zkAnalysis.encumbrance_risk_matrix.enforcement_count > 0 && (
+                    <span className="text-xs px-3 py-1 rounded-full bg-red-100 text-red-800 font-semibold">
+                      {zkAnalysis.encumbrance_risk_matrix.enforcement_count} ovrha
+                    </span>
+                  )}
+                </div>
+
+                {/* Summary text */}
+                <p className="text-sm text-gray-700 leading-relaxed">
+                  {zkAnalysis.encumbrance_risk_matrix.summary}
+                </p>
+              </div>
+            )}
+
+            {/* ═══ V44: HISTORICAL ENCUMBRANCES ═══ */}
+            {zkAnalysis.historical_encumbrances && zkAnalysis.historical_encumbrances.length > 0 && (
+              <div className="rounded-xl border border-amber-300 bg-amber-50 p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <History className="h-5 w-5 text-amber-700" />
+                  <h3 className="text-lg font-bold text-amber-900">
+                    📜 Povijesni tereti
+                  </h3>
+                  <span className="text-xs font-semibold text-amber-700 bg-amber-200 px-2 py-0.5 rounded-full">
+                    {zkAnalysis.historical_encumbrances.length} pronađeno
+                  </span>
+                </div>
+                <div className="space-y-3">
+                  {zkAnalysis.historical_encumbrances.map((h, i) => (
+                    <div key={i} className={`p-4 rounded-lg border-l-4 bg-white/70 ${
+                      h.still_legally_relevant ? "border-red-400" : "border-amber-300"
+                    }`}>
+                      <div className="flex items-center gap-2 flex-wrap mb-2">
+                        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-amber-200 text-amber-800">
+                          {h.type.replace(/_/g, " ")}
+                        </span>
+                        {h.estimated_year > 0 && (
+                          <span className="text-[10px] font-mono text-gray-500">
+                            ~{h.estimated_year}.
+                          </span>
+                        )}
+                        {h.still_legally_relevant ? (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-red-200 text-red-800">
+                            PRAVNO RELEVANTNO
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-green-200 text-green-800">
+                            NERELEVANTNO
+                          </span>
+                        )}
+                        {h.blocks_sale === "DA" && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-red-900 text-white flex items-center gap-1">
+                            <Lock className="h-3 w-3" /> BLOKIRA PRODAJU
+                          </span>
+                        )}
+                        {h.blocks_construction === "DA" && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-orange-700 text-white">
+                            BLOKIRA GRADNJU
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-800 italic mb-1">&ldquo;{h.original_text}&rdquo;</p>
+                      <p className="text-sm text-gray-700">{h.interpretation}</p>
+                      {h.resolution && (
+                        <div className="mt-2 flex items-start gap-1.5 text-xs text-gray-600 bg-white/60 rounded p-2">
+                          <span className="font-semibold text-gray-500 whitespace-nowrap">📋 Razrješenje:</span>
+                          <span>{h.resolution}</span>
+                        </div>
+                      )}
+                      {h.legal_basis && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Pravna osnova: <span className="font-medium">{h.legal_basis}</span>
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 

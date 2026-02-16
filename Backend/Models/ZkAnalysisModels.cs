@@ -48,6 +48,10 @@ public class ZkParsedResult
     public bool HasUsagePermitIssue { get; set; }                      // "Nije priložena uporabna dozvola"
     public string DueDiligenceSummary { get; set; } = string.Empty;    // Professional report summary
 
+    // ── V44: Advanced Encumbrance Risk Analysis ──
+    public List<HistoricalEncumbrance> HistoricalEncumbrances { get; set; } = [];  // Pre-1991, old fiduciary, legacy burdens
+    public EncumbranceRiskSummary? EncumbranceRiskMatrix { get; set; }             // Aggregated risk matrix
+
     // ── V42: Norm Validity Engine — cited norms with validity status ──
     public List<CitedNorm> CitedNorms { get; set; } = [];
 
@@ -88,6 +92,7 @@ public class OwnerInfo
 
 /// <summary>
 /// Non-mortgage encumbrances from C sheet.
+/// V44: Enhanced with structured risk classification.
 /// </summary>
 public class EncumbranceInfo
 {
@@ -95,16 +100,36 @@ public class EncumbranceInfo
     public string Description { get; set; } = string.Empty;
     public string Beneficiary { get; set; } = string.Empty;  // Korisnik prava
     public bool IsActive { get; set; } = true;
+    /// <summary>V44: Specific risk type — "FIDUCIJA", "OSOBNA_SLUZNOST", "STVARNA_SLUZNOST", 
+    /// "ZABRANA_OTUDENJA", "PRAVO_GRADENJA", "KONCESIJA", "OVRHA", "PRAVO_PRVOKUPA", "OSTALO"</summary>
+    public string RiskType { get; set; } = string.Empty;
+    /// <summary>V44: Legal basis with NN reference</summary>
+    public string LegalBasis { get; set; } = string.Empty;
+    /// <summary>V44: Whether this encumbrance blocks a sale transaction</summary>
+    public bool BlocksSale { get; set; }
+    /// <summary>V44: Whether this encumbrance prevents construction/building permits</summary>
+    public bool BlocksConstruction { get; set; }
+    /// <summary>V44: Year the encumbrance was registered (0 if unknown)</summary>
+    public int YearRegistered { get; set; }
+    /// <summary>V44: Whether this is a historical/legacy encumbrance (pre-1991, socialist era, etc.)</summary>
+    public bool IsHistorical { get; set; }
 }
 
 /// <summary>
 /// Active plomba (pending registration request) — the #1 critical risk.
+/// V44: Enhanced with type classification and risk scoring.
 /// </summary>
 public class PlombaInfo
 {
     public string ZNumber { get; set; } = string.Empty;       // e.g. "Z-1234/2024"
     public string Description { get; set; } = string.Empty;   // What the request is about
     public string Date { get; set; } = string.Empty;           // When it was filed
+    /// <summary>V44: Type of plomba — "VLASNISTVO", "HIPOTEKA", "OVRHA", "BRISANJE", "ZABILJEŽBA", "OSTALO"</summary>
+    public string PlombaType { get; set; } = string.Empty;
+    /// <summary>V44: Risk level — "CRITICAL" (blocks sale), "WARNING" (delays), "INFO" (routine)</summary>
+    public string RiskLevel { get; set; } = "CRITICAL";
+    /// <summary>V44: Whether this plomba blocks the sale outright</summary>
+    public bool BlocksSale { get; set; } = true;
 }
 
 /// <summary>
@@ -190,6 +215,80 @@ public class KatastarParcelDiscrepancy
 
     /// <summary>Severity: "HIGH", "MEDIUM", "LOW"</summary>
     public string Severity { get; set; } = "MEDIUM";
+}
+
+// ══════════════════════════════════════════════════════════
+//  V44: Advanced Encumbrance Risk Analysis — "OCR 2.0"
+//  Patterns: fiducije, historical burdens, old socialist-era entries
+// ══════════════════════════════════════════════════════════
+
+/// <summary>
+/// Historical or legacy encumbrance — pre-1991, old fiduciary transfers,
+/// socialist-era entries (JNA, SOUR, RO), or unclear entries that may
+/// block modern transactions despite appearing "dead" in the register.
+/// </summary>
+public class HistoricalEncumbrance
+{
+    /// <summary>Type: "FIDUCIJA", "STARI_TERET", "SOCIJALIZAM", "NEIDENTIFICIRANO"</summary>
+    public string Type { get; set; } = string.Empty;
+
+    /// <summary>Original text as found in ZK izvadak</summary>
+    public string OriginalText { get; set; } = string.Empty;
+
+    /// <summary>AI interpretation of what this entry means</summary>
+    public string Interpretation { get; set; } = string.Empty;
+
+    /// <summary>Estimated year of registration (0 if unknown)</summary>
+    public int EstimatedYear { get; set; }
+
+    /// <summary>Whether this encumbrance could still have legal effect today</summary>
+    public bool StillLegallyRelevant { get; set; }
+
+    /// <summary>Whether it blocks sale: "DA", "NE", "MOGUĆE"</summary>
+    public string BlocksSale { get; set; } = "MOGUĆE";
+
+    /// <summary>Whether it blocks construction: "DA", "NE", "MOGUĆE"</summary>
+    public string BlocksConstruction { get; set; } = "NE";
+
+    /// <summary>Recommended action to resolve this encumbrance</summary>
+    public string Resolution { get; set; } = string.Empty;
+
+    /// <summary>Legal basis with NN reference</summary>
+    public string LegalBasis { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Aggregated risk matrix for all encumbrances on a property.
+/// Provides a quick overview: how many block sale, block construction, etc.
+/// </summary>
+public class EncumbranceRiskSummary
+{
+    /// <summary>Total active encumbrances</summary>
+    public int TotalActive { get; set; }
+
+    /// <summary>Number that block sale transactions</summary>
+    public int BlockingSale { get; set; }
+
+    /// <summary>Number that block construction permits</summary>
+    public int BlockingConstruction { get; set; }
+
+    /// <summary>Number of fiduciary transfers detected</summary>
+    public int FiduciaryCount { get; set; }
+
+    /// <summary>Number of personal servitudes (deal-breakers)</summary>
+    public int PersonalServitudeCount { get; set; }
+
+    /// <summary>Number of historical/legacy entries requiring investigation</summary>
+    public int HistoricalCount { get; set; }
+
+    /// <summary>Number of active enforcement/execution proceedings</summary>
+    public int EnforcementCount { get; set; }
+
+    /// <summary>Overall encumbrance risk: "ČISTO", "UVJETNO", "BLOKIRANO"</summary>
+    public string OverallRisk { get; set; } = "ČISTO";
+
+    /// <summary>1-sentence summary of the encumbrance situation</summary>
+    public string Summary { get; set; } = string.Empty;
 }
 
 /// <summary>
