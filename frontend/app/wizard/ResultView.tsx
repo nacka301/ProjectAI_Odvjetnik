@@ -161,8 +161,6 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
                       <th className="pb-3 pr-3 text-right">Površina</th>
                       <th className="pb-3 pr-3 text-right">Cijena</th>
                       <th className="pb-3 pr-3 text-right">€/m²</th>
-                      <th className="pb-3 pr-3 text-right">Korekcija</th>
-                      <th className="pb-3 pr-3 text-right">Prilagođeno €/m²</th>
                       <th className="pb-3 text-right">Sličnost</th>
                     </tr>
                   </thead>
@@ -180,13 +178,6 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
                         <td className="py-2.5 pr-3 text-right text-gray-700">{row.area_m2 > 0 ? `${formatPrice(row.area_m2)} m²` : "—"}</td>
                         <td className="py-2.5 pr-3 text-right text-gray-700">{row.total_price > 0 ? `${formatPrice(Math.round(row.total_price))} €` : "—"}</td>
                         <td className="py-2.5 pr-3 text-right font-medium text-gray-900">{formatPrice(Math.round(row.raw_price_per_m2))} €</td>
-                        <td className={`py-2.5 pr-3 text-right font-semibold ${row.correction_percent > 0 ? "text-green-600" : row.correction_percent < 0 ? "text-red-600" : "text-gray-400"}`} title={row.correction_reason || undefined}>
-                          {row.correction_percent > 0 ? "+" : ""}{row.correction_percent.toFixed(1)}%
-                          {row.correction_reason && (
-                            <div className="text-[9px] font-normal text-gray-400 max-w-[200px] whitespace-normal text-right">{row.correction_reason}</div>
-                          )}
-                        </td>
-                        <td className="py-2.5 pr-3 text-right font-bold text-blue-700">{formatPrice(Math.round(row.adjusted_price_per_m2))} €</td>
                         <td className="py-2.5 text-right">
                           <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold cursor-help ${
                             row.similarity_score >= 70 ? "bg-green-100 text-green-800" :
@@ -203,7 +194,7 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
                   <tfoot>
                     {/* V27: Ponderirani prosjek — weighted median from backend, NOT recalculated */}
                     <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
-                      <td colSpan={6} className="py-3 pr-3 text-right text-gray-600">Ponderirani prosjek:</td>
+                      <td colSpan={4} className="py-3 pr-3 text-right text-gray-600">Ponderirani prosjek:</td>
                       <td className="py-3 pr-3 text-right text-blue-800 text-base">
                         {result.market_average_asking ? `${formatPrice(Math.round(result.market_average_asking))} €/m²` : "—"}
                       </td>
@@ -212,7 +203,7 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
                     {/* V27: After realization gap */}
                     {result.realization_discount_percent && (
                       <tr className="bg-gray-50 text-sm">
-                        <td colSpan={6} className="py-2 pr-3 text-right text-gray-500">
+                        <td colSpan={4} className="py-2 pr-3 text-right text-gray-500">
                           Nakon diskonta ({result.realization_discount_percent.toFixed(1)}%):
                         </td>
                         <td className="py-2 pr-3 text-right font-bold text-indigo-700 text-base">
@@ -224,7 +215,7 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
                     {/* V27: After contextual adjustments */}
                     {result.total_adjustment_percent !== undefined && result.total_adjustment_percent !== 0 && (
                       <tr className="bg-gray-50 text-sm">
-                        <td colSpan={6} className="py-2 pr-3 text-right text-gray-500">
+                        <td colSpan={4} className="py-2 pr-3 text-right text-gray-500">
                           Σ Korekcija ({result.total_adjustment_percent > 0 ? "+" : ""}{result.total_adjustment_percent.toFixed(1)}%):
                         </td>
                         <td className="py-2 pr-3 text-right font-bold text-purple-700 text-base">
@@ -234,7 +225,7 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
                       </tr>
                     )}
                     <tr className="bg-blue-50 text-base">
-                      <td colSpan={6} className="py-3 pr-3 text-right font-bold text-blue-900">
+                      <td colSpan={4} className="py-3 pr-3 text-right font-bold text-blue-900">
                         Konačna procjena:
                       </td>
                       <td colSpan={2} className="py-3 text-right font-extrabold text-blue-900 text-lg">

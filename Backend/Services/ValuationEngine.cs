@@ -957,18 +957,30 @@ public class ValuationEngine
                 aiScored++;
                 usedAiScore = true;
 
+                // Always compute math baseline for AI sanity checks
+                double mathScore = CalculateSimilarityScore(
+                    price, property, marketData.DetectedPropertyType, marketData.RegionName);
+
+                // V48e: Math-based floor — AI often underrates same-neighborhood comps
+                // (gives 0.50 "same city" when math confirms 0.90 "same neighborhood").
+                // If math confirms strong location match, don't let AI drag score down.
+                if (mathScore >= 0.55 && mathScore > simScore)
+                {
+                    _logger.LogInformation(
+                        "V48e AI Floor: {Title} — AI={AI:F2}, Math={Math:F2} → boosted to math",
+                        price.SourceTitle.Length > 50 ? price.SourceTitle[..50] : price.SourceTitle,
+                        simScore, mathScore);
+                    simScore = mathScore;
+                }
                 // V38: Cross-city safety cap — if math-based location score is very low
                 // (wrong city/region), cap the AI score to prevent AI hallucination
-                // from overriding geographic reality. A listing from Split cannot be
-                // a good comparable for Zagreb no matter what the AI thinks.
-                double mathLocationCheck = CalculateSimilarityScore(
-                    price, property, marketData.DetectedPropertyType, marketData.RegionName);
-                if (mathLocationCheck <= 0.15 && simScore > 0.25)
+                // from overriding geographic reality.
+                else if (mathScore <= 0.15 && simScore > 0.25)
                 {
                     _logger.LogInformation(
                         "V38 AI Score Cap: {Title} — AI gave {AiScore:F2} but math location={MathScore:F2}, capped to 0.25",
                         price.SourceTitle.Length > 50 ? price.SourceTitle[..50] : price.SourceTitle,
-                        simScore, mathLocationCheck);
+                        simScore, mathScore);
                     simScore = 0.25;
                 }
             }
@@ -1023,6 +1035,9 @@ public class ValuationEngine
                 price.SourceTitle.Length > 50 ? price.SourceTitle[..50] : price.SourceTitle);
 
             // V20: Per-comparable correction (individual adjustment)
+            // V48e: Still computed for diagnostic/logging but NO LONGER applied to weighted median.
+            // Per-comp corrections were based on unreliable AI-extracted data (e.g., year_built=1890
+            // for modern buildings). All adjustments now flow through global "Struktura formiranja cijene".
             var (corrPct, corrReason) = CalculatePerCompCorrection(property, listing, price, marketData.DetectedPropertyType);
 
             // V24: Prefer ListedPriceEur (actual ad price) for TotalPrice in the table
@@ -1032,12 +1047,9 @@ public class ValuationEngine
                     ? Math.Round(price.PricePerM2 * listing.AiSizeM2!.Value, 0)
                     : price.DetectedSizeM2 > 0 ? Math.Round(price.PricePerM2 * price.DetectedSizeM2, 0) : null;
 
-            // V48: Generate similarity reason for math-fallback (AI provides its own)
-            string? similarityReason = listing?.AiSimilarityReason;
-            if (string.IsNullOrEmpty(similarityReason) && !usedAiScore)
-            {
-                similarityReason = GenerateMathSimilarityReason(simScore, price, property);
-            }
+            // V48e: Always use math-based reason — AI reasons are often inconsistent
+            // with the actual score (especially when V48e floor boosted the score).
+            string? similarityReason = GenerateMathSimilarityReason(simScore, price, property);
 
             compDetails.Add(new UsedComparable
             {
@@ -1061,9 +1073,10 @@ public class ValuationEngine
                 YardAreaM2 = listing?.AiYardAreaM2 > 0 ? listing.AiYardAreaM2 : (price.DetectedYardM2 > 0 ? price.DetectedYardM2 : null),
                 SimilarityReason = similarityReason,
                 DeepDiveStatus = listing?.DeepDiveStatus,
-                // V20: Per-comparable correction
-                CorrectionPercent = corrPct,
-                CorrectionReason = corrReason,
+                // V48e: Per-comp corrections zeroed out — unreliable AI data.
+                // All adjustments shown exclusively in "Struktura formiranja cijene".
+                CorrectionPercent = 0,
+                CorrectionReason = null,
             });
         }
 
@@ -1275,7 +1288,8 @@ public class ValuationEngine
         if (cleanPrices.Count >= 2)
         {
             // Build weight-value pairs (3x boost for exact neighborhood match)
-            // V20: Use per-comparable corrected prices for weighted median
+            // V48e: Use RAW prices — per-comp corrections removed (unreliable AI data).
+            // All adjustments applied post-median via global "Struktura formiranja cijene".
             var weightedPairs = cleanPrices.Select(p =>
             {
                 var match = compDetails
@@ -1287,12 +1301,7 @@ public class ValuationEngine
                 if (p.IsExactNeighborhoodMatch)
                     weight *= 3.0;
 
-                // V20: Apply per-comparable correction to price
-                double correctedPrice = p.PricePerM2;
-                if (match != null && match.CorrectionPercent != 0)
-                    correctedPrice = p.PricePerM2 * (1 + match.CorrectionPercent / 100.0);
-
-                return (Value: correctedPrice, Weight: weight);
+                return (Value: p.PricePerM2, Weight: weight);
             }).ToList();
 
             basePricePerM2 = WeightedMedian(weightedPairs);

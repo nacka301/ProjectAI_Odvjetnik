@@ -534,6 +534,14 @@ public class ValuationService
         - 0.00–0.29: Neusporedivo (drugi grad, krivi tip, ili potpuno različita nekretnina)
 
         ████████████████████████████████████████████████████████
+        KRITIČNO PRAVILO — ISTI KVART = MINIMUM 0.70:
+        Ako oglas i CILJNA NEKRETNINA dijele ISTI KVART/NASELJE (npr. oba su u "Bačvice",
+        oba u "Trešnjevka", oba u "Maksimir"), ocjena MORA biti minimalno 0.70,
+        čak i ako se razlikuju po veličini, broju soba ili stanju.
+        Lokacija je najvažniji faktor — isti kvart znači isto mikrotržište.
+        ████████████████████████████████████████████████████████
+
+        ████████████████████████████████████████████████████████
         KRITIČNO PRAVILO — APSOLUTNA ZABRANA USPOREDBE RAZLIČITIH GRADOVA:
         Ako je CILJNA NEKRETNINA u Zagrebu, a oglas je u Splitu, Rijeci, Osijeku,
         ili BILO KOJEM drugom gradu → similarity_score MORA biti 0.00.
@@ -586,6 +594,11 @@ public class ValuationService
             sb.AppendLine("=== TARGET PROPERTY (the one being valued) ===");
             sb.AppendLine($"Description: {subjectProperty.Description}");
             sb.AppendLine($"Location: {subjectProperty.Location}");
+            // V48e: Explicitly extract and label neighborhood for AI matching
+            var locSegments = subjectProperty.Location?.Split(new[] { ',', '-' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(s => s.Trim()).Where(s => s.Length > 2).ToArray() ?? [];
+            if (locSegments.Length >= 2)
+                sb.AppendLine($"Neighborhood/Kvart: {locSegments[0]}");
             sb.AppendLine($"Size: {subjectProperty.SizeM2} m²");
             sb.AppendLine($"Condition: {subjectProperty.Condition}");
             if (subjectProperty.YardAreaM2 > 0)
