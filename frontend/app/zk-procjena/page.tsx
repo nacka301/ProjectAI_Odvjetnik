@@ -17,8 +17,6 @@ import {
   Check,
   ArrowLeft,
   Scale,
-  Search,
-  Brain,
   FileCheck,
   ExternalLink,
   ShieldCheck,
@@ -1468,228 +1466,476 @@ export default function ZkProcjenaPage() {
 
             {showValuation && (
               <div className="space-y-6">
-                {/* Main Value Card */}
-                <div className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-700 p-8 text-white text-center">
-                  <p className="text-sm font-medium text-blue-100 uppercase tracking-wide">
+                {/* Value Card */}
+                <div className="rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 p-8 text-center text-white shadow-lg">
+                  <p className="text-sm uppercase tracking-wide opacity-80 mb-1">
                     Procijenjena tržišna vrijednost
                   </p>
-                  <p className="text-5xl font-bold mt-2">
-                    {formatPrice(valuation.estimated_value_eur)} €
+                  <p className="text-4xl font-bold">
+                    {valuation.estimated_value_eur.toLocaleString("hr-HR")} €
                   </p>
-                  {valuation.calculated_price_per_m2 && valuation.calculated_price_per_m2 > 0 && (
-                    <p className="mt-2 text-blue-200">
-                      {formatPrice(Math.round(valuation.calculated_price_per_m2))} €/m²
-                      {valuation.confidence_level && ` • ${valuation.confidence_level}`}
-                    </p>
+                  {/* V4 Math Confidence (primary) */}
+                  {valuation.math_confidence_score != null && (
+                    <div className="mt-4 mx-auto max-w-md">
+                      <div className="flex items-center justify-center gap-2 mb-2">
+                        <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                          valuation.math_confidence_score >= 75
+                            ? "bg-green-500/20 text-green-100"
+                            : valuation.math_confidence_score >= 50
+                            ? "bg-yellow-500/20 text-yellow-100"
+                            : "bg-red-500/20 text-red-100"
+                        }`}>
+                          🧮 Engine: {valuation.math_confidence_level} ({valuation.math_confidence_score}/100)
+                        </span>
+                        {valuation.confidence_score != null && (
+                          <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                            valuation.confidence_color === "green"
+                              ? "bg-green-500/20 text-green-100"
+                              : valuation.confidence_color === "yellow"
+                              ? "bg-yellow-500/20 text-yellow-100"
+                              : "bg-red-500/20 text-red-100"
+                          }`}>
+                            🔍 Podaci: {valuation.confidence_score}/100
+                          </span>
+                        )}
+                      </div>
+                      <div className="w-full bg-white/20 rounded-full h-2 mb-2">
+                        <div
+                          className={`h-2 rounded-full transition-all duration-500 ${
+                            valuation.math_confidence_score >= 75 ? "bg-green-400"
+                            : valuation.math_confidence_score >= 50 ? "bg-yellow-400"
+                            : "bg-red-400"
+                          }`}
+                          style={{ width: `${valuation.math_confidence_score}%` }}
+                        />
+                      </div>
+                      {valuation.math_confidence_explanation && (
+                        <p className="text-xs opacity-70">{valuation.math_confidence_explanation}</p>
+                      )}
+                    </div>
                   )}
-                  {valuation.math_confidence_score !== undefined && valuation.math_confidence_score > 0 && (
-                    <div className="mt-3 inline-flex items-center gap-2 bg-white/20 rounded-full px-4 py-1.5">
-                      <span className="text-sm font-medium">
-                        Pouzdanost: {valuation.math_confidence_score}/100 ({valuation.math_confidence_level})
+                  {/* Fallback to V3 confidence if no V4 */}
+                  {valuation.math_confidence_score == null && valuation.confidence_level && (
+                    <div className="mt-4 mx-auto max-w-md">
+                      <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                        valuation.confidence_color === "green"
+                          ? "bg-green-500/20 text-green-100"
+                          : valuation.confidence_color === "yellow"
+                          ? "bg-yellow-500/20 text-yellow-100"
+                          : "bg-red-500/20 text-red-100"
+                      }`}>
+                        Pouzdanost: {valuation.confidence_level}
+                        {valuation.confidence_score ? ` (${valuation.confidence_score}/100)` : ""}
                       </span>
                     </div>
                   )}
+                  {valuation.calculated_price_per_m2 && (
+                    <p className="text-sm mt-2 opacity-80">
+                      {valuation.calculated_price_per_m2.toLocaleString("hr-HR")} €/m²
+                    </p>
+                  )}
                 </div>
 
-                {/* Engine Stats */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <StatCard label="Pronađeno oglasa" value={valuation.total_listings_found ?? 0} />
-                  <StatCard label="Korištenih" value={valuation.usable_price_points ?? 0} />
-                  <StatCard label="Outlieri uklonjeni" value={valuation.outliers_removed ?? 0} />
-                  <StatCard label="Diskont" value={`${valuation.realization_discount_percent?.toFixed(1) ?? "15"}%`} />
-                </div>
-
-                {/* Comparables */}
-                {valuation.selected_comparables?.length > 0 && (
-                  <div className="rounded-xl bg-white border border-gray-200 p-6">
-                    <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4 flex items-center gap-2">
-                      <Search className="h-4 w-4" />
-                      Odabrane usporedive nekretnine
+                {/* Engine Analytics Panel (V4) */}
+                {valuation.market_average_asking && (
+                  <div className="rounded-xl bg-white border border-gray-200 p-5">
+                    <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                      📊 Analitika procjene (Robust Estimator V4)
                     </h3>
-                    <div className="space-y-4">
-                      {valuation.selected_comparables.map((c, i) => (
-                        <div key={i} className="p-4 border border-gray-100 rounded-lg hover:bg-gray-50 transition">
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1 min-w-0">
-                              <h4 className="text-sm font-semibold text-gray-900 truncate">{c.title}</h4>
-                              <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
-                                <span className="font-semibold text-blue-700">{c.price}</span>
-                                <span>{c.location}</span>
-                              </div>
-                            </div>
-                            {c.url && (
-                              <a
-                                href={c.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-500 hover:text-blue-700 flex-shrink-0 ml-2"
-                              >
-                                <ExternalLink className="h-4 w-4" />
-                              </a>
-                            )}
-                          </div>
-                          <p className="text-xs text-gray-500 mt-2 leading-relaxed">{c.reason_for_selection}</p>
-                        </div>
-                      ))}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                      <div className="text-center p-3 bg-gray-50 rounded-lg">
+                        <p className="text-xs text-gray-500">Weighted Median</p>
+                        <p className="text-lg font-bold text-gray-900">
+                          {(valuation.market_average_asking ?? 0).toLocaleString("hr-HR")} €/m²
+                        </p>
+                        <p className="text-xs text-gray-400">{valuation.price_source}</p>
+                      </div>
+                      <div className="text-center p-3 bg-gray-50 rounded-lg">
+                        <p className="text-xs text-gray-500">Comparables</p>
+                        <p className="text-lg font-bold text-gray-900">
+                          {valuation.usable_price_points ?? 0} / {valuation.total_listings_found ?? 0}
+                        </p>
+                        <p className="text-xs text-gray-400">
+                          {valuation.outliers_removed ?? 0} outliera ({valuation.outlier_method ?? "N/A"})
+                        </p>
+                      </div>
+                      <div className="text-center p-3 bg-gray-50 rounded-lg">
+                        <p className="text-xs text-gray-500">StdDev / CV</p>
+                        <p className="text-lg font-bold text-gray-900">
+                          {(valuation.std_dev_per_m2 ?? 0).toLocaleString("hr-HR")} €/m²
+                        </p>
+                        <p className={`text-xs font-medium ${
+                          (valuation.coefficient_of_variation ?? 0) < 15 ? "text-green-600"
+                          : (valuation.coefficient_of_variation ?? 0) < 30 ? "text-yellow-600"
+                          : "text-red-600"
+                        }`}>
+                          CV: {valuation.coefficient_of_variation ?? 0}%
+                        </p>
+                      </div>
+                    </div>
+                    {/* Realization Gap Reasoning */}
+                    {valuation.realization_gap_reasoning && (
+                      <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <p className="text-xs font-semibold text-blue-700 mb-1">
+                          Realizacijski gap: {valuation.realization_discount_percent ?? 0}%
+                        </p>
+                        <p className="text-xs text-blue-600">{valuation.realization_gap_reasoning}</p>
+                      </div>
+                    )}
+                    {valuation.note && (
+                      <div className="mt-3 flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                        <AlertTriangle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                        <p className="text-xs text-amber-800">{valuation.note}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* V4 Used Comparables Table (Engine) */}
+                {valuation.used_comparables && valuation.used_comparables.length > 0 && (() => {
+                  const sorted = [...valuation.used_comparables].sort((a, b) => {
+                    if (a.is_outlier !== b.is_outlier) return a.is_outlier ? 1 : -1;
+                    return b.similarity_score - a.similarity_score;
+                  });
+                  const usedCount = sorted.filter(c => !c.is_outlier).length;
+                  const outlierCount = sorted.filter(c => c.is_outlier).length;
+                  const usedPrices = sorted.filter(c => !c.is_outlier).map(c => c.price_per_m2).sort((a, b) => a - b);
+                  const medianPrice = usedPrices.length > 0
+                    ? usedPrices[Math.floor(usedPrices.length / 2)]
+                    : 0;
+
+                  return (
+                  <div className="rounded-xl bg-white border border-gray-200 overflow-hidden">
+                    <div className="px-5 py-3 border-b border-gray-100 bg-gray-50">
+                      <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
+                        🧮 Engine Comparables ({usedCount} korištenih{outlierCount > 0 ? `, ${outlierCount} uklonjenih` : ""})
+                      </h3>
+                      {medianPrice > 0 && (
+                        <p className="text-xs text-gray-400 mt-1">
+                          Median korištenih: {medianPrice.toLocaleString("hr-HR")} €/m²
+                        </p>
+                      )}
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-gray-100 bg-gray-50/50">
+                            <th className="text-left px-4 py-2 font-semibold text-gray-600">Oglas</th>
+                            <th className="text-right px-4 py-2 font-semibold text-gray-600">€/m²</th>
+                            <th className="text-right px-4 py-2 font-semibold text-gray-600">Similarity</th>
+                            <th className="text-center px-4 py-2 font-semibold text-gray-600">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {sorted.map((c, i) => (
+                            <tr key={i} className={`transition-colors ${c.is_outlier ? "bg-red-50/50 opacity-60" : "hover:bg-gray-50"}`}>
+                              <td className="px-4 py-2">
+                                {c.url ? (
+                                  <a href={c.url} target="_blank" rel="noopener noreferrer" 
+                                    className={`hover:underline text-xs truncate block max-w-[250px] ${c.is_outlier ? "text-gray-400" : "text-blue-600"}`}>
+                                    {c.title || c.url}
+                                  </a>
+                                ) : (
+                                  <span className="text-xs text-gray-600 truncate block max-w-[250px]">{c.title}</span>
+                                )}
+                                {/* Enriched feature pills */}
+                                {(c.area_m2 || c.rooms || c.year_built || c.condition || c.energy_class) && (
+                                  <div className="flex flex-wrap gap-1 mt-1">
+                                    {c.area_m2 && <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">{c.area_m2} m²</span>}
+                                    {c.rooms && <span className="text-[10px] bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded">{c.rooms} soba</span>}
+                                    {c.floor && <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded">Kat {c.floor}</span>}
+                                    {c.year_built && <span className="text-[10px] bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded">{c.year_built}</span>}
+                                    {c.condition && <span className="text-[10px] bg-green-50 text-green-600 px-1.5 py-0.5 rounded capitalize">{c.condition}</span>}
+                                    {c.energy_class && <span className="text-[10px] bg-teal-50 text-teal-600 px-1.5 py-0.5 rounded">E: {c.energy_class}</span>}
+                                    {c.heating && <span className="text-[10px] bg-orange-50 text-orange-600 px-1.5 py-0.5 rounded">{c.heating}</span>}
+                                    {c.has_garage && <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">Garaža</span>}
+                                    {c.yard_area_m2 != null && c.yard_area_m2 > 0 && <span className="text-[10px] bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded">Okućnica {c.yard_area_m2} m²</span>}
+                                  </div>
+                                )}
+                                {c.similarity_reason && (
+                                  <div className="text-[10px] text-gray-400 mt-1 italic truncate max-w-[300px]" title={c.similarity_reason}>
+                                    {c.similarity_reason}
+                                  </div>
+                                )}
+                                {c.deep_dive_status && (
+                                  <div className={`text-[10px] mt-1 truncate max-w-[350px] ${
+                                    c.deep_dive_status.startsWith("✓") ? "text-green-500" 
+                                    : c.deep_dive_status.startsWith("⚠") ? "text-amber-500"
+                                    : "text-red-400"
+                                  }`} title={c.deep_dive_status}>
+                                    {c.deep_dive_status}
+                                  </div>
+                                )}
+                                {/* Per-comp correction */}
+                                {!c.is_outlier && c.correction_reason && (
+                                  <div className="text-[10px] text-indigo-500 mt-1">
+                                    📐 {c.correction_reason}
+                                  </div>
+                                )}
+                              </td>
+                              <td className={`px-4 py-2 text-right font-mono text-xs ${c.is_outlier ? "text-red-400 line-through" : ""}`}>
+                                {c.price_per_m2.toLocaleString("hr-HR")} €
+                                {c.total_price && (
+                                  <div className="text-[10px] text-gray-400 font-normal">
+                                    ({c.total_price.toLocaleString("hr-HR")} € uk.)
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-4 py-2 text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <div className="w-12 bg-gray-200 rounded-full h-1.5">
+                                    <div className={`h-1.5 rounded-full ${
+                                      c.is_outlier ? "bg-red-300"
+                                      : c.similarity_score >= 0.7 ? "bg-green-500"
+                                      : c.similarity_score >= 0.4 ? "bg-yellow-500"
+                                      : "bg-red-500"
+                                    }`} style={{ width: `${Math.max(c.similarity_score * 100, 5)}%` }} />
+                                  </div>
+                                  <span className={`text-xs w-8 text-right ${c.is_outlier ? "text-gray-400" : "text-gray-500"}`}>
+                                    {(c.similarity_score * 100).toFixed(0)}%
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-2 text-center">
+                                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+                                  c.is_outlier
+                                    ? "bg-red-100 text-red-700"
+                                    : "bg-green-100 text-green-700"
+                                }`}>
+                                  {c.is_outlier ? "✗ Uklonjen" : "✓ Korišten"}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                  );
+                })()}
+
+                {/* V4 Engine Adjustments */}
+                {valuation.adjustments && valuation.adjustments.length > 0 && (
+                  <div className="rounded-xl bg-white border border-gray-200 overflow-hidden">
+                    <div className="px-5 py-3 border-b border-gray-100 bg-gray-50">
+                      <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
+                        ⚙️ Engine Korekcije (cap ±40%)
+                      </h3>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-gray-100 bg-gray-50/50">
+                            <th className="text-left px-5 py-2 font-semibold text-gray-600">Faktor</th>
+                            <th className="text-left px-5 py-2 font-semibold text-gray-600">Opis</th>
+                            <th className="text-right px-5 py-2 font-semibold text-gray-600">%</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {valuation.adjustments.map((a, i) => (
+                            <tr key={i} className="hover:bg-gray-50">
+                              <td className="px-5 py-2 text-gray-800 font-medium text-xs">{a.factor}</td>
+                              <td className="px-5 py-2 text-gray-500 text-xs">{a.description}</td>
+                              <td className="px-5 py-2 text-right">
+                                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold ${
+                                  a.percent > 0 ? "bg-green-100 text-green-800"
+                                  : a.percent < 0 ? "bg-red-100 text-red-800"
+                                  : "bg-gray-100 text-gray-600"
+                                }`}>
+                                  {a.percent > 0 ? "+" : ""}{a.percent}%
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="border-t-2 border-gray-200 bg-gray-50">
+                            <td colSpan={2} className="px-5 py-2 font-semibold text-gray-800 text-xs">
+                              Ukupno (cap ±40%)
+                            </td>
+                            <td className="px-5 py-2 text-right">
+                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold ${
+                                (valuation.total_adjustment_percent ?? 0) >= 0 ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+                              }`}>
+                                {(valuation.total_adjustment_percent ?? 0) > 0 ? "+" : ""}{valuation.total_adjustment_percent ?? 0}%
+                              </span>
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
                     </div>
                   </div>
                 )}
 
-                {/* Engine Comparables (used_comparables) */}
-                {valuation.used_comparables && valuation.used_comparables.length > 0 && (
-                  <div className="rounded-xl bg-white border border-gray-200 p-6">
-                    <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4 flex items-center gap-2">
-                      🧮 Engine usporedbe ({valuation.used_comparables.filter(c => !c.is_outlier).length} korištenih)
-                    </h3>
-                    <div className="space-y-3">
-                      {[...valuation.used_comparables]
-                        .sort((a, b) => {
-                          if (a.is_outlier !== b.is_outlier) return a.is_outlier ? 1 : -1;
-                          return b.similarity_score - a.similarity_score;
-                        })
-                        .map((c, i) => (
-                        <div key={i} className={`p-4 rounded-lg border transition ${c.is_outlier ? "border-red-200 bg-red-50/50 opacity-60" : "border-gray-100 bg-gray-50 hover:border-blue-200 hover:bg-blue-50/30"}`}>
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <h4 className="text-sm font-semibold text-gray-900 truncate">{c.title}</h4>
-                                {c.is_outlier && (
-                                  <span className="text-[10px] font-bold uppercase tracking-wider bg-red-100 text-red-700 px-2 py-0.5 rounded-full">Outlier</span>
-                                )}
-                                {c.is_outlier && c.outlier_reason && (
-                                  <span className="text-[10px] text-red-500 italic">{c.outlier_reason}</span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-3 mt-1">
-                                <span className="text-sm font-bold text-blue-700">{c.price_per_m2.toLocaleString("hr-HR")} €/m²</span>
-                                {c.total_price && <span className="text-xs text-gray-500">({c.total_price.toLocaleString("hr-HR")} €)</span>}
-                                <span className={`text-xs font-semibold ${c.similarity_score >= 0.7 ? "text-green-600" : c.similarity_score >= 0.4 ? "text-yellow-600" : "text-red-600"}`}>
-                                  {(c.similarity_score * 100).toFixed(0)}%
+                {/* Pipeline Trace (collapsible) */}
+                {valuation.pipeline && valuation.pipeline.length > 0 && (
+                  <details className="rounded-xl bg-white border border-gray-200 overflow-hidden">
+                    <summary className="px-5 py-3 border-b border-gray-100 bg-gray-50 cursor-pointer">
+                      <span className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
+                        🔬 Pipeline Trace ({valuation.pipeline.length} koraka)
+                      </span>
+                    </summary>
+                    <div className="px-5 py-3 space-y-1">
+                      {valuation.pipeline.map((step, i) => (
+                        <div key={i} className="flex items-start gap-2">
+                          <span className="text-xs text-gray-400 font-mono w-6 text-right flex-shrink-0">{i + 1}.</span>
+                          <span className="text-xs text-gray-600">{step}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {valuation.outlier_log && valuation.outlier_log.length > 0 && (
+                      <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/50">
+                        <p className="text-xs font-semibold text-gray-500 mb-1">Outlier Log:</p>
+                        {valuation.outlier_log.map((log, i) => (
+                          <p key={i} className="text-xs text-gray-500 ml-4">• {log}</p>
+                        ))}
+                      </div>
+                    )}
+                  </details>
+                )}
+
+                {/* Target Property Summary */}
+                <div className="rounded-xl bg-white border border-gray-200 p-5">
+                  <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                    Nekretnina
+                  </h3>
+                  <p className="text-gray-800">
+                    {valuation.target_property_summary}
+                  </p>
+                </div>
+
+                {/* Selected Comparables (AI) */}
+                {valuation.selected_comparables && valuation.selected_comparables.length > 0 && (
+                  <div className="rounded-xl bg-white border border-gray-200 overflow-hidden">
+                    <div className="px-5 py-3 border-b border-gray-100 bg-gray-50">
+                      <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
+                        Odabrane usporedive nekretnine
+                      </h3>
+                    </div>
+                    <div className="divide-y divide-gray-100">
+                      {valuation.selected_comparables.map((c, i) => (
+                        <div key={i} className="p-5">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">
+                                  {i + 1}
+                                </span>
+                                <span className="text-sm font-semibold text-gray-900">
+                                  {c.title || "Usporediva nekretnina"}
                                 </span>
                               </div>
-                              {/* Enriched feature pills */}
-                              {(c.area_m2 || c.rooms || c.year_built || c.condition || c.energy_class) && (
-                                <div className="flex flex-wrap gap-1 mt-2">
-                                  {c.area_m2 && <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">{c.area_m2} m²</span>}
-                                  {c.rooms && <span className="text-[10px] bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded">{c.rooms} soba</span>}
-                                  {c.floor && <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded">Kat {c.floor}</span>}
-                                  {c.year_built && <span className="text-[10px] bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded">{c.year_built}</span>}
-                                  {c.condition && <span className="text-[10px] bg-green-50 text-green-600 px-1.5 py-0.5 rounded capitalize">{c.condition}</span>}
-                                  {c.energy_class && <span className="text-[10px] bg-teal-50 text-teal-600 px-1.5 py-0.5 rounded">E: {c.energy_class}</span>}
-                                  {c.heating && <span className="text-[10px] bg-orange-50 text-orange-600 px-1.5 py-0.5 rounded">{c.heating}</span>}
-                                  {c.has_garage && <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">Garaža</span>}
-                                  {c.yard_area_m2 != null && c.yard_area_m2 > 0 && <span className="text-[10px] bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded">Okućnica {c.yard_area_m2} m²</span>}
-                                </div>
-                              )}
-                              {/* V18: Similarity reason */}
-                              {c.similarity_reason && (
-                                <div className="text-[10px] text-gray-400 mt-1 italic truncate max-w-[300px]" title={c.similarity_reason}>
-                                  {c.similarity_reason}
-                                </div>
-                              )}
-                              {/* V20: Deep dive status */}
-                              {c.deep_dive_status && (
-                                <div className={`text-[10px] mt-1 truncate max-w-[350px] ${
-                                  c.deep_dive_status.startsWith("✓") ? "text-green-500" 
-                                  : c.deep_dive_status.startsWith("⚠") ? "text-amber-500"
-                                  : "text-red-400"
-                                }`} title={c.deep_dive_status}>
-                                  {c.deep_dive_status}
-                                </div>
+                              <div className="flex items-center gap-3 mt-1">
+                                <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-800 px-2.5 py-0.5 text-xs font-semibold">
+                                  {c.price}
+                                </span>
+                                {c.location && (
+                                  <span className="text-xs text-gray-500">
+                                    📍 {c.location}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-sm text-gray-600 mt-2">
+                                {c.reason_for_selection}
+                              </p>
+                              {c.url && (
+                                <a
+                                  href={c.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 mt-2 text-sm text-blue-600 hover:text-blue-800 font-medium hover:underline"
+                                >
+                                  <ExternalLink className="h-3.5 w-3.5" />
+                                  Otvori oglas
+                                </a>
                               )}
                             </div>
-                            {c.url && (
-                              <a href={c.url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-700 shrink-0">
-                                <ExternalLink className="h-4 w-4" />
-                              </a>
-                            )}
                           </div>
-                          {/* Similarity bar */}
-                          <div className="mt-2 h-1 bg-gray-200 rounded-full overflow-hidden">
-                            <div className={`h-full rounded-full ${c.is_outlier ? "bg-red-300" : c.similarity_score >= 0.7 ? "bg-green-500" : c.similarity_score >= 0.4 ? "bg-yellow-500" : "bg-red-500"}`}
-                              style={{ width: `${Math.max(c.similarity_score * 100, 5)}%` }} />
-                          </div>
-                          {/* Per-comp correction */}
-                          {!c.is_outlier && c.correction_percent !== undefined && c.correction_percent !== 0 && (
-                            <div className={`mt-2 text-xs px-3 py-1.5 rounded-md ${c.correction_percent > 0 ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
-                              <span className="font-semibold">Korekcija: {c.correction_percent > 0 ? "+" : ""}{c.correction_percent.toFixed(1)}%</span>
-                              {c.correction_reason && <span className="ml-1 text-gray-500">— {c.correction_reason}</span>}
-                            </div>
-                          )}
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
 
-                {/* Value Drivers */}
-                {valuation.value_drivers?.length > 0 && (
-                  <div className="rounded-xl bg-white border border-gray-200 p-6">
-                    <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">
-                      Faktori vrijednosti
-                    </h3>
-                    <div className="space-y-2">
-                      {valuation.value_drivers.map((d, i) => (
-                        <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-gray-50">
-                          <div>
-                            <span className="text-sm font-medium text-gray-700">{d.factor}</span>
-                            <p className="text-xs text-gray-500">{d.impact}</p>
-                          </div>
-                          <span className={`text-sm font-bold ${d.adjustment_percent > 0 ? "text-green-600" : d.adjustment_percent < 0 ? "text-red-600" : "text-gray-500"}`}>
-                            {d.adjustment_percent > 0 ? "+" : ""}{d.adjustment_percent}%
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Engine Adjustments */}
-                {valuation.adjustments && valuation.adjustments.length > 0 && (
-                  <div className="rounded-xl bg-white border border-gray-200 p-6">
-                    <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">
-                      📀 Korekcije primijenjene na procjenu
-                    </h3>
-                    <div className="space-y-2">
-                      {valuation.adjustments.map((a: AdjustmentV4, i: number) => (
-                        <div key={i} className={`flex items-start justify-between p-3 rounded-lg border ${a.percent > 0 ? "bg-green-50/50 border-green-100" : a.percent < 0 ? "bg-red-50/50 border-red-100" : "bg-gray-50 border-gray-100"}`}>
-                          <div className="flex-1 min-w-0">
-                            <span className={`text-sm font-semibold ${a.percent > 0 ? "text-green-800" : a.percent < 0 ? "text-red-800" : "text-gray-700"}`}>{a.factor}</span>
-                            <p className="text-xs text-gray-500 mt-0.5">{a.description}</p>
-                          </div>
-                          <span className={`ml-4 text-sm font-bold whitespace-nowrap ${a.percent > 0 ? "text-green-600" : a.percent < 0 ? "text-red-600" : "text-gray-400"}`}>
-                            {a.percent > 0 ? "+" : ""}{a.percent.toFixed(1)}%
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Reasoning */}
-                {valuation.valuation_reasoning && (
-                  <div className="rounded-xl bg-white border border-gray-200 p-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-2">
-                        <Brain className="h-4 w-4" />
-                        Stručno mišljenje
+                {/* Value Drivers Table */}
+                {valuation.value_drivers && valuation.value_drivers.length > 0 && (
+                  <div className="rounded-xl bg-white border border-gray-200 overflow-hidden">
+                    <div className="px-5 py-3 border-b border-gray-100 bg-gray-50">
+                      <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
+                        Faktori vrijednosti
                       </h3>
-                      <button
-                        onClick={() => copyToClipboard(valuation.valuation_reasoning)}
-                        className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition"
-                      >
-                        {copied ? (
-                          <><Check className="h-4 w-4 text-green-600" /> Kopirano</>
-                        ) : (
-                          <><ClipboardCopy className="h-4 w-4" /> Kopiraj</>
-                        )}
-                      </button>
                     </div>
-                    <div className="prose prose-sm max-w-none text-gray-800 leading-relaxed whitespace-pre-wrap">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-gray-100 bg-gray-50/50">
+                            <th className="text-left px-5 py-3 font-semibold text-gray-600">Faktor</th>
+                            <th className="text-left px-5 py-3 font-semibold text-gray-600">Utjecaj</th>
+                            <th className="text-right px-5 py-3 font-semibold text-gray-600">Korekcija</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {valuation.value_drivers.map((d, i) => (
+                            <tr key={i} className="hover:bg-gray-50 transition-colors">
+                              <td className="px-5 py-3 text-gray-800 font-medium">{d.factor}</td>
+                              <td className="px-5 py-3 text-gray-600">{d.impact}</td>
+                              <td className="px-5 py-3 text-right">
+                                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                                  d.adjustment_percent > 0
+                                    ? "bg-green-100 text-green-800"
+                                    : d.adjustment_percent < 0
+                                    ? "bg-red-100 text-red-800"
+                                    : "bg-gray-100 text-gray-600"
+                                }`}>
+                                  {d.adjustment_percent > 0 ? "+" : ""}{d.adjustment_percent}%
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="border-t-2 border-gray-200 bg-gray-50">
+                            <td colSpan={2} className="px-5 py-3 text-gray-800 font-semibold">Ukupna korekcija</td>
+                            <td className="px-5 py-3 text-right">
+                              <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                                valuation.value_drivers.reduce((sum, d) => sum + d.adjustment_percent, 0) >= 0
+                                  ? "bg-green-100 text-green-800"
+                                  : "bg-red-100 text-red-800"
+                              }`}>
+                                {valuation.value_drivers.reduce((sum, d) => sum + d.adjustment_percent, 0) > 0 ? "+" : ""}
+                                {valuation.value_drivers.reduce((sum, d) => sum + d.adjustment_percent, 0)}%
+                              </span>
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Valuation Reasoning */}
+                <div className="rounded-xl bg-white border border-gray-200 overflow-hidden">
+                  <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 bg-gray-50">
+                    <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
+                      Obrazloženje procjene
+                    </h3>
+                    <button
+                      onClick={() => copyToClipboard(valuation.valuation_reasoning)}
+                      className="flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-800 transition"
+                    >
+                      {copied ? (
+                        <><Check className="h-4 w-4" /> Kopirano!</>
+                      ) : (
+                        <><ClipboardCopy className="h-4 w-4" /> Kopiraj u clipboard</>
+                      )}
+                    </button>
+                  </div>
+                  <div className="px-6 py-5">
+                    <div className="prose prose-sm max-w-none text-gray-800 whitespace-pre-wrap leading-relaxed">
                       {valuation.valuation_reasoning}
                     </div>
                   </div>
-                )}
+                </div>
               </div>
             )}
           </div>
@@ -1732,11 +1978,4 @@ function InfoCard({ label, value }: { label: string; value: string }) {
   );
 }
 
-function StatCard({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="rounded-lg bg-white border border-gray-200 p-4 text-center">
-      <p className="text-2xl font-bold text-gray-900">{value}</p>
-      <p className="text-xs text-gray-500 mt-1">{label}</p>
-    </div>
-  );
-}
+
