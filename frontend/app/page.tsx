@@ -24,6 +24,8 @@ import {
   Eye,
   Send,
   Receipt,
+  Landmark,
+  Construction,
 } from "lucide-react";
 import LegalFeed from "@/components/LegalFeed";
 import { getRecentActivity, type ActivityItem, type ActivityType } from "@/lib/supabase";
@@ -84,12 +86,17 @@ const TOUR_STEPS = [
   },
   {
     target: "card-zk",
-    title: "4/5 · ZK & Sudska Praksa",
-    text: "AI tumači ZK izvadak i traži relevantnu sudsku praksu za Vaš slučaj.",
+    title: "4/6 · ZK Izvadak",
+    text: "Učitajte ZK izvadak — AI identificira terete, hipoteke, plombe i pravne rizike.",
+  },
+  {
+    target: "card-sudska-praksa",
+    title: "5/6 · Sudska Praksa",
+    text: "AI traži relevantne presude Vrhovnog suda i analizira izglede Vašeg predmeta.",
   },
   {
     target: "card-fiskalizacija",
-    title: "5/5 · Fiskalizacija 2.0",
+    title: "6/6 · Fiskalizacija 2.0",
     text: "Generirajte e-račun (UBL 2.1) izravno povezan s predmetom — spremno za e-Račun sustav.",
   },
 ];
@@ -218,6 +225,8 @@ interface FeatureCard {
   title: string;
   description: string;
   howItWorks: string;
+  disabled?: boolean;
+  disabledLabel?: string;
 }
 
 const FEATURE_CARDS: FeatureCard[] = [
@@ -262,16 +271,29 @@ const FEATURE_CARDS: FeatureCard[] = [
   },
   {
     id: "card-zk",
+    href: "/zk-procjena",
+    icon: <Landmark className="h-6 w-6" />,
+    iconBg: "bg-orange-100 group-hover:bg-orange-200",
+    iconColor: "text-orange-600",
+    accentBorder: "hover:border-orange-400",
+    accentBg: "bg-orange-50 group-hover:bg-orange-100",
+    title: "ZK Izvadak",
+    description: "AI analiza zemljišnoknjižnog izvatka — terete, hipoteke, plombe i pravni rizici.",
+    howItWorks:
+      "Učitajte PDF ZK izvatka. AI identificira vlasnike, terete (hipoteke, služnosti, fiducije), plombe i ocjenjuje rizik za kupnju ili gradnju.",
+  },
+  {
+    id: "card-sudska-praksa",
     href: "/sudska-praksa",
     icon: <Gavel className="h-6 w-6" />,
     iconBg: "bg-amber-100 group-hover:bg-amber-200",
     iconColor: "text-amber-600",
     accentBorder: "hover:border-amber-400",
     accentBg: "bg-amber-50 group-hover:bg-amber-100",
-    title: "ZK & Sudska Praksa",
-    description: "Analiza tereta i povezivanje činjenica s presudama Vrhovnog suda.",
+    title: "Sudska Praksa",
+    description: "Pretraga i analiza relevantnih presuda za Vaš pravni slučaj.",
     howItWorks:
-      "AI tumači ZK izvadak (terete, plombe) i traži relevantnu sudsku praksu za Vaš slučaj.",
+      "Opišite Vaš slučaj ili učitajte tužbu. AI traži relevantne presude Vrhovnog suda i analizira izglede vašeg predmeta.",
   },
   {
     id: "card-fiskalizacija",
@@ -285,6 +307,8 @@ const FEATURE_CARDS: FeatureCard[] = [
     description: "Automatska izrada e-računa (UBL 2.1) iz analiziranih predmeta.",
     howItWorks:
       "Unesite podatke stranaka i iznos — PravoTek generira UBL 2.1 XML e-račun povezan s predmetom, spreman za slanje putem e-Račun sustava.",
+    disabled: true,
+    disabledLabel: "U razvoju",
   },
 ];
 
@@ -469,49 +493,78 @@ export default function Dashboard() {
             <span className="text-[11px] text-slate-400">Odaberite modul za početak rada</span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {FEATURE_CARDS.map((card) => (
-              <Link
-                key={card.id}
-                href={card.href}
-                id={card.id}
-                className={`group relative bg-white rounded-xl border border-slate-200 p-6 transition overflow-hidden ${card.accentBorder} hover:shadow-lg ${
-                  tourTargetId === card.id
-                    ? "relative z-[110] ring-2 ring-blue-500 ring-offset-2 shadow-xl"
-                    : ""
-                }`}
-              >
-                {/* Accent corner blob */}
-                <div className={`absolute top-0 right-0 w-24 h-24 ${card.accentBg} rounded-bl-[48px] -mr-3 -mt-3 transition`} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {FEATURE_CARDS.map((card) => {
+              const inner = (
+                <div
+                  id={card.id}
+                  className={`group relative bg-white rounded-xl border border-slate-200 p-6 transition overflow-hidden ${
+                    card.disabled
+                      ? "opacity-60 cursor-not-allowed"
+                      : `${card.accentBorder} hover:shadow-lg`
+                  } ${
+                    tourTargetId === card.id
+                      ? "relative z-[110] ring-2 ring-blue-500 ring-offset-2 shadow-xl"
+                      : ""
+                  }`}
+                >
+                  {/* Accent corner blob */}
+                  <div className={`absolute top-0 right-0 w-24 h-24 ${card.accentBg} rounded-bl-[48px] -mr-3 -mt-3 transition`} />
 
-                <div className="relative">
-                  {/* Top row: icon + info button */}
-                  <div className="flex items-start justify-between mb-4">
-                    <div className={`w-12 h-12 rounded-xl ${card.iconBg} flex items-center justify-center transition`}>
-                      <span className={card.iconColor}>{card.icon}</span>
+                  {/* Disabled badge */}
+                  {card.disabled && card.disabledLabel && (
+                    <div className="absolute top-3 right-3 z-10 flex items-center gap-1 bg-slate-200 text-slate-600 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full">
+                      <Construction className="h-3 w-3" />
+                      {card.disabledLabel}
                     </div>
-                    {/* How it works hover card */}
-                    <HoverInfoCard text={card.howItWorks} />
-                  </div>
+                  )}
 
-                  {/* Title */}
-                  <h3 className="font-bold text-slate-900 text-base mb-1.5">
-                    {card.title}
-                  </h3>
+                  <div className="relative">
+                    {/* Top row: icon + info button */}
+                    <div className="flex items-start justify-between mb-4">
+                      <div className={`w-12 h-12 rounded-xl ${card.iconBg} flex items-center justify-center transition`}>
+                        <span className={card.iconColor}>{card.icon}</span>
+                      </div>
+                      {/* How it works hover card */}
+                      {!card.disabled && <HoverInfoCard text={card.howItWorks} />}
+                    </div>
 
-                  {/* Description */}
-                  <p className="text-sm text-slate-500 leading-relaxed mb-4">
-                    {card.description}
-                  </p>
+                    {/* Title */}
+                    <h3 className="font-bold text-slate-900 text-base mb-1.5">
+                      {card.title}
+                    </h3>
 
-                  {/* CTA hint */}
-                  <div className="flex items-center gap-1.5 text-xs font-medium text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">
-                    Otvori modul
-                    <ArrowRight className="h-3.5 w-3.5" />
+                    {/* Description */}
+                    <p className="text-sm text-slate-500 leading-relaxed mb-4">
+                      {card.description}
+                    </p>
+
+                    {/* CTA hint */}
+                    {card.disabled ? (
+                      <div className="flex items-center gap-1.5 text-xs font-medium text-slate-400">
+                        <Construction className="h-3.5 w-3.5" />
+                        Uskoro dostupno
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 text-xs font-medium text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                        Otvori modul
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </div>
+                    )}
                   </div>
                 </div>
-              </Link>
-            ))}
+              );
+
+              if (card.disabled) {
+                return <div key={card.id}>{inner}</div>;
+              }
+
+              return (
+                <Link key={card.id} href={card.href}>
+                  {inner}
+                </Link>
+              );
+            })}
           </div>
         </section>
 
