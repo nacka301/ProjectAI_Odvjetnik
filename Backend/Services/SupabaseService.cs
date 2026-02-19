@@ -364,7 +364,7 @@ public class AuditLogRecord
     public string Citation { get; set; } = "";
     public string Reasoning { get; set; } = "";
     public string Confidence { get; set; } = "SREDNJE";
-    public string ModelUsed { get; set; } = "deepseek/deepseek-v3.2";
+    public string ModelUsed { get; set; } = "";
     public double ModelTemperature { get; set; } = 0.10;
 }
 

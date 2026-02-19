@@ -18,17 +18,20 @@ public class ContractController : ControllerBase
     private readonly ContractAnalysisService _contractService;
     private readonly PdfService _pdfService;
     private readonly SupabaseService _supabaseService;
+    private readonly ChatClientProvider _clients;
     private readonly ILogger<ContractController> _logger;
 
     public ContractController(
         ContractAnalysisService contractService,
         PdfService pdfService,
         SupabaseService supabaseService,
+        ChatClientProvider clients,
         ILogger<ContractController> logger)
     {
         _contractService = contractService;
         _pdfService = pdfService;
         _supabaseService = supabaseService;
+        _clients = clients;
         _logger = logger;
     }
 
@@ -94,7 +97,7 @@ public class ContractController : ControllerBase
                 Citation = "čl. 247.–269. ZOO",
                 Reasoning = result.Summary,
                 Confidence = result.RiskScore >= 70 ? "VISOKO" : result.RiskScore >= 40 ? "SREDNJE" : "NISKO",
-                ModelUsed = "deepseek/deepseek-v3.2 + deepseek/deepseek-r1-0528",
+                ModelUsed = _clients.HeavyModel,
                 ModelTemperature = 0.10
             });
         }
@@ -148,7 +151,7 @@ public class ContractController : ControllerBase
                 Citation = "čl. 247.–269. ZOO",
                 Reasoning = result.Summary,
                 Confidence = result.RiskScore >= 70 ? "VISOKO" : result.RiskScore >= 40 ? "SREDNJE" : "NISKO",
-                ModelUsed = "deepseek/deepseek-v3.2 + deepseek/deepseek-r1-0528",
+                ModelUsed = _clients.HeavyModel,
                 ModelTemperature = 0.10
             });
         }
@@ -293,7 +296,7 @@ public class ContractController : ControllerBase
                     Citation = "čl. 247.–269. ZOO",
                     Reasoning = result.Summary,
                     Confidence = result.RiskScore >= 70 ? "VISOKO" : result.RiskScore >= 40 ? "SREDNJE" : "NISKO",
-                    ModelUsed = "deepseek/deepseek-v3.2 + deepseek/deepseek-r1-0528",
+                    ModelUsed = _clients.HeavyModel,
                     ModelTemperature = 0.10
                 });
             }
@@ -370,7 +373,7 @@ public class ContractController : ControllerBase
                     Reasoning = $"Originalni ugovor: {request.OriginalText.Length} znakova, " +
                                 $"Rizik: {request.AnalysisResult.OverallRisk} ({request.AnalysisResult.RiskScore}/100)",
                     Confidence = "VISOKO",
-                    ModelUsed = "deepseek/deepseek-v3.2",
+                    ModelUsed = _clients.HeavyModel,
                     ModelTemperature = 0.10
                 });
             }

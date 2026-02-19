@@ -22,6 +22,7 @@ public class EvaluateController : ControllerBase
     private readonly EmailService _emailService;
     private readonly TextAnalysisService _textAnalysisService;
     private readonly ValuationAgentService _valuationAgentService;
+    private readonly ChatClientProvider _clients;
     private readonly ILogger<EvaluateController> _logger;
 
     public EvaluateController(
@@ -33,6 +34,7 @@ public class EvaluateController : ControllerBase
         EmailService emailService,
         TextAnalysisService textAnalysisService,
         ValuationAgentService valuationAgentService,
+        ChatClientProvider clients,
         ILogger<EvaluateController> logger)
     {
         _valuationService = valuationService;
@@ -43,6 +45,7 @@ public class EvaluateController : ControllerBase
         _emailService = emailService;
         _textAnalysisService = textAnalysisService;
         _valuationAgentService = valuationAgentService;
+        _clients = clients;
         _logger = logger;
     }
 
@@ -705,7 +708,7 @@ public class EvaluateController : ControllerBase
                     Citation = "čl. 4., čl. 19., čl. 24. ZPVN",
                     Reasoning = $"Engine: {engineResult.CalculatedPricePerM2:N0}€/m², {engineResult.UsablePricePoints} usporedivih. AI: {aiResult.EstimatedValueEur:N0}€. Pouzdanost: {engineResult.ConfidenceLevel}.",
                     Confidence = engineResult.ConfidenceLevel == "HIGH" ? "VISOKO" : engineResult.ConfidenceLevel == "MEDIUM" ? "SREDNJE" : "NISKO",
-                    ModelUsed = "deepseek/deepseek-v3.2",
+                    ModelUsed = _clients.HeavyModel,
                     ModelTemperature = 0.10
                 });
             }

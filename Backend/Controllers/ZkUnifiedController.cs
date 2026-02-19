@@ -25,6 +25,7 @@ public class ZkUnifiedController : ControllerBase
     private readonly ValuationEngine _valuationEngine;
     private readonly SupabaseService _supabaseService;
     private readonly EmailService _emailService;
+    private readonly ChatClientProvider _clients;
     private readonly ILogger<ZkUnifiedController> _logger;
 
     public ZkUnifiedController(
@@ -35,6 +36,7 @@ public class ZkUnifiedController : ControllerBase
         ValuationEngine valuationEngine,
         SupabaseService supabaseService,
         EmailService emailService,
+        ChatClientProvider clients,
         ILogger<ZkUnifiedController> logger)
     {
         _zkParsingService = zkParsingService;
@@ -44,6 +46,7 @@ public class ZkUnifiedController : ControllerBase
         _valuationEngine = valuationEngine;
         _supabaseService = supabaseService;
         _emailService = emailService;
+        _clients = clients;
         _logger = logger;
     }
 
@@ -257,7 +260,7 @@ public class ZkUnifiedController : ControllerBase
                 Citation = "čl. 2., čl. 8., čl. 30. ZZK",
                 Reasoning = $"AI je parsirao A/B/C listove ZK izvatka. Status: {zkResult.OverallStatus}. {zkResult.LawyerComment}",
                 Confidence = zkResult.RiskScore == "HIGH" ? "VISOKO" : "SREDNJE",
-                ModelUsed = "openai/gpt-4o-mini",
+                ModelUsed = _clients.FastModel,
                 ModelTemperature = 0.10
             });
         }
@@ -574,7 +577,7 @@ public class ZkUnifiedController : ControllerBase
                     Citation = "čl. 4., čl. 19., čl. 24. ZPVN",
                     Reasoning = $"Engine: {engineResult.CalculatedPricePerM2:N0}€/m², {engineResult.UsablePricePoints} usporedivih. AI: {aiResult.EstimatedValueEur:N0}€. Pouzdanost: {engineResult.ConfidenceLevel}.",
                     Confidence = engineResult.ConfidenceLevel == "HIGH" ? "VISOKO" : engineResult.ConfidenceLevel == "MEDIUM" ? "SREDNJE" : "NISKO",
-                    ModelUsed = "deepseek/deepseek-v3.2",
+                    ModelUsed = _clients.HeavyModel,
                     ModelTemperature = 0.10
                 });
             }

@@ -18,17 +18,20 @@ public class ChronologyController : ControllerBase
     private readonly ChronologyService _chronologyService;
     private readonly PdfService _pdfService;
     private readonly SupabaseService _supabaseService;
+    private readonly ChatClientProvider _clients;
     private readonly ILogger<ChronologyController> _logger;
 
     public ChronologyController(
         ChronologyService chronologyService,
         PdfService pdfService,
         SupabaseService supabaseService,
+        ChatClientProvider clients,
         ILogger<ChronologyController> logger)
     {
         _chronologyService = chronologyService;
         _pdfService = pdfService;
         _supabaseService = supabaseService;
+        _clients = clients;
         _logger = logger;
     }
 
@@ -198,7 +201,7 @@ public class ChronologyController : ControllerBase
                 Citation = "čl. 219., čl. 223. ZPP",
                 Reasoning = $"AI je obradio {processed} PDF dokumenata i ekstrahirao {allEvents.Count} kronoloških događaja. Greške: {errors.Count}.",
                 Confidence = errors.Count == 0 ? "VISOKO" : "SREDNJE",
-                ModelUsed = "openai/gpt-4o-mini",
+                ModelUsed = _clients.FastModel,
                 ModelTemperature = 0.10
             });
         }

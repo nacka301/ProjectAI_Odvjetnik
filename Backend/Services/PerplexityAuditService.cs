@@ -39,7 +39,7 @@ public class PerplexityAuditService
         _apiKey = Environment.GetEnvironmentVariable("PERPLEXITY_API_KEY")
             ?? config["Perplexity:ApiKey"];
 
-        _model = config["Perplexity:Model"] ?? "sonar";
+        _model = config["Perplexity:Model"] ?? "sonar-pro";
 
         _isConfigured = !string.IsNullOrWhiteSpace(_apiKey)
             && _apiKey != "YOUR_PERPLEXITY_API_KEY_HERE";

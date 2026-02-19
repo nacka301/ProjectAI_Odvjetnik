@@ -288,7 +288,7 @@ public class ContractAnalysisService
 
     public ContractAnalysisService(ChatClientProvider clients, ILogger<ContractAnalysisService> logger)
     {
-        _client = clients.Heavy;  // V65: deepseek-v3.2 — single model for all analysis
+        _client = clients.Heavy;  // V65: Single model for all analysis
         _logger = logger;
     }
 
@@ -324,7 +324,7 @@ public class ContractAnalysisService
 
         try
         {
-            _logger.LogInformation("V65 Contract analysis: {Len} chars — single-pass (deepseek-v3.2 + scoring)", text.Length);
+            _logger.LogInformation("V65 Contract analysis: {Len} chars — single-pass (Heavy model + scoring)", text.Length);
 
             // ── Progress: reading done ──
             if (onProgress != null)

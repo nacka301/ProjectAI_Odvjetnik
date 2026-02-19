@@ -22,17 +22,20 @@ public class LegalController : ControllerBase
     private readonly LegalIntelligenceService _legalService;
     private readonly PdfService _pdfService;
     private readonly SupabaseService _supabaseService;
+    private readonly ChatClientProvider _clients;
     private readonly ILogger<LegalController> _logger;
 
     public LegalController(
         LegalIntelligenceService legalService,
         PdfService pdfService,
         SupabaseService supabaseService,
+        ChatClientProvider clients,
         ILogger<LegalController> logger)
     {
         _legalService = legalService;
         _pdfService = pdfService;
         _supabaseService = supabaseService;
+        _clients = clients;
         _logger = logger;
     }
 
@@ -136,7 +139,7 @@ public class LegalController : ControllerBase
                 Citation = "čl. 2., čl. 7., čl. 219. ZPP",
                 Reasoning = $"Pozicija: {clientPosition}. Vjerojatnost uspjeha: {result.WinProbability}% ({result.WinProbabilityMin}-{result.WinProbabilityMax}%). Presedana: {result.Precedents.Count}.",
                 Confidence = result.WinProbability >= 60 ? "VISOKO" : result.WinProbability >= 35 ? "SREDNJE" : "NISKO",
-                ModelUsed = "deepseek/deepseek-v3.2",
+                ModelUsed = _clients.HeavyModel,
                 ModelTemperature = 0.10
             }
         };
@@ -155,7 +158,7 @@ public class LegalController : ControllerBase
                 Citation = p.CaseNumber ?? "",
                 Reasoning = p.RelevanceToCase ?? p.Summary ?? "",
                 Confidence = "SREDNJE",
-                ModelUsed = "deepseek/deepseek-v3.2",
+                ModelUsed = _clients.HeavyModel,
                 ModelTemperature = 0.10
             });
         }
