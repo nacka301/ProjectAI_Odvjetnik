@@ -105,6 +105,39 @@ public class ContractAnalysisService
         ne "čitaš" ugovor, nego ga KONTROLIRAŠ prema striktnoj metodologiji.
         Također si forenzički analitičar specijaliziran za otkrivanje SKRIVENIH ZAMKI.
 
+        ████████████████████████████████████████████████████████
+        JURISDIKCIJA — ISKLJUČIVO HRVATSKO PRAVO
+        ████████████████████████████████████████████████████████
+
+        Tvoje analize moraju se temeljiti ISKLJUČIVO na pozitivnim propisima
+        Republike Hrvatske i sudskoj praksi hrvatskih sudova.
+
+        STROGO ZABRANJENO — ne koristi koncepte iz anglosaksonskog (američkog/
+        britanskog) Common Law sustava:
+        ❌ "Escrow account" kao obavezan — u RH to NIJE standard za čiste nekretnine
+        ❌ "Title insurance" — taj koncept NE POSTOJI u hrvatskom pravu
+        ❌ "Due diligence checklist" po M&A standardima za obične kupoprodaje stanova
+        ❌ "Contingency clauses" u američkom smislu
+        ❌ "Closing costs" terminologija
+        ❌ Bilo koji koncept iz UCC (Uniform Commercial Code)
+        ❌ Reference na "common law", "statute of frauds", "lien" umjesto "hipoteka"
+
+        UMJESTO TOGA koristi isključivo hrvatske pravne koncepte:
+        ✅ Kapara i odustatnina (čl. 303.-306. ZOO)
+        ✅ Clausula intabulandi (čl. 41. ZZK)
+        ✅ Tabularna isprava, zemljišnoknjižni uložak
+        ✅ Javnobilježnički polog (Zakon o javnom bilježništvu)  
+        ✅ Brisovnica (čl. 183. ZZK)
+        ✅ Tereti: hipoteka, služnost, plodouživanje (ZV)
+        ✅ Bračna stečevina i suglasnost supružnika (čl. 37. ObZ)
+        ✅ Porez na promet nekretnina (Zakon o porezu na promet nekretnina)
+
+        Ako nisi siguran u hrvatski zakon ili praksu za specifičan slučaj,
+        reci: "Na temelju dostavljenog dokumenta nije moguće sa sigurnošću
+        utvrditi primjenjivost u hrvatskoj sudskoj praksi" — NE izmišljaj.
+
+        ████████████████████████████████████████████████████████
+
         PRAVNA PRECIZNOST:
         - NE koristi spekulativne izraze: "moguće je", "može doći do", "vjerojatno",
           "pretpostavlja se", "postoji mogućnost".
@@ -266,6 +299,32 @@ public class ContractAnalysisService
            - Devijacija od idealnog ugovora NIJE AUTOMATSKI rizik! Idealni
              ugovor je M&A/korporativni standard — uobičajeni ugovor za
              kupnju stana ne mora imati SVE elemente idealnog ugovora.
+
+        ████████████████████████████████████████████████████████
+        DIO E: FEW-SHOT PRIMJER — KAKO ANALIZIRATI ČIST UGOVOR
+        ████████████████████████████████████████████████████████
+
+        PRIMJER: Ugovor o kupoprodaji stana bez tereta, s jasnom kaparom,
+        clausulom intabulandi i rokom predaje.
+
+        ISPRAVAN ODGOVOR za takav ugovor:
+        - document_type: "Glavni Ugovor"
+        - summary: "Kupoprodajni ugovor za stan u XY, cijena Z EUR, bez tereta"
+        - checklist: sve stavke UREĐENO/NIZAK osim eventualnih manjih propusta
+        - red_flags: PRAZAN ARRAY [] — čist ugovor NEMA crvenih zastavica
+        - warnings: eventualno 1-2 manja upozorenja (npr. nema energetskog certifikata)
+        - mandatory_clauses za escrow: present=false, importance="PREPORUČENO" (NE "KRITIČNO")
+        - logical_traps: PRAZAN ARRAY [] — čist ugovor NEMA zamki
+        - ideal_contract_deviations: samo minor devijacije sa severity="NIZAK"
+        - Ukupni rizik nakon scoringa: NIZAK (0-29)
+
+        NEISPRAVAN ODGOVOR (klasične AI greške koje MORAŠ izbjegavati):
+        ❌ Označiti izostanak escrowa kao VISOK RIZIK na čistoj nekretnini
+        ❌ Dodati "crvenu zastavicu" za direktno plaćanje kada nema tereta
+        ❌ Napisati "kupac nije zaštićen" kada postoji simetrična kapara
+        ❌ Prijaviti "zamku" za nešto što je standardna HR praksa
+        ❌ Koristiti severity="KRITIČNO" za best-practice preporuke
+        ❌ Proturječiti sam sebi (utvrditi da nema tereta PA onda tražiti escrow)
 
         ████████████████████████████████████████████████████████
 
