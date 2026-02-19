@@ -1,9 +1,10 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { loadPdfFonts, getPdfFont } from "./pdfFontLoader";
 
 // ═══════════════════════════════════════════
 //  PDF EXPORT — Contract Analysis Report
-//  V58: Professional contract audit export
+//  V59: Professional export with Croatian character support
 // ═══════════════════════════════════════════
 
 interface ContractIssue {
@@ -83,6 +84,11 @@ const fmt = (n: number) => n.toLocaleString("hr-HR");
 
 export async function generateContractPdf(result: ContractAnalysisResult) {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  
+  // Load Croatian-compatible fonts
+  await loadPdfFonts(doc);
+  const fontFamily = getPdfFont();
+  
   const pageW = doc.internal.pageSize.getWidth();
   const margin = 18;
   const contentW = pageW - margin * 2;
@@ -109,10 +115,10 @@ export async function generateContractPdf(result: ContractAnalysisResult) {
   doc.rect(0, 0, pageW, 38, "F");
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(20);
-  doc.setFont("helvetica", "bold");
+  doc.setFont(fontFamily, "bold");
   doc.text("Izvještaj o analizi ugovora", margin, 18);
   doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
+  doc.setFont(fontFamily, "normal");
   doc.text(`Datum: ${new Date().toLocaleDateString("hr-HR")}`, margin, 28);
   doc.text("PravoTek — AI pravni revizor", margin, 34);
 
@@ -124,7 +130,7 @@ export async function generateContractPdf(result: ContractAnalysisResult) {
   doc.roundedRect(margin, y, contentW, 24, 2, 2, "FD");
   doc.setTextColor(50, 50, 50);
   doc.setFontSize(9);
-  doc.setFont("helvetica", "bold");
+  doc.setFont(fontFamily, "bold");
 
   const col1x = margin + 4;
   const col2x = margin + contentW / 2;
@@ -132,13 +138,13 @@ export async function generateContractPdf(result: ContractAnalysisResult) {
   doc.text("Vrsta dokumenta:", col1x, y + 8);
   doc.text("Ukupni rizik:", col2x, y + 8);
 
-  doc.setFont("helvetica", "normal");
+  doc.setFont(fontFamily, "normal");
   doc.setFontSize(10);
   doc.text(result.document_type, col1x, y + 15);
 
   const [rr, rg, rb] = riskColor(result.overall_risk);
   doc.setTextColor(rr, rg, rb);
-  doc.setFont("helvetica", "bold");
+  doc.setFont(fontFamily, "bold");
   doc.text(`${result.overall_risk} (${result.risk_score}/100)`, col2x, y + 15);
 
   y += 30;
@@ -147,7 +153,7 @@ export async function generateContractPdf(result: ContractAnalysisResult) {
   if (result.summary) {
     doc.setTextColor(50, 50, 50);
     doc.setFontSize(9);
-    doc.setFont("helvetica", "normal");
+    doc.setFont(fontFamily, "normal");
     const sumLines = doc.splitTextToSize(result.summary, contentW);
     doc.text(sumLines.slice(0, 3), margin, y);
     y += sumLines.slice(0, 3).length * 4 + 4;
@@ -156,7 +162,7 @@ export async function generateContractPdf(result: ContractAnalysisResult) {
   // ── Stats ──
   addPageIfNeeded(20);
   doc.setFontSize(11);
-  doc.setFont("helvetica", "bold");
+  doc.setFont(fontFamily, "bold");
   doc.setTextColor(50, 50, 50);
   doc.text("Statistika analize", margin, y);
   y += 5;
@@ -172,7 +178,7 @@ export async function generateContractPdf(result: ContractAnalysisResult) {
       ["Prijedlozi izmjena", String(result.suggested_amendments.length)],
     ],
     theme: "plain",
-    styles: { fontSize: 9, cellPadding: 2.5 },
+    styles: { fontSize: 9, cellPadding: 2.5, font: fontFamily },
     columnStyles: {
       0: { fontStyle: "bold", cellWidth: 55, textColor: [80, 80, 80] },
       1: { textColor: [30, 30, 30] },
@@ -185,7 +191,7 @@ export async function generateContractPdf(result: ContractAnalysisResult) {
   if (result.checklist && result.checklist.length > 0) {
     addPageIfNeeded(30);
     doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
+    doc.setFont(fontFamily, "bold");
     doc.setTextColor(50, 50, 50);
     doc.text("Revizijska kontrolna lista", margin, y);
     y += 5;
@@ -201,8 +207,8 @@ export async function generateContractPdf(result: ContractAnalysisResult) {
         item.finding.slice(0, 80) + (item.finding.length > 80 ? "..." : ""),
       ]),
       theme: "striped",
-      headStyles: { fillColor: [5, 150, 105], fontSize: 7.5 },
-      styles: { fontSize: 7, cellPadding: 2 },
+      headStyles: { fillColor: [5, 150, 105], fontSize: 7.5, font: fontFamily },
+      styles: { fontSize: 7, cellPadding: 2, font: fontFamily },
       columnStyles: { 0: { cellWidth: 25 }, 1: { cellWidth: 30 }, 2: { cellWidth: 20 }, 3: { cellWidth: 15 } },
       margin: { left: margin, right: margin },
     });
@@ -213,19 +219,19 @@ export async function generateContractPdf(result: ContractAnalysisResult) {
   if (result.red_flags.length > 0) {
     addPageIfNeeded(30);
     doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
+    doc.setFont(fontFamily, "bold");
     doc.setTextColor(220, 38, 38);
     doc.text(`Crvene zastavice (${result.red_flags.length})`, margin, y);
     y += 5;
 
     for (const flag of result.red_flags) {
       addPageIfNeeded(20);
-      doc.setFont("helvetica", "bold");
+      doc.setFont(fontFamily, "bold");
       doc.setFontSize(9);
       doc.setTextColor(220, 38, 38);
       doc.text(`• ${flag.title}`, margin, y);
       y += 4;
-      doc.setFont("helvetica", "normal");
+      doc.setFont(fontFamily, "normal");
       doc.setTextColor(50, 50, 50);
       const descLines = doc.splitTextToSize(flag.description, contentW - 4);
       for (const line of descLines.slice(0, 4)) {
@@ -247,20 +253,20 @@ export async function generateContractPdf(result: ContractAnalysisResult) {
   if (result.logical_traps && result.logical_traps.length > 0) {
     addPageIfNeeded(30);
     doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
+    doc.setFont(fontFamily, "bold");
     doc.setTextColor(220, 38, 38);
     doc.text(`Logičke zamke — AI dubinska analiza (${result.logical_traps.length})`, margin, y);
     y += 5;
 
     for (const trap of result.logical_traps) {
       addPageIfNeeded(25);
-      doc.setFont("helvetica", "bold");
+      doc.setFont(fontFamily, "bold");
       doc.setFontSize(9);
       const [sr, sg, sb] = riskColor(trap.severity);
       doc.setTextColor(sr, sg, sb);
       doc.text(`[${trap.severity}] ${trap.title}`, margin, y);
       y += 4;
-      doc.setFont("helvetica", "normal");
+      doc.setFont(fontFamily, "normal");
       doc.setTextColor(50, 50, 50);
       const explLines = doc.splitTextToSize(trap.explanation, contentW - 4);
       for (const line of explLines.slice(0, 5)) {
@@ -282,19 +288,19 @@ export async function generateContractPdf(result: ContractAnalysisResult) {
   if (result.warnings.length > 0) {
     addPageIfNeeded(25);
     doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
+    doc.setFont(fontFamily, "bold");
     doc.setTextColor(217, 119, 6);
     doc.text(`Upozorenja (${result.warnings.length})`, margin, y);
     y += 5;
 
     for (const warn of result.warnings) {
       addPageIfNeeded(15);
-      doc.setFont("helvetica", "bold");
+      doc.setFont(fontFamily, "bold");
       doc.setFontSize(9);
       doc.setTextColor(217, 119, 6);
       doc.text(`• ${warn.title}`, margin, y);
       y += 4;
-      doc.setFont("helvetica", "normal");
+      doc.setFont(fontFamily, "normal");
       doc.setTextColor(50, 50, 50);
       const descLines = doc.splitTextToSize(warn.description, contentW - 4);
       for (const line of descLines.slice(0, 3)) {
@@ -310,19 +316,19 @@ export async function generateContractPdf(result: ContractAnalysisResult) {
   if (result.suggested_amendments.length > 0) {
     addPageIfNeeded(30);
     doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
+    doc.setFont(fontFamily, "bold");
     doc.setTextColor(37, 99, 235);
     doc.text(`Prijedlozi izmjena (${result.suggested_amendments.length})`, margin, y);
     y += 5;
 
     for (const sa of result.suggested_amendments) {
       addPageIfNeeded(25);
-      doc.setFont("helvetica", "bold");
+      doc.setFont(fontFamily, "bold");
       doc.setFontSize(9);
       doc.setTextColor(37, 99, 235);
       doc.text(sa.article_reference, margin, y);
       y += 4;
-      doc.setFont("helvetica", "normal");
+      doc.setFont(fontFamily, "normal");
       doc.setTextColor(50, 50, 50);
       doc.setFontSize(8);
       if (sa.current_text) {
@@ -356,14 +362,14 @@ export async function generateContractPdf(result: ContractAnalysisResult) {
   if (result.risk_score_breakdown && result.risk_score_breakdown.length > 0) {
     addPageIfNeeded(25);
     doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
+    doc.setFont(fontFamily, "bold");
     doc.setTextColor(50, 50, 50);
     doc.text(`Struktura ocjene rizika (${result.risk_score}/100)`, margin, y);
     y += 5;
 
     for (const line of result.risk_score_breakdown) {
       addPageIfNeeded(5);
-      doc.setFont("helvetica", "normal");
+      doc.setFont(fontFamily, "normal");
       doc.setFontSize(8);
       if (line.startsWith("-")) {
         doc.setTextColor(22, 163, 74);
@@ -374,7 +380,7 @@ export async function generateContractPdf(result: ContractAnalysisResult) {
       y += 3.5;
     }
     doc.setTextColor(50, 50, 50);
-    doc.setFont("helvetica", "bold");
+    doc.setFont(fontFamily, "bold");
     doc.text(`= ${result.risk_score}/100 → ${result.overall_risk}`, margin + 4, y);
     y += 6;
   }
@@ -383,11 +389,11 @@ export async function generateContractPdf(result: ContractAnalysisResult) {
   if (result.positives.length > 0) {
     addPageIfNeeded(20);
     doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
+    doc.setFont(fontFamily, "bold");
     doc.setTextColor(22, 163, 74);
     doc.text(`Pozitivne strane (${result.positives.length})`, margin, y);
     y += 5;
-    doc.setFont("helvetica", "normal");
+    doc.setFont(fontFamily, "normal");
     doc.setFontSize(9);
     doc.setTextColor(50, 50, 50);
     for (const p of result.positives) {
@@ -403,7 +409,7 @@ export async function generateContractPdf(result: ContractAnalysisResult) {
     addPageIfNeeded(20);
     doc.setFontSize(7);
     doc.setTextColor(150, 150, 150);
-    doc.setFont("helvetica", "italic");
+    doc.setFont(fontFamily, "italic");
     const disclaimerLines = doc.splitTextToSize(result.disclaimer, contentW);
     for (const line of disclaimerLines) {
       addPageIfNeeded(4);
@@ -421,7 +427,7 @@ export async function generateContractPdf(result: ContractAnalysisResult) {
     doc.line(margin, pageH - 14, pageW - margin, pageH - 14);
     doc.setFontSize(7);
     doc.setTextColor(150, 150, 150);
-    doc.setFont("helvetica", "normal");
+    doc.setFont(fontFamily, "normal");
     doc.text("PravoTek — AI analiza ugovora", margin, pageH - 9);
     doc.text(`Stranica ${i} / ${totalPages}`, pageW - margin, pageH - 9, { align: "right" });
     doc.text("Ovaj izvještaj ne zamjenjuje pravni savjet ovlaštenog odvjetnika.", margin, pageH - 5);
@@ -479,6 +485,11 @@ interface LegalStrategyResult {
 
 export async function generateLegalPdf(result: LegalStrategyResult) {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  
+  // Load Croatian-compatible fonts
+  await loadPdfFonts(doc);
+  const fontFamily = getPdfFont();
+  
   const pageW = doc.internal.pageSize.getWidth();
   const margin = 18;
   const contentW = pageW - margin * 2;
@@ -496,10 +507,10 @@ export async function generateLegalPdf(result: LegalStrategyResult) {
   doc.rect(0, 0, pageW, 38, "F");
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(20);
-  doc.setFont("helvetica", "bold");
+  doc.setFont(fontFamily, "bold");
   doc.text("Pravna strategija — AI analiza", margin, 18);
   doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
+  doc.setFont(fontFamily, "normal");
   doc.text(`Datum: ${new Date().toLocaleDateString("hr-HR")}`, margin, 28);
   doc.text("PravoTek — AI pravna inteligencija", margin, 34);
 
@@ -508,10 +519,10 @@ export async function generateLegalPdf(result: LegalStrategyResult) {
   // ── Key Issue ──
   doc.setTextColor(50, 50, 50);
   doc.setFontSize(11);
-  doc.setFont("helvetica", "bold");
+  doc.setFont(fontFamily, "bold");
   doc.text("Ključno pravno pitanje", margin, y);
   y += 5;
-  doc.setFont("helvetica", "normal");
+  doc.setFont(fontFamily, "normal");
   doc.setFontSize(9);
   const issueLines = doc.splitTextToSize(result.key_legal_issue, contentW);
   doc.text(issueLines, margin, y);
@@ -520,7 +531,7 @@ export async function generateLegalPdf(result: LegalStrategyResult) {
   // ── Win Probability ──
   addPageIfNeeded(20);
   doc.setFontSize(11);
-  doc.setFont("helvetica", "bold");
+  doc.setFont(fontFamily, "bold");
   doc.text("Procjena uspjeha", margin, y);
   y += 6;
   doc.setFontSize(14);
@@ -528,7 +539,7 @@ export async function generateLegalPdf(result: LegalStrategyResult) {
   doc.text(`${result.win_probability}% — ${result.win_probability_label}`, margin, y);
   y += 6;
   doc.setTextColor(50, 50, 50);
-  doc.setFont("helvetica", "normal");
+  doc.setFont(fontFamily, "normal");
   doc.setFontSize(9);
   const probLines = doc.splitTextToSize(result.probability_reasoning, contentW);
   for (const line of probLines.slice(0, 6)) {
@@ -542,7 +553,7 @@ export async function generateLegalPdf(result: LegalStrategyResult) {
   if (result.precedents.length > 0) {
     addPageIfNeeded(30);
     doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
+    doc.setFont(fontFamily, "bold");
     doc.setTextColor(50, 50, 50);
     doc.text(`Sudska praksa (${result.precedents.length})`, margin, y);
     y += 5;
@@ -558,8 +569,8 @@ export async function generateLegalPdf(result: LegalStrategyResult) {
         `${p.similarity_score}%`,
       ]),
       theme: "striped",
-      headStyles: { fillColor: [79, 70, 229], fontSize: 8 },
-      styles: { fontSize: 7.5, cellPadding: 2 },
+      headStyles: { fillColor: [79, 70, 229], fontSize: 8, font: fontFamily },
+      styles: { fontSize: 7.5, cellPadding: 2, font: fontFamily },
       margin: { left: margin, right: margin },
     });
     y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6;
@@ -569,19 +580,19 @@ export async function generateLegalPdf(result: LegalStrategyResult) {
   if (result.risks.length > 0) {
     addPageIfNeeded(25);
     doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
+    doc.setFont(fontFamily, "bold");
     doc.setTextColor(220, 38, 38);
     doc.text("Rizici", margin, y);
     y += 5;
 
     for (const risk of result.risks) {
       addPageIfNeeded(15);
-      doc.setFont("helvetica", "bold");
+      doc.setFont(fontFamily, "bold");
       doc.setFontSize(9);
       doc.setTextColor(220, 38, 38);
       doc.text(`[${risk.severity}] ${risk.title}`, margin, y);
       y += 4;
-      doc.setFont("helvetica", "normal");
+      doc.setFont(fontFamily, "normal");
       doc.setTextColor(50, 50, 50);
       const descLines = doc.splitTextToSize(risk.description, contentW - 4);
       for (const line of descLines.slice(0, 3)) {
@@ -597,11 +608,11 @@ export async function generateLegalPdf(result: LegalStrategyResult) {
   if (result.strategy_summary) {
     addPageIfNeeded(25);
     doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
+    doc.setFont(fontFamily, "bold");
     doc.setTextColor(50, 50, 50);
     doc.text("Strateški sažetak", margin, y);
     y += 5;
-    doc.setFont("helvetica", "normal");
+    doc.setFont(fontFamily, "normal");
     doc.setFontSize(9);
     const stratLines = doc.splitTextToSize(result.strategy_summary, contentW);
     for (const line of stratLines) {
@@ -616,7 +627,7 @@ export async function generateLegalPdf(result: LegalStrategyResult) {
   if (result.recommendations.length > 0) {
     addPageIfNeeded(25);
     doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
+    doc.setFont(fontFamily, "bold");
     doc.setTextColor(50, 50, 50);
     doc.text("Preporuke", margin, y);
     y += 5;
@@ -631,8 +642,8 @@ export async function generateLegalPdf(result: LegalStrategyResult) {
         r.timing,
       ]),
       theme: "striped",
-      headStyles: { fillColor: [79, 70, 229], fontSize: 8 },
-      styles: { fontSize: 7.5, cellPadding: 2 },
+      headStyles: { fillColor: [79, 70, 229], fontSize: 8, font: fontFamily },
+      styles: { fontSize: 7.5, cellPadding: 2, font: fontFamily },
       margin: { left: margin, right: margin },
     });
     y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6;
@@ -647,7 +658,7 @@ export async function generateLegalPdf(result: LegalStrategyResult) {
     doc.line(margin, pageH - 14, pageW - margin, pageH - 14);
     doc.setFontSize(7);
     doc.setTextColor(150, 150, 150);
-    doc.setFont("helvetica", "normal");
+    doc.setFont(fontFamily, "normal");
     doc.text("PravoTek — AI pravna inteligencija", margin, pageH - 9);
     doc.text(`Stranica ${i} / ${totalPages}`, pageW - margin, pageH - 9, { align: "right" });
     doc.text("Ovaj izvještaj ne zamjenjuje pravni savjet ovlaštenog odvjetnika.", margin, pageH - 5);
@@ -679,6 +690,11 @@ interface ChronologyResult {
 
 export async function generateChronologyPdf(result: ChronologyResult) {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  
+  // Load Croatian-compatible fonts
+  await loadPdfFonts(doc);
+  const fontFamily = getPdfFont();
+  
   const pageW = doc.internal.pageSize.getWidth();
   const margin = 18;
   const contentW = pageW - margin * 2;
@@ -689,10 +705,10 @@ export async function generateChronologyPdf(result: ChronologyResult) {
   doc.rect(0, 0, pageW, 38, "F");
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(20);
-  doc.setFont("helvetica", "bold");
+  doc.setFont(fontFamily, "bold");
   doc.text("Kronologija spisa", margin, 18);
   doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
+  doc.setFont(fontFamily, "normal");
   doc.text(`Datum: ${new Date().toLocaleDateString("hr-HR")}`, margin, 28);
   doc.text(`${result.total_documents_processed} dokumenata, ${result.total_events_extracted} događaja`, margin, 34);
 
@@ -711,8 +727,8 @@ export async function generateChronologyPdf(result: ChronologyResult) {
       evt.confidence === "high" ? "Potvrđeno" : evt.confidence === "medium" ? "Izvedeno" : "Provjeri",
     ]),
     theme: "striped",
-    headStyles: { fillColor: [37, 99, 235], fontSize: 8 },
-    styles: { fontSize: 7.5, cellPadding: 2 },
+    headStyles: { fillColor: [37, 99, 235], fontSize: 8, font: fontFamily },
+    styles: { fontSize: 7.5, cellPadding: 2, font: fontFamily },
     columnStyles: {
       0: { cellWidth: 8 },
       1: { cellWidth: 22 },
@@ -733,7 +749,7 @@ export async function generateChronologyPdf(result: ChronologyResult) {
     doc.line(margin, pageH - 14, pageW - margin, pageH - 14);
     doc.setFontSize(7);
     doc.setTextColor(150, 150, 150);
-    doc.setFont("helvetica", "normal");
+    doc.setFont(fontFamily, "normal");
     doc.text("PravoTek — Kronologija spisa", margin, pageH - 9);
     doc.text(`Stranica ${i} / ${totalPages}`, pageW - margin, pageH - 9, { align: "right" });
   }
