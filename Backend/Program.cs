@@ -139,7 +139,7 @@ if (openRouterKey.StartsWith("YOUR_") || string.IsNullOrWhiteSpace(openRouterKey
 
 var baseUrl = builder.Configuration["OpenRouter:BaseUrl"] ?? "https://openrouter.ai/api/v1";
 var fastModel = builder.Configuration["OpenRouter:FastModel"] ?? "openai/gpt-4o-mini";
-var heavyModel = builder.Configuration["OpenRouter:HeavyModel"] ?? "anthropic/claude-sonnet-4";
+var heavyModel = builder.Configuration["OpenRouter:HeavyModel"] ?? "anthropic/claude-sonnet-4.5";
 var reasoningModel = builder.Configuration["OpenRouter:ReasoningModel"] ?? "deepseek/deepseek-r1-0528";
 builder.Services.AddSingleton(new ChatClientProvider(openRouterKey, baseUrl, fastModel, heavyModel, reasoningModel));
 builder.Services.AddScoped<PdfService>();

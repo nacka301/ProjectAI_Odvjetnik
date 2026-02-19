@@ -136,7 +136,7 @@ public class LegalController : ControllerBase
                 Citation = "čl. 2., čl. 7., čl. 219. ZPP",
                 Reasoning = $"Pozicija: {clientPosition}. Vjerojatnost uspjeha: {result.WinProbability}% ({result.WinProbabilityMin}-{result.WinProbabilityMax}%). Presedana: {result.Precedents.Count}.",
                 Confidence = result.WinProbability >= 60 ? "VISOKO" : result.WinProbability >= 35 ? "SREDNJE" : "NISKO",
-                ModelUsed = "anthropic/claude-sonnet-4",
+                ModelUsed = "anthropic/claude-sonnet-4.5",
                 ModelTemperature = 0.10
             }
         };
@@ -155,7 +155,7 @@ public class LegalController : ControllerBase
                 Citation = p.CaseNumber ?? "",
                 Reasoning = p.RelevanceToCase ?? p.Summary ?? "",
                 Confidence = "SREDNJE",
-                ModelUsed = "anthropic/claude-sonnet-4",
+                ModelUsed = "anthropic/claude-sonnet-4.5",
                 ModelTemperature = 0.10
             });
         }

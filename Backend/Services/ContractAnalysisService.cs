@@ -8,7 +8,7 @@ namespace Backend.Services;
 /// <summary>
 /// V51: AI Contract Auditor — “The Legal Auditor” with Deep Reasoning via OpenRouter
 /// Three-pass architecture:
-///   Pass 1 (Heavy/claude-sonnet-4): Structured audit checklist — mandatory elements, cross-article analysis, missing clauses
+///   Pass 1 (Heavy/claude-sonnet-4.5): Structured audit checklist — mandatory elements, cross-article analysis, missing clauses
 ///   Pass 2 (Reasoning/deepseek-r1-0528): Deep logical reasoning — trap detection, RAG comparison with ideal contract
 ///   Pass 3 (Engine): Deterministic risk scoring from all findings
 /// </summary>
@@ -270,7 +270,7 @@ public class ContractAnalysisService
 
     public ContractAnalysisService(ChatClientProvider clients, ILogger<ContractAnalysisService> logger)
     {
-        _auditClient = clients.Heavy;        // claude-sonnet-4 — structured audit (Pass 1)
+        _auditClient = clients.Heavy;        // claude-sonnet-4.5 — structured audit (Pass 1)
         _reasoningClient = clients.Reasoning; // deepseek-r1-0528 — deep reasoning (Pass 2)
         _logger = logger;
     }
@@ -327,7 +327,7 @@ public class ContractAnalysisService
 
     /// <summary>
     /// V51: Three-pass contract analysis.
-    /// Pass 1 (claude-sonnet-4): AI audit — structured checklist + cross-article + mandatory clauses
+    /// Pass 1 (claude-sonnet-4.5): AI audit — structured checklist + cross-article + mandatory clauses
     /// Pass 2 (deepseek-r1-0528): Deep reasoning — logical traps + ideal contract comparison
     /// Pass 3 (Engine):             Deterministic risk scoring from all findings
     /// </summary>
