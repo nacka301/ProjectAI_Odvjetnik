@@ -392,14 +392,12 @@ public class ContractAnalysisService
                     """)
             };
 
-            // o3-mini does NOT support temperature or system messages
-            var reasoningOptions = new ChatCompletionOptions
-            {
-                ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
-            };
+            // DeepSeek Reasoner does NOT support temperature, system messages, or json response_format
+            // The prompt itself instructs JSON output — model compliance is reliable
+            var reasoningOptions = new ChatCompletionOptions();
 
             // Run both passes in parallel for maximum speed
-            _logger.LogInformation("V50 Starting parallel passes: Pass 1 (gpt-4o audit) + Pass 2 (o3-mini reasoning)");
+            _logger.LogInformation("V51 Starting parallel passes: Pass 1 (claude-sonnet audit) + Pass 2 (deepseek-reasoner)");
             var auditTask = _auditClient.CompleteChatAsync(auditMessages, auditOptions);
             var reasoningTask = _reasoningClient.CompleteChatAsync(reasoningMessages, reasoningOptions);
 
