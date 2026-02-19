@@ -133,8 +133,8 @@ var openRouterKey = builder.Configuration["OpenRouter:ApiKey"]
 
 var baseUrl = builder.Configuration["OpenRouter:BaseUrl"] ?? "https://openrouter.ai/api/v1";
 var fastModel = builder.Configuration["OpenRouter:FastModel"] ?? "openai/gpt-4o-mini";
-var heavyModel = builder.Configuration["OpenRouter:HeavyModel"] ?? "openai/gpt-4o";
-var reasoningModel = builder.Configuration["OpenRouter:ReasoningModel"] ?? "openai/o3-mini";
+var heavyModel = builder.Configuration["OpenRouter:HeavyModel"] ?? "anthropic/claude-sonnet-4";
+var reasoningModel = builder.Configuration["OpenRouter:ReasoningModel"] ?? "deepseek/deepseek-reasoner";
 builder.Services.AddSingleton(new ChatClientProvider(openRouterKey, baseUrl, fastModel, heavyModel, reasoningModel));
 builder.Services.AddScoped<PdfService>();
 builder.Services.AddScoped<ValuationService>();

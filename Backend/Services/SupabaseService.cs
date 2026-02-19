@@ -364,7 +364,7 @@ public class AuditLogRecord
     public string Citation { get; set; } = "";
     public string Reasoning { get; set; } = "";
     public string Confidence { get; set; } = "SREDNJE";
-    public string ModelUsed { get; set; } = "openai/gpt-4o";
+    public string ModelUsed { get; set; } = "anthropic/claude-sonnet-4";
     public double ModelTemperature { get; set; } = 0.10;
 }
 

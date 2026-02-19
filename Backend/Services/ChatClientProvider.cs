@@ -11,9 +11,9 @@ namespace Backend.Services;
 /// DeepSeek, Meta, Mistral, etc.) using a single API key.
 /// 
 /// Routing philosophy:
-///   Fast      (openai/gpt-4o-mini) = extraction, classification, summaries — cheap &amp; fast
-///   Heavy     (openai/gpt-4o)      = complex reasoning, legal strategy, final reports
-///   Reasoning (openai/o3-mini)     = deep logical reasoning, trap detection, second opinion
+///   Fast      (openai/gpt-4o-mini)          = extraction, classification, summaries — cheap & fast
+///   Heavy     (anthropic/claude-sonnet-4)   = complex reasoning, legal strategy, final reports
+///   Reasoning (deepseek/deepseek-reasoner)  = deep logical reasoning, trap detection, second opinion
 ///
 /// Model format: "provider/model" (e.g., "openai/gpt-4o", "anthropic/claude-3.5-sonnet")
 /// To switch providers, just change the model string in appsettings.json.
@@ -70,8 +70,8 @@ public class ChatClientProvider
         string apiKey,
         string baseUrl = "https://openrouter.ai/api/v1",
         string fastModel = "openai/gpt-4o-mini",
-        string heavyModel = "openai/gpt-4o",
-        string reasoningModel = "openai/o3-mini")
+        string heavyModel = "anthropic/claude-sonnet-4",
+        string reasoningModel = "deepseek/deepseek-reasoner")
     {
         BaseUrl = baseUrl;
         FastModel = fastModel;
