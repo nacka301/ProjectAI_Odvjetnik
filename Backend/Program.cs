@@ -125,11 +125,17 @@ builder.Services.AddRateLimiter(options =>
 });
 
 // V51: OpenRouter gateway — single API key for all AI providers
-var openRouterKey = builder.Configuration["OpenRouter:ApiKey"]
-    ?? Environment.GetEnvironmentVariable("OPENROUTER_API_KEY")
+// Priority: env var > appsettings.json (env vars override placeholder values)
+var openRouterKey = Environment.GetEnvironmentVariable("OPENROUTER_API_KEY")
     ?? Environment.GetEnvironmentVariable("OpenRouter__ApiKey")
+    ?? builder.Configuration["OpenRouter:ApiKey"]
     ?? throw new InvalidOperationException(
         "OpenRouter API key is not configured. Set OPENROUTER_API_KEY environment variable.");
+
+// Guard against placeholder values left in appsettings.json
+if (openRouterKey.StartsWith("YOUR_") || string.IsNullOrWhiteSpace(openRouterKey))
+    throw new InvalidOperationException(
+        "OpenRouter API key is a placeholder. Set OPENROUTER_API_KEY environment variable.");
 
 var baseUrl = builder.Configuration["OpenRouter:BaseUrl"] ?? "https://openrouter.ai/api/v1";
 var fastModel = builder.Configuration["OpenRouter:FastModel"] ?? "openai/gpt-4o-mini";
