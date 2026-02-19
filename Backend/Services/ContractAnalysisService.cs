@@ -421,7 +421,9 @@ public class ContractAnalysisService
 
             // V57: Await individually to report progress per pass
             var auditCompletion = await auditTask;
-            var auditJson = auditCompletion.Value.Content[0].Text;
+            var auditJson = auditCompletion.Value.Content.Count > 0
+                ? auditCompletion.Value.Content[0].Text ?? ""
+                : "";
             _logger.LogDebug("V51 Pass 1 audit: {Len} chars", auditJson.Length);
 
             if (onProgress != null)
@@ -432,7 +434,9 @@ public class ContractAnalysisService
 
             // Pass 2 may already be complete (was running in parallel)
             var reasoningCompletion = await reasoningTask;
-            var reasoningJson = reasoningCompletion.Value.Content[0].Text;
+            var reasoningJson = reasoningCompletion.Value.Content.Count > 0
+                ? reasoningCompletion.Value.Content[0].Text ?? ""
+                : "";
             _logger.LogDebug("V51 Pass 2 reasoning: {Len} chars", reasoningJson.Length);
 
             if (onProgress != null)
