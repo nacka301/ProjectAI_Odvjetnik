@@ -415,7 +415,16 @@ public class ContractAnalysisService
             var reasoningOptions = new ChatCompletionOptions();
 
             // Run both passes in parallel for maximum speed
-            _logger.LogInformation("V55 Starting parallel passes: Pass 1 (deepseek-v3.2 audit) + Pass 2 (deepseek-r1-0528)");
+            // V63: Enhanced diagnostics — estimate input tokens (chars/4 ≈ tokens)
+            int auditPromptChars = AuditorPrompt.Length + text.Length + 200; // system + user msg
+            int reasoningPromptChars = DeepReasoningPrompt.Length + IdealContractTemplate.Length + text.Length + 200;
+            _logger.LogInformation(
+                "V63 Starting parallel passes — estimated input tokens: " +
+                "Pass1(deepseek-v3.2)≈{AuditTok}tok ({AuditChars}chars), " +
+                "Pass2(deepseek-r1-0528)≈{ReasonTok}tok ({ReasonChars}chars)",
+                auditPromptChars / 4, auditPromptChars,
+                reasoningPromptChars / 4, reasoningPromptChars);
+
             var sw = System.Diagnostics.Stopwatch.StartNew();
             var auditTask = _auditClient.CompleteChatAsync(auditMessages, auditOptions);
             var reasoningTask = _reasoningClient.CompleteChatAsync(reasoningMessages, reasoningOptions);
@@ -426,7 +435,16 @@ public class ContractAnalysisService
                 ? auditCompletion.Value.Content[0].Text ?? ""
                 : "";
             var auditTime = sw.Elapsed;
-            _logger.LogInformation("V62 Pass 1 audit completed in {Sec:F1}s — {Len} chars", auditTime.TotalSeconds, auditJson.Length);
+
+            // V63: Log token usage from API response
+            var auditUsage = auditCompletion.Value.Usage;
+            _logger.LogInformation(
+                "V63 Pass 1 (deepseek-v3.2) DONE in {Sec:F1}s — " +
+                "output: {OutChars} chars, tokens: in={InTok} out={OutTok} total={TotalTok}",
+                auditTime.TotalSeconds, auditJson.Length,
+                auditUsage?.InputTokenCount ?? 0,
+                auditUsage?.OutputTokenCount ?? 0,
+                auditUsage?.TotalTokenCount ?? 0);
 
             if (onProgress != null)
             {
@@ -440,8 +458,16 @@ public class ContractAnalysisService
                 ? reasoningCompletion.Value.Content[0].Text ?? ""
                 : "";
             var totalTime = sw.Elapsed;
-            _logger.LogInformation("V62 Pass 2 reasoning: {Len} chars in {Sec:F1}s (total elapsed: {Total:F1}s)",
-                reasoningJson.Length, (totalTime - auditTime).TotalSeconds, totalTime.TotalSeconds);
+
+            // V63: Log token usage from reasoning response
+            var reasoningUsage = reasoningCompletion.Value.Usage;
+            _logger.LogInformation(
+                "V63 Pass 2 (deepseek-r1-0528) DONE in {Sec:F1}s (waited {Wait:F1}s after Pass1) — " +
+                "output: {OutChars} chars, tokens: in={InTok} out={OutTok} total={TotalTok}",
+                totalTime.TotalSeconds, (totalTime - auditTime).TotalSeconds, reasoningJson.Length,
+                reasoningUsage?.InputTokenCount ?? 0,
+                reasoningUsage?.OutputTokenCount ?? 0,
+                reasoningUsage?.TotalTokenCount ?? 0);
 
             if (onProgress != null)
             {
@@ -473,10 +499,15 @@ public class ContractAnalysisService
 
             sw.Stop();
             _logger.LogInformation(
-                "V62 Contract analysis complete in {Sec:F1}s: type={Type}, risk={Risk}({Score}), " +
+                "V63 ═══ ANALYSIS COMPLETE ═══ Total: {Sec:F1}s " +
+                "(Pass1: {P1:F1}s, Pass2: {P2:F1}s, Parse+Score: {P3:F1}s) " +
+                "type={Type}, risk={Risk}({Score}), " +
                 "checklist={CL}, cross={CA}, mandatory={MC}, flags={Flags}, warnings={Warn}, " +
                 "traps={Traps}, deviations={Dev}",
                 sw.Elapsed.TotalSeconds,
+                auditTime.TotalSeconds,
+                totalTime.TotalSeconds,
+                (sw.Elapsed - totalTime).TotalSeconds,
                 result.DocumentType, result.OverallRisk, result.RiskScore,
                 result.Checklist.Count, result.CrossArticleIssues.Count,
                 result.MandatoryClauses.Count, result.RedFlags.Count, result.Warnings.Count,
