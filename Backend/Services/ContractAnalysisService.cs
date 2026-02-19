@@ -420,9 +420,6 @@ public class ContractAnalysisService
             var auditTask = _auditClient.CompleteChatAsync(auditMessages, auditOptions);
             var reasoningTask = _reasoningClient.CompleteChatAsync(reasoningMessages, reasoningOptions);
 
-            // V62: Timeout — if a pass takes >120s, cancel and continue with partial results
-            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(180));
-
             // V57: Await individually to report progress per pass
             var auditCompletion = await auditTask;
             var auditJson = auditCompletion.Value.Content.Count > 0
@@ -434,30 +431,14 @@ public class ContractAnalysisService
             if (onProgress != null)
             {
                 await onProgress("audit", "done", $"Pravni audit završen ({auditTime.TotalSeconds:F0}s)", null);
-                await onProgress("reasoning", "active", "Pass 2: Dubinska analiza (može potrajati do 2 min)", null);
+                await onProgress("reasoning", "active", "Pass 2: Dubinska analiza (može potrajati nekoliko minuta)", null);
             }
 
-            // Pass 2 (reasoning) — may take much longer, use timeout
-            string reasoningJson = "";
-            try
-            {
-                var reasoningCompleted = await Task.WhenAny(reasoningTask, Task.Delay(TimeSpan.FromSeconds(150)));
-                if (reasoningCompleted == reasoningTask)
-                {
-                    var reasoningCompletion = await reasoningTask;
-                    reasoningJson = reasoningCompletion.Value.Content.Count > 0
-                        ? reasoningCompletion.Value.Content[0].Text ?? ""
-                        : "";
-                }
-                else
-                {
-                    _logger.LogWarning("V62 Pass 2 (reasoning) timed out after 150s — continuing with audit-only results");
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "V62 Pass 2 (reasoning) failed — continuing with audit-only results");
-            }
+            // Pass 2 (reasoning) — no timeout, let it finish
+            var reasoningCompletion = await reasoningTask;
+            var reasoningJson = reasoningCompletion.Value.Content.Count > 0
+                ? reasoningCompletion.Value.Content[0].Text ?? ""
+                : "";
             var totalTime = sw.Elapsed;
             _logger.LogInformation("V62 Pass 2 reasoning: {Len} chars in {Sec:F1}s (total elapsed: {Total:F1}s)",
                 reasoningJson.Length, (totalTime - auditTime).TotalSeconds, totalTime.TotalSeconds);
