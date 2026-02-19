@@ -55,7 +55,10 @@ public class ContractAnalysisService
            - Kapara: jasno definirano da je KAPARA, ne odustatnina (čl. 303. ZOO)
            - Dvostruko vraćanje kapare ako prodavatelj odustane (čl. 304. st. 2. ZOO)
            - Zaštićeni mehanizam plaćanja: escrow račun / javnobilježnički polog / 
-             uvjetna isplata (ne direktna isplata prodavatelju prije brisanja tereta)
+             uvjetna isplata — PREPORUČENO za bolju zaštitu kupca
+             NAPOMENA: U HR praksi direktna uplata je standard za čiste nekretnine.
+             Escrow je OBAVEZAN samo ako postoje tereti (hipoteke, služnosti)
+             koje treba brisati kao uvjet prijenosa vlasništva.
 
         4. TERETI I HIPOTEKE
            - Izjava o postojećim teretima (hipoteka, služnost, plodouživanje)
@@ -125,16 +128,19 @@ public class ContractAnalysisService
         KORAK 1: PROVJERA TERETA I OSIGURANJA
         a) Postoji li teret na nekretnini (hipoteka, služnost, plodouživanje)?
         b) Ako postoji teret — postoji li mehanizam brisanja s rokom?
-        c) Postoji li mehanizam osiguranja kupca (escrow, fiducija, uvjetna isplata)?
+        c) Ako postoji teret — postoji li mehanizam osiguranja kupca (escrow, fiducija, uvjetna isplata)?
         d) Jesu li rokovi plaćanja i brisanja tereta međusobno povezani i usklađeni?
-        e) Je li isplata uvjetovana brisanjem tereta?
+        e) Je li isplata uvjetovana brisanjem tereta (samo ako teret postoji)?
+        NAPOMENA: Ako nema tereta, pitanja c), d), e) su IRELEVANTNA — označi ih kao UREĐENO/NIZAK.
 
         KORAK 2: PROVJERA KAPARE I PLAĆANJA
         a) Je li kapara simetrično uređena za obje strane (dvostruko vraćanje)?
         b) Je li jasno je li kapara ili odustatnina (čl. 303. vs čl. 306. ZOO)?
         c) Postoje li posljedice neispunjenja za OBJE strane?
         d) Ide li isplata direktno prodavatelju ili kroz zaštićeni mehanizam?
-        e) Postoji li zaštita kupca prije brisanja tereta?
+        e) Ako postoje tereti — postoji li zaštita kupca prije brisanja tereta?
+        NAPOMENA: Direktno plaćanje prodavatelju je STANDARDNO u HR kada
+        nekretnina nema tereta. Ne označavaj to automatski kao rizik.
 
         KORAK 3: PROVJERA PRIJENOSA VLASNIŠTVA
         a) Je li clausula intabulandi bezuvjetna?
@@ -164,8 +170,8 @@ public class ContractAnalysisService
         Ako NISU usklađeni, označi to kao STRUKTURNI RIZIK.
 
         Provjeri postoje li sljedeće zaštitne klauzule:
-        1. Escrow ili uvjetna isplata — KRITIČNO
-        2. Mehanizam brisanja hipoteke s rokom — KRITIČNO (ako postoji hipoteka)
+        1. Escrow ili uvjetna isplata — KRITIČNO ako postoje tereti, inače PREPORUČENO
+        2. Mehanizam brisanja hipoteke s rokom — KRITIČNO (samo ako postoji hipoteka)
         3. Dvostruka kapara (čl. 304. st. 2. ZOO) — KRITIČNO
         4. Raskidni uvjet — PREPORUČENO
         5. Klauzula o naknadi štete — PREPORUČENO
@@ -199,6 +205,67 @@ public class ContractAnalysisService
         2. Citirati TOČAN dio teksta iz ugovora (quoted_text)
         3. Objasniti KONKRETNU pravnu posljedicu (ne apstraktnu)
         4. Koristiti Syllogismus Iuridicus: MAIOR (norma) → MINOR (činjenica) → CONCLUSIO (posljedica)
+
+        ████████████████████████████████████████████████████████
+        DIO D: HRVATSKA PRAKSA — KALIBRIRAJ RIZIK PREMA KONTEKSTU
+        ████████████████████████████████████████████████████████
+
+        OBAVEZNA PRAVILA za ocjenjivanje rizika u hrvatskoj praksi:
+
+        1. ESCROW RAČUN — NIJE STANDARD U HRVATSKOJ
+           Ako nekretnina NEMA tereta (nema hipoteke, nema služnosti, nema
+           plodouživanja), izostanak escrow računa / javnobilježničkog pologa
+           NIJE visok rizik. U hrvatskom prometu nekretnina standardno je
+           da kupac uplaćuje kaparu i ostatak cijene direktno na račun
+           prodavatelja kada je nekretnina čista. Escrow postaje KRITIČAN
+           samo ako postoje tereti koji se moraju brisati PRIJE ili ISTOVREMENO
+           s isplatom.
+           → Ako nema tereta: escrow označi kao "PREPORUČENO", importance="PREPORUČENO", NE "KRITIČNO"
+           → Ako ima tereta: escrow označi kao "KRITIČNO"
+
+        2. LOGIČKA KONZISTENTNOST — NE PROTURJEČI SAM SEBI
+           Prije svakog nalaza PROVJERI što si već zaključio u prethodnim koracima:
+           - Ako si utvrdio da nekretnina NEMA tereta → NE diži paniku
+             zbog izostanka zaštitnih mehanizama vezanih uz brisanje tereta
+           - Ako si utvrdio da je kapara simetrično uređena → NE označavaj
+             plaćanje kao visokorizično samo zato što nema escrowa
+           - Ako si utvrdio da je clausula intabulandi bezuvjetna → NE
+             označavaj prijenos vlasništva kao rizičan
+
+        3. RAZLIKUJ PREPORUKE OD STVARNIH RIZIKA
+           - VISOK RIZIK = Postoji konkretan pravni mehanizam u ugovoru
+             koji može NEPOSREDNO oštetiti kupca (npr. jednostrana odustatnina,
+             hipoteka bez mehanizma brisanja, uvjetna clausula intabulandi)
+           - SREDNJI RIZIK = Element postoji ali je nepotpuno uređen
+             (npr. rokovi nisu precizirani, nema ugovorne kazne za kašnjenje)
+           - NIZAK RIZIK = Element nedostaje ali ne stvara neposrednu
+             opasnost za kupca (npr. nema energetskog certifikata, nema
+             razgraničenja režijskih troškova)
+           - PREPORUKA (ne rizik!) = Nešto bi bilo "bolje" imati, ali
+             izostanak NE čini ugovor problematičnim (npr. escrow kod čiste
+             nekretnine, ugovorna kazna kad su rokovi jasni)
+
+        4. ČIST UGOVOR — PREPOZNAJ GA
+           Ako ugovor sadržava:
+           ✓ Jasnu identifikaciju stranaka s OIB-om
+           ✓ Preciznu oznaku nekretnine (k.o., k.č.br.)
+           ✓ Izjavu prodavatelja da nekretnina nema tereta
+           ✓ Jasno definiranu kaparu s dvostrukim vraćanjem
+           ✓ Bezuvjetnu clausulu intabulandi
+           ✓ Rok predaje u posjed
+           → takav ugovor je STANDARDAN i UREDAN. Ne diži uzbunu
+             zbog izostanka elemenata koji su relevantni samo za
+             kompleksnije transakcije (escrow, brisovnica, fiducija).
+
+        5. KALIBRACIJA SEVERITY ZA ZAMKE I DEVIJACIJE
+           - "KRITIČNO" koristi SAMO ako zamka može uzrokovati GUBITAK
+             VLASNIŠTVA ili GUBITAK NOVCA bez pravnog lijeka
+           - "VISOK" koristi ako kupac trpi značajnu štetu ali ima pravni lijek
+           - "SREDNJI" koristi za propuste koji otežavaju kupčevu poziciju
+           - "NIZAK" koristi za best-practice preporuke
+           - Devijacija od idealnog ugovora NIJE AUTOMATSKI rizik! Idealni
+             ugovor je M&A/korporativni standard — uobičajeni ugovor za
+             kupnju stana ne mora imati SVE elemente idealnog ugovora.
 
         ████████████████████████████████████████████████████████
 
