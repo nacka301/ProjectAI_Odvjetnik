@@ -606,6 +606,29 @@ public class ContractAnalysisService
     {
         try
         {
+            // Guard against empty responses
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                _logger.LogWarning("V60 ParseReasoningResponse received empty JSON — skipping deep analysis");
+                return;
+            }
+
+            // Strip markdown code blocks if present
+            json = json.Trim();
+            if (json.StartsWith("```json", StringComparison.OrdinalIgnoreCase))
+            {
+                json = json.Substring(7);
+            }
+            else if (json.StartsWith("```"))
+            {
+                json = json.Substring(3);
+            }
+            if (json.EndsWith("```"))
+            {
+                json = json.Substring(0, json.Length - 3);
+            }
+            json = json.Trim();
+
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
 
@@ -666,6 +689,31 @@ public class ContractAnalysisService
     private ContractAnalysisResult ParseAuditResponse(string json)
     {
         var result = new ContractAnalysisResult { Disclaimer = Disclaimer };
+
+        // Guard against empty or whitespace-only responses
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            _logger.LogWarning("V60 ParseAuditResponse received empty JSON — AI model may have failed");
+            result.DocumentType = "Greška";
+            result.Summary = "AI model nije vratio odgovor. Pokušajte ponovno.";
+            return result;
+        }
+
+        // Some models wrap JSON in markdown code blocks — strip them
+        json = json.Trim();
+        if (json.StartsWith("```json", StringComparison.OrdinalIgnoreCase))
+        {
+            json = json.Substring(7);
+        }
+        else if (json.StartsWith("```"))
+        {
+            json = json.Substring(3);
+        }
+        if (json.EndsWith("```"))
+        {
+            json = json.Substring(0, json.Length - 3);
+        }
+        json = json.Trim();
 
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
