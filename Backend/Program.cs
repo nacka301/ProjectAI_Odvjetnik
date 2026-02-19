@@ -62,9 +62,9 @@ builder.Services.AddCors(options =>
     {
         policy.SetIsOriginAllowed(origin =>
             {
-                // Allow null/empty origin (file:// or tools like Postman)
+                // Reject null/empty origins in production (prevents CSRF from curl/scripts)
                 if (string.IsNullOrWhiteSpace(origin))
-                    return true;
+                    return false;
 
                 // Always allow configured origins
                 if (allowedOrigins.Any(ao => ao.Equals(origin, StringComparison.OrdinalIgnoreCase)))
@@ -152,6 +152,14 @@ builder.Services.AddHttpClient<MarketResearchService>(client =>
     client.Timeout = TimeSpan.FromMinutes(5);
 });
 builder.Services.AddHttpClient<SupabaseService>();
+builder.Services.AddHttpClient<PerplexityAuditService>(client =>
+{
+    client.Timeout = TimeSpan.FromMinutes(2);
+});
+builder.Services.AddHttpClient<PerplexityTestValidationService>(client =>
+{
+    client.Timeout = TimeSpan.FromMinutes(3);
+});
 
 var app = builder.Build();
 
@@ -164,6 +172,36 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("Frontend");
+
+// ── API Key Authentication Middleware (optional, activate via API_KEY env var) ──
+var apiKey = Environment.GetEnvironmentVariable("API_KEY");
+if (!string.IsNullOrWhiteSpace(apiKey))
+{
+    app.Use(async (context, next) =>
+    {
+        var path = context.Request.Path.Value ?? "";
+
+        // Skip auth for health check and CORS preflight
+        if (path.StartsWith("/api/health", StringComparison.OrdinalIgnoreCase)
+            || context.Request.Method == "OPTIONS")
+        {
+            await next();
+            return;
+        }
+
+        if (!context.Request.Headers.TryGetValue("X-API-Key", out var providedKey)
+            || providedKey != apiKey)
+        {
+            context.Response.StatusCode = 401;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsync("{\"error\":\"Nevaljan ili nedostaje API ključ.\"}");
+            return;
+        }
+
+        await next();
+    });
+}
+
 app.UseRateLimiter();
 
 // Only redirect to HTTPS in development; Render handles TLS at the proxy level

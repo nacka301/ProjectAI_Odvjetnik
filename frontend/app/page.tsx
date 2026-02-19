@@ -430,6 +430,13 @@ export default function Dashboard() {
               <Clock className="h-3.5 w-3.5" />
               Puna povijest
             </Link>
+            <Link
+              href="/audit"
+              className="text-xs text-slate-400 hover:text-white transition flex items-center gap-1"
+            >
+              <ShieldAlert className="h-3.5 w-3.5" />
+              AI Audit
+            </Link>
           </div>
         </div>
       </header>

@@ -35,7 +35,8 @@ import PrecedentSidebar from "@/components/PrecedentSidebar";
 import { NormBadge, CitedNormsList, TemporalDatePicker, CitationModeToggle } from "@/components/NormBadge";
 import { type CitedNorm, fetchTemporalBatch, type TemporalNormResult } from "@/lib/normApi";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000";
+import { API_BASE } from "@/lib/api";
+const API = API_BASE;
 
 // ── Types matching backend LegalStrategyResult (V34) ──
 

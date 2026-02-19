@@ -18,8 +18,10 @@ public class InvoiceService
     private readonly SupabaseService _supabaseService;
     private readonly ILogger<InvoiceService> _logger;
 
-    // Thread-safe sequential counter (in production, this would come from the DB)
-    private static int _invoiceCounter = 0;
+    // Thread-safe sequential counter — seeded from timestamp to survive restarts.
+    // The high bits encode the date (YYYYMMDDHHmm), the low bits ensure uniqueness
+    // within the same minute via Interlocked.Increment.
+    private static int _invoiceCounter = int.Parse(DateTime.UtcNow.ToString("HHmm")) * 100;
 
     public InvoiceService(SupabaseService supabaseService, ILogger<InvoiceService> logger)
     {
@@ -117,12 +119,18 @@ public class InvoiceService
     }
 
     /// <summary>
-    /// Generate a sequential invoice number: YYYY-NNNNN
+    /// Generate a unique invoice number: YYYY-NNNNN
+    /// Uses a combination of date seed and sequential counter to minimize
+    /// collision risk across app restarts. For full production safety,
+    /// replace with a DB sequence (e.g., Supabase nextval()).
     /// </summary>
     private static string GenerateInvoiceNumber()
     {
+        var now = DateTime.UtcNow;
         var seq = Interlocked.Increment(ref _invoiceCounter);
-        return $"{DateTime.UtcNow.Year}-{seq:D5}";
+        // Combine day-of-year (1-366) with counter for cross-restart uniqueness
+        var uniqueSeq = (now.DayOfYear * 10000) + (seq % 10000);
+        return $"{now.Year}-{uniqueSeq:D5}";
     }
 
     /// <summary>

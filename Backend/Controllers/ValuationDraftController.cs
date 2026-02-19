@@ -2,6 +2,7 @@ using Backend.Helpers;
 using Backend.Models;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Backend.Controllers;
 
@@ -12,6 +13,7 @@ namespace Backend.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/valuation")]
+[EnableRateLimiting("general")]
 public class ValuationDraftController : ControllerBase
 {
     private readonly IValidator<PropertyInputBase> _validator;

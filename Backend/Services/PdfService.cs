@@ -33,6 +33,15 @@ public class PdfService
     /// </summary>
     public string ExtractText(IFormFile file)
     {
+        // Safety: reject oversized PDFs to prevent OOM
+        const long MaxPdfSize = 50 * 1024 * 1024; // 50 MB
+        if (file.Length > MaxPdfSize)
+        {
+            _logger.LogWarning("PDF too large: {Size:N0} bytes (max {Max:N0})", file.Length, MaxPdfSize);
+            throw new InvalidOperationException(
+                $"PDF datoteka je prevelika ({file.Length / (1024 * 1024)} MB). Maksimalna veličina je 50 MB.");
+        }
+
         using var stream = file.OpenReadStream();
         return ExtractTextFromStream(stream, file.FileName, file.Length);
     }

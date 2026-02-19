@@ -37,10 +37,10 @@ import {
   ShieldX,
   BarChart3,
 } from "lucide-react";
-import { uploadPdfToStorage, saveEvaluation } from "@/lib/supabase";
+import { uploadPdfToStorage } from "@/lib/supabase";
 import LocationSelector from "@/components/LocationSelector";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5078";
+import { API_BASE } from "@/lib/api";
 
 // --- Types ---
 
@@ -451,16 +451,9 @@ export default function ZkProcjenaPage() {
 
       setIsStreaming(false);
 
-      // Save to Supabase (fire-and-forget)
+      // PDF upload result (non-critical)
       if (state.result?.valuation) {
-        const pdfUrl = await pdfUrlPromise;
-        saveEvaluation({
-          property_type: state.result.zk_analysis.property_type || "nekretnina",
-          location: state.result.zk_analysis.location || "nepoznato",
-          estimated_value: state.result.valuation.estimated_value_eur,
-          pdf_url: pdfUrl,
-          raw_json_output: state.result as unknown as Record<string, unknown>,
-        }).catch(() => { /* non-critical */ });
+        await pdfUrlPromise;
       }
     } catch (e: unknown) {
       setIsStreaming(false);

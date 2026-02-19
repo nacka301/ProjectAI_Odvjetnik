@@ -2749,6 +2749,8 @@
   "projectFileDependencyGroups": {
     "net8.0": [
       "Backend >= 1.0.0",
+      "FluentValidation >= 11.11.0",
+      "Microsoft.Extensions.Logging.Abstractions >= 8.0.3",
       "Microsoft.NET.Test.Sdk >= 17.14.1",
       "coverlet.collector >= 6.0.4",
       "xunit >= 2.9.3",
@@ -2810,6 +2812,14 @@
       "net8.0": {
         "targetAlias": "net8.0",
         "dependencies": {
+          "FluentValidation": {
+            "target": "Package",
+            "version": "[11.11.0, )"
+          },
+          "Microsoft.Extensions.Logging.Abstractions": {
+            "target": "Package",
+            "version": "[8.0.3, )"
+          },
           "Microsoft.NET.Test.Sdk": {
             "target": "Package",
             "version": "[17.14.1, )"

@@ -21,9 +21,9 @@ import {
   FileCheck,
   ExternalLink,
 } from "lucide-react";
-import { uploadPdfToStorage, saveEvaluation } from "@/lib/supabase";
+import { uploadPdfToStorage } from "@/lib/supabase";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5078";
+import { API_BASE } from "@/lib/api";
 
 // --- Types ---
 
@@ -279,17 +279,9 @@ export default function ValuationPage() {
 
       setIsStreaming(false);
 
-      // Save to Supabase (fire-and-forget)
+      // PDF upload result (non-critical)
       if (streamedResult) {
-        const pdfUrl = await pdfUrlPromise;
-        saveEvaluation({
-          property_type:
-            streamedResult.target_property_summary?.split(",")[0] || "nekretnina",
-          location: streamedResult.target_property_summary || "nepoznato",
-          estimated_value: streamedResult.estimated_value_eur,
-          pdf_url: pdfUrl,
-          raw_json_output: streamedResult as unknown as Record<string, unknown>,
-        }).catch((e) => console.warn("Failed to save evaluation:", e));
+        await pdfUrlPromise;
       }
     } catch {
       setIsStreaming(false);

@@ -466,7 +466,7 @@ public class LegalIntelligenceService
     //  PRIVATE HELPERS
     // ═══════════════════════════════════════════════════════════
 
-    private static string BuildCaseContext(LegalStrategyRequest request)
+    internal static string BuildCaseContext(LegalStrategyRequest request)
     {
         var parts = new List<string>();
 
@@ -806,5 +806,53 @@ public class LegalIntelligenceService
     {
         return el.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.String
             ? v.GetString() ?? fallback : fallback;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  Testable win probability computation (extracted for unit tests)
+    // ═══════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Computes win probability from GPT qualitative scores + deterministic precedent alignment.
+    /// Formula: Final = 60% GPT + 40% PrecedentScore.
+    /// PrecedentScore = (favorable*100 + neutral*50) / total, or 50 if no precedents.
+    /// </summary>
+    internal static void ComputeWinProbability(
+        LegalStrategyResult result,
+        int gptProbability,
+        int gptMin,
+        int gptMax)
+    {
+        int favorable = result.Precedents.Count(p => p.Alignment.Equals("POVOLJNA", StringComparison.OrdinalIgnoreCase));
+        int unfavorable = result.Precedents.Count(p => p.Alignment.Equals("NEPOVOLJNA", StringComparison.OrdinalIgnoreCase));
+        int neutral = result.Precedents.Count(p => !p.Alignment.Equals("POVOLJNA", StringComparison.OrdinalIgnoreCase) &&
+                                                    !p.Alignment.Equals("NEPOVOLJNA", StringComparison.OrdinalIgnoreCase));
+        int total = result.Precedents.Count;
+
+        int precedentScore = total > 0
+            ? (int)Math.Round((favorable * 100.0 + neutral * 50.0) / total)
+            : 50;
+
+        int finalProbability = (int)Math.Round(gptProbability * 0.6 + precedentScore * 0.4);
+        int finalMin = Math.Max(0, (int)Math.Round(gptMin * 0.6 + Math.Max(0, precedentScore - 15) * 0.4));
+        int finalMax = Math.Min(100, (int)Math.Round(gptMax * 0.6 + Math.Min(100, precedentScore + 15) * 0.4));
+
+        result.WinProbability = Math.Clamp(finalProbability, 0, 100);
+        result.WinProbabilityMin = Math.Clamp(Math.Min(finalMin, result.WinProbability), 0, 100);
+        result.WinProbabilityMax = Math.Clamp(Math.Max(finalMax, result.WinProbability), 0, 100);
+
+        result.WinProbabilityLabel = result.WinProbability >= 70 ? "Visoka"
+            : result.WinProbability >= 40 ? "Srednja" : "Niska";
+
+        result.ScoreBreakdown = new ScoreBreakdown
+        {
+            FavorableCount = favorable,
+            NeutralCount = neutral,
+            UnfavorableCount = unfavorable,
+            PrecedentScore = precedentScore,
+            QualitativeScore = gptProbability,
+            Methodology = $"Konačna procjena = 60% AI kvalitativna analiza ({gptProbability}%) + 40% bodovanje presuda ({precedentScore}%). " +
+                          $"Od {total} presuda: {favorable} povoljnih, {neutral} neutralnih, {unfavorable} nepovoljnih."
+        };
     }
 }

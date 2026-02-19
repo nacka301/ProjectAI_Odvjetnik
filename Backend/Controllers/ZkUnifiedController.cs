@@ -112,8 +112,9 @@ public class ZkUnifiedController : ControllerBase
             }
             catch (Exception ex)
             {
-                await SendProgress("zk_parsing", "error", "Parsiranje ZK-a", ex.Message);
-                await SendError("zk_parsing", $"Greška: {ex.Message}");
+                _logger.LogError(ex, "ZK PDF parsing failed");
+                await SendProgress("zk_parsing", "error", "Parsiranje ZK-a", "Greška pri parsiranju");
+                await SendError("zk_parsing", "Greška pri parsiranju ZK izvatka. Provjerite PDF.");
                 return;
             }
 
@@ -126,7 +127,8 @@ public class ZkUnifiedController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "ZK unified pipeline error");
-            await SendError("unknown", $"Neočekivana greška: {ex.Message}");
+            if (!HttpContext.RequestAborted.IsCancellationRequested)
+                await SendError("unknown", "Neočekivana greška pri obradi. Pokušajte ponovno.");
         }
     }
 
@@ -172,8 +174,9 @@ public class ZkUnifiedController : ControllerBase
             }
             catch (Exception ex)
             {
-                await SendProgress("zk_parsing", "error", "Parsiranje ZK-a", ex.Message);
-                await SendError("zk_parsing", $"Greška: {ex.Message}");
+                _logger.LogError(ex, "ZK text parsing failed");
+                await SendProgress("zk_parsing", "error", "Parsiranje ZK-a", "Greška pri parsiranju");
+                await SendError("zk_parsing", "Greška pri parsiranju ZK teksta. Pokušajte ponovno.");
                 return;
             }
 
@@ -186,7 +189,8 @@ public class ZkUnifiedController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "ZK text pipeline error");
-            await SendError("unknown", $"Neočekivana greška: {ex.Message}");
+            if (!HttpContext.RequestAborted.IsCancellationRequested)
+                await SendError("unknown", "Neočekivana greška pri obradi. Pokušajte ponovno.");
         }
     }
 
@@ -205,6 +209,56 @@ public class ZkUnifiedController : ControllerBase
 
         // Send ZK analysis result as intermediate data (includes due diligence findings)
         await SendSSE("zk_analysis", zkResult);
+
+        // ── Save ZK analysis to Supabase (always, regardless of valuation) ──
+        string? zkAnalysisId = null;
+        try
+        {
+            zkAnalysisId = await _supabaseService.SaveZkAnalysisAsync(new ZkAnalysisRecord
+            {
+                PropertyId = zkResult.PropertyId,
+                CadastralMunicipality = zkResult.CadastralMunicipality,
+                ParcelNumber = zkResult.ParcelNumber,
+                PropertyType = zkResult.PropertyType,
+                Location = zkResult.Location,
+                LandAreaM2 = zkResult.LandAreaM2 > 0 ? zkResult.LandAreaM2 : null,
+                BuildingAreaM2 = zkResult.BuildingAreaM2 > 0 ? zkResult.BuildingAreaM2 : null,
+                RiskScore = zkResult.RiskScore,
+                Owners = zkResult.Owners,
+                Mortgages = zkResult.ActiveMortgages,
+                Disputes = zkResult.ActiveDisputes,
+                Encumbrances = zkResult.OtherEncumbrances,
+                LawyerComment = zkResult.LawyerComment,
+                RawJsonOutput = zkResult
+            });
+            _logger.LogInformation("ZK analysis saved to Supabase: {Id}", zkAnalysisId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to save ZK analysis to Supabase");
+        }
+
+        // ── Save audit log for ZK parsing step ──
+        try
+        {
+            await _supabaseService.SaveAuditLogAsync(new AuditLogRecord
+            {
+                Module = "zk_analysis",
+                AnalysisId = zkAnalysisId,
+                Step = 1,
+                Action = $"ZK izvadak parsiran: {zkResult.PropertyId}, risk={zkResult.RiskScore}, vlasnici={zkResult.Owners.Count}, hipoteke={zkResult.ActiveMortgages.Count}",
+                LegalBasis = "Zakon o zemljišnim knjigama (NN 63/19)",
+                Citation = "čl. 2., čl. 8., čl. 30. ZZK",
+                Reasoning = $"AI je parsirao A/B/C listove ZK izvatka. Status: {zkResult.OverallStatus}. {zkResult.LawyerComment}",
+                Confidence = zkResult.RiskScore == "HIGH" ? "VISOKO" : "SREDNJE",
+                ModelUsed = "gpt-4o",
+                ModelTemperature = 0.10
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to save ZK audit log");
+        }
 
         // ── Check if valuation should proceed ──
         if (skipValuation)
@@ -247,8 +301,9 @@ public class ZkUnifiedController : ControllerBase
         }
         catch (Exception ex)
         {
-            await SendProgress("reading", "error", "Priprema podataka", ex.Message);
-            await SendError("reading", $"Greška: {ex.Message}");
+            _logger.LogError(ex, "ZK property data preparation failed");
+            await SendProgress("reading", "error", "Priprema podataka", "Greška pri pripremi podataka");
+            await SendError("reading", "Greška pri pripremi podataka za procjenu.");
             return;
         }
 
@@ -316,8 +371,9 @@ public class ZkUnifiedController : ControllerBase
         }
         catch (Exception ex)
         {
-            await SendProgress("searching", "error", "Pretraga tržišta", ex.Message);
-            await SendError("searching", $"Greška pretrage: {ex.Message}");
+            _logger.LogError(ex, "ZK market search failed");
+            await SendProgress("searching", "error", "Pretraga tržišta", "Greška pri pretrazi");
+            await SendError("searching", "Greška pri pretrazi tržišta. Pokušajte ponovno.");
             return null;
         }
 
@@ -367,8 +423,9 @@ public class ZkUnifiedController : ControllerBase
         }
         catch (Exception ex)
         {
-            await SendProgress("engine", "error", "Engine izračun", ex.Message);
-            await SendError("engine", $"Greška engine-a: {ex.Message}");
+            _logger.LogError(ex, "ZK valuation engine failed");
+            await SendProgress("engine", "error", "Engine izračun", "Greška pri izračunu");
+            await SendError("engine", "Greška pri izračunu vrijednosti. Pokušajte ponovno.");
             return null;
         }
 
@@ -395,8 +452,9 @@ public class ZkUnifiedController : ControllerBase
         }
         catch (Exception ex)
         {
-            await SendProgress("ai_opinion", "error", "AI mišljenje", ex.Message);
-            await SendError("ai_opinion", $"Greška AI procjene: {ex.Message}");
+            _logger.LogError(ex, "ZK AI opinion generation failed");
+            await SendProgress("ai_opinion", "error", "AI mišljenje", "Greška pri generiranju");
+            await SendError("ai_opinion", "Greška pri generiranju AI mišljenja. Pokušajte ponovno.");
             return null;
         }
 
@@ -419,8 +477,25 @@ public class ZkUnifiedController : ControllerBase
         }
         else if (engineResult.EstimatedValueEur <= 0 && aiResult.EstimatedValueEur > 0)
         {
-            // Engine had 0 usable comparables — fall back to AI estimate
-            finalValue = (int)Math.Round(aiResult.EstimatedValueEur);
+            // V39: Engine had 0 usable comparables — DO NOT blindly trust AI estimate.
+            // The AI gets ALL raw listings (including cross-city junk) and can hallucinate.
+            // Only accept AI value if engine had SOME comps that just scored low.
+            if (engineResult.UsablePricePoints > 0)
+            {
+                finalValue = (int)Math.Round(aiResult.EstimatedValueEur);
+                _logger.LogWarning("V39-ZK: Engine value=0 but {Comps} usable points — using AI fallback {Value}€",
+                    engineResult.UsablePricePoints, finalValue);
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "V39-ZK: Engine=0€ with 0 usable comps — AI suggested {AiValue}€ but REJECTING (no valid comparables)",
+                    aiResult.EstimatedValueEur);
+                finalValue = 0; // Signal to frontend: no valid valuation possible
+                finalReasoning = "UPOZORENJE: Nije pronađen nijedan valjan usporedivi oglas za ovu nekretninu u zadanoj lokaciji. " +
+                    "Sustav ne može izraditi pouzdanu procjenu tržišne vrijednosti bez relevantnih usporedivih prodaja. " +
+                    "Preporučamo angažiranje ovlaštenog sudskog vještaka za procjenu vrijednosti.";
+            }
         }
 
         // ── Build response ──
@@ -479,6 +554,25 @@ public class ZkUnifiedController : ControllerBase
             });
             response.EvaluationId = evaluationId;
             await SendProgress("saving", "done", "Rezultati spremljeni", $"ID: {evaluationId}");
+
+            // Audit log
+            try
+            {
+                await _supabaseService.SaveAuditLogAsync(new AuditLogRecord
+                {
+                    Module = "valuation_zk",
+                    AnalysisId = evaluationId,
+                    Step = 1,
+                    Action = $"ZK procjena: {marketData.DetectedPropertyType}, {property.Location}, {property.SizeM2} m², vrijednost={finalValue}€",
+                    LegalBasis = "Zakon o procjeni vrijednosti nekretnina (NN 78/15)",
+                    Citation = "čl. 4., čl. 19., čl. 24. ZPVN",
+                    Reasoning = $"Engine: {engineResult.CalculatedPricePerM2:N0}€/m², {engineResult.UsablePricePoints} usporedivih. AI: {aiResult.EstimatedValueEur:N0}€. Pouzdanost: {engineResult.ConfidenceLevel}.",
+                    Confidence = engineResult.ConfidenceLevel == "HIGH" ? "VISOKO" : engineResult.ConfidenceLevel == "MEDIUM" ? "SREDNJE" : "NISKO",
+                    ModelUsed = "gpt-4o",
+                    ModelTemperature = 0.10
+                });
+            }
+            catch { /* non-critical */ }
         }
         catch
         {

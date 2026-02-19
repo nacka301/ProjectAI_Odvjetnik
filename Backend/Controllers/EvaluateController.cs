@@ -134,8 +134,9 @@ public class EvaluateController : ControllerBase
             }
             catch (Exception ex)
             {
-                await SendProgress("reading", "error", "Čitanje PDF-a", ex.Message);
-                await SendError("reading", $"Greška: {ex.Message}");
+                _logger.LogError(ex, "PDF reading failed");
+                await SendProgress("reading", "error", "Čitanje PDF-a", "Greška pri čitanju PDF-a");
+                await SendError("reading", "Greška pri čitanju PDF-a. Provjerite format datoteke.");
                 return;
             }
 
@@ -150,7 +151,9 @@ public class EvaluateController : ControllerBase
         }
         catch (Exception ex)
         {
-            await SendError("unknown", $"Neočekivana greška: {ex.Message}");
+            _logger.LogError(ex, "Unexpected error during PDF evaluation");
+            if (!HttpContext.RequestAborted.IsCancellationRequested)
+                await SendError("unknown", "Neočekivana greška pri obradi. Pokušajte ponovno.");
         }
     }
 
@@ -158,6 +161,7 @@ public class EvaluateController : ControllerBase
     /// SSE streaming text evaluation — sends real-time stage progress.
     /// </summary>
     [HttpPost("text/stream")]
+    [RequestSizeLimit(2 * 1024 * 1024)]
     [EnableRateLimiting("valuation")]
     public async Task EvaluateTextStream([FromBody] TextEvaluationRequest request)
     {
@@ -269,8 +273,9 @@ public class EvaluateController : ControllerBase
             }
             catch (Exception ex)
             {
-                await SendProgress("reading", "error", "Analiza teksta", ex.Message);
-                await SendError("reading", $"Greška: {ex.Message}");
+                _logger.LogError(ex, "Text analysis failed");
+                await SendProgress("reading", "error", "Analiza teksta", "Greška pri analizi teksta");
+                await SendError("reading", "Greška pri analizi teksta. Pokušajte ponovno.");
                 return;
             }
 
@@ -296,7 +301,9 @@ public class EvaluateController : ControllerBase
         }
         catch (Exception ex)
         {
-            await SendError("unknown", $"Neočekivana greška: {ex.Message}");
+            _logger.LogError(ex, "Unexpected error during text evaluation");
+            if (!HttpContext.RequestAborted.IsCancellationRequested)
+                await SendError("unknown", "Neočekivana greška pri obradi. Pokušajte ponovno.");
         }
     }
 
@@ -320,8 +327,9 @@ public class EvaluateController : ControllerBase
         }
         catch (Exception ex)
         {
-            await SendProgress("searching", "error", "Pretraga tržišta", ex.Message);
-            await SendError("searching", $"Greška pretrage: {ex.Message}");
+            _logger.LogError(ex, "Market search failed");
+            await SendProgress("searching", "error", "Pretraga tržišta", "Greška pri pretrazi");
+            await SendError("searching", "Greška pri pretrazi tržišta. Pokušajte ponovno.");
             return;
         }
 
@@ -424,8 +432,9 @@ public class EvaluateController : ControllerBase
         }
         catch (Exception ex)
         {
-            await SendProgress("engine", "error", "Engine izračun", ex.Message);
-            await SendError("engine", $"Greška engine-a: {ex.Message}");
+            _logger.LogError(ex, "Valuation engine failed");
+            await SendProgress("engine", "error", "Engine izračun", "Greška pri izračunu");
+            await SendError("engine", "Greška pri izračunu vrijednosti. Pokušajte ponovno.");
             return;
         }
 
@@ -541,8 +550,9 @@ public class EvaluateController : ControllerBase
         }
         catch (Exception ex)
         {
-            await SendProgress("ai_opinion", "error", "AI mišljenje", ex.Message);
-            await SendError("ai_opinion", $"Greška AI procjene: {ex.Message}");
+            _logger.LogError(ex, "AI opinion generation failed");
+            await SendProgress("ai_opinion", "error", "AI mišljenje", "Greška pri generiranju mišljenja");
+            await SendError("ai_opinion", "Greška pri generiranju AI mišljenja. Pokušajte ponovno.");
             return;
         }
 
@@ -671,6 +681,25 @@ public class EvaluateController : ControllerBase
             });
             response.EvaluationId = evaluationId;
             await SendProgress("saving", "done", "Rezultati spremljeni", $"ID: {evaluationId}");
+
+            // Audit log
+            try
+            {
+                await _supabaseService.SaveAuditLogAsync(new AuditLogRecord
+                {
+                    Module = "valuation",
+                    AnalysisId = evaluationId,
+                    Step = 1,
+                    Action = $"Procjena nekretnine: {marketData.DetectedPropertyType}, {property.Location}, {property.SizeM2} m², vrijednost={finalValue}€",
+                    LegalBasis = "Zakon o procjeni vrijednosti nekretnina (NN 78/15)",
+                    Citation = "čl. 4., čl. 19., čl. 24. ZPVN",
+                    Reasoning = $"Engine: {engineResult.CalculatedPricePerM2:N0}€/m², {engineResult.UsablePricePoints} usporedivih. AI: {aiResult.EstimatedValueEur:N0}€. Pouzdanost: {engineResult.ConfidenceLevel}.",
+                    Confidence = engineResult.ConfidenceLevel == "HIGH" ? "VISOKO" : engineResult.ConfidenceLevel == "MEDIUM" ? "SREDNJE" : "NISKO",
+                    ModelUsed = "gpt-4o",
+                    ModelTemperature = 0.10
+                });
+            }
+            catch { /* non-critical */ }
         }
         catch
         {

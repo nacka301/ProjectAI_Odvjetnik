@@ -29,6 +29,21 @@ public static class SseHelpers
     public static Task SendError(HttpResponse response, string stage, string message)
         => SendSSE(response, "error", new { stage, message });
 
+    /// <summary>
+    /// Send an error SSE event with a sanitized exception — never leak internal details to client.
+    /// Logs the full exception server-side.
+    /// </summary>
+    public static Task SendSafeError(HttpResponse response, string stage, string userMessage, Exception ex, ILogger logger)
+    {
+        logger.LogError(ex, "SSE error in stage {Stage}", stage);
+
+        // Only send the user-friendly message, never ex.Message
+        if (response.HttpContext.RequestAborted.IsCancellationRequested)
+            return Task.CompletedTask;
+
+        return SendSSE(response, "error", new { stage, message = userMessage });
+    }
+
     public static void SetupSSEHeaders(HttpResponse response)
     {
         response.ContentType = "text/event-stream";

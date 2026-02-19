@@ -19,10 +19,16 @@ WORKDIR /app
 
 # Minimal system deps (fonts + TLS)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    fonts-liberation ca-certificates \
+    fonts-liberation ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Create non-root user for security
+RUN adduser --disabled-password --gecos "" --home /app appuser
+
 COPY --from=build /app/publish .
+
+# Switch to non-root user
+USER appuser
 
 # Render provides PORT env var at runtime (typically 10000).
 # Do NOT set ASPNETCORE_URLS here — Program.cs reads PORT and binds dynamically.
@@ -30,5 +36,8 @@ COPY --from=build /app/publish .
 ENV ASPNETCORE_ENVIRONMENT=Production
 
 EXPOSE 10000
+
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD curl -f http://localhost:10000/api/health || exit 1
 
 ENTRYPOINT ["dotnet", "Backend.dll"]

@@ -419,6 +419,7 @@ public class ContractAnalysisService
 
             // ── PASS 3: DETERMINISTIC RISK SCORING ──
             ComputeRiskScore(result);
+            result.Disclaimer = Disclaimer;
 
             _logger.LogInformation(
                 "V50 Contract analysis complete: type={Type}, risk={Risk}({Score}), " +
@@ -452,7 +453,7 @@ public class ContractAnalysisService
     /// V50: Compute risk score mathematically from ALL findings (audit + reasoning).
     /// No AI guessing — pure formula.
     /// </summary>
-    private void ComputeRiskScore(ContractAnalysisResult result)
+    internal static void ComputeRiskScore(ContractAnalysisResult result)
     {
         int score = 0;
         var breakdown = new List<string>();
@@ -549,10 +550,6 @@ public class ContractAnalysisService
             _ => "Nizak"
         };
         result.RiskScoreBreakdown = breakdown;
-        result.Disclaimer = Disclaimer;
-
-        _logger.LogInformation("V50 Risk score: {Score}/100 ({Level}) from {Items} breakdown items",
-            score, result.OverallRisk, breakdown.Count);
     }
 
     // ══════════════════════════════════════════════════════════

@@ -207,11 +207,14 @@ public class ValuationEngine
     //  corrupt data). They are NOT valuation benchmarks. Real comparable
     //  prices from actual ads are ALWAYS the primary data source.
     //  Floor values are set very low intentionally so they never kill real listings.
+    //  V29-FIX: MinPricePerM2_Building lowered from 800 → 200 so rural continental
+    //  houses (Požega, Slavonija, Zagorje — typically 300-700 €/m²) are NOT filtered
+    //  out. 200 €/m² still safely removes monthly-rent ads (10-50 €/m²).
     // ══════════════════════════════════════════════════════════
     private const double MinSalePriceEur_Building    = 35_000;
     private const double MinSalePriceEur_BuildLand   =  5_000;
     private const double MinSalePriceEur_AgriLand    =    500;
-    private const double MinPricePerM2_Building      =    800;
+    private const double MinPricePerM2_Building      =    200;
     private const double MinPricePerM2_BuildLand     =     15;
     private const double MinPricePerM2_AgriLand      =    0.5;
 
@@ -1428,10 +1431,10 @@ public class ValuationEngine
             {
                 int oldValue = finalValue;
                 finalValue = (int)Math.Round(floorPrice);
-                pipeline.Add($"SAFETY FLOOR: {oldValue:N0} EUR < 65% of avg comp ({averageCompTotal:N0} EUR) " +
+                pipeline.Add($"SAFETY FLOOR: {oldValue:N0} EUR < 50% of avg comp ({averageCompTotal:N0} EUR) " +
                     $"→ clamped to {finalValue:N0} EUR");
                 _logger.LogWarning(
-                    "Safety floor activated: {Old:N0} -> {New:N0} EUR (65% of avg comp {Avg:N0})",
+                    "Safety floor activated: {Old:N0} -> {New:N0} EUR (50% of avg comp {Avg:N0})",
                     oldValue, finalValue, averageCompTotal);
             }
         }
@@ -2778,11 +2781,12 @@ public class ValuationEngine
         }
         else if (hasDot)
         {
-            // Check: "1.088" or "1088.5"?
+            // Check: "1.088" or "1.234.567" or "1088.5"?
             var dotParts = raw.Split('.');
-            if (dotParts.Length == 2 && dotParts[1].Length == 3)
+            // All segments after the first are exactly 3 digits → thousands separators
+            if (dotParts.Length >= 2 && dotParts.Skip(1).All(p => p.Length == 3))
             {
-                // "1.088" → thousands separator → 1088
+                // "1.088" → 1088, "1.234.567" → 1234567
                 raw = raw.Replace(".", "");
             }
             // else "1088.5" stays as-is (decimal dot)

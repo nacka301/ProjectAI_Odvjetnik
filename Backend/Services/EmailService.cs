@@ -1,5 +1,6 @@
 using Backend.Models;
 using System.Globalization;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -100,6 +101,13 @@ public class EmailService
         var ci = new CultureInfo("hr-HR");
         var compsHtml = "";
 
+        // HTML-encode user-controlled strings to prevent XSS
+        var safePropertyDescription = WebUtility.HtmlEncode(propertyDescription);
+        var safeReasoning = WebUtility.HtmlEncode(r.ValuationReasoning ?? "");
+        var safeRegion = WebUtility.HtmlEncode(r.RegionName ?? "");
+        var safeConfidence = WebUtility.HtmlEncode(r.ConfidenceLevel ?? "");
+        var safeMathConfidence = WebUtility.HtmlEncode(r.MathConfidenceLevel ?? "");
+
         if (r.UsedComparables?.Count > 0)
         {
             compsHtml = "<h3 style=\"color:#1e40af;\">📊 Korištene usporedne nekretnine</h3><table style=\"border-collapse:collapse;width:100%;font-size:14px;\">"
@@ -110,9 +118,13 @@ public class EmailService
 
             foreach (var c in r.UsedComparables)
             {
-                var title = TruncateText(c.Title, 50);
-                var link = !string.IsNullOrEmpty(c.Url)
-                    ? $"<a href=\"{c.Url}\" style=\"color:#2563eb;text-decoration:none;\">{title}</a>"
+                var title = WebUtility.HtmlEncode(TruncateText(c.Title, 50));
+                // Only allow http/https URLs in href to prevent javascript: injection
+                var isValidUrl = !string.IsNullOrEmpty(c.Url)
+                    && (c.Url.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+                        || c.Url.StartsWith("https://", StringComparison.OrdinalIgnoreCase));
+                var link = isValidUrl
+                    ? $"<a href=\"{WebUtility.HtmlEncode(c.Url)}\" style=\"color:#2563eb;text-decoration:none;\">{title}</a>"
                     : title;
 
                 compsHtml += $"<tr style=\"border-bottom:1px solid #e5e7eb;\">"
@@ -132,7 +144,7 @@ public class EmailService
             foreach (var adj in r.Adjustments)
             {
                 var sign = adj.Percent >= 0 ? "+" : "";
-                adjustmentsHtml += $"<li><strong>{adj.Factor}</strong>: {sign}{adj.Percent:N1}% — {adj.Description}</li>";
+                adjustmentsHtml += $"<li><strong>{WebUtility.HtmlEncode(adj.Factor)}</strong>: {sign}{adj.Percent:N1}% — {WebUtility.HtmlEncode(adj.Description)}</li>";
             }
             adjustmentsHtml += "</ul>";
         }
@@ -145,7 +157,7 @@ public class EmailService
 
 <div style='background: linear-gradient(135deg, #1e40af, #3b82f6); border-radius: 16px; padding: 32px; color: white; text-align: center; margin-bottom: 24px;'>
   <h1 style='margin: 0 0 8px; font-size: 28px;'>🏠 AI Procjena Nekretnine</h1>
-  <p style='margin: 0; opacity: 0.9; font-size: 14px;'>{propertyDescription}</p>
+  <p style='margin: 0; opacity: 0.9; font-size: 14px;'>{safePropertyDescription}</p>
   <div style='margin-top: 20px; font-size: 42px; font-weight: bold;'>{FormatEur(r.EstimatedValueEur)} €</div>
   <p style='margin: 4px 0 0; opacity: 0.85; font-size: 14px;'>{r.CalculatedPricePerM2:N0} €/m²</p>
 </div>
@@ -154,15 +166,15 @@ public class EmailService
   <table style='width:100%;font-size:14px;'>
     <tr>
       <td style='padding:4px 0;'><strong>Pouzdanost (Math):</strong></td>
-      <td style='text-align:right;'>{r.MathConfidenceScore}/100 — {r.MathConfidenceLevel}</td>
+      <td style='text-align:right;'>{r.MathConfidenceScore}/100 — {safeMathConfidence}</td>
     </tr>
     <tr>
       <td style='padding:4px 0;'><strong>Pouzdanost (Tržište):</strong></td>
-      <td style='text-align:right;'>{r.ConfidenceScore}/100 — {r.ConfidenceLevel}</td>
+      <td style='text-align:right;'>{r.ConfidenceScore}/100 — {safeConfidence}</td>
     </tr>
     <tr>
       <td style='padding:4px 0;'><strong>Regija:</strong></td>
-      <td style='text-align:right;'>{r.RegionName}</td>
+      <td style='text-align:right;'>{safeRegion}</td>
     </tr>
     <tr>
       <td style='padding:4px 0;'><strong>Pronađeno oglasa:</strong></td>
@@ -189,12 +201,12 @@ public class EmailService
 
 <div style='background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 16px; margin-top: 20px;'>
   <h3 style='color:#92400e; margin-top:0;'>📝 AI Obrazloženje</h3>
-  <p style='font-size:14px; line-height:1.6; white-space:pre-line;'>{r.ValuationReasoning}</p>
+  <p style='font-size:14px; line-height:1.6; white-space:pre-line;'>{safeReasoning}</p>
 </div>
 
 <hr style='border:none; border-top:1px solid #e5e7eb; margin:24px 0;'>
 <p style='font-size:12px; color:#9ca3af; text-align:center;'>
-  Generirano automatski putem AI Procjenitelja · {DateTime.Now:dd.MM.yyyy. HH:mm}
+  Generirano automatski putem AI Procjenitelja · {DateTime.UtcNow:dd.MM.yyyy. HH:mm} UTC
   <br>Ovo nije službena procjena i ne zamjenjuje rad ovlaštenog procjenitelja.
 </p>
 

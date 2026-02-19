@@ -64,7 +64,8 @@ interface InvoiceResult {
   disclaimer: string;
 }
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000";
+import { API_BASE } from "@/lib/api";
+const API = API_BASE;
 
 const MODULE_LABELS: Record<string, string> = {
   valuation: "Procjena nekretnine",

@@ -296,3 +296,42 @@ CREATE POLICY "service_role_full_access" ON invoices
 DROP POLICY IF EXISTS "anon_select" ON invoices;
 CREATE POLICY "anon_select" ON invoices
     FOR SELECT USING (true);
+
+-- ========================================
+-- Perplexity AI Audit Layer — Valuation Verification
+-- Stores audit results from the second AI layer that
+-- cross-checks property valuations against real market data.
+-- ========================================
+
+CREATE TABLE IF NOT EXISTS valuation_audits (
+    id                  UUID            DEFAULT uuid_generate_v4() PRIMARY KEY,
+    created_at          TIMESTAMPTZ     DEFAULT now() NOT NULL,
+    evaluation_id       UUID            NOT NULL REFERENCES evaluations(id),
+    verdict             TEXT            NOT NULL DEFAULT 'SUSPICIOUS',   -- CONFIRMED, SUSPICIOUS, REJECTED
+    overall_confidence  INTEGER         NOT NULL DEFAULT 0,             -- 0-100
+    summary             TEXT            NOT NULL DEFAULT '',
+    recommendation      TEXT            NOT NULL DEFAULT '',
+    price_score         INTEGER         NOT NULL DEFAULT 0,             -- 0-100
+    location_score      INTEGER         NOT NULL DEFAULT 0,             -- 0-100
+    methodology_score   INTEGER         NOT NULL DEFAULT 0,             -- 0-100
+    data_quality_score  INTEGER         NOT NULL DEFAULT 0,             -- 0-100
+    findings_count      INTEGER         NOT NULL DEFAULT 0,
+    critical_count      INTEGER         NOT NULL DEFAULT 0,
+    model_used          TEXT            NOT NULL DEFAULT 'sonar',
+    prompt_tokens       INTEGER         NOT NULL DEFAULT 0,
+    completion_tokens   INTEGER         NOT NULL DEFAULT 0,
+    raw_json_output     JSONB           NOT NULL DEFAULT '{}'::jsonb    -- full audit result
+);
+
+-- One audit per evaluation (latest wins)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_valuation_audits_eval ON valuation_audits (evaluation_id);
+CREATE INDEX IF NOT EXISTS idx_valuation_audits_created_at ON valuation_audits (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_valuation_audits_verdict ON valuation_audits (verdict);
+
+ALTER TABLE valuation_audits ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "service_role_full_access" ON valuation_audits;
+CREATE POLICY "service_role_full_access" ON valuation_audits
+    FOR ALL USING (auth.role() = 'service_role');
+DROP POLICY IF EXISTS "anon_select" ON valuation_audits;
+CREATE POLICY "anon_select" ON valuation_audits
+    FOR SELECT USING (true);

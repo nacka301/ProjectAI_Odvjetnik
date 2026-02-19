@@ -9,6 +9,8 @@
       "Backend.Tests/1.0.0": {
         "dependencies": {
           "Backend": "1.0.0",
+          "FluentValidation": "11.11.0",
+          "Microsoft.Extensions.Logging.Abstractions": "8.0.3",
           "Microsoft.NET.Test.Sdk": "17.14.1",
           "xunit": "2.9.3"
         },

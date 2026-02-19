@@ -88,15 +88,26 @@ public class LegalController : ControllerBase
 
         var result = await _legalService.AnalyzeLegalStrategyAsync(request);
 
-        // Save to Supabase (fire-and-forget)
-        _ = SaveStrategyAsync(result, request.ClientPosition);
+        // Save to Supabase (background — safe fire-and-forget)
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await SaveStrategyAsync(result, request.ClientPosition);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Background Supabase save failed for legal strategy");
+            }
+        });
 
         return Ok(result);
     }
 
-    /// <summary>Helper: persist strategy result to Supabase.</summary>
-    private Task SaveStrategyAsync(LegalStrategyResult result, string clientPosition)
-        => _supabaseService.SaveLegalStrategyAsync(new LegalStrategyRecord
+    /// <summary>Helper: persist strategy result to Supabase + audit log.</summary>
+    private async Task SaveStrategyAsync(LegalStrategyResult result, string clientPosition)
+    {
+        var id = await _supabaseService.SaveLegalStrategyAsync(new LegalStrategyRecord
         {
             KeyLegalIssue = result.KeyLegalIssue,
             ClientPosition = clientPosition,
@@ -106,6 +117,46 @@ public class LegalController : ControllerBase
             PrecedentsCount = result.Precedents.Count,
             RawJsonOutput = result
         });
+
+        // Audit log — one entry per analysis step
+        var auditLogs = new List<AuditLogRecord>
+        {
+            new()
+            {
+                Module = "legal_strategy",
+                AnalysisId = id,
+                Step = 1,
+                Action = $"Pravna strategija: {result.KeyLegalIssue}",
+                LegalBasis = "Zakon o parničnom postupku (NN 53/91, 25/13)",
+                Citation = "čl. 2., čl. 7., čl. 219. ZPP",
+                Reasoning = $"Pozicija: {clientPosition}. Vjerojatnost uspjeha: {result.WinProbability}% ({result.WinProbabilityMin}-{result.WinProbabilityMax}%). Presedana: {result.Precedents.Count}.",
+                Confidence = result.WinProbability >= 60 ? "VISOKO" : result.WinProbability >= 35 ? "SREDNJE" : "NISKO",
+                ModelUsed = "gpt-4o",
+                ModelTemperature = 0.10
+            }
+        };
+
+        // Add one audit entry per cited precedent
+        int step = 2;
+        foreach (var p in result.Precedents.Take(5))
+        {
+            auditLogs.Add(new AuditLogRecord
+            {
+                Module = "legal_strategy",
+                AnalysisId = id,
+                Step = step++,
+                Action = $"Presuda: {p.CaseNumber}",
+                LegalBasis = p.Court ?? "",
+                Citation = p.CaseNumber ?? "",
+                Reasoning = p.RelevanceToCase ?? p.Summary ?? "",
+                Confidence = "SREDNJE",
+                ModelUsed = "gpt-4o",
+                ModelTemperature = 0.10
+            });
+        }
+
+        await _supabaseService.SaveAuditLogBatchAsync(auditLogs);
+    }
 
     /// <summary>
     /// POST /api/legal/strategy/stream — SSE streaming version of legal strategy analysis.
@@ -182,8 +233,18 @@ public class LegalController : ControllerBase
             // Final result
             await SseHelpers.SendSSE(Response, "result", result);
 
-            // Save to Supabase (fire-and-forget)
-            _ = SaveStrategyAsync(result, request.ClientPosition);
+            // Save to Supabase (background — safe fire-and-forget)
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await SaveStrategyAsync(result, request.ClientPosition);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Background Supabase save failed for legal strategy (SSE)");
+                }
+            });
 
             await SseHelpers.SendSSE(Response, "done", new
             {
@@ -199,7 +260,8 @@ public class LegalController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Legal strategy stream failed");
-            await SseHelpers.SendError(Response, "analysis", $"Analiza nije uspjela: {ex.Message}");
+            if (!HttpContext.RequestAborted.IsCancellationRequested)
+                await SseHelpers.SendError(Response, "analysis", "Analiza nije uspjela. Pokušajte ponovno.");
         }
     }
 
@@ -287,8 +349,18 @@ public class LegalController : ControllerBase
 
         var result = await _legalService.AnalyzeLegalStrategyAsync(request);
 
-        // Save to Supabase (fire-and-forget)
-        _ = SaveStrategyAsync(result, request.ClientPosition);
+        // Save to Supabase (background — safe fire-and-forget)
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await SaveStrategyAsync(result, request.ClientPosition);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Background Supabase save failed for legal strategy (PDF)");
+            }
+        });
 
         return Ok(result);
     }

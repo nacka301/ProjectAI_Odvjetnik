@@ -14,7 +14,8 @@ import {
   Info,
 } from "lucide-react";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000";
+import { API_BASE } from "@/lib/api";
+const API = API_BASE;
 
 interface LegalFeedItem {
   case_number: string;

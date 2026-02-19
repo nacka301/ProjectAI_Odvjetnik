@@ -65,6 +65,12 @@ public class ChronologyController : ControllerBase
             return;
         }
 
+        if (pdfFiles.Count > 50)
+        {
+            await SseHelpers.SendError(Response, "validation", "Maksimalno 50 PDF datoteka po zahtjevu.");
+            return;
+        }
+
         _logger.LogInformation("\n" +
             "╔══════════════════════════════════════════════════════════════╗\n" +
             "║          📜  KRONOLOGIJA SPISA                              ║\n" +
@@ -164,7 +170,7 @@ public class ChronologyController : ControllerBase
         _logger.LogInformation("Chronology complete: {Docs} docs → {Events} events, {Errors} errors",
             processed, allEvents.Count, errors.Count);
 
-        // Save to Supabase (fire-and-forget)
+        // Save to Supabase (background — safe fire-and-forget)
         string dateRange = "";
         if (allEvents.Count > 0)
         {
@@ -172,12 +178,36 @@ public class ChronologyController : ControllerBase
             var last = allEvents.Last().DisplayDate;
             dateRange = first == last ? first : $"{first} — {last}";
         }
-        _ = _supabaseService.SaveChronologyAsync(new ChronologyRecord
+        _ = Task.Run(async () =>
         {
-            TotalDocuments = processed,
-            TotalEvents = allEvents.Count,
-            DateRange = dateRange,
-            RawJsonOutput = result
+            try
+            {
+                var id = await _supabaseService.SaveChronologyAsync(new ChronologyRecord
+                {
+                    TotalDocuments = processed,
+                    TotalEvents = allEvents.Count,
+                    DateRange = dateRange,
+                    RawJsonOutput = result
+                });
+                // Audit log
+                await _supabaseService.SaveAuditLogAsync(new AuditLogRecord
+                {
+                    Module = "chronology",
+                    AnalysisId = id,
+                    Step = 1,
+                    Action = $"Kronologija generirana: {processed} dokumenata, {allEvents.Count} događaja, raspon: {dateRange}",
+                    LegalBasis = "Zakon o parničnom postupku (NN 53/91, 25/13)",
+                    Citation = "čl. 219., čl. 223. ZPP",
+                    Reasoning = $"AI je obradio {processed} PDF dokumenata i ekstrahirao {allEvents.Count} kronoloških događaja. Greške: {errors.Count}.",
+                    Confidence = errors.Count == 0 ? "VISOKO" : "SREDNJE",
+                    ModelUsed = "gpt-4o",
+                    ModelTemperature = 0.10
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Background Supabase save failed for chronology");
+            }
         });
 
         await SendSSE("result", result);

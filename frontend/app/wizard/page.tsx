@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useRef } from "react";
 import Link from "next/link";
@@ -13,7 +13,6 @@ import {
   AlertTriangle,
   Scale,
 } from "lucide-react";
-import { saveEvaluation } from "@/lib/supabase";
 import LocationSelector from "@/components/LocationSelector";
 
 import type {
@@ -61,11 +60,11 @@ const ResultView = dynamic(() => import("./ResultView"), {
   ),
 });
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5078";
+import { API_BASE } from "@/lib/api";
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════
 //  MAIN COMPONENT
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════
 
 export default function WizardPage() {
   // Wizard state
@@ -106,10 +105,10 @@ export default function WizardPage() {
   const [email, setEmail] = useState("");
   const [notes, setNotes] = useState("");
 
-  // View state machine: INPUT â†’ PROCESSING â†’ RESULT
+  // View state machine: INPUT → PROCESSING → RESULT
   const [viewState, setViewState] = useState<ViewState>("INPUT");
 
-  // â”€â”€ Build JSON payload â”€â”€
+  // ── Build JSON payload ──
 
   const buildPayload = () => {
     const base = { location, property_type: propertyType, notes: notes.trim() || undefined };
@@ -119,7 +118,7 @@ export default function WizardPage() {
     return base;
   };
 
-  // â”€â”€ Step 2 â†’ Validate draft â”€â”€
+  // ── Step 2 → Validate draft ──
 
   const validateDraft = async () => {
     setDraftLoading(true);
@@ -138,7 +137,7 @@ export default function WizardPage() {
       const data = await res.json();
 
       if (!res.ok || data.valid === false) {
-        setDraftErrors(data.errors || [{ field: "", message: "Nepoznata greška" }]);
+        setDraftErrors(data.errors || [{ field: "", message: "Nepoznata gre�ka" }]);
         setDraftWarnings(data.warnings || []);
       } else {
         setDraftResult(data);
@@ -146,13 +145,13 @@ export default function WizardPage() {
         setStep(3);
       }
     } catch {
-      setError("Server ne odgovara. Pokušajte ponovno.");
+      setError("Server ne odgovara. Poku�ajte ponovno.");
     } finally {
       setDraftLoading(false);
     }
   };
 
-  // â”€â”€ Step 3 â†’ Run valuation (SSE) â”€â”€
+  // ── Step 3 → Run valuation (SSE) ──
 
   const runValuation = async () => {
     if (!draftResult) return;
@@ -228,23 +227,12 @@ export default function WizardPage() {
 
       setIsStreaming(false);
       if (state.streamedResult) setViewState("RESULT");
-
-      // Save to Supabase (fire-and-forget)
-      if (state.streamedResult) {
-        saveEvaluation({
-          property_type: propertyType || "nekretnina",
-          location: `${location.city}, ${location.district}`,
-          estimated_value: state.streamedResult.estimated_value_eur,
-          pdf_url: null,
-          raw_json_output: state.streamedResult as unknown as Record<string, unknown>,
-        }).catch(() => { /* non-critical */ });
-      }
     } catch (e: unknown) {
       setIsStreaming(false);
       if (e instanceof DOMException && e.name === "AbortError") {
         setError("Procjena je otkazana.");
       } else {
-        setError("Server ne odgovara. Pokušajte ponovno za minutu.");
+        setError("Server ne odgovara. Poku�ajte ponovno za minutu.");
       }
     } finally {
       abortRef.current = null;
@@ -257,7 +245,7 @@ export default function WizardPage() {
     setViewState("INPUT");
   };
 
-  // â”€â”€ Reset â”€â”€
+  // ── Reset ──
 
   const reset = () => {
     abortRef.current?.abort();
@@ -276,13 +264,13 @@ export default function WizardPage() {
 
   const areaM2 = propertyType === "Apartment" ? apt.area_m2 : propertyType === "House" ? house.living_area_m2 : land.land_area_m2;
 
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ═══════════════════════════════════════════
   //  RENDER
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ═══════════════════════════════════════════
 
   return (
     <>
-    {/* â•â•â• PROCESSING: Full-Screen Pipeline â•â•â• */}
+    {/* ═══ PROCESSING: Full-Screen Pipeline ═══ */}
     {viewState === "PROCESSING" && (
       <ProcessingView
         stages={stages}
@@ -293,7 +281,7 @@ export default function WizardPage() {
       />
     )}
 
-    {/* Normal page wrapper â€” hidden during PROCESSING */}
+    {/* Normal page wrapper — hidden during PROCESSING */}
     {viewState !== "PROCESSING" && (
     <div className="min-h-screen bg-gray-50 py-12 px-4 font-sans">
       <div className="mx-auto max-w-3xl">
@@ -301,15 +289,15 @@ export default function WizardPage() {
           <ArrowLeft className="h-4 w-4" /> Natrag
         </Link>
 
-        {/* Header + Step indicator â€” INPUT only */}
+        {/* Header + Step indicator — INPUT only */}
         {viewState === "INPUT" && (
           <>
             <div className="text-center mb-10">
               <h1 className="text-3xl font-bold text-gray-900">
-                🏠 Wizard — Unos nekretnine
+                ?? Wizard � Unos nekretnine
               </h1>
               <p className="mt-2 text-gray-500">
-                Unesite podatke korak po korak — sustav automatski procjenjuje tržišnu vrijednost
+                Unesite podatke korak po korak � sustav automatski procjenjuje tr�i�nu vrijednost
               </p>
             </div>
 
@@ -326,7 +314,7 @@ export default function WizardPage() {
           </>
         )}
 
-        {/* Error â€” INPUT only */}
+        {/* Error — INPUT only */}
         {viewState === "INPUT" && error && (
           <div className="mb-6 flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 p-4 text-red-700">
             <AlertTriangle className="h-5 w-5 flex-shrink-0" />
@@ -334,7 +322,7 @@ export default function WizardPage() {
           </div>
         )}
 
-        {/* â•â•â• STEP 1: Choose type + Location â•â•â• */}
+        {/* ═══ STEP 1: Choose type + Location ═══ */}
         {viewState === "INPUT" && step === 1 && (
           <div className="space-y-6">
             <div className="rounded-xl bg-white border border-gray-200 p-6">
@@ -342,8 +330,8 @@ export default function WizardPage() {
               <div className="grid grid-cols-3 gap-4">
                 {([
                   { type: "Apartment" as PropertyType, icon: <Building2 className="h-8 w-8" />, label: "Stan" },
-                  { type: "House" as PropertyType, icon: <Home className="h-8 w-8" />, label: "Kuća" },
-                  { type: "Land" as PropertyType, icon: <TreePine className="h-8 w-8" />, label: "Zemljište" },
+                  { type: "House" as PropertyType, icon: <Home className="h-8 w-8" />, label: "Ku�a" },
+                  { type: "Land" as PropertyType, icon: <TreePine className="h-8 w-8" />, label: "Zemlji�te" },
                 ]).map((opt) => (
                   <button
                     key={opt.type}
@@ -385,19 +373,19 @@ export default function WizardPage() {
           </div>
         )}
 
-        {/* â•â•â• STEP 2: Type-specific details â•â•â• */}
+        {/* ═══ STEP 2: Type-specific details ═══ */}
         {viewState === "INPUT" && step === 2 && propertyType && (
           <div className="space-y-6">
             <button onClick={() => setStep(1)} className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1">
               <ArrowLeft className="h-4 w-4" /> Natrag na korak 1
             </button>
 
-            {/* â”€â”€ APARTMENT â”€â”€ */}
+            {/* ── APARTMENT ── */}
             {propertyType === "Apartment" && (
               <div className="rounded-xl bg-white border border-gray-200 p-6 space-y-5">
-                <h3 className="text-sm font-semibold text-gray-700">🏢 Detalji stana</h3>
+                <h3 className="text-sm font-semibold text-gray-700">?? Detalji stana</h3>
                 <div className="grid grid-cols-2 gap-4">
-                  <NumberInput label="Površina (m²) *" value={apt.area_m2}
+                  <NumberInput label="Povr�ina (m2) *" value={apt.area_m2}
                     onChange={(v) => setApt({ ...apt, area_m2: v })} min={10} max={300} />
                   <NumberInput label="Broj soba *" value={apt.room_count}
                     onChange={(v) => setApt({ ...apt, room_count: v })} min={1} max={10} step={1} />
@@ -429,20 +417,20 @@ export default function WizardPage() {
                 </div>
                 {floorNumericValue(apt.floor) >= 2 && !apt.has_elevator && (
                   <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-3 text-sm text-yellow-800">
-                    ⚠️ Stan je na visokom katu bez lifta — to utječe na vrijednost.
+                    ?? Stan je na visokom katu bez lifta � to utje�e na vrijednost.
                   </div>
                 )}
               </div>
             )}
 
-            {/* â”€â”€ HOUSE â”€â”€ */}
+            {/* ── HOUSE ── */}
             {propertyType === "House" && (
               <div className="rounded-xl bg-white border border-gray-200 p-6 space-y-5">
-                <h3 className="text-sm font-semibold text-gray-700">🏠 Detalji kuće</h3>
+                <h3 className="text-sm font-semibold text-gray-700">?? Detalji ku�e</h3>
                 <div className="grid grid-cols-2 gap-4">
-                  <NumberInput label="Stambena površina (m²) *" value={house.living_area_m2}
+                  <NumberInput label="Stambena povr�ina (m2) *" value={house.living_area_m2}
                     onChange={(v) => setHouse({ ...house, living_area_m2: v })} min={20} max={2000} />
-                  <NumberInput label="Okućnica (m²) *" value={house.land_area_m2}
+                  <NumberInput label="Oku�nica (m2) *" value={house.land_area_m2}
                     onChange={(v) => setHouse({ ...house, land_area_m2: v })} min={1} max={100000} />
                   <NumberInput label="Godina izgradnje" value={house.year_built || 0}
                     onChange={(v) => setHouse({ ...house, year_built: v || undefined })} min={1900} max={2030} step={1} />
@@ -464,20 +452,20 @@ export default function WizardPage() {
                     onChange={(v) => setHouse({ ...house, view_type: v as ViewType })} />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <Toggle label="Garaža" checked={house.has_garage} onChange={(v) => setHouse({ ...house, has_garage: v })} />
+                  <Toggle label="Gara�a" checked={house.has_garage} onChange={(v) => setHouse({ ...house, has_garage: v })} />
                   <Toggle label="Bazen" checked={house.has_pool} onChange={(v) => setHouse({ ...house, has_pool: v })} />
                   <Toggle label="1. red do mora" checked={house.first_row_to_sea} onChange={(v) => setHouse({ ...house, first_row_to_sea: v })} />
-                  <Toggle label="Pomoćni objekt" checked={house.has_auxiliary_object} onChange={(v) => setHouse({ ...house, has_auxiliary_object: v })} />
+                  <Toggle label="Pomo�ni objekt" checked={house.has_auxiliary_object} onChange={(v) => setHouse({ ...house, has_auxiliary_object: v })} />
                 </div>
               </div>
             )}
 
-            {/* â”€â”€ LAND â”€â”€ */}
+            {/* ── LAND ── */}
             {propertyType === "Land" && (
               <div className="rounded-xl bg-white border border-gray-200 p-6 space-y-5">
-                <h3 className="text-sm font-semibold text-gray-700">🌿 Detalji zemljišta</h3>
+                <h3 className="text-sm font-semibold text-gray-700">?? Detalji zemlji�ta</h3>
                 <div className="grid grid-cols-2 gap-4">
-                  <NumberInput label="Površina (m²) *" value={land.land_area_m2}
+                  <NumberInput label="Povr�ina (m2) *" value={land.land_area_m2}
                     onChange={(v) => setLand({ ...land, land_area_m2: v })} min={50} max={1000000} />
                   <NumberInput label="Udaljenost od mora (m)" value={land.distance_to_sea_m || 0}
                     onChange={(v) => setLand({ ...land, distance_to_sea_m: v || undefined })} min={0} max={100000} step={10} />
@@ -498,32 +486,32 @@ export default function WizardPage() {
             {draftErrors.length > 0 && (
               <div className="rounded-lg border border-red-300 bg-red-50 p-4 space-y-1">
                 {draftErrors.map((e, i) => (
-                  <p key={i} className="text-sm text-red-700">❌ {e.message}</p>
+                  <p key={i} className="text-sm text-red-700">? {e.message}</p>
                 ))}
               </div>
             )}
             {draftWarnings.length > 0 && (
               <div className="rounded-lg border border-yellow-300 bg-yellow-50 p-4 space-y-1">
                 {draftWarnings.map((w, i) => (
-                  <p key={i} className="text-sm text-yellow-800">⚠️ {w.message}</p>
+                  <p key={i} className="text-sm text-yellow-800">?? {w.message}</p>
                 ))}
               </div>
             )}
 
             {/* Dodatne informacije */}
             <div className="rounded-xl bg-white border border-gray-200 p-5">
-              <h4 className="text-sm font-semibold text-gray-700 mb-2">✍️ Dodatne informacije <span className="text-xs font-normal text-gray-400">(opcionalno)</span></h4>
-              <p className="text-xs text-gray-400 mb-2">Navedite sve što može utjecati na vrijednost: renovacije, posebnosti, blizina sadržaja...</p>
+              <h4 className="text-sm font-semibold text-gray-700 mb-2">?? Dodatne informacije <span className="text-xs font-normal text-gray-400">(opcionalno)</span></h4>
+              <p className="text-xs text-gray-400 mb-2">Navedite sve �to mo�e utjecati na vrijednost: renovacije, posebnosti, blizina sadr�aja...</p>
               <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
                 rows={3} maxLength={500}
-                placeholder="npr. Stan je potpuno renoviran 2023., ima podne grijanje, klima u svim sobama, u blizini škole i tramvaja..."
+                placeholder="npr. Stan je potpuno renoviran 2023., ima podne grijanje, klima u svim sobama, u blizini �kole i tramvaja..."
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-none" />
               <p className="text-xs text-gray-400 mt-1 text-right">{notes.length}/500</p>
             </div>
 
             {/* Email */}
             <div className="rounded-xl bg-white border border-gray-200 p-5">
-              <h4 className="text-sm font-semibold text-gray-700 mb-2">✉️ Email obavijest <span className="text-xs font-normal text-gray-400">(opcionalno)</span></h4>
+              <h4 className="text-sm font-semibold text-gray-700 mb-2">?? Email obavijest <span className="text-xs font-normal text-gray-400">(opcionalno)</span></h4>
               <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
                 placeholder="ime@gmail.com" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
             </div>
@@ -537,7 +525,7 @@ export default function WizardPage() {
           </div>
         )}
 
-        {/* â•â•â• STEP 3: Confirmation + Valuation â•â•â• */}
+        {/* ═══ STEP 3: Confirmation + Valuation ═══ */}
         {viewState === "INPUT" && step === 3 && draftResult && (
           <div className="space-y-6">
             <button onClick={() => setStep(2)} className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1">
@@ -545,12 +533,12 @@ export default function WizardPage() {
             </button>
 
             <div className="rounded-xl bg-white border border-gray-200 p-6">
-              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Potvrda — opis nekretnine</h3>
+              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Potvrda � opis nekretnine</h3>
               <p className="text-gray-800 leading-relaxed text-lg font-medium">{draftResult.description}</p>
               {draftWarnings.length > 0 && (
                 <div className="mt-4 space-y-1">
                   {draftWarnings.map((w, i) => (
-                    <p key={i} className="text-sm text-yellow-700">⚠️ {w.message}</p>
+                    <p key={i} className="text-sm text-yellow-700">?? {w.message}</p>
                   ))}
                 </div>
               )}
@@ -565,7 +553,7 @@ export default function WizardPage() {
           </div>
         )}
 
-        {/* â•â•â• VALUATION RESULT â•â•â• */}
+        {/* ═══ VALUATION RESULT ═══ */}
         {viewState === "RESULT" && result && (
           <ResultView
             result={result}
