@@ -416,40 +416,70 @@ public class ContractAnalysisService
 
             // Run both passes in parallel for maximum speed
             _logger.LogInformation("V55 Starting parallel passes: Pass 1 (deepseek-v3.2 audit) + Pass 2 (deepseek-r1-0528)");
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             var auditTask = _auditClient.CompleteChatAsync(auditMessages, auditOptions);
             var reasoningTask = _reasoningClient.CompleteChatAsync(reasoningMessages, reasoningOptions);
+
+            // V62: Timeout — if a pass takes >120s, cancel and continue with partial results
+            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(180));
 
             // V57: Await individually to report progress per pass
             var auditCompletion = await auditTask;
             var auditJson = auditCompletion.Value.Content.Count > 0
                 ? auditCompletion.Value.Content[0].Text ?? ""
                 : "";
-            _logger.LogDebug("V51 Pass 1 audit: {Len} chars", auditJson.Length);
+            var auditTime = sw.Elapsed;
+            _logger.LogInformation("V62 Pass 1 audit completed in {Sec:F1}s — {Len} chars", auditTime.TotalSeconds, auditJson.Length);
 
             if (onProgress != null)
             {
-                await onProgress("audit", "done", "Pravni audit završen", null);
-                await onProgress("reasoning", "active", "Pass 2: Dubinska analiza", null);
+                await onProgress("audit", "done", $"Pravni audit završen ({auditTime.TotalSeconds:F0}s)", null);
+                await onProgress("reasoning", "active", "Pass 2: Dubinska analiza (može potrajati do 2 min)", null);
             }
 
-            // Pass 2 may already be complete (was running in parallel)
-            var reasoningCompletion = await reasoningTask;
-            var reasoningJson = reasoningCompletion.Value.Content.Count > 0
-                ? reasoningCompletion.Value.Content[0].Text ?? ""
-                : "";
-            _logger.LogDebug("V51 Pass 2 reasoning: {Len} chars", reasoningJson.Length);
+            // Pass 2 (reasoning) — may take much longer, use timeout
+            string reasoningJson = "";
+            try
+            {
+                var reasoningCompleted = await Task.WhenAny(reasoningTask, Task.Delay(TimeSpan.FromSeconds(150)));
+                if (reasoningCompleted == reasoningTask)
+                {
+                    var reasoningCompletion = await reasoningTask;
+                    reasoningJson = reasoningCompletion.Value.Content.Count > 0
+                        ? reasoningCompletion.Value.Content[0].Text ?? ""
+                        : "";
+                }
+                else
+                {
+                    _logger.LogWarning("V62 Pass 2 (reasoning) timed out after 150s — continuing with audit-only results");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "V62 Pass 2 (reasoning) failed — continuing with audit-only results");
+            }
+            var totalTime = sw.Elapsed;
+            _logger.LogInformation("V62 Pass 2 reasoning: {Len} chars in {Sec:F1}s (total elapsed: {Total:F1}s)",
+                reasoningJson.Length, (totalTime - auditTime).TotalSeconds, totalTime.TotalSeconds);
 
             if (onProgress != null)
             {
-                await onProgress("reasoning", "done", "Dubinska analiza završena", null);
+                await onProgress("reasoning", "done", $"Dubinska analiza završena ({totalTime.TotalSeconds:F0}s)", null);
                 await onProgress("scoring", "active", "Pass 3: Bodovanje rizika", null);
             }
 
             // ── Parse Pass 1: Audit output ──
             var result = ParseAuditResponse(auditJson);
 
-            // ── Parse Pass 2: Deep reasoning output ──
-            ParseReasoningResponse(reasoningJson, result);
+            // ── Parse Pass 2: Deep reasoning output (may be empty if timed out) ──
+            if (!string.IsNullOrWhiteSpace(reasoningJson))
+            {
+                ParseReasoningResponse(reasoningJson, result);
+            }
+            else
+            {
+                _logger.LogInformation("V62 Skipping reasoning parse — no data (timeout or error)");
+            }
 
             // ── PASS 3: DETERMINISTIC RISK SCORING ──
             ComputeRiskScore(result);
@@ -460,10 +490,12 @@ public class ContractAnalysisService
                 await onProgress("scoring", "done", "Bodovanje završeno", $"Rizik: {result.OverallRisk} ({result.RiskScore}/100)");
             }
 
+            sw.Stop();
             _logger.LogInformation(
-                "V51 Contract analysis complete: type={Type}, risk={Risk}({Score}), " +
+                "V62 Contract analysis complete in {Sec:F1}s: type={Type}, risk={Risk}({Score}), " +
                 "checklist={CL}, cross={CA}, mandatory={MC}, flags={Flags}, warnings={Warn}, " +
                 "traps={Traps}, deviations={Dev}",
+                sw.Elapsed.TotalSeconds,
                 result.DocumentType, result.OverallRisk, result.RiskScore,
                 result.Checklist.Count, result.CrossArticleIssues.Count,
                 result.MandatoryClauses.Count, result.RedFlags.Count, result.Warnings.Count,
