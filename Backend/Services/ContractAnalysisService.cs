@@ -388,7 +388,7 @@ public class ContractAnalysisService
             {
                 Temperature = 0.0f,
                 ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat(),
-                MaxOutputTokenCount = 8192  // Claude default may truncate large JSON
+                MaxOutputTokenCount = 16384  // V61: Increased from 8192 — large contracts need more tokens
             };
 
             // ── PASS 2 (Reasoning): Deep Reasoning — runs in PARALLEL with Pass 1 ──
@@ -633,6 +633,9 @@ public class ContractAnalysisService
             }
             json = json.Trim();
 
+            // V61: Repair truncated JSON
+            json = RepairTruncatedJson(json);
+
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
 
@@ -718,6 +721,9 @@ public class ContractAnalysisService
             json = json.Substring(0, json.Length - 3);
         }
         json = json.Trim();
+
+        // V61: Attempt to repair truncated JSON from AI models that hit token limits
+        json = RepairTruncatedJson(json);
 
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
@@ -843,6 +849,86 @@ public class ContractAnalysisService
             result.MandatoryClauses.Count, result.RedFlags.Count, result.Warnings.Count);
 
         return result;
+    }
+
+    /// <summary>
+    /// V61: Repairs truncated JSON from AI models that hit output token limits.
+    /// When a model runs out of tokens mid-response, the JSON is cut off.
+    /// This method closes open strings, arrays, and objects to make it parseable.
+    /// </summary>
+    private string RepairTruncatedJson(string json)
+    {
+        // Quick check — if it parses, no repair needed
+        try
+        {
+            using var test = JsonDocument.Parse(json);
+            return json; // Valid JSON, no repair needed
+        }
+        catch (JsonException)
+        {
+            _logger.LogWarning("V61 Truncated JSON detected ({Len} chars) — attempting repair", json.Length);
+        }
+
+        var sb = new System.Text.StringBuilder(json);
+
+        // Remove trailing incomplete escape sequences
+        while (sb.Length > 0 && sb[sb.Length - 1] == '\\')
+            sb.Length--;
+
+        // Close any unterminated string
+        int quoteCount = 0;
+        bool inEscape = false;
+        for (int i = 0; i < sb.Length; i++)
+        {
+            if (inEscape) { inEscape = false; continue; }
+            if (sb[i] == '\\') { inEscape = true; continue; }
+            if (sb[i] == '"') quoteCount++;
+        }
+        if (quoteCount % 2 != 0)
+            sb.Append('"');
+
+        // Close open arrays and objects by tracking brackets
+        var stack = new Stack<char>();
+        bool inString = false;
+        inEscape = false;
+        for (int i = 0; i < sb.Length; i++)
+        {
+            char c = sb[i];
+            if (inEscape) { inEscape = false; continue; }
+            if (c == '\\' && inString) { inEscape = true; continue; }
+            if (c == '"') { inString = !inString; continue; }
+            if (inString) continue;
+            if (c == '{') stack.Push('}');
+            else if (c == '[') stack.Push(']');
+            else if (c == '}' || c == ']')
+            {
+                if (stack.Count > 0) stack.Pop();
+            }
+        }
+
+        // Remove trailing commas before closing
+        string partial = sb.ToString().TrimEnd();
+        if (partial.EndsWith(","))
+            partial = partial[..^1];
+
+        sb = new System.Text.StringBuilder(partial);
+        while (stack.Count > 0)
+            sb.Append(stack.Pop());
+
+        var repaired = sb.ToString();
+
+        // Verify the repair worked
+        try
+        {
+            using var verify = JsonDocument.Parse(repaired);
+            _logger.LogInformation("V61 JSON repair successful — recovered {Len} chars", repaired.Length);
+            return repaired;
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogWarning(ex, "V61 JSON repair failed — returning original (will throw)");
+            return json; // Let the caller handle the error
+        }
     }
 
     private static string GetString(JsonElement el, string prop, string fallback = "")
