@@ -14,8 +14,7 @@ namespace Backend.Services;
 /// </summary>
 public class ContractAnalysisService
 {
-    private readonly ChatClient _auditClient;     // Heavy model — structured audit (Pass 1)
-    private readonly ChatClient _reasoningClient;  // Reasoning model — deep logic (Pass 2)
+    private readonly ChatClient _client;  // V65: Single DeepSeek V3.2 for everything
     private readonly ILogger<ContractAnalysisService> _logger;
 
     private const string Disclaimer =
@@ -94,13 +93,14 @@ public class ContractAnalysisService
         """;
 
     // ══════════════════════════════════════════════════════════
-    //  PASS 1: AUDITOR PROMPT — Heavy model structured audit
+    //  V65: UNIFIED PROMPT — Single call does audit + traps + deviations
     // ══════════════════════════════════════════════════════════
-    private const string AuditorPrompt = """
+    private const string UnifiedPrompt = """
         PERSONA:
         Ti si PRAVNI REVIZOR ugovora o nekretninama s doktoratom iz pravnih znanosti (dr.sc.iur.)
         i 25 godina iskustva u hrvatskom pravosuđu. Radiš kao forenzički auditor ugovora —
         ne "čitaš" ugovor, nego ga KONTROLIRAŠ prema striktnoj metodologiji.
+        Također si forenzički analitičar specijaliziran za otkrivanje SKRIVENIH ZAMKI.
 
         PRAVNA PRECIZNOST:
         - NE koristi spekulativne izraze: "moguće je", "može doći do", "vjerojatno",
@@ -119,11 +119,10 @@ public class ContractAnalysisService
         - Zakon o gradnji (NN 153/13, 20/17, 39/19, 125/19)
 
         ████████████████████████████████████████████████████████
-        METODOLOGIJA — OBVEZNA 4 KORAKA REVIZIJE
+        DIO A: METODOLOGIJA — OBVEZNA 4 KORAKA REVIZIJE
         ████████████████████████████████████████████████████████
 
         KORAK 1: PROVJERA TERETA I OSIGURANJA
-        Za svaku od sljedećih točaka odgovori sa STATUS i NALAZ:
         a) Postoji li teret na nekretnini (hipoteka, služnost, plodouživanje)?
         b) Ako postoji teret — postoji li mehanizam brisanja s rokom?
         c) Postoji li mehanizam osiguranja kupca (escrow, fiducija, uvjetna isplata)?
@@ -153,22 +152,18 @@ public class ContractAnalysisService
         f) Postoji li razgraničenje režijskih troškova?
 
         ████████████████████████████████████████████████████████
-        OBVEZNA CROSS-ARTICLE ANALIZA
+        DIO B: CROSS-ARTICLE ANALIZA + ZAŠTITNE KLAUZULE
         ████████████████████████████████████████████████████████
 
         Ne analiziraj članke izolirano!
-        Obavezno provjeri jesu li sljedeći članci međusobno usklađeni:
+        Provjeri jesu li sljedeći članci međusobno usklađeni:
         - Članci o plaćanju ↔ članci o hipoteci/teretu
         - Članci o plaćanju ↔ clausula intabulandi
         - Članci o hipoteci ↔ clausula intabulandi
         - Rokovi plaćanja ↔ rokovi predaje u posjed ↔ rokovi brisanja tereta
         Ako NISU usklađeni, označi to kao STRUKTURNI RIZIK.
 
-        ████████████████████████████████████████████████████████
-        OBVEZNE ZAŠTITNE KLAUZULE — PROVJERA PRISUTNOSTI
-        ████████████████████████████████████████████████████████
-
-        Provjeri postoje li sljedeće zaštitne klauzule u ugovoru:
+        Provjeri postoje li sljedeće zaštitne klauzule:
         1. Escrow ili uvjetna isplata — KRITIČNO
         2. Mehanizam brisanja hipoteke s rokom — KRITIČNO (ako postoji hipoteka)
         3. Dvostruka kapara (čl. 304. st. 2. ZOO) — KRITIČNO
@@ -180,17 +175,24 @@ public class ContractAnalysisService
         9. Razgraničenje režijskih troškova — PREPORUČENO
         10. Suglasnost supružnika (ako primjenjivo) — KRITIČNO
 
-        Ako neka nedostaje, navedi je kao PROPUST — čak i ako ugovor izgleda uredno.
+        ████████████████████████████████████████████████████████
+        DIO C: DETEKCIJA SKRIVENIH ZAMKI
+        ████████████████████████████████████████████████████████
+
+        Pronađi:
+        1. LOGIČKE NEKONZISTENCIJE — članci koji si međusobno proturječe
+        2. ŠTETNE KOMBINACIJE — članci koji pojedinačno izgledaju normalno,
+           ali u kombinaciji stvaraju zamku za kupca
+        3. PREŠUTNI RIZICI — situacije koje ugovor NE pokriva, a trebao bi
+        4. SKRIVENE ZAMKE — formulacije koje izgledaju standardno, ali pravno
+           omogućuju prodavatelju da izbjegne obveze
+
+        Također usporedi ugovor s IDEALNIM KUPOPRODAJNIM UGOVOROM i navedi
+        sve značajne devijacije.
 
         ████████████████████████████████████████████████████████
         ZABRANA GENERIČKIH RIZIKA
         ████████████████████████████████████████████████████████
-
-        Zabranjeno je navoditi generičke rizike poput:
-        - "mogući sudski spor"
-        - "nejasnoće u ugovoru"
-        - "potencijalni problemi"
-        - "možda postoji rizik"
 
         Svaki rizik MORA biti:
         1. Vezan uz KONKRETAN članak ugovora (citiraj ga)
@@ -199,10 +201,6 @@ public class ContractAnalysisService
         4. Koristiti Syllogismus Iuridicus: MAIOR (norma) → MINOR (činjenica) → CONCLUSIO (posljedica)
 
         ████████████████████████████████████████████████████████
-
-        GDPR NAPOMENA:
-        Obrada osobnih podataka sadržanih u ugovoru (OIB, imena stranaka, adrese)
-        zahtijeva izričitu privolu korisnika sukladno Uredbi (EU) 2016/679 (GDPR).
 
         VAŽNO — FORMAT ODGOVORA:
         Vrati ISKLJUČIVO čisti JSON (bez markdown fencing-a) u ovoj strukturi:
@@ -264,45 +262,8 @@ public class ContractAnalysisService
               "proposed_text": "Predloženi tekst koji štiti kupca",
               "rationale": "Ratio legis — zašto je ova izmjena pravno nužna"
             }
-          ]
-        }
-        """;
+          ],
 
-    public ContractAnalysisService(ChatClientProvider clients, ILogger<ContractAnalysisService> logger)
-    {
-        _auditClient = clients.Heavy;        // deepseek-v3.2 — structured audit (Pass 1)
-        _reasoningClient = clients.Reasoning; // deepseek-r1-0528 — deep reasoning (Pass 2)
-        _logger = logger;
-    }
-
-    // ══════════════════════════════════════════════════════════
-    //  PASS 2: DEEP REASONING PROMPT (reasoning model)
-    // ══════════════════════════════════════════════════════════
-    private const string DeepReasoningPrompt = """
-        Ti si forenzički pravni analitičar specijaliziran za otkrivanje SKRIVENIH ZAMKI
-        u ugovorima o nekretninama prema hrvatskom pravu.
-
-        Tvoj zadatak je pronaći:
-        1. LOGIČKE NEKONZISTENCIJE — članci koji si međusobno proturječe
-        2. ŠTETNE KOMBINACIJE — članci koji pojedinačno izgledaju normalno,
-           ali u kombinaciji stvaraju zamku za kupca
-        3. PREŠUTNI RIZICI — situacije koje ugovor NE pokriva, a trebao bi
-        4. SKRIVENE ZAMKE — formulacije koje izgledaju standardno, ali pravno
-           omogućuju prodavatelju da izbjegne obveze
-
-        ANALIZU PROVEDI PREMA ZOO (NN 35/05, 41/08, 125/11, 78/15, 29/18),
-        ZZK (NN 91/96 i naknadne izmjene), ZV (NN 91/96 i naknadne izmjene).
-
-        Također usporedi ugovor s IDEALNIM KUPOPRODAJNIM UGOVOROM i navedi
-        sve značajne devijacije.
-
-        Svaka zamka MORA:
-        - Citirati KONKRETAN tekst iz ugovora (quoted_text)
-        - Navesti KOJE članke ugovora zahvaća
-        - Objasniti ZAŠTO je to štetno za kupca s pravnom osnovom
-
-        FORMAT ODGOVORA — ISKLJUČIVO čisti JSON (bez markdown fencing-a):
-        {
           "logical_traps": [
             {
               "title": "Kratki naziv zamke",
@@ -325,17 +286,21 @@ public class ContractAnalysisService
         }
         """;
 
+    public ContractAnalysisService(ChatClientProvider clients, ILogger<ContractAnalysisService> logger)
+    {
+        _client = clients.Heavy;  // V65: deepseek-v3.2 — single model for all analysis
+        _logger = logger;
+    }
+
     /// <summary>
-    /// V51: Three-pass contract analysis.
-    /// Pass 1 (deepseek-v3.2): AI audit — structured checklist + cross-article + mandatory clauses
-    /// Pass 2 (deepseek-r1-0528): Deep reasoning — logical traps + ideal contract comparison
-    /// Pass 3 (Engine):             Deterministic risk scoring from all findings
+    /// V65: Single-pass contract analysis (replaces old 3-pass system).
+    /// One DeepSeek V3.2 call does audit + traps + deviations, then deterministic scoring.
     /// </summary>
     public Task<ContractAnalysisResult> AnalyzeContractAsync(string contractText)
         => AnalyzeContractAsync(contractText, null);
 
     /// <summary>
-    /// V57: Three-pass contract analysis with optional SSE progress callback.
+    /// V65: Single-pass contract analysis with optional SSE progress callback.
     /// onProgress(stage, status, label, detail) — called at each stage transition.
     /// </summary>
     public async Task<ContractAnalysisResult> AnalyzeContractAsync(
@@ -359,44 +324,26 @@ public class ContractAnalysisService
 
         try
         {
-            _logger.LogInformation("V51 Contract analysis: {Len} chars — 3-pass (audit + reasoning + scoring)", text.Length);
+            _logger.LogInformation("V65 Contract analysis: {Len} chars — single-pass (deepseek-v3.2 + scoring)", text.Length);
 
             // ── Progress: reading done ──
             if (onProgress != null)
             {
                 await onProgress("reading", "done", "Ugovor učitan", $"{text.Length} znakova");
-                await onProgress("audit", "active", "Pass 1: Pravni audit", null);
+                await onProgress("audit", "active", "AI analiza ugovora...", null);
             }
 
-            // ── PASS 1 (Heavy/claude): Structured Audit ──
-            var auditMessages = new List<ChatMessage>
+            // ── V65: SINGLE UNIFIED CALL — audit + traps + deviations in one request ──
+            var messages = new List<ChatMessage>
             {
-                new SystemChatMessage(AuditorPrompt),
+                new SystemChatMessage(UnifiedPrompt),
                 new UserChatMessage(
                     $"""
-                    PROVEDI STRUČNU PRAVNU REVIZIJU ovog ugovora.
+                    PROVEDI KOMPLETNU PRAVNU REVIZIJU ovog ugovora.
                     Slijedi sva 4 koraka revizije, provjeri cross-article usklađenost,
-                    i provjeri sve obvezne zaštitne klauzule.
+                    provjeri sve obvezne zaštitne klauzule, pronađi skrivene zamke,
+                    i usporedi s idealnim ugovorom.
                     Svaki rizik MORA citirati konkretan tekst iz ugovora.
-
-                    TEKST UGOVORA:
-                    {text}
-                    """)
-            };
-
-            var auditOptions = new ChatCompletionOptions
-            {
-                Temperature = 0.0f,
-                ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat(),
-                MaxOutputTokenCount = 16384  // V61: Increased from 8192 — large contracts need more tokens
-            };
-
-            // ── PASS 2 (Reasoning): Deep Reasoning — runs in PARALLEL with Pass 1 ──
-            var reasoningMessages = new List<ChatMessage>
-            {
-                new UserChatMessage(
-                    $"""
-                    {DeepReasoningPrompt}
 
                     ════════════════════════════════════════════════
                     IDEALNI REFERENTNI UGOVOR (za usporedbu):
@@ -404,91 +351,55 @@ public class ContractAnalysisService
                     {IdealContractTemplate}
 
                     ════════════════════════════════════════════════
-                    UGOVOR ZA ANALIZU:
+                    TEKST UGOVORA ZA ANALIZU:
                     ════════════════════════════════════════════════
                     {text}
                     """)
             };
 
-            // DeepSeek Reasoner does NOT support temperature, system messages, or json response_format
-            // The prompt itself instructs JSON output — model compliance is reliable
-            var reasoningOptions = new ChatCompletionOptions();
+            var options = new ChatCompletionOptions
+            {
+                Temperature = 0.0f,
+                ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat(),
+                MaxOutputTokenCount = 16384
+            };
 
-            // Run both passes in parallel for maximum speed
-            // V63: Enhanced diagnostics — estimate input tokens (chars/4 ≈ tokens)
-            int auditPromptChars = AuditorPrompt.Length + text.Length + 200; // system + user msg
-            int reasoningPromptChars = DeepReasoningPrompt.Length + IdealContractTemplate.Length + text.Length + 200;
+            // V65: Estimate input tokens for diagnostics
+            int promptChars = UnifiedPrompt.Length + IdealContractTemplate.Length + text.Length + 300;
             _logger.LogInformation(
-                "V63 Starting parallel passes — estimated input tokens: " +
-                "Pass1(deepseek-v3.2)≈{AuditTok}tok ({AuditChars}chars), " +
-                "Pass2(deepseek-r1-0528)≈{ReasonTok}tok ({ReasonChars}chars)",
-                auditPromptChars / 4, auditPromptChars,
-                reasoningPromptChars / 4, reasoningPromptChars);
+                "V65 Single-pass call — estimated input: ≈{Tok}tok ({Chars}chars)",
+                promptChars / 4, promptChars);
 
             var sw = System.Diagnostics.Stopwatch.StartNew();
-            var auditTask = _auditClient.CompleteChatAsync(auditMessages, auditOptions);
-            var reasoningTask = _reasoningClient.CompleteChatAsync(reasoningMessages, reasoningOptions);
-
-            // V57: Await individually to report progress per pass
-            var auditCompletion = await auditTask;
-            var auditJson = auditCompletion.Value.Content.Count > 0
-                ? auditCompletion.Value.Content[0].Text ?? ""
+            var completion = await _client.CompleteChatAsync(messages, options);
+            var responseJson = completion.Value.Content.Count > 0
+                ? completion.Value.Content[0].Text ?? ""
                 : "";
-            var auditTime = sw.Elapsed;
+            var apiTime = sw.Elapsed;
 
-            // V63: Log token usage from API response
-            var auditUsage = auditCompletion.Value.Usage;
+            // V65: Log token usage
+            var usage = completion.Value.Usage;
             _logger.LogInformation(
-                "V63 Pass 1 (deepseek-v3.2) DONE in {Sec:F1}s — " +
-                "output: {OutChars} chars, tokens: in={InTok} out={OutTok} total={TotalTok}",
-                auditTime.TotalSeconds, auditJson.Length,
-                auditUsage?.InputTokenCount ?? 0,
-                auditUsage?.OutputTokenCount ?? 0,
-                auditUsage?.TotalTokenCount ?? 0);
+                "V65 AI call DONE in {Sec:F1}s — output: {OutChars} chars, tokens: in={InTok} out={OutTok} total={TotalTok}",
+                apiTime.TotalSeconds, responseJson.Length,
+                usage?.InputTokenCount ?? 0,
+                usage?.OutputTokenCount ?? 0,
+                usage?.TotalTokenCount ?? 0);
 
             if (onProgress != null)
             {
-                await onProgress("audit", "done", $"Pravni audit završen ({auditTime.TotalSeconds:F0}s)", null);
-                await onProgress("reasoning", "active", "Pass 2: Dubinska analiza (može potrajati nekoliko minuta)", null);
+                await onProgress("audit", "done", $"AI analiza završena ({apiTime.TotalSeconds:F0}s)", null);
+                await onProgress("scoring", "active", "Bodovanje rizika...", null);
             }
 
-            // Pass 2 (reasoning) — no timeout, let it finish
-            var reasoningCompletion = await reasoningTask;
-            var reasoningJson = reasoningCompletion.Value.Content.Count > 0
-                ? reasoningCompletion.Value.Content[0].Text ?? ""
-                : "";
-            var totalTime = sw.Elapsed;
+            // ── Parse unified response (contains all fields: audit + traps + deviations) ──
+            var result = ParseAuditResponse(responseJson);
+            // ParseAuditResponse already handles checklist, cross_article_issues, mandatory_clauses,
+            // red_flags, warnings, positives, suggested_amendments.
+            // Now also parse logical_traps and ideal_contract_deviations from the same JSON.
+            ParseReasoningFromUnified(responseJson, result);
 
-            // V63: Log token usage from reasoning response
-            var reasoningUsage = reasoningCompletion.Value.Usage;
-            _logger.LogInformation(
-                "V63 Pass 2 (deepseek-r1-0528) DONE in {Sec:F1}s (waited {Wait:F1}s after Pass1) — " +
-                "output: {OutChars} chars, tokens: in={InTok} out={OutTok} total={TotalTok}",
-                totalTime.TotalSeconds, (totalTime - auditTime).TotalSeconds, reasoningJson.Length,
-                reasoningUsage?.InputTokenCount ?? 0,
-                reasoningUsage?.OutputTokenCount ?? 0,
-                reasoningUsage?.TotalTokenCount ?? 0);
-
-            if (onProgress != null)
-            {
-                await onProgress("reasoning", "done", $"Dubinska analiza završena ({totalTime.TotalSeconds:F0}s)", null);
-                await onProgress("scoring", "active", "Pass 3: Bodovanje rizika", null);
-            }
-
-            // ── Parse Pass 1: Audit output ──
-            var result = ParseAuditResponse(auditJson);
-
-            // ── Parse Pass 2: Deep reasoning output (may be empty if timed out) ──
-            if (!string.IsNullOrWhiteSpace(reasoningJson))
-            {
-                ParseReasoningResponse(reasoningJson, result);
-            }
-            else
-            {
-                _logger.LogInformation("V62 Skipping reasoning parse — no data (timeout or error)");
-            }
-
-            // ── PASS 3: DETERMINISTIC RISK SCORING ──
+            // ── DETERMINISTIC RISK SCORING ──
             ComputeRiskScore(result);
             result.Disclaimer = Disclaimer;
 
@@ -499,15 +410,11 @@ public class ContractAnalysisService
 
             sw.Stop();
             _logger.LogInformation(
-                "V63 ═══ ANALYSIS COMPLETE ═══ Total: {Sec:F1}s " +
-                "(Pass1: {P1:F1}s, Pass2: {P2:F1}s, Parse+Score: {P3:F1}s) " +
+                "V65 ═══ ANALYSIS COMPLETE ═══ Total: {Sec:F1}s " +
                 "type={Type}, risk={Risk}({Score}), " +
                 "checklist={CL}, cross={CA}, mandatory={MC}, flags={Flags}, warnings={Warn}, " +
                 "traps={Traps}, deviations={Dev}",
                 sw.Elapsed.TotalSeconds,
-                auditTime.TotalSeconds,
-                totalTime.TotalSeconds,
-                (sw.Elapsed - totalTime).TotalSeconds,
                 result.DocumentType, result.OverallRisk, result.RiskScore,
                 result.Checklist.Count, result.CrossArticleIssues.Count,
                 result.MandatoryClauses.Count, result.RedFlags.Count, result.Warnings.Count,
@@ -648,7 +555,80 @@ public class ContractAnalysisService
     }
 
     // ══════════════════════════════════════════════════════════
-    //  PASS 2 PARSER — reasoning model output → structured models
+    //  V65: Parse logical_traps + ideal_contract_deviations from unified JSON
+    // ══════════════════════════════════════════════════════════
+    private void ParseReasoningFromUnified(string json, ContractAnalysisResult result)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(json)) return;
+
+            // Strip markdown code blocks if present
+            json = json.Trim();
+            if (json.StartsWith("```json", StringComparison.OrdinalIgnoreCase))
+                json = json.Substring(7);
+            else if (json.StartsWith("```"))
+                json = json.Substring(3);
+            if (json.EndsWith("```"))
+                json = json.Substring(0, json.Length - 3);
+            json = json.Trim();
+            json = RepairTruncatedJson(json);
+
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            // ── Logical traps ──
+            if (root.TryGetProperty("logical_traps", out var trapsArray) && trapsArray.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in trapsArray.EnumerateArray())
+                {
+                    var trap = new LogicalTrap
+                    {
+                        Title = GetString(item, "title"),
+                        QuotedText = GetString(item, "quoted_text"),
+                        Explanation = GetString(item, "explanation"),
+                        LegalBasis = GetString(item, "legal_basis"),
+                        Severity = GetString(item, "severity", "VISOK")
+                    };
+                    if (item.TryGetProperty("articles", out var artArray) && artArray.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var a in artArray.EnumerateArray())
+                        {
+                            if (a.ValueKind == JsonValueKind.String)
+                                trap.Articles.Add(a.GetString() ?? "");
+                        }
+                    }
+                    result.LogicalTraps.Add(trap);
+                }
+            }
+
+            // ── Ideal contract deviations ──
+            if (root.TryGetProperty("ideal_contract_deviations", out var devArray) && devArray.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in devArray.EnumerateArray())
+                {
+                    result.IdealContractDeviations.Add(new IdealContractDeviation
+                    {
+                        Element = GetString(item, "element"),
+                        IdealText = GetString(item, "ideal_text"),
+                        ActualText = GetString(item, "actual_text"),
+                        Severity = GetString(item, "severity", "SREDNJI"),
+                        Recommendation = GetString(item, "recommendation")
+                    });
+                }
+            }
+
+            _logger.LogInformation("V65 Unified parse: traps={Traps}, deviations={Dev}",
+                result.LogicalTraps.Count, result.IdealContractDeviations.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "V65 Failed to parse reasoning fields from unified response — audit results still valid");
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  PASS 2 PARSER (legacy) — reasoning model output → structured models
     // ══════════════════════════════════════════════════════════
     private void ParseReasoningResponse(string json, ContractAnalysisResult result)
     {
@@ -1106,7 +1086,7 @@ public class ContractAnalysisService
                 MaxOutputTokenCount = 16384  // Contracts can be long
             };
 
-            var completion = await _auditClient.CompleteChatAsync(messages, options);
+            var completion = await _client.CompleteChatAsync(messages, options);
             var responseJson = completion.Value.Content[0].Text;
 
             if (onProgress != null)
