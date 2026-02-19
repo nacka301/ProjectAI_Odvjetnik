@@ -82,7 +82,7 @@ public class LegalStrategyResult
 
     /// <summary>V34: Data provenance disclaimer — where the AI info comes from</summary>
     public string DataProvenance { get; set; } =
-        "Rezultati se temelje na GPT-4o modelu koji analizira kontekst slučaja u usporedbi s " +
+        "Rezultati se temelje na AI modelu koji analizira kontekst slučaja u usporedbi s " +
         "općim načelima sudske prakse. Citirane presude su ILUSTRATIVNE — generirane na temelju " +
         "ustaljenih pravnih stajališta, a ne pretragom stvarne baze sudskih odluka.";
 

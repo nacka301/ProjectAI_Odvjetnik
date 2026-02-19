@@ -57,7 +57,7 @@ public class LegalIntelligenceTests
         Assert.Equal("", r.ProbabilityReasoning);
         Assert.Null(r.ScoreBreakdown);
         Assert.Empty(r.ConfidenceFactors);
-        Assert.Contains("GPT-4o", r.DataProvenance);
+        Assert.Contains("AI model", r.DataProvenance);
         Assert.Empty(r.Risks);
         Assert.Empty(r.Strengths);
         Assert.Empty(r.Recommendations);
