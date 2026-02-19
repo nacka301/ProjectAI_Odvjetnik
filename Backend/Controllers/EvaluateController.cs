@@ -111,14 +111,24 @@ public class EvaluateController : ControllerBase
             return;
         }
 
+        if (!file.FileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+        {
+            await SendError("validation", "Samo PDF datoteke su podržane.");
+            return;
+        }
+
         try
         {
+            // Sanitize filename for logging (prevent log injection)
+            var safeFileName = Path.GetFileName(file.FileName ?? "unknown")
+                .Replace("\n", "").Replace("\r", "");
+
             _logger.LogInformation("\n\n" +
                 "╔══════════════════════════════════════════════════════════════╗\n" +
                 "║          🔵  NOVA PROCJENA — PDF UPLOAD                     ║\n" +
                 "║  Datoteka: {FileName}  ({Size} bytes)                       ║\n" +
                 "╚══════════════════════════════════════════════════════════════╝",
-                file.FileName, file.Length);
+                safeFileName, file.Length);
 
             // ── Stage 1: PDF extraction ──
             _logger.LogInformation("━━━ STAGE 1: PDF EKSTRAKCIJA ━━━");

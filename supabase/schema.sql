@@ -64,7 +64,15 @@ CREATE INDEX IF NOT EXISTS idx_zk_analyses_created_at ON zk_analyses (created_at
 -- ========================================
 -- Row Level Security
 -- Backend uses the service_role key, which bypasses RLS.
--- The anon key (exposed in frontend) is limited to INSERT only.
+-- The anon key (exposed in frontend) is limited:
+--   • SELECT allowed for dashboard display (TODO: scope to user_id when auth is added)
+--   • INSERT blocked — only service_role (backend) can write
+--
+-- SECURITY TODO (before production):
+--   1. Add user_id UUID column to all data tables
+--   2. Implement Supabase Auth (JWT) in frontend
+--   3. Replace anon_select policies with: USING (auth.uid() = user_id)
+--   4. Consider encrypting OIB fields at rest
 -- ========================================
 
 -- evaluations
@@ -73,8 +81,7 @@ DROP POLICY IF EXISTS "service_role_full_access" ON evaluations;
 CREATE POLICY "service_role_full_access" ON evaluations
     FOR ALL USING (auth.role() = 'service_role');
 DROP POLICY IF EXISTS "anon_insert_only" ON evaluations;
-CREATE POLICY "anon_insert_only" ON evaluations
-    FOR INSERT WITH CHECK (true);
+-- anon INSERT removed — backend writes via service_role
 DROP POLICY IF EXISTS "anon_select" ON evaluations;
 CREATE POLICY "anon_select" ON evaluations
     FOR SELECT USING (true);
@@ -85,8 +92,7 @@ DROP POLICY IF EXISTS "service_role_full_access" ON zk_analyses;
 CREATE POLICY "service_role_full_access" ON zk_analyses
     FOR ALL USING (auth.role() = 'service_role');
 DROP POLICY IF EXISTS "anon_insert_only" ON zk_analyses;
-CREATE POLICY "anon_insert_only" ON zk_analyses
-    FOR INSERT WITH CHECK (true);
+-- anon INSERT removed — backend writes via service_role
 
 -- ========================================
 -- Contract Analyses table — stores AI contract risk analyses

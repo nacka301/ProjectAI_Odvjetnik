@@ -79,6 +79,14 @@ public class LegalController : ControllerBase
         if (!hasContent)
             return BadRequest(new { error = "Molimo unesite barem opis slučaja ili tekst ugovora." });
 
+        // Input length validation — prevent token abuse
+        const int MaxFieldLen = 100_000;
+        if ((request.CaseDescription?.Length ?? 0) > MaxFieldLen
+            || (request.ContractText?.Length ?? 0) > MaxFieldLen
+            || (request.ChronologySummary?.Length ?? 0) > MaxFieldLen
+            || (request.ZkSummary?.Length ?? 0) > MaxFieldLen)
+            return BadRequest(new { error = $"Tekst je predugačak (max {MaxFieldLen:N0} znakova po polju)." });
+
         _logger.LogInformation(
             "\n╔══════════════════════════════════════════════════════════════╗\n" +
             "║          ⚖️  PROVJERA ISHODA NA SUDU                        ║\n" +
@@ -88,18 +96,15 @@ public class LegalController : ControllerBase
 
         var result = await _legalService.AnalyzeLegalStrategyAsync(request);
 
-        // Save to Supabase (background — safe fire-and-forget)
-        _ = Task.Run(async () =>
+        // Save to Supabase (inline await — reliable audit trail)
+        try
         {
-            try
-            {
-                await SaveStrategyAsync(result, request.ClientPosition);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Background Supabase save failed for legal strategy");
-            }
-        });
+            await SaveStrategyAsync(result, request.ClientPosition);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Supabase save failed for legal strategy");
+        }
 
         return Ok(result);
     }
@@ -233,18 +238,15 @@ public class LegalController : ControllerBase
             // Final result
             await SseHelpers.SendSSE(Response, "result", result);
 
-            // Save to Supabase (background — safe fire-and-forget)
-            _ = Task.Run(async () =>
+            // Save to Supabase (inline await — reliable audit trail)
+            try
             {
-                try
-                {
-                    await SaveStrategyAsync(result, request.ClientPosition);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Background Supabase save failed for legal strategy (SSE)");
-                }
-            });
+                await SaveStrategyAsync(result, request.ClientPosition);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Supabase save failed for legal strategy (SSE)");
+            }
 
             await SseHelpers.SendSSE(Response, "done", new
             {
@@ -314,6 +316,9 @@ public class LegalController : ControllerBase
         if (pdfFiles.Count == 0)
             return BadRequest(new { error = "Nijedna PDF datoteka nije pronađena." });
 
+        if (pdfFiles.Count > 10)
+            return BadRequest(new { error = "Maksimalno 10 PDF datoteka po zahtjevu." });
+
         _logger.LogInformation("Strategy PDF analysis: {Count} files", pdfFiles.Count);
 
         // Extract text from all PDFs
@@ -349,18 +354,15 @@ public class LegalController : ControllerBase
 
         var result = await _legalService.AnalyzeLegalStrategyAsync(request);
 
-        // Save to Supabase (background — safe fire-and-forget)
-        _ = Task.Run(async () =>
+        // Save to Supabase (inline await — reliable audit trail)
+        try
         {
-            try
-            {
-                await SaveStrategyAsync(result, request.ClientPosition);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Background Supabase save failed for legal strategy (PDF)");
-            }
-        });
+            await SaveStrategyAsync(result, request.ClientPosition);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Supabase save failed for legal strategy (PDF)");
+        }
 
         return Ok(result);
     }

@@ -8,7 +8,7 @@ namespace Backend.Services;
 /// V50: AI Contract Auditor — "The Legal Auditor" with Deep Reasoning
 /// Three-pass architecture:
 ///   Pass 1 (Heavy/gpt-4o): Structured audit checklist — mandatory elements, cross-article analysis, missing clauses
-///   Pass 2 (Reasoning/o1-preview): Deep logical reasoning — trap detection, RAG comparison with ideal contract
+///   Pass 2 (Reasoning/o3-mini): Deep logical reasoning — trap detection, RAG comparison with ideal contract
 ///   Pass 3 (Engine): Deterministic risk scoring from all findings
 /// </summary>
 public class ContractAnalysisService
@@ -270,12 +270,12 @@ public class ContractAnalysisService
     public ContractAnalysisService(ChatClientProvider clients, ILogger<ContractAnalysisService> logger)
     {
         _auditClient = clients.Heavy;        // gpt-4o — structured audit (Pass 1)
-        _reasoningClient = clients.Reasoning; // o1-preview — deep reasoning (Pass 2)
+        _reasoningClient = clients.Reasoning; // o3-mini — deep reasoning (Pass 2)
         _logger = logger;
     }
 
     // ══════════════════════════════════════════════════════════
-    //  PASS 2: o1-preview DEEP REASONING PROMPT
+    //  PASS 2: o3-mini DEEP REASONING PROMPT
     // ══════════════════════════════════════════════════════════
     private const string DeepReasoningPrompt = """
         Ti si forenzički pravni analitičar specijaliziran za otkrivanje SKRIVENIH ZAMKI
@@ -327,7 +327,7 @@ public class ContractAnalysisService
     /// <summary>
     /// V50: Three-pass contract analysis.
     /// Pass 1 (gpt-4o):     AI audit — structured checklist + cross-article + mandatory clauses
-    /// Pass 2 (o1-preview):  Deep reasoning — logical traps + ideal contract comparison
+    /// Pass 2 (o3-mini):  Deep reasoning — logical traps + ideal contract comparison
     /// Pass 3 (Engine):      Deterministic risk scoring from all findings
     /// </summary>
     public async Task<ContractAnalysisResult> AnalyzeContractAsync(string contractText)
@@ -373,7 +373,7 @@ public class ContractAnalysisService
                 ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
             };
 
-            // ── PASS 2 (o1-preview): Deep Reasoning — runs in PARALLEL with Pass 1 ──
+            // ── PASS 2 (o3-mini): Deep Reasoning — runs in PARALLEL with Pass 1 ──
             var reasoningMessages = new List<ChatMessage>
             {
                 new UserChatMessage(
@@ -392,14 +392,14 @@ public class ContractAnalysisService
                     """)
             };
 
-            // o1-preview does NOT support temperature or system messages
+            // o3-mini does NOT support temperature or system messages
             var reasoningOptions = new ChatCompletionOptions
             {
                 ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
             };
 
             // Run both passes in parallel for maximum speed
-            _logger.LogInformation("V50 Starting parallel passes: Pass 1 (gpt-4o audit) + Pass 2 (o1-preview reasoning)");
+            _logger.LogInformation("V50 Starting parallel passes: Pass 1 (gpt-4o audit) + Pass 2 (o3-mini reasoning)");
             var auditTask = _auditClient.CompleteChatAsync(auditMessages, auditOptions);
             var reasoningTask = _reasoningClient.CompleteChatAsync(reasoningMessages, reasoningOptions);
 
@@ -503,7 +503,7 @@ public class ContractAnalysisService
         if (result.Warnings.Count > 0)
             breakdown.Add($"+{result.Warnings.Count * 3} Upozorenja ({result.Warnings.Count}×3)");
 
-        // ── V50: Logical traps from o1-preview ──
+        // ── V50: Logical traps from o3-mini ──
         foreach (var trap in result.LogicalTraps)
         {
             int pts = trap.Severity?.ToUpperInvariant() switch
@@ -553,7 +553,7 @@ public class ContractAnalysisService
     }
 
     // ══════════════════════════════════════════════════════════
-    //  PASS 2 PARSER — o1-preview reasoning output → structured models
+    //  PASS 2 PARSER — o3-mini reasoning output → structured models
     // ══════════════════════════════════════════════════════════
     private void ParseReasoningResponse(string json, ContractAnalysisResult result)
     {
@@ -608,7 +608,7 @@ public class ContractAnalysisService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "V50 Failed to parse o1-preview reasoning output — continuing without deep analysis");
+            _logger.LogWarning(ex, "V50 Failed to parse o3-mini reasoning output — continuing without deep analysis");
             // Non-fatal: Pass 1 audit results are still valid
         }
     }

@@ -43,7 +43,7 @@ public class ContractAnalysisResult
     /// <summary>V49: Breakdown of how risk score was computed</summary>
     public List<string> RiskScoreBreakdown { get; set; } = [];
 
-    /// <summary>V50: o1-preview deep reasoning — logical traps and inconsistencies</summary>
+    /// <summary>V50: o3-mini deep reasoning — logical traps and inconsistencies</summary>
     public List<LogicalTrap> LogicalTraps { get; set; } = [];
 
     /// <summary>V50: Deviations from ideal contract template (RAG comparison)</summary>
@@ -56,7 +56,7 @@ public class ContractAnalysisResult
     public string Disclaimer { get; set; } = "";
 }
 
-/// <summary>V50: Logical trap detected by o1-preview deep reasoning pass.</summary>
+/// <summary>V50: Logical trap detected by o3-mini deep reasoning pass.</summary>
 public class LogicalTrap
 {
     /// <summary>Short name of the trap</summary>

@@ -18,9 +18,18 @@ public static class SseHelpers
 
     public static async Task SendSSE(HttpResponse response, string type, object? payload)
     {
-        var json = JsonSerializer.Serialize(new { type, data = payload }, SseJsonOptions);
-        await response.WriteAsync($"data: {json}\n\n");
-        await response.Body.FlushAsync();
+        if (response.HttpContext.RequestAborted.IsCancellationRequested)
+            return;
+        try
+        {
+            var json = JsonSerializer.Serialize(new { type, data = payload }, SseJsonOptions);
+            await response.WriteAsync($"data: {json}\n\n", response.HttpContext.RequestAborted);
+            await response.Body.FlushAsync(response.HttpContext.RequestAborted);
+        }
+        catch (Exception) when (response.HttpContext.RequestAborted.IsCancellationRequested)
+        {
+            // Client disconnected — expected, swallow silently
+        }
     }
 
     public static Task SendProgress(HttpResponse response, string stage, string status, string label, string? detail = null)

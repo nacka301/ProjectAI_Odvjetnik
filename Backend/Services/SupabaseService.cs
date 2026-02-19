@@ -190,6 +190,7 @@ public class SupabaseService
     public async Task<List<EvaluationReadRecord>> GetUnauditedEvaluationsAsync(int limit = 20)
     {
         if (!_isConfigured) return [];
+        limit = Math.Clamp(limit, 1, 100);
 
         try
         {
@@ -212,8 +213,10 @@ public class SupabaseService
 
             if (evals.Count == 0) return [];
 
-            // Fetch existing audit evaluation IDs
-            var evalIds = string.Join(",", evals.Select(e => $"\"{e.Id}\""));
+            // Fetch existing audit evaluation IDs (validate UUIDs from deserialized data)
+            var validIds = evals.Where(e => UuidRegex.IsMatch(e.Id)).Select(e => $"\"{e.Id}\"");
+            var evalIds = string.Join(",", validIds);
+            if (string.IsNullOrEmpty(evalIds)) return evals;
             var auditUrl = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/valuation_audits?select=evaluation_id&evaluation_id=in.({evalIds})";
             var auditReq = new HttpRequestMessage(HttpMethod.Get, auditUrl);
             auditReq.Headers.Add("apikey", _serviceKey);

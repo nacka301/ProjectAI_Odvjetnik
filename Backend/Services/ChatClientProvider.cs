@@ -8,7 +8,7 @@ namespace Backend.Services;
 /// Routing philosophy:
 ///   Fast      (gpt-4o-mini) = extraction, classification, summaries — cheap &amp; fast
 ///   Heavy     (gpt-4o)      = complex reasoning, legal strategy, final reports
-///   Reasoning (o1-preview)  = deep logical reasoning, trap detection, second opinion
+///   Reasoning (o3-mini)    = deep logical reasoning, trap detection, second opinion
 ///
 /// Task → Model mapping:
 ///   ExtractPropertyInfo (PDF)           → Fast
@@ -42,7 +42,7 @@ public class ChatClientProvider
 
     /// <summary>
     /// Reasoning model — for deep logical reasoning and trap detection.
-    /// Uses o1-preview chain-of-thought for catching subtle contractual traps.
+    /// Uses o3-mini chain-of-thought for catching subtle contractual traps.
     /// </summary>
     public ChatClient Reasoning { get; }
 
@@ -57,7 +57,7 @@ public class ChatClientProvider
         string apiKey,
         string fastModel = "gpt-4o-mini",
         string heavyModel = "gpt-4o",
-        string reasoningModel = "o1-preview")
+        string reasoningModel = "o3-mini")
     {
         FastModel = fastModel;
         HeavyModel = heavyModel;

@@ -18,10 +18,9 @@ public class InvoiceService
     private readonly SupabaseService _supabaseService;
     private readonly ILogger<InvoiceService> _logger;
 
-    // Thread-safe sequential counter — seeded from timestamp to survive restarts.
-    // The high bits encode the date (YYYYMMDDHHmm), the low bits ensure uniqueness
-    // within the same minute via Interlocked.Increment.
-    private static int _invoiceCounter = int.Parse(DateTime.UtcNow.ToString("HHmm")) * 100;
+    // Thread-safe sequential counter — uses Guid-based seed for restart uniqueness.
+    // Each restart gets a different seed, preventing collision across restarts.
+    private static int _invoiceCounter = Math.Abs(Guid.NewGuid().GetHashCode() % 100000);
 
     public InvoiceService(SupabaseService supabaseService, ILogger<InvoiceService> logger)
     {
@@ -128,9 +127,9 @@ public class InvoiceService
     {
         var now = DateTime.UtcNow;
         var seq = Interlocked.Increment(ref _invoiceCounter);
-        // Combine day-of-year (1-366) with counter for cross-restart uniqueness
-        var uniqueSeq = (now.DayOfYear * 10000) + (seq % 10000);
-        return $"{now.Year}-{uniqueSeq:D5}";
+        // Combine timestamp (YYMMDDHHmmss) with counter for uniqueness across restarts
+        var timePart = now.ToString("MMddHHmm");
+        return $"{now.Year}-{timePart}{seq % 1000:D3}";
     }
 
     /// <summary>

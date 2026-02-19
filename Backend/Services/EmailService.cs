@@ -85,8 +85,9 @@ public class EmailService
             }
 
             var errorBody = await response.Content.ReadAsStringAsync();
+            var safeBody = errorBody.Length > 500 ? errorBody[..500] : errorBody;
             _logger.LogError("EmailService: Brevo API returned {Status}: {Body}",
-                response.StatusCode, errorBody);
+                response.StatusCode, safeBody);
             return false;
         }
         catch (Exception ex)

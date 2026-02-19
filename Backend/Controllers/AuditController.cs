@@ -188,7 +188,7 @@ public class AuditController : ControllerBase
                 {
                     EvaluationId = evalId,
                     Success = false,
-                    Error = ex.Message
+                    Error = "Audit procjene nije uspio. Pokušajte ponovno."
                 });
                 response.Failed++;
             }

@@ -67,7 +67,7 @@ interface MandatoryClauseCheck {
   description: string;
 }
 
-// V50: Logical trap detected by o1-preview deep reasoning
+// V50: Logical trap detected by o3-mini deep reasoning
 interface LogicalTrap {
   title: string;
   articles: string[];
@@ -576,7 +576,7 @@ export default function ContractAnalysisPage() {
                   <h2 className="font-bold text-red-900">
                     🪤 Logičke zamke — dubinska analiza ({result.logical_traps.length})
                   </h2>
-                  <span className="ml-auto text-[10px] bg-red-200 text-red-800 px-2 py-0.5 rounded-full font-semibold uppercase">o1-preview</span>
+                  <span className="ml-auto text-[10px] bg-red-200 text-red-800 px-2 py-0.5 rounded-full font-semibold uppercase">o3-mini</span>
                 </div>
                 <div className="divide-y divide-red-100">
                   {result.logical_traps.map((trap, i) => (

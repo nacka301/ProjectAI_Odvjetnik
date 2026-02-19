@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
@@ -132,7 +134,7 @@ var openAiKey = builder.Configuration["OpenAI:ApiKey"]
 
 var fastModel = builder.Configuration["OpenAI:FastModel"] ?? "gpt-4o-mini";
 var heavyModel = builder.Configuration["OpenAI:HeavyModel"] ?? "gpt-4o";
-var reasoningModel = builder.Configuration["OpenAI:ReasoningModel"] ?? "o1-preview";
+var reasoningModel = builder.Configuration["OpenAI:ReasoningModel"] ?? "o3-mini";
 builder.Services.AddSingleton(new ChatClientProvider(openAiKey, fastModel, heavyModel, reasoningModel));
 builder.Services.AddScoped<PdfService>();
 builder.Services.AddScoped<ValuationService>();
@@ -190,7 +192,9 @@ if (!string.IsNullOrWhiteSpace(apiKey))
         }
 
         if (!context.Request.Headers.TryGetValue("X-API-Key", out var providedKey)
-            || providedKey != apiKey)
+            || !CryptographicOperations.FixedTimeEquals(
+                Encoding.UTF8.GetBytes(providedKey.ToString()),
+                Encoding.UTF8.GetBytes(apiKey)))
         {
             context.Response.StatusCode = 401;
             context.Response.ContentType = "application/json";

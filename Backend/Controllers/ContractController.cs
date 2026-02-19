@@ -59,7 +59,7 @@ public class ContractController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to extract text from contract PDF");
-            return BadRequest(new { error = $"Nije moguće pročitati PDF: {ex.Message}" });
+            return BadRequest(new { error = "Nije moguće pročitati PDF. Provjerite da je datoteka ispravna." });
         }
 
         if (string.IsNullOrWhiteSpace(pdfText) || pdfText.Length < 50)
@@ -71,40 +71,36 @@ public class ContractController : ControllerBase
 
         var result = await _contractService.AnalyzeContractAsync(pdfText);
 
-        // Save to Supabase (background — safe fire-and-forget)
-        _ = Task.Run(async () =>
+        // Save to Supabase (inline await — reliable audit trail)
+        try
         {
-            try
+            var id = await _supabaseService.SaveContractAnalysisAsync(new ContractAnalysisRecord
             {
-                var id = await _supabaseService.SaveContractAnalysisAsync(new ContractAnalysisRecord
-                {
-                    DocumentType = result.DocumentType,
-                    Summary = result.Summary,
-                    OverallRisk = result.OverallRisk,
-                    RiskScore = result.RiskScore,
-                    RedFlagsCount = result.RedFlags.Count,
-                    RawJsonOutput = result
-                });
-                // Audit log
-                await _supabaseService.SaveAuditLogAsync(new AuditLogRecord
-                {
-                    Module = "contract_analysis",
-                    AnalysisId = id,
-                    Step = 1,
-                    Action = $"Ugovor analiziran: {result.DocumentType}, rizik={result.OverallRisk} ({result.RiskScore}/100), {result.RedFlags.Count} crvenih zastavica",
-                    LegalBasis = "Zakon o obveznim odnosima (NN 35/05, 29/18)",
-                    Citation = "čl. 247.–269. ZOO",
-                    Reasoning = result.Summary,
-                    Confidence = result.RiskScore >= 70 ? "VISOKO" : result.RiskScore >= 40 ? "SREDNJE" : "NISKO",
-                    ModelUsed = "gpt-4o",
-                    ModelTemperature = 0.10
-                });
-            }
-            catch (Exception ex)
+                DocumentType = result.DocumentType,
+                Summary = result.Summary,
+                OverallRisk = result.OverallRisk,
+                RiskScore = result.RiskScore,
+                RedFlagsCount = result.RedFlags.Count,
+                RawJsonOutput = result
+            });
+            await _supabaseService.SaveAuditLogAsync(new AuditLogRecord
             {
-                _logger.LogWarning(ex, "Background Supabase save failed for contract analysis (PDF)");
-            }
-        });
+                Module = "contract_analysis",
+                AnalysisId = id,
+                Step = 1,
+                Action = $"Ugovor analiziran: {result.DocumentType}, rizik={result.OverallRisk} ({result.RiskScore}/100), {result.RedFlags.Count} crvenih zastavica",
+                LegalBasis = "Zakon o obveznim odnosima (NN 35/05, 29/18)",
+                Citation = "čl. 247.–269. ZOO",
+                Reasoning = result.Summary,
+                Confidence = result.RiskScore >= 70 ? "VISOKO" : result.RiskScore >= 40 ? "SREDNJE" : "NISKO",
+                ModelUsed = "gpt-4o",
+                ModelTemperature = 0.10
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Supabase save failed for contract analysis (PDF)");
+        }
 
         return Ok(result);
     }
@@ -129,40 +125,36 @@ public class ContractController : ControllerBase
 
         var result = await _contractService.AnalyzeContractAsync(request.Text);
 
-        // Save to Supabase (background — safe fire-and-forget)
-        _ = Task.Run(async () =>
+        // Save to Supabase (inline await — reliable audit trail)
+        try
         {
-            try
+            var id = await _supabaseService.SaveContractAnalysisAsync(new ContractAnalysisRecord
             {
-                var id = await _supabaseService.SaveContractAnalysisAsync(new ContractAnalysisRecord
-                {
-                    DocumentType = result.DocumentType,
-                    Summary = result.Summary,
-                    OverallRisk = result.OverallRisk,
-                    RiskScore = result.RiskScore,
-                    RedFlagsCount = result.RedFlags.Count,
-                    RawJsonOutput = result
-                });
-                // Audit log
-                await _supabaseService.SaveAuditLogAsync(new AuditLogRecord
-                {
-                    Module = "contract_analysis",
-                    AnalysisId = id,
-                    Step = 1,
-                    Action = $"Ugovor analiziran (tekst): {result.DocumentType}, rizik={result.OverallRisk} ({result.RiskScore}/100), {result.RedFlags.Count} crvenih zastavica",
-                    LegalBasis = "Zakon o obveznim odnosima (NN 35/05, 29/18)",
-                    Citation = "čl. 247.–269. ZOO",
-                    Reasoning = result.Summary,
-                    Confidence = result.RiskScore >= 70 ? "VISOKO" : result.RiskScore >= 40 ? "SREDNJE" : "NISKO",
-                    ModelUsed = "gpt-4o",
-                    ModelTemperature = 0.10
-                });
-            }
-            catch (Exception ex)
+                DocumentType = result.DocumentType,
+                Summary = result.Summary,
+                OverallRisk = result.OverallRisk,
+                RiskScore = result.RiskScore,
+                RedFlagsCount = result.RedFlags.Count,
+                RawJsonOutput = result
+            });
+            await _supabaseService.SaveAuditLogAsync(new AuditLogRecord
             {
-                _logger.LogWarning(ex, "Background Supabase save failed for contract analysis (text)");
-            }
-        });
+                Module = "contract_analysis",
+                AnalysisId = id,
+                Step = 1,
+                Action = $"Ugovor analiziran (tekst): {result.DocumentType}, rizik={result.OverallRisk} ({result.RiskScore}/100), {result.RedFlags.Count} crvenih zastavica",
+                LegalBasis = "Zakon o obveznim odnosima (NN 35/05, 29/18)",
+                Citation = "čl. 247.–269. ZOO",
+                Reasoning = result.Summary,
+                Confidence = result.RiskScore >= 70 ? "VISOKO" : result.RiskScore >= 40 ? "SREDNJE" : "NISKO",
+                ModelUsed = "gpt-4o",
+                ModelTemperature = 0.10
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Supabase save failed for contract analysis (text)");
+        }
 
         return Ok(result);
     }

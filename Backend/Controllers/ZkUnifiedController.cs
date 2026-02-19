@@ -158,6 +158,12 @@ public class ZkUnifiedController : ControllerBase
             return;
         }
 
+        if (text.Length > 200_000)
+        {
+            await SendError("validation", "Tekst je predugačak (max 200.000 znakova).");
+            return;
+        }
+
         _logger.LogInformation("=== ZK Text Stream: {Len} chars ===", text.Length);
 
         try
