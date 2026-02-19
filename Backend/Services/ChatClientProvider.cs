@@ -12,8 +12,8 @@ namespace Backend.Services;
 /// 
 /// Routing philosophy:
 ///   Fast      (openai/gpt-4o-mini)          = extraction, classification, summaries — cheap & fast
-///   Heavy     (deepseek/deepseek-v3-0324)   = complex reasoning, legal strategy, final reports
-///   Reasoning (deepseek/deepseek-v3-0324)   = deep logical reasoning, trap detection, second opinion
+///   Heavy     (deepseek/deepseek-chat-v3-0324)  = complex reasoning, legal strategy, final reports
+///   Reasoning (deepseek/deepseek-chat-v3-0324)  = deep logical reasoning, trap detection, second opinion
 ///
 /// Model format: "provider/model" (e.g., "openai/gpt-4o", "anthropic/claude-3.5-sonnet")
 /// To switch providers, just change the model string in appsettings.json.
@@ -70,8 +70,8 @@ public class ChatClientProvider
         string apiKey,
         string baseUrl = "https://openrouter.ai/api/v1",
         string fastModel = "openai/gpt-4o-mini",
-        string heavyModel = "deepseek/deepseek-v3-0324",
-        string reasoningModel = "deepseek/deepseek-v3-0324")
+        string heavyModel = "deepseek/deepseek-chat-v3-0324",
+        string reasoningModel = "deepseek/deepseek-chat-v3-0324")
     {
         BaseUrl = baseUrl;
         FastModel = fastModel;
