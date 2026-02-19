@@ -804,4 +804,286 @@ public class ContractAnalysisService
         return el.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.String
             ? v.GetString() : null;
     }
+
+    // ══════════════════════════════════════════════════════════
+    //  V58: GENERATE IMPROVED CONTRACT
+    // ══════════════════════════════════════════════════════════
+
+    private const string GenerateContractPrompt = """
+        PERSONA:
+        Ti si VRHOVNI PRAVNI REDAKTOR sa 30 godina iskustva u sastavljanju
+        kupoprodajnih ugovora za nekretnine prema hrvatskom pravu.
+
+        ZADATAK:
+        Na temelju originalnog ugovora i rezultata AI pravne revizije,
+        NAPIŠI POBOLJŠANI UGOVOR koji:
+
+        1. ZADRŽAVA strukturu i namjeru originalnog ugovora
+        2. ISPRAVLJA SVE crvene zastavice (red_flags)
+        3. PRIMJENJUJE SVE predložene izmjene (suggested_amendments)
+        4. ZATVARA SVE logičke zamke (logical_traps)
+        5. DODAJE nedostajuće zaštitne klauzule (mandatory_clauses koje nedostaju)
+        6. USKLAĐUJE proturječne članke (cross_article_issues)
+        7. PRIBLIŽAVA ugovor idealnom predlošku (ideal_contract_deviations)
+
+        PRAVILA PISANJA:
+        - Piši na HRVATSKOM JEZIKU u formalnom pravnom stilu
+        - Svaki članak numeriraj (Članak 1., Članak 2., ...)
+        - Uz svaki NOVI ili IZMIJENJENI članak dodaj komentar u uglatim zagradama
+          [NOVO: razlog] ili [IZMIJENJENO: što je promijenjeno i zašto]
+        - Zadrži sve ispravne dijelove originalnog ugovora NETAKNUTE
+        - Citiraj relevantne zakonske članke (ZOO, ZZK, ZV, ObZ) uz svaku izmjenu
+        - NE dodaj ništa što nije potkrijepljeno analizom ili zakonskim okvirom
+
+        ZAKONSKI OKVIR:
+        - ZOO = Zakon o obveznim odnosima (NN 35/05, 41/08, 125/11, 78/15, 29/18)
+        - ZZK = Zakon o zemljišnim knjigama (NN 91/96, 137/99, 114/01, 100/04, 107/07, 152/08, 55/13, 60/13, 108/17)
+        - ZV = Zakon o vlasništvu i drugim stvarnim pravima (NN 91/96, 68/98, 137/99, 22/00, 73/00, 114/01, 79/06, 141/06, 146/08, 38/09, 153/09, 143/12, 152/14)
+        - ObZ = Obiteljski zakon (NN 103/15, 98/19, 47/20)
+
+        FORMAT ODGOVORA — ISKLJUČIVO čisti JSON (bez markdown fencing-a):
+        {
+          "improved_contract": "Puni tekst poboljšanog ugovora s komentarima u uglatim zagradama",
+          "changes_summary": [
+            {
+              "article": "Članak X.",
+              "change_type": "IZMIJENJENO | NOVO | UKLONJENO",
+              "description": "Kratki opis što je promijenjeno i zašto",
+              "legal_basis": "čl. XX. ZOO"
+            }
+          ],
+          "disclaimer": "Ovaj ugovor je generiran AI alatom i ne zamjenjuje pravni savjet ovlaštenog odvjetnika."
+        }
+        """;
+
+    /// <summary>
+    /// V58: Generate an improved version of the contract based on the analysis results.
+    /// Uses the Heavy model to rewrite the contract with all amendments, fixes, and missing clauses.
+    /// </summary>
+    public async Task<GeneratedContractResult> GenerateImprovedContractAsync(
+        string originalContractText,
+        ContractAnalysisResult analysisResult,
+        Func<string, string, string, string?, Task>? onProgress = null)
+    {
+        if (string.IsNullOrWhiteSpace(originalContractText))
+        {
+            return new GeneratedContractResult
+            {
+                ImprovedContract = "",
+                ChangesSummary = [],
+                Disclaimer = Disclaimer
+            };
+        }
+
+        string text = originalContractText.Length > 15000 ? originalContractText[..15000] : originalContractText;
+
+        try
+        {
+            _logger.LogInformation("V58 Generating improved contract from {Len} chars + analysis", text.Length);
+
+            if (onProgress != null)
+                await onProgress("preparing", "active", "Pripremam analizu...", null);
+
+            // Build a concise summary of all findings for the AI
+            var findingsSummary = BuildFindingsSummary(analysisResult);
+
+            if (onProgress != null)
+            {
+                await onProgress("preparing", "done", "Analiza pripremljena", null);
+                await onProgress("generating", "active", "Generiram poboljšani ugovor...", "AI pravni redaktor radi");
+            }
+
+            var messages = new List<ChatMessage>
+            {
+                new SystemChatMessage(GenerateContractPrompt),
+                new UserChatMessage(
+                    $"""
+                    GENERIRAJ POBOLJŠANI UGOVOR na temelju ove analize.
+
+                    ════════════════════════════════════════════════
+                    ORIGINALNI UGOVOR:
+                    ════════════════════════════════════════════════
+                    {text}
+
+                    ════════════════════════════════════════════════
+                    REZULTATI PRAVNE REVIZIJE:
+                    ════════════════════════════════════════════════
+                    {findingsSummary}
+
+                    ════════════════════════════════════════════════
+                    IDEALNI REFERENTNI PREDLOŽAK (za usporedbu):
+                    ════════════════════════════════════════════════
+                    {IdealContractTemplate}
+                    """)
+            };
+
+            var options = new ChatCompletionOptions
+            {
+                Temperature = 0.1f,
+                ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat(),
+                MaxOutputTokenCount = 16384  // Contracts can be long
+            };
+
+            var completion = await _auditClient.CompleteChatAsync(messages, options);
+            var responseJson = completion.Value.Content[0].Text;
+
+            if (onProgress != null)
+            {
+                await onProgress("generating", "done", "Ugovor generiran", null);
+                await onProgress("reviewing", "active", "Završna provjera...", null);
+            }
+
+            _logger.LogDebug("V58 Generated contract response: {Len} chars", responseJson.Length);
+
+            var result = ParseGeneratedContract(responseJson);
+
+            if (onProgress != null)
+                await onProgress("reviewing", "done", "Provjera završena", null);
+
+            _logger.LogInformation("V58 Improved contract generated: {ContractLen} chars, {Changes} changes",
+                result.ImprovedContract.Length, result.ChangesSummary.Count);
+
+            return result;
+        }
+        catch (ClientResultException ex)
+        {
+            _logger.LogError(ex, "V58 Generate contract failed — OpenRouter API error (HTTP {Status})", ex.Status);
+            return new GeneratedContractResult
+            {
+                ImprovedContract = "",
+                ChangesSummary = [],
+                Disclaimer = Disclaimer,
+                Error = $"AI generiranje nije uspjelo: API greška (HTTP {ex.Status}). Pokušajte ponovno."
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "V58 Generate contract failed");
+            return new GeneratedContractResult
+            {
+                ImprovedContract = "",
+                ChangesSummary = [],
+                Disclaimer = Disclaimer,
+                Error = "AI generiranje nije uspjelo. Pokušajte ponovno ili kontaktirajte podršku."
+            };
+        }
+    }
+
+    /// <summary>
+    /// Build a concise text summary of all analysis findings for the contract generation prompt.
+    /// </summary>
+    private static string BuildFindingsSummary(ContractAnalysisResult analysis)
+    {
+        var sb = new System.Text.StringBuilder();
+
+        sb.AppendLine($"Vrsta dokumenta: {analysis.DocumentType}");
+        sb.AppendLine($"Ukupni rizik: {analysis.OverallRisk} ({analysis.RiskScore}/100)");
+        sb.AppendLine($"Sažetak: {analysis.Summary}");
+        sb.AppendLine();
+
+        if (analysis.RedFlags.Count > 0)
+        {
+            sb.AppendLine("CRVENE ZASTAVICE:");
+            foreach (var f in analysis.RedFlags)
+                sb.AppendLine($"  • {f.Title}: {f.Description} [Pravna osnova: {f.LegalBasis}]");
+            sb.AppendLine();
+        }
+
+        if (analysis.Warnings.Count > 0)
+        {
+            sb.AppendLine("UPOZORENJA:");
+            foreach (var w in analysis.Warnings)
+                sb.AppendLine($"  • {w.Title}: {w.Description}");
+            sb.AppendLine();
+        }
+
+        if (analysis.LogicalTraps.Count > 0)
+        {
+            sb.AppendLine("LOGIČKE ZAMKE:");
+            foreach (var t in analysis.LogicalTraps)
+                sb.AppendLine($"  • [{t.Severity}] {t.Title}: {t.Explanation} (članci: {string.Join(", ", t.Articles)})");
+            sb.AppendLine();
+        }
+
+        if (analysis.SuggestedAmendments.Count > 0)
+        {
+            sb.AppendLine("PREDLOŽENE IZMJENE:");
+            foreach (var a in analysis.SuggestedAmendments)
+                sb.AppendLine($"  • {a.ArticleReference}: Trenutno: \"{a.CurrentText}\" → Predloženo: \"{a.ProposedText}\" Razlog: {a.Rationale}");
+            sb.AppendLine();
+        }
+
+        if (analysis.MandatoryClauses.Count > 0)
+        {
+            var missing = analysis.MandatoryClauses.Where(mc => !mc.Present).ToList();
+            if (missing.Count > 0)
+            {
+                sb.AppendLine("NEDOSTAJUĆE ZAŠTITNE KLAUZULE:");
+                foreach (var mc in missing)
+                    sb.AppendLine($"  • [{mc.Importance}] {mc.Clause}: {mc.Description}");
+                sb.AppendLine();
+            }
+        }
+
+        if (analysis.CrossArticleIssues.Count > 0)
+        {
+            sb.AppendLine("STRUKTURNI PROBLEMI (cross-article):");
+            foreach (var ca in analysis.CrossArticleIssues)
+                sb.AppendLine($"  • {ca.Title} (članci: {string.Join(", ", ca.LinkedArticles)}): {ca.Description}");
+            sb.AppendLine();
+        }
+
+        if (analysis.IdealContractDeviations.Count > 0)
+        {
+            sb.AppendLine("DEVIJACIJE OD IDEALNOG UGOVORA:");
+            foreach (var d in analysis.IdealContractDeviations)
+                sb.AppendLine($"  • [{d.Severity}] {d.Element}: Idealno: \"{d.IdealText}\" — Stvarno: \"{d.ActualText}\" — Preporuka: {d.Recommendation}");
+            sb.AppendLine();
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Parse the AI-generated improved contract JSON response.
+    /// </summary>
+    private GeneratedContractResult ParseGeneratedContract(string json)
+    {
+        var result = new GeneratedContractResult { Disclaimer = Disclaimer };
+
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            result.ImprovedContract = GetString(root, "improved_contract");
+
+            if (root.TryGetProperty("changes_summary", out var csArray) && csArray.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in csArray.EnumerateArray())
+                {
+                    result.ChangesSummary.Add(new ContractChange
+                    {
+                        Article = GetString(item, "article"),
+                        ChangeType = GetString(item, "change_type"),
+                        Description = GetString(item, "description"),
+                        LegalBasis = GetStringOrNull(item, "legal_basis") ?? ""
+                    });
+                }
+            }
+
+            if (root.TryGetProperty("disclaimer", out var disc) && disc.ValueKind == JsonValueKind.String)
+            {
+                result.Disclaimer = disc.GetString() ?? Disclaimer;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "V58 Failed to parse generated contract JSON");
+            // Try to extract just the text if JSON parsing fails
+            result.ImprovedContract = json;
+        }
+
+        return result;
+    }
 }

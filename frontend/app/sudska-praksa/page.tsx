@@ -32,6 +32,9 @@ import {
   Send,
 } from "lucide-react";
 import PrecedentSidebar from "@/components/PrecedentSidebar";
+import SharedProcessingView, { type ProcessingStage } from "@/components/SharedProcessingView";
+import ResultActions from "@/components/ResultActions";
+import { generateLegalPdf } from "@/lib/generateModulePdfs";
 import { NormBadge, CitedNormsList, TemporalDatePicker, CitationModeToggle } from "@/components/NormBadge";
 import { type CitedNorm, fetchTemporalBatch, type TemporalNormResult } from "@/lib/normApi";
 
@@ -385,6 +388,25 @@ function StabilityBadge({ stability }: { stability: string }) {
 //  MAIN PAGE COMPONENT
 // ═════════════════════════════════════════════════════════
 
+const LEGAL_STAGE_ICONS: Record<string, React.ReactNode> = {
+  preparing: <FileText className="h-4 w-4" />,
+  analyzing: <Scale className="h-4 w-4" />,
+  precedents: <BookOpen className="h-4 w-4" />,
+  strategy: <Target className="h-4 w-4" />,
+};
+const LEGAL_STAGE_MICROCOPY: Record<string, string[]> = {
+  preparing: ["Pripremam kontekst...", "Čitam podatke slučaja..."],
+  analyzing: ["Analiziram pravno pitanje...", "Identificiram pod-pitanja...", "Klasificiram pravni spor..."],
+  precedents: ["Pretražujem sudsku praksu...", "Analiziram relevantne presude...", "Procjenjujem stabilnost prakse..."],
+  strategy: ["Procjenjujem šanse za uspjeh...", "Formuliram preporuke...", "Izračunavam vjerojatnost..."],
+};
+const INITIAL_LEGAL_STAGES: ProcessingStage[] = [
+  { id: "preparing", label: "Priprema", status: "pending" },
+  { id: "analyzing", label: "Pravna analiza", status: "pending" },
+  { id: "precedents", label: "Sudska praksa", status: "pending" },
+  { id: "strategy", label: "Strategija i prognoza", status: "pending" },
+];
+
 export default function ProvjeriIshodPage() {
   // Input state
   const [caseDescription, setCaseDescription] = useState("");
@@ -401,6 +423,9 @@ export default function ProvjeriIshodPage() {
   >({});
   const [result, setResult] = useState<LegalStrategyResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // V58: Stage-based progress for SharedProcessingView
+  const [processingStages, setProcessingStages] = useState<ProcessingStage[]>([]);
+  const [viewState, setViewState] = useState<"INPUT" | "PROCESSING" | "RESULT">("INPUT");
 
   // UI state
   const [expandedPrecedent, setExpandedPrecedent] = useState<number | null>(null);
@@ -412,6 +437,15 @@ export default function ProvjeriIshodPage() {
   const [eventDate, setEventDate] = useState("");
   const [courtCitationMode, setCourtCitationMode] = useState(true);
   const [temporalResults, setTemporalResults] = useState<TemporalNormResult[]>([]);
+
+  const resetAnalysis = () => {
+    setResult(null);
+    setStages({});
+    setProcessingStages([]);
+    setError(null);
+    setLoading(false);
+    setViewState("INPUT");
+  };
 
   // ── Submit via SSE stream ──
   const submitAnalysis = async () => {
@@ -434,6 +468,10 @@ export default function ProvjeriIshodPage() {
     setError(null);
     setResult(null);
     setStages({});
+    setProcessingStages(INITIAL_LEGAL_STAGES.map((s) => ({ ...s })));
+    setViewState("PROCESSING");
+
+    const knownStages = new Set(INITIAL_LEGAL_STAGES.map((s) => s.id));
 
     try {
       const response = await fetch(`${API}/api/legal/strategy/stream`, {
@@ -485,9 +523,21 @@ export default function ProvjeriIshodPage() {
                   status: msg.data.status ?? "active",
                 },
               }));
+              // Map to processing stages for SharedProcessingView
+              const stageId = msg.data.stage!;
+              if (knownStages.has(stageId)) {
+                setProcessingStages((prev) =>
+                  prev.map((s) =>
+                    s.id === stageId
+                      ? { ...s, status: (msg.data.status ?? "active") as ProcessingStage["status"], label: msg.data.label || s.label, detail: msg.data.detail ?? s.detail }
+                      : s
+                  )
+                );
+              }
             }
 
             if (msg.type === "result") {
+              setProcessingStages((prev) => prev.map((s) => ({ ...s, status: "done" as const })));
               setResult(msg.data as unknown as LegalStrategyResult);
             }
 
@@ -499,6 +549,8 @@ export default function ProvjeriIshodPage() {
           }
         }
       }
+
+      if (!error) setViewState("RESULT");
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Nepoznata greška"
@@ -518,6 +570,8 @@ export default function ProvjeriIshodPage() {
     setLoading(true);
     setError(null);
     setResult(null);
+    setProcessingStages(INITIAL_LEGAL_STAGES.map((s) => ({ ...s, status: "active" as const })));
+    setViewState("PROCESSING");
 
     try {
       const formData = new FormData();
@@ -540,7 +594,9 @@ export default function ProvjeriIshodPage() {
       }
 
       const data: LegalStrategyResult = await res.json();
+      setProcessingStages((prev) => prev.map((s) => ({ ...s, status: "done" as const })));
       setResult(data);
+      setViewState("RESULT");
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Nepoznata greška"
@@ -567,7 +623,25 @@ export default function ProvjeriIshodPage() {
     .join("\n");
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans">
+    <>
+      {/* ═══ PROCESSING: Full-Screen Pipeline ═══ */}
+      {viewState === "PROCESSING" && (
+        <SharedProcessingView
+          stages={processingStages}
+          isStreaming={loading}
+          error={error}
+          onCancel={resetAnalysis}
+          onReset={resetAnalysis}
+          title="Analiza u tijeku"
+          subtitle="AI pretražuje sudsku praksu i procjenjuje šanse"
+          headerIcon={<Gavel className="h-7 w-7 text-white" />}
+          stageIcons={LEGAL_STAGE_ICONS}
+          stageMicrocopy={LEGAL_STAGE_MICROCOPY}
+          theme="indigo"
+        />
+      )}
+
+    <div className={`min-h-screen bg-slate-50 font-sans ${viewState === "PROCESSING" ? "hidden" : ""}`}>
       {/* Header */}
       <header className="bg-slate-900 text-white">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
@@ -603,7 +677,7 @@ export default function ProvjeriIshodPage() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
-        {!result ? (
+        {viewState !== "RESULT" || !result ? (
           /* ═══════════ INPUT FORM ═══════════ */
           <div className="space-y-6">
             {/* Tab selector */}
@@ -832,37 +906,41 @@ export default function ProvjeriIshodPage() {
                 </>
               )}
             </button>
-
-            {/* SSE Progress */}
-            {loading && Object.keys(stages).length > 0 && (
-              <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
-                <h3 className="text-xs font-bold text-slate-600 uppercase tracking-wider">
-                  Tijek analize
-                </h3>
-                {Object.entries(stages).map(([key, val]) => (
-                  <ProgressStage
-                    key={key}
-                    label={val.label}
-                    detail={val.detail}
-                    status={val.status as "pending" | "active" | "done" | "error"}
-                  />
-                ))}
-              </div>
-            )}
           </div>
         ) : (
           /* ═══════════ RESULT VIEW ═══════════ */
           <div className="space-y-6">
-            {/* Back button */}
-            <button
-              onClick={() => {
-                setResult(null);
-                setStages({});
-              }}
-              className="text-xs text-blue-600 hover:underline flex items-center gap-1"
-            >
-              <ArrowLeft className="h-3 w-3" /> Nova analiza
-            </button>
+            {/* Back button + Actions */}
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <button
+                onClick={resetAnalysis}
+                className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+              >
+                <ArrowLeft className="h-3 w-3" /> Nova analiza
+              </button>
+              <ResultActions
+                copyText={[
+                  `PRAVNA STRATEGIJA — AI analiza`,
+                  `Ključno pitanje: ${result.key_legal_issue}`,
+                  `Vjerojatnost uspjeha: ${result.win_probability}% (${result.win_probability_label})`,
+                  "",
+                  result.probability_reasoning,
+                  "",
+                  `SUDSKA PRAKSA (${result.precedents.length}):`,
+                  ...result.precedents.map((p) => `• ${p.case_number} (${p.court}, ${p.date}) — ${p.alignment}, ${p.similarity_score}%`),
+                  "",
+                  `RIZICI (${result.risks.length}):`,
+                  ...result.risks.map((r) => `• [${r.severity}] ${r.title}: ${r.description}`),
+                  "",
+                  `PREPORUKE (${result.recommendations.length}):`,
+                  ...result.recommendations.map((r) => `• [${r.priority}] ${r.action}`),
+                  "",
+                  `STRATEŠKI SAŽETAK:`,
+                  result.strategy_summary,
+                ].join("\n")}
+                onPdfExport={() => generateLegalPdf(result as Parameters<typeof generateLegalPdf>[0])}
+              />
+            </div>
 
             {/* ── Hero: Win Probability ── */}
             <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
@@ -1413,5 +1491,6 @@ export default function ProvjeriIshodPage() {
         />
       )}
     </div>
+    </>
   );
 }

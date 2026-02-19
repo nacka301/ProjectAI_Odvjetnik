@@ -183,3 +183,55 @@ public class SuggestedAmendment
     /// <summary>Why this change protects the buyer</summary>
     public string Rationale { get; set; } = "";
 }
+
+// ══════════════════════════════════════════════════════════
+//  V58: GENERATED IMPROVED CONTRACT MODELS
+// ══════════════════════════════════════════════════════════
+
+/// <summary>
+/// V58: Result of AI-generated improved contract with all amendments applied.
+/// </summary>
+public class GeneratedContractResult
+{
+    /// <summary>Full text of the improved contract with [NOVO] / [IZMIJENJENO] annotations</summary>
+    public string ImprovedContract { get; set; } = "";
+
+    /// <summary>Summary of all changes made to the original contract</summary>
+    public List<ContractChange> ChangesSummary { get; set; } = [];
+
+    /// <summary>Legal disclaimer</summary>
+    public string Disclaimer { get; set; } = "";
+
+    /// <summary>Error message if generation failed (null on success)</summary>
+    public string? Error { get; set; }
+}
+
+/// <summary>
+/// V58: Individual change made in the improved contract.
+/// </summary>
+public class ContractChange
+{
+    /// <summary>Article reference (e.g., "Članak 3.")</summary>
+    public string Article { get; set; } = "";
+
+    /// <summary>IZMIJENJENO | NOVO | UKLONJENO</summary>
+    public string ChangeType { get; set; } = "";
+
+    /// <summary>Description of what was changed and why</summary>
+    public string Description { get; set; } = "";
+
+    /// <summary>Legal basis for the change</summary>
+    public string LegalBasis { get; set; } = "";
+}
+
+/// <summary>
+/// V58: Request body for generating an improved contract.
+/// </summary>
+public class GenerateContractRequest
+{
+    /// <summary>Original contract text that was analyzed</summary>
+    public string OriginalText { get; set; } = "";
+
+    /// <summary>Analysis result from the contract analysis</summary>
+    public ContractAnalysisResult? AnalysisResult { get; set; }
+}

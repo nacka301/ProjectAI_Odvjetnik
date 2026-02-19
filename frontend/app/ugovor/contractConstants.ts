@@ -5,14 +5,10 @@
 
 import { FileText, Search, Brain, Calculator, Save } from "lucide-react";
 import { createElement } from "react";
+import type { ProcessingStage } from "@/components/SharedProcessingView";
 
-export type ContractStage = {
-  id: string;
-  label: string;
-  status: "pending" | "active" | "done" | "error";
-  detail?: string;
-  error?: string;
-};
+/** @deprecated Use ProcessingStage from SharedProcessingView instead */
+export type ContractStage = ProcessingStage;
 
 export const INITIAL_CONTRACT_STAGES: ContractStage[] = [
   { id: "reading", label: "Čitam ugovor...", status: "pending" },

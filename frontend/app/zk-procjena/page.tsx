@@ -39,6 +39,8 @@ import {
 } from "lucide-react";
 import { uploadPdfToStorage } from "@/lib/supabase";
 import LocationSelector from "@/components/LocationSelector";
+import SharedProcessingView, { type ProcessingStage } from "@/components/SharedProcessingView";
+import ResultActions from "@/components/ResultActions";
 
 import { API_BASE } from "@/lib/api";
 
@@ -297,6 +299,25 @@ const INITIAL_STAGES: StreamStage[] = [
   { id: "saving", label: "Spremam rezultate...", status: "pending" },
 ];
 
+const ZK_STAGE_ICONS: Record<string, React.ReactNode> = {
+  zk_parsing: <Landmark className="h-4 w-4" />,
+  reading: <FileText className="h-4 w-4" />,
+  searching: <Scale className="h-4 w-4" />,
+  ai_features: <ShieldCheck className="h-4 w-4" />,
+  engine: <BarChart3 className="h-4 w-4" />,
+  ai_opinion: <FileCheck className="h-4 w-4" />,
+  saving: <Check className="h-4 w-4" />,
+};
+const ZK_STAGE_MICROCOPY: Record<string, string[]> = {
+  zk_parsing: ["Parsiram A list (posjedovnica)...", "Parsiram B list (vlasništvo)...", "Parsiram C list (tereti)..."],
+  reading: ["Pripremam podatke o nekretnini...", "Identificiram tip i lokaciju..."],
+  searching: ["Pretražujem Njuškalo...", "Pretražujem Index Oglasi...", "Tražim usporedive nekretnine..."],
+  ai_features: ["Analiziram detalje oglasa...", "Procjenjujem stanje nekretnina..."],
+  engine: ["Izračunavam medijanu cijena...", "Robust estimator u tijeku...", "Primjenjujem korekcije..."],
+  ai_opinion: ["AI formulira stručno mišljenje...", "Obrazlažem procjenu..."],
+  saving: ["Spremam u bazu...", "Generiranje izvještaja..."],
+};
+
 // --- Component ---
 
 export default function ZkProcjenaPage() {
@@ -311,6 +332,8 @@ export default function ZkProcjenaPage() {
   const [unifiedResult, setUnifiedResult] = useState<UnifiedResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  // V58: viewState for full-screen processing
+  const [viewState, setViewState] = useState<"INPUT" | "PROCESSING" | "RESULT">("INPUT");
 
   // Structured location override
   const [city, setCity] = useState("");
@@ -366,6 +389,7 @@ export default function ZkProcjenaPage() {
     setUnifiedResult(null);
     setStages(INITIAL_STAGES.map((s) => ({ ...s })));
     setIsStreaming(true);
+    setViewState("PROCESSING");
 
     // Upload PDF to Supabase Storage (non-blocking, only for PDF mode)
     const pdfUrlPromise = mode === "pdf" && file ? uploadPdfToStorage(file) : Promise.resolve(null);
@@ -450,6 +474,7 @@ export default function ZkProcjenaPage() {
       if (buffer.trim()) processEvent(buffer.trim());
 
       setIsStreaming(false);
+      if (state.result) setViewState("RESULT");
 
       // PDF upload result (non-critical)
       if (state.result?.valuation) {
@@ -459,6 +484,7 @@ export default function ZkProcjenaPage() {
       setIsStreaming(false);
       if (e instanceof DOMException && e.name === "AbortError") {
         setError("Analiza je otkazana.");
+        setViewState("INPUT");
       } else {
         setError(
           "Server ne odgovara. Moguće da se Render restartira (~30s). Pokušajte ponovno za minutu."
@@ -511,6 +537,7 @@ export default function ZkProcjenaPage() {
     setCopied(false);
     setShowZkDetails(true);
     setShowValuation(true);
+    setViewState("INPUT");
   };
 
   // --- Helpers ---
@@ -530,7 +557,25 @@ export default function ZkProcjenaPage() {
   // --- Render ---
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4 font-sans">
+    <>
+      {/* ═══ PROCESSING: Full-Screen Pipeline ═══ */}
+      {viewState === "PROCESSING" && (
+        <SharedProcessingView
+          stages={stages as ProcessingStage[]}
+          isStreaming={isStreaming}
+          error={error}
+          onCancel={() => { cancelAnalysis(); setViewState("INPUT"); }}
+          onReset={reset}
+          title="ZK analiza i procjena u tijeku"
+          subtitle="AI parsira izvadak, provodi due diligence i procjenjuje vrijednost"
+          headerIcon={<BookOpen className="h-7 w-7 text-white" />}
+          stageIcons={ZK_STAGE_ICONS}
+          stageMicrocopy={ZK_STAGE_MICROCOPY}
+          theme="indigo"
+        />
+      )}
+
+    <div className={`min-h-screen bg-gray-50 py-12 px-4 font-sans ${viewState === "PROCESSING" ? "hidden" : ""}`}>
       <div className="mx-auto max-w-4xl">
         <Link
           href="/"
@@ -691,53 +736,39 @@ export default function ZkProcjenaPage() {
           </div>
         )}
 
-        {/* ===================== STREAMING PROGRESS ===================== */}
-        {stages.length > 0 && (
-          <div className="mb-8 rounded-xl bg-white border border-gray-200 p-6">
-            <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-              <Loader2 className={`h-4 w-4 ${isStreaming ? "animate-spin text-indigo-600" : "text-green-600"}`} />
-              {isStreaming ? "Pipeline u tijeku..." : "Pipeline završen"}
-            </h3>
-            <div className="space-y-3">
-              {stages.map((s) => (
-                <div key={s.id} className="flex items-start gap-3">
-                  <StageIcon status={s.status} />
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-sm font-medium ${
-                      s.status === "active" ? "text-blue-700" :
-                      s.status === "done" ? "text-green-700" :
-                      s.status === "error" ? "text-red-700" :
-                      s.status === "skipped" ? "text-gray-500" :
-                      "text-gray-400"
-                    }`}>{s.label}</p>
-                    {s.detail && (
-                      <p className="text-xs text-gray-500 mt-0.5 truncate">{s.detail}</p>
-                    )}
-                    {s.error && (
-                      <p className="text-xs text-red-600 mt-0.5">{s.error}</p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Cancel button */}
-            {isStreaming && (
-              <div className="mt-4 text-center">
-                <button
-                  onClick={cancelAnalysis}
-                  className="rounded-lg border border-gray-300 bg-white px-5 py-2 text-sm font-medium text-gray-600 hover:bg-red-50 hover:border-red-300 hover:text-red-700 transition"
-                >
-                  ✕ Odustani
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
         {/* ===================== ZK ANALYSIS RESULTS ===================== */}
         {zkAnalysis && (
           <div className="mb-8 space-y-4">
+            {/* Actions bar */}
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <button
+                onClick={reset}
+                className="text-sm text-indigo-600 hover:underline flex items-center gap-1"
+              >
+                <ArrowLeft className="h-4 w-4" /> Nova analiza
+              </button>
+              <ResultActions
+                copyText={[
+                  `ZK DUE DILIGENCE IZVJEŠTAJ`,
+                  `Nekretnina: ${zkAnalysis.property_id} (${zkAnalysis.property_type})`,
+                  `Status: ${zkAnalysis.overall_status} | Rizik: ${zkAnalysis.risk_score}`,
+                  "",
+                  `DUE DILIGENCE SAŽETAK:`,
+                  zkAnalysis.due_diligence_summary,
+                  "",
+                  ...(zkAnalysis.findings?.length ? [
+                    `NALAZI (${zkAnalysis.findings.length}):`,
+                    ...zkAnalysis.findings.map((f) => `• [${f.severity}] ${f.category}: ${f.description}`),
+                    "",
+                  ] : []),
+                  ...(valuation ? [
+                    `PROCJENA VRIJEDNOSTI: ${valuation.estimated_value_eur.toLocaleString("hr-HR")} €`,
+                    valuation.valuation_reasoning,
+                  ] : []),
+                ].join("\n")}
+              />
+            </div>
+
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
                 <Landmark className="h-6 w-6 text-indigo-600" />
@@ -1957,6 +1988,7 @@ export default function ZkProcjenaPage() {
         )}
       </div>
     </div>
+    </>
   );
 }
 

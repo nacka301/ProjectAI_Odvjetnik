@@ -19,11 +19,18 @@ import {
   Link2,
   ListChecks,
   Calculator,
+  Sparkles,
+  FileDown,
+  X,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { NormBadge, CitedNormsList, TemporalDatePicker } from "@/components/NormBadge";
 import { type CitedNorm } from "@/lib/normApi";
-import ContractProcessingView from "./ContractProcessingView";
-import { INITIAL_CONTRACT_STAGES, type ContractStage } from "./contractConstants";
+import SharedProcessingView, { type ProcessingStage } from "@/components/SharedProcessingView";
+import ResultActions from "@/components/ResultActions";
+import { INITIAL_CONTRACT_STAGES, CONTRACT_STAGE_ICONS, CONTRACT_STAGE_MICROCOPY, type ContractStage } from "./contractConstants";
+import { generateContractPdf } from "@/lib/generateModulePdfs";
 
 // ── Types matching backend ContractAnalysisResult (V49) ──
 
@@ -108,6 +115,43 @@ interface ContractAnalysisResult {
   disclaimer: string;
 }
 
+// V58: Generated improved contract types
+interface ContractChange {
+  article: string;
+  change_type: string; // IZMIJENJENO | NOVO | UKLONJENO
+  description: string;
+  legal_basis: string;
+}
+
+interface GeneratedContractResult {
+  improved_contract: string;
+  changes_summary: ContractChange[];
+  disclaimer: string;
+  error?: string;
+}
+
+// V58: Generation processing stages
+const GENERATE_STAGES: ProcessingStage[] = [
+  { id: "preparing", label: "Priprema analize", status: "pending" },
+  { id: "generating", label: "Generiranje ugovora", status: "pending" },
+  { id: "reviewing", label: "Završna provjera", status: "pending" },
+];
+
+const GENERATE_STAGE_ICONS: Record<string, React.ReactNode> = {
+  preparing: <ListChecks className="h-4 w-4" />,
+  generating: <Sparkles className="h-4 w-4" />,
+  reviewing: <Shield className="h-4 w-4" />,
+};
+
+const GENERATE_STAGE_MICROCOPY = [
+  "Analiziram nalaze revizije...",
+  "AI pravni redaktor sastavlja poboljšani ugovor...",
+  "Primjenjujem sve predložene izmjene...",
+  "Dodajem nedostajuće zaštitne klauzule...",
+  "Usklađujem proturječne članke...",
+  "Provjeravam pravnu konzistentnost...",
+];
+
 import { API_BASE } from "@/lib/api";
 const API = API_BASE;
 
@@ -126,6 +170,15 @@ export default function ContractAnalysisPage() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [viewState, setViewState] = useState<"INPUT" | "PROCESSING" | "RESULT">("INPUT");
   const abortRef = useRef<AbortController | null>(null);
+  // V58: Generated contract state
+  const [generatedContract, setGeneratedContract] = useState<GeneratedContractResult | null>(null);
+  const [generateStages, setGenerateStages] = useState<ProcessingStage[]>([]);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
+  const [showGenerated, setShowGenerated] = useState(false);
+  const [expandedChanges, setExpandedChanges] = useState(false);
+  // Keep the original text for generate endpoint
+  const originalTextRef = useRef<string>("");
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -139,9 +192,14 @@ export default function ContractAnalysisPage() {
   const handleAnalyze = async () => {
     setError(null);
     setResult(null);
+    setGeneratedContract(null);
+    setShowGenerated(false);
     setStages(INITIAL_CONTRACT_STAGES.map((s) => ({ ...s })));
     setIsStreaming(true);
     setViewState("PROCESSING");
+
+    // For text mode, save text immediately (PDF mode gets it from SSE source_text event)
+    if (mode === "text") originalTextRef.current = textInput;
 
     const state = { streamedResult: null as ContractAnalysisResult | null };
     const controller = new AbortController();
@@ -208,6 +266,9 @@ export default function ContractAnalysisPage() {
               )
             );
             setError(message);
+          } else if (evt.type === "source_text") {
+            // V58: Capture extracted text for generate endpoint
+            originalTextRef.current = evt.data.text || "";
           } else if (evt.type === "result") {
             state.streamedResult = evt.data;
             setResult(evt.data);
@@ -256,6 +317,80 @@ export default function ContractAnalysisPage() {
     setResult(null);
     setError(null);
     setIsStreaming(false);
+    setGeneratedContract(null);
+    setShowGenerated(false);
+    setGenerateError(null);
+    originalTextRef.current = "";
+  };
+
+  // ═══ V58: Generate Improved Contract via SSE ═══
+  const handleGenerateContract = async () => {
+    if (!result || !originalTextRef.current) {
+      setGenerateError("Nema dostupnog teksta ili analize za generiranje ugovora.");
+      return;
+    }
+
+    setGenerateError(null);
+    setGeneratedContract(null);
+    setGenerateStages(GENERATE_STAGES.map((s) => ({ ...s })));
+    setIsGenerating(true);
+    setShowGenerated(true);
+
+    try {
+      const response = await fetch(`${API}/api/contract/generate-stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          original_text: originalTextRef.current,
+          analysis_result: result,
+        }),
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      const processEvent = (line: string) => {
+        if (!line.startsWith("data: ")) return;
+        try {
+          const evt = JSON.parse(line.slice(6));
+          if (evt.type === "progress") {
+            const { stage, status, label, detail } = evt.data;
+            setGenerateStages((prev) =>
+              prev.map((s) =>
+                s.id === stage
+                  ? { ...s, status, label: label || s.label, detail: detail ?? s.detail }
+                  : s
+              )
+            );
+          } else if (evt.type === "error") {
+            setGenerateError(evt.data.message);
+          } else if (evt.type === "result") {
+            setGeneratedContract(evt.data);
+          }
+        } catch {
+          /* skip malformed */
+        }
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop()!;
+        for (const part of parts) processEvent(part.trim());
+      }
+      if (buffer.trim()) processEvent(buffer.trim());
+    } catch (e: unknown) {
+      setGenerateError(e instanceof Error ? e.message : "Generiranje nije uspjelo.");
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const riskColor = (risk: string) => {
@@ -308,12 +443,18 @@ export default function ContractAnalysisPage() {
     <>
       {/* ═══ PROCESSING: Full-Screen Pipeline ═══ */}
       {viewState === "PROCESSING" && (
-        <ContractProcessingView
+        <SharedProcessingView
           stages={stages}
           isStreaming={isStreaming}
           error={error}
           onCancel={cancelAnalysis}
           onReset={resetAnalysis}
+          title="Analiza ugovora u tijeku"
+          subtitle="AI pravni revizor provjerava vaš ugovor"
+          headerIcon={<Scale className="h-7 w-7 text-white" />}
+          stageIcons={CONTRACT_STAGE_ICONS}
+          stageMicrocopy={CONTRACT_STAGE_MICROCOPY}
+          theme="emerald"
         />
       )}
 
@@ -441,13 +582,109 @@ export default function ContractAnalysisPage() {
         {/* ── Results Section ── */}
         {viewState === "RESULT" && result && (
           <div className="space-y-6">
-            {/* Back / New Analysis */}
-            <button
-              onClick={resetAnalysis}
-              className="text-sm text-emerald-600 hover:underline flex items-center gap-1"
-            >
-              <ArrowLeft className="h-4 w-4" /> Nova analiza
-            </button>
+            {/* Back / New Analysis + Actions */}
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <button
+                onClick={resetAnalysis}
+                className="text-sm text-emerald-600 hover:underline flex items-center gap-1"
+              >
+                <ArrowLeft className="h-4 w-4" /> Nova analiza
+              </button>
+              <ResultActions
+                copyText={[
+                  `ANALIZA UGOVORA — ${result.document_type}`,
+                  `Ukupni rizik: ${result.overall_risk} (${result.risk_score}/100)`,
+                  result.summary,
+                  "",
+                  `CRVENE ZASTAVICE (${result.red_flags.length}):`,
+                  ...result.red_flags.map((f) => `• ${f.title}: ${f.description}`),
+                  "",
+                  `UPOZORENJA (${result.warnings.length}):`,
+                  ...result.warnings.map((w) => `• ${w.title}: ${w.description}`),
+                  "",
+                  ...(result.logical_traps?.length ? [
+                    `LOGIČKE ZAMKE (${result.logical_traps.length}):`,
+                    ...result.logical_traps.map((t) => `• [${t.severity}] ${t.title}: ${t.explanation}`),
+                    "",
+                  ] : []),
+                  `PRIJEDLOZI IZMJENA (${result.suggested_amendments.length}):`,
+                  ...result.suggested_amendments.map((a) =>
+                    `• ${a.article_reference}: ${a.proposed_text}`
+                  ),
+                  "",
+                  `POZITIVNO (${result.positives.length}):`,
+                  ...result.positives.map((p) => `✓ ${p}`),
+                ].join("\n")}
+                onPdfExport={() => generateContractPdf(result as Parameters<typeof generateContractPdf>[0])}
+              />
+            </div>
+
+            {/* V58: Generate Improved Contract Button */}
+            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl border border-emerald-200 shadow-sm p-5">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-bold text-emerald-800 flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 text-emerald-600" />
+                    Generiraj poboljšani ugovor
+                  </h3>
+                  <p className="text-sm text-emerald-600 mt-1">
+                    AI pravni redaktor će na temelju analize izraditi korigiranu verziju ugovora
+                    sa svim ispravkama, nedostajućim klauzulama i usklađenim člancima.
+                  </p>
+                </div>
+                <button
+                  onClick={handleGenerateContract}
+                  disabled={isGenerating || !originalTextRef.current}
+                  className="px-6 py-3 rounded-xl bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2 whitespace-nowrap shadow-sm"
+                >
+                  {isGenerating ? (
+                    <>
+                      <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      Generiram...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-5 w-5" />
+                      Generiraj ugovor
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Mini progress when generating */}
+              {isGenerating && generateStages.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  {generateStages.map((s) => (
+                    <div key={s.id} className="flex items-center gap-2 text-sm">
+                      {s.status === "done" ? (
+                        <CheckCircle className="h-4 w-4 text-emerald-500" />
+                      ) : s.status === "active" ? (
+                        <svg className="animate-spin h-4 w-4 text-emerald-500" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                      ) : (
+                        <div className="h-4 w-4 rounded-full border-2 border-gray-300" />
+                      )}
+                      <span className={s.status === "active" ? "text-emerald-700 font-medium" : s.status === "done" ? "text-emerald-600" : "text-gray-400"}>
+                        {s.label}
+                      </span>
+                      {s.detail && <span className="text-xs text-gray-400">— {s.detail}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {generateError && (
+                <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                  <AlertCircle className="h-4 w-4 inline mr-1" />
+                  {generateError}
+                </div>
+              )}
+            </div>
 
             {/* Document Type & Risk Overview */}
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
@@ -946,6 +1183,98 @@ export default function ContractAnalysisPage() {
                 </ul>
                 <div className="px-6 py-2 bg-gray-50 border-t border-gray-200 text-sm font-bold text-gray-800 font-mono">
                   = {result.risk_score}/100 → {result.overall_risk}
+                </div>
+              </div>
+            )}
+
+            {/* ═══ V58: GENERATED IMPROVED CONTRACT ═══ */}
+            {showGenerated && generatedContract && generatedContract.improved_contract && (
+              <div id="generated-contract" className="bg-white rounded-xl border-2 border-emerald-300 shadow-lg overflow-hidden">
+                <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-white">
+                    <Sparkles className="h-5 w-5" />
+                    <h2 className="font-bold text-lg">Poboljšani ugovor</h2>
+                    <span className="text-emerald-200 text-sm ml-2">
+                      ({generatedContract.changes_summary?.length || 0} izmjena)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <ResultActions
+                      copyText={generatedContract.improved_contract}
+                      copyLabel="Kopiraj ugovor"
+                      className="!bg-white/20 !text-white hover:!bg-white/30"
+                    />
+                    <button
+                      onClick={() => setShowGenerated(false)}
+                      className="p-1.5 rounded-lg hover:bg-white/20 text-white transition"
+                      title="Sakrij"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Changes Summary */}
+                {generatedContract.changes_summary && generatedContract.changes_summary.length > 0 && (
+                  <div className="border-b border-emerald-200">
+                    <button
+                      onClick={() => setExpandedChanges(!expandedChanges)}
+                      className="w-full px-6 py-3 bg-emerald-50 flex items-center justify-between hover:bg-emerald-100 transition"
+                    >
+                      <span className="text-sm font-semibold text-emerald-800">
+                        Popis izmjena ({generatedContract.changes_summary.length})
+                      </span>
+                      {expandedChanges ? (
+                        <ChevronUp className="h-4 w-4 text-emerald-600" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 text-emerald-600" />
+                      )}
+                    </button>
+                    {expandedChanges && (
+                      <div className="divide-y divide-emerald-100">
+                        {generatedContract.changes_summary.map((change, i) => (
+                          <div key={i} className="px-6 py-3 flex items-start gap-3">
+                            <span className={`px-2 py-0.5 rounded text-xs font-bold whitespace-nowrap mt-0.5 ${
+                              change.change_type === "NOVO" ? "bg-green-100 text-green-700" :
+                              change.change_type === "UKLONJENO" ? "bg-red-100 text-red-700" :
+                              "bg-amber-100 text-amber-700"
+                            }`}>
+                              {change.change_type}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium text-gray-800">{change.article}</div>
+                              <div className="text-sm text-gray-600 mt-0.5">{change.description}</div>
+                              {change.legal_basis && (
+                                <div className="text-xs text-indigo-500 mt-1">{change.legal_basis}</div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Contract Text */}
+                <div className="px-6 py-5">
+                  <pre className="whitespace-pre-wrap text-sm text-gray-800 leading-relaxed font-serif">
+                    {generatedContract.improved_contract.split(/(\[(?:NOVO|IZMIJENJENO|UKLONJENO):[^\]]*\])/).map((part, i) => {
+                      if (/^\[NOVO:/.test(part))
+                        return <span key={i} className="bg-green-100 text-green-800 px-1 rounded text-xs font-sans font-bold">{part}</span>;
+                      if (/^\[IZMIJENJENO:/.test(part))
+                        return <span key={i} className="bg-amber-100 text-amber-800 px-1 rounded text-xs font-sans font-bold">{part}</span>;
+                      if (/^\[UKLONJENO:/.test(part))
+                        return <span key={i} className="bg-red-100 text-red-800 px-1 rounded text-xs font-sans font-bold">{part}</span>;
+                      return <span key={i}>{part}</span>;
+                    })}
+                  </pre>
+                </div>
+
+                {/* Generated contract disclaimer */}
+                <div className="px-6 py-3 bg-gray-50 border-t border-gray-200">
+                  <p className="text-xs text-gray-400 text-center leading-relaxed">
+                    ⚖️ {generatedContract.disclaimer}
+                  </p>
                 </div>
               </div>
             )}

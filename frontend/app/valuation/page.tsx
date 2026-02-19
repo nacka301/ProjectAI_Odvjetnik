@@ -22,6 +22,8 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { uploadPdfToStorage } from "@/lib/supabase";
+import SharedProcessingView, { type ProcessingStage } from "@/components/SharedProcessingView";
+import ResultActions from "@/components/ResultActions";
 
 import { API_BASE } from "@/lib/api";
 
@@ -127,6 +129,23 @@ const INITIAL_STAGES: StreamStage[] = [
   { id: "saving", label: "Spremam rezultate...", status: "pending" },
 ];
 
+const VALUATION_STAGE_ICONS: Record<string, React.ReactNode> = {
+  reading: <FileText className="h-4 w-4" />,
+  searching: <Search className="h-4 w-4" />,
+  ai_features: <Brain className="h-4 w-4" />,
+  engine: <Scale className="h-4 w-4" />,
+  ai_opinion: <FileCheck className="h-4 w-4" />,
+  saving: <Check className="h-4 w-4" />,
+};
+const VALUATION_STAGE_MICROCOPY: Record<string, string[]> = {
+  reading: ["Učitavam dokument...", "Identificiram lokaciju i tip nekretnine..."],
+  searching: ["Pretražujem Njuškalo...", "Pretražujem Index Oglasi...", "Tražim usporedive nekretnine..."],
+  ai_features: ["Analiziram slike i opise oglasa...", "Procjenjujem stanje i kvalitetu..."],
+  engine: ["Izračunavam medijanu cijena...", "Primjenjujem korekcije...", "Robust estimator u tijeku..."],
+  ai_opinion: ["AI generira stručno mišljenje...", "Formuliram obrazloženje procjene..."],
+  saving: ["Spremam u bazu...", "Generiranje izvještaja..."],
+};
+
 // --- Component ---
 
 type InputMode = "pdf" | "text";
@@ -141,6 +160,8 @@ export default function ValuationPage() {
   const [result, setResult] = useState<AutoValuationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  // V58: viewState for full-screen processing
+  const [viewState, setViewState] = useState<"INPUT" | "PROCESSING" | "RESULT">("INPUT");
 
   // Structured location fields
   const [city, setCity] = useState("");
@@ -191,6 +212,7 @@ export default function ValuationPage() {
     setResult(null);
     setStages(INITIAL_STAGES.map((s) => ({ ...s })));
     setIsStreaming(true);
+    setViewState("PROCESSING");
 
     // Upload PDF to Supabase Storage (non-blocking, only for PDF mode)
     const pdfUrlPromise =
@@ -278,6 +300,7 @@ export default function ValuationPage() {
       }
 
       setIsStreaming(false);
+      if (streamedResult) setViewState("RESULT");
 
       // PDF upload result (non-critical)
       if (streamedResult) {
@@ -324,12 +347,31 @@ export default function ValuationPage() {
     setStages([]);
     setIsStreaming(false);
     setCopied(false);
+    setViewState("INPUT");
   };
 
   // --- Render ---
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4 font-sans">
+    <>
+      {/* ═══ PROCESSING: Full-Screen Pipeline ═══ */}
+      {viewState === "PROCESSING" && (
+        <SharedProcessingView
+          stages={stages as ProcessingStage[]}
+          isStreaming={isStreaming}
+          error={error}
+          onCancel={reset}
+          onReset={reset}
+          title="Procjena u tijeku"
+          subtitle="Automatski pretražujem tržište i procjenjujem vrijednost"
+          headerIcon={<Scale className="h-7 w-7 text-white" />}
+          stageIcons={VALUATION_STAGE_ICONS}
+          stageMicrocopy={VALUATION_STAGE_MICROCOPY}
+          theme="blue"
+        />
+      )}
+
+    <div className={`min-h-screen bg-gray-50 py-12 px-4 font-sans ${viewState === "PROCESSING" ? "hidden" : ""}`}>
       <div className="mx-auto max-w-3xl">
         <Link
           href="/"
@@ -563,78 +605,6 @@ export default function ValuationPage() {
                         {step.label}
                       </p>
                       <p className="text-xs text-gray-500">{step.desc}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ===================== LOADING ===================== */}
-        {isLoading && (
-          <div className="space-y-6">
-            <div className="rounded-xl bg-white border border-gray-200 p-8">
-              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-5 flex items-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Pipeline — trenutni status
-              </h3>
-              <div className="space-y-3">
-                {stages.map((s) => (
-                  <div
-                    key={s.id}
-                    className={`flex items-start gap-4 rounded-lg p-4 transition-all duration-300 ${
-                      s.status === "active"
-                        ? "bg-blue-50 border border-blue-200"
-                        : s.status === "done"
-                        ? "bg-green-50 border border-green-200"
-                        : s.status === "error"
-                        ? "bg-red-50 border border-red-200"
-                        : s.status === "skipped"
-                        ? "bg-yellow-50 border border-yellow-200"
-                        : "bg-gray-50 border border-gray-100"
-                    }`}
-                  >
-                    <div className="flex-shrink-0 mt-0.5">
-                      {s.status === "active" ? (
-                        <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
-                      ) : s.status === "done" ? (
-                        <Check className="h-5 w-5 text-green-600" />
-                      ) : s.status === "error" ? (
-                        <AlertTriangle className="h-5 w-5 text-red-500" />
-                      ) : s.status === "skipped" ? (
-                        <AlertTriangle className="h-5 w-5 text-yellow-500" />
-                      ) : (
-                        <div className="h-5 w-5 rounded-full border-2 border-gray-300" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p
-                        className={`text-sm font-medium ${
-                          s.status === "active"
-                            ? "text-blue-800"
-                            : s.status === "done"
-                            ? "text-green-800"
-                            : s.status === "error"
-                            ? "text-red-700"
-                            : s.status === "skipped"
-                            ? "text-yellow-700"
-                            : "text-gray-400"
-                        }`}
-                      >
-                        {s.label}
-                      </p>
-                      {s.detail && s.status === "done" && (
-                        <p className="text-xs text-green-600 mt-1 truncate">
-                          {s.detail}
-                        </p>
-                      )}
-                      {s.detail && s.status === "skipped" && (
-                        <p className="text-xs text-yellow-600 mt-1">{s.detail}</p>
-                      )}
-                      {s.error && (
-                        <p className="text-xs text-red-500 mt-1">{s.error}</p>
-                      )}
                     </div>
                   </div>
                 ))}
@@ -1129,20 +1099,9 @@ export default function ValuationPage() {
                 <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
                   Obrazloženje procjene
                 </h3>
-                <button
-                  onClick={copyToClipboard}
-                  className="flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-800 transition"
-                >
-                  {copied ? (
-                    <>
-                      <Check className="h-4 w-4" /> Kopirano!
-                    </>
-                  ) : (
-                    <>
-                      <ClipboardCopy className="h-4 w-4" /> Kopiraj u clipboard
-                    </>
-                  )}
-                </button>
+                <ResultActions
+                  copyText={result.valuation_reasoning}
+                />
               </div>
               <div className="px-6 py-5">
                 <div className="prose prose-sm max-w-none text-gray-800 whitespace-pre-wrap leading-relaxed">
@@ -1164,5 +1123,6 @@ export default function ValuationPage() {
         )}
       </div>
     </div>
+    </>
   );
 }

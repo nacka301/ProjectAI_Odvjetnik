@@ -15,6 +15,9 @@ import {
   Trash2,
   ScrollText,
 } from "lucide-react";
+import SharedProcessingView, { type ProcessingStage } from "@/components/SharedProcessingView";
+import ResultActions from "@/components/ResultActions";
+import { generateChronologyPdf } from "@/lib/generateModulePdfs";
 
 // ── Types ──
 
@@ -204,6 +207,25 @@ async function exportToDocx(events: TimelineEvent[]) {
 //  Main Component
 // ═══════════════════════════════════════════════════════
 
+const CHRONO_STAGE_ICONS: Record<string, React.ReactNode> = {
+  upload: <Upload className="h-4 w-4" />,
+  processing: <Loader2 className="h-4 w-4" />,
+  extraction: <FileText className="h-4 w-4" />,
+  sorting: <Clock className="h-4 w-4" />,
+};
+const CHRONO_STAGE_MICROCOPY: Record<string, string[]> = {
+  upload: ["Učitavam datoteke...", "Pripremam dokumente..."],
+  processing: ["AI obrađuje dokumente...", "Čitam sadržaj stranica..."],
+  extraction: ["Vadim datume i događaje...", "Analiziram kontekst...", "Povezujem izvore..."],
+  sorting: ["Sortiram kronološki...", "Formatiram vremensku crtu..."],
+};
+const INITIAL_CHRONO_STAGES: ProcessingStage[] = [
+  { id: "upload", label: "Učitavam datoteke", status: "pending" },
+  { id: "processing", label: "Obrada dokumenata", status: "pending" },
+  { id: "extraction", label: "Izvlačim događaje", status: "pending" },
+  { id: "sorting", label: "Kronološko sortiranje", status: "pending" },
+];
+
 export default function ChronologyPage() {
   const [files, setFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
@@ -212,6 +234,9 @@ export default function ChronologyPage() {
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  // V58: Stage-based progress for SharedProcessingView
+  const [stages, setStages] = useState<ProcessingStage[]>([]);
+  const [viewState, setViewState] = useState<"INPUT" | "PROCESSING" | "RESULT">("INPUT");
 
   // ── File handling ──
 
@@ -249,10 +274,20 @@ export default function ChronologyPage() {
     setResult(null);
     setProgress([]);
     setLoading(true);
+    setStages(INITIAL_CHRONO_STAGES.map((s) => ({ ...s })));
+    setViewState("PROCESSING");
+
+    // Map SSE stages to our predefined stage list
+    const knownStages = new Set(["upload", "processing", "extraction", "sorting"]);
 
     try {
       const formData = new FormData();
       files.forEach((f) => formData.append("files", f));
+
+      // Mark upload as active immediately
+      setStages((prev) =>
+        prev.map((s) => (s.id === "upload" ? { ...s, status: "active" as const } : s))
+      );
 
       const response = await fetch(`${API}/api/chronology/stream`, {
         method: "POST",
@@ -263,6 +298,14 @@ export default function ChronologyPage() {
         const err = await response.text().catch(() => "");
         throw new Error(err || `Greška ${response.status}`);
       }
+
+      // Upload done, processing starts
+      setStages((prev) =>
+        prev.map((s) =>
+          s.id === "upload" ? { ...s, status: "done" as const } :
+          s.id === "processing" ? { ...s, status: "active" as const } : s
+        )
+      );
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -282,7 +325,20 @@ export default function ChronologyPage() {
             const parsed = JSON.parse(line.slice(6));
             if (parsed.type === "progress") {
               setProgress((prev) => [...prev, parsed.data]);
+              // Map progress to stage updates
+              const { stage, status, label, detail } = parsed.data;
+              if (knownStages.has(stage)) {
+                setStages((prev) =>
+                  prev.map((s) =>
+                    s.id === stage
+                      ? { ...s, status: status as ProcessingStage["status"], label: label || s.label, detail: detail ?? s.detail }
+                      : s
+                  )
+                );
+              }
             } else if (parsed.type === "result") {
+              // Mark all stages as done
+              setStages((prev) => prev.map((s) => ({ ...s, status: "done" as const })));
               setResult(parsed.data);
             } else if (parsed.type === "error") {
               setError(parsed.data?.message || "Nepoznata greška");
@@ -292,11 +348,23 @@ export default function ChronologyPage() {
           }
         }
       }
+
+      if (!error) setViewState("RESULT");
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Neočekivana greška");
     } finally {
       setLoading(false);
     }
+  };
+
+  const resetChronology = () => {
+    setResult(null);
+    setProgress([]);
+    setFiles([]);
+    setError(null);
+    setStages([]);
+    setLoading(false);
+    setViewState("INPUT");
   };
 
   // ── Group events by date for nicer display ──
@@ -310,7 +378,25 @@ export default function ChronologyPage() {
     : {};
 
   return (
-    <div className="min-h-screen bg-gray-50 font-sans">
+    <>
+      {/* ═══ PROCESSING: Full-Screen Pipeline ═══ */}
+      {viewState === "PROCESSING" && (
+        <SharedProcessingView
+          stages={stages}
+          isStreaming={loading}
+          error={error}
+          onCancel={resetChronology}
+          onReset={resetChronology}
+          title="Kronologija u izradi"
+          subtitle="AI izvlači datume i događaje iz dokumenata"
+          headerIcon={<ScrollText className="h-7 w-7 text-white" />}
+          stageIcons={CHRONO_STAGE_ICONS}
+          stageMicrocopy={CHRONO_STAGE_MICROCOPY}
+          theme="purple"
+        />
+      )}
+
+    <div className={`min-h-screen bg-gray-50 font-sans ${viewState === "PROCESSING" ? "hidden" : ""}`}>
       {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center gap-4">
@@ -326,7 +412,7 @@ export default function ChronologyPage() {
 
       <main className="max-w-5xl mx-auto px-4 py-8">
         {/* ═══ Input Phase ═══ */}
-        {!result && !loading && (
+        {viewState === "INPUT" && (
           <div className="space-y-6">
             <div className="text-center mb-8">
               <p className="text-gray-500 text-lg">
@@ -433,77 +519,35 @@ export default function ChronologyPage() {
           </div>
         )}
 
-        {/* ═══ Processing Phase ═══ */}
-        {loading && (
-          <div className="space-y-4">
-            <div className="text-center mb-6">
-              <Loader2 className="h-10 w-10 text-violet-600 animate-spin mx-auto mb-3" />
-              <p className="text-gray-600 font-medium">
-                AI obrađuje dokumente...
-              </p>
-            </div>
-
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-3">
-              {progress.map((p, i) => (
-                <div key={i} className="flex items-center gap-3">
-                  {p.status === "active" && (
-                    <Loader2 className="h-4 w-4 text-violet-500 animate-spin shrink-0" />
-                  )}
-                  {p.status === "done" && (
-                    <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />
-                  )}
-                  {p.status === "skipped" && (
-                    <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />
-                  )}
-                  {p.status === "error" && (
-                    <XCircle className="h-4 w-4 text-red-500 shrink-0" />
-                  )}
-                  <div className="min-w-0">
-                    <span className="text-sm text-gray-700">{p.label}</span>
-                    {p.detail && (
-                      <span className="text-xs text-gray-400 ml-2">
-                        {p.detail}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700 text-sm">
-                {error}
-              </div>
-            )}
-          </div>
-        )}
-
         {/* ═══ Results Phase ═══ */}
-        {result && (
+        {viewState === "RESULT" && result && (
           <div className="space-y-6">
             {/* Controls */}
             <div className="flex items-center justify-between flex-wrap gap-3">
               <button
-                onClick={() => {
-                  setResult(null);
-                  setProgress([]);
-                  setFiles([]);
-                  setError(null);
-                }}
+                onClick={resetChronology}
                 className="text-sm text-violet-600 hover:underline flex items-center gap-1"
               >
                 <ArrowLeft className="h-4 w-4" /> Nova kronologija
               </button>
 
-              {result.events.length > 0 && (
-                <button
-                  onClick={() => exportToDocx(result.events)}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition"
-                >
-                  <Download className="h-4 w-4" />
-                  Export .docx
-                </button>
-              )}
+              <div className="flex items-center gap-2">
+                <ResultActions
+                  copyText={result.events.map((e, i) =>
+                    `${i + 1}. ${e.display_date}${e.time ? ` ${e.time}` : ""} — ${e.event_description} [${e.source_file}]`
+                  ).join("\n")}
+                  onPdfExport={() => generateChronologyPdf(result as Parameters<typeof generateChronologyPdf>[0])}
+                />
+                {result.events.length > 0 && (
+                  <button
+                    onClick={() => exportToDocx(result.events)}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition"
+                  >
+                    <Download className="h-4 w-4" />
+                    Export .docx
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Summary Card */}
@@ -652,5 +696,6 @@ export default function ChronologyPage() {
         </div>
       </footer>
     </div>
+    </>
   );
 }

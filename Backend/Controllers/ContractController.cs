@@ -262,6 +262,9 @@ public class ContractController : ControllerBase
     {
         try
         {
+            // V58: Send extracted text to client so it can be used for generate-stream later
+            await SseHelpers.SendSSE(Response, "source_text", new { text = contractText });
+
             var result = await _contractService.AnalyzeContractAsync(contractText, async (stage, status, label, detail) =>
             {
                 await SendProgress(stage, status, label, detail);
@@ -306,6 +309,81 @@ public class ContractController : ControllerBase
         catch (Exception ex)
         {
             await SseHelpers.SendSafeError(Response, "audit", "AI analiza nije uspjela. Pokušajte ponovno.", ex, _logger);
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  V58: GENERATE IMPROVED CONTRACT — SSE streaming
+    // ══════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// POST /api/contract/generate-stream — Generate an improved contract based on analysis results.
+    /// Returns SSE events with progress updates, then the generated contract.
+    /// </summary>
+    [HttpPost("generate-stream")]
+    [EnableRateLimiting("valuation")]
+    public async Task GenerateContractStream([FromBody] GenerateContractRequest request)
+    {
+        SseHelpers.SetupSSEHeaders(Response);
+
+        if (string.IsNullOrWhiteSpace(request?.OriginalText))
+        {
+            await SseHelpers.SendError(Response, "preparing", "Originalni tekst ugovora je obavezan.");
+            return;
+        }
+
+        if (request.AnalysisResult == null)
+        {
+            await SseHelpers.SendError(Response, "preparing", "Rezultat analize je obavezan.");
+            return;
+        }
+
+        _logger.LogInformation("V58 Generate improved contract: {Len} chars, risk={Risk}",
+            request.OriginalText.Length, request.AnalysisResult.OverallRisk);
+
+        try
+        {
+            var result = await _contractService.GenerateImprovedContractAsync(
+                request.OriginalText,
+                request.AnalysisResult,
+                async (stage, status, label, detail) =>
+                {
+                    await SendProgress(stage, status, label, detail);
+                });
+
+            if (!string.IsNullOrEmpty(result.Error))
+            {
+                await SseHelpers.SendError(Response, "generating", result.Error);
+                return;
+            }
+
+            // ── Save audit log ──
+            try
+            {
+                await _supabaseService.SaveAuditLogAsync(new AuditLogRecord
+                {
+                    Module = "contract_generate",
+                    Step = 1,
+                    Action = $"Poboljšani ugovor generiran: {result.ChangesSummary.Count} izmjena",
+                    LegalBasis = "Zakon o obveznim odnosima (NN 35/05, 29/18)",
+                    Citation = "čl. 247.–269. ZOO",
+                    Reasoning = $"Originalni ugovor: {request.OriginalText.Length} znakova, " +
+                                $"Rizik: {request.AnalysisResult.OverallRisk} ({request.AnalysisResult.RiskScore}/100)",
+                    Confidence = "VISOKO",
+                    ModelUsed = "deepseek/deepseek-v3.2",
+                    ModelTemperature = 0.10
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Supabase audit log failed for contract generation");
+            }
+
+            await SseHelpers.SendSSE(Response, "result", result);
+        }
+        catch (Exception ex)
+        {
+            await SseHelpers.SendSafeError(Response, "generating", "Generiranje ugovora nije uspjelo. Pokušajte ponovno.", ex, _logger);
         }
     }
 }
