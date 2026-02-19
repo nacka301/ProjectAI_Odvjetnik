@@ -9,7 +9,7 @@ namespace Backend.Services;
 /// V51: AI Contract Auditor — “The Legal Auditor” with Deep Reasoning via OpenRouter
 /// Three-pass architecture:
 ///   Pass 1 (Heavy/claude-sonnet-4): Structured audit checklist — mandatory elements, cross-article analysis, missing clauses
-///   Pass 2 (Reasoning/deepseek-reasoner): Deep logical reasoning — trap detection, RAG comparison with ideal contract
+///   Pass 2 (Reasoning/deepseek-r1-0528): Deep logical reasoning — trap detection, RAG comparison with ideal contract
 ///   Pass 3 (Engine): Deterministic risk scoring from all findings
 /// </summary>
 public class ContractAnalysisService
@@ -271,7 +271,7 @@ public class ContractAnalysisService
     public ContractAnalysisService(ChatClientProvider clients, ILogger<ContractAnalysisService> logger)
     {
         _auditClient = clients.Heavy;        // claude-sonnet-4 — structured audit (Pass 1)
-        _reasoningClient = clients.Reasoning; // deepseek-reasoner — deep reasoning (Pass 2)
+        _reasoningClient = clients.Reasoning; // deepseek-r1-0528 — deep reasoning (Pass 2)
         _logger = logger;
     }
 
@@ -328,7 +328,7 @@ public class ContractAnalysisService
     /// <summary>
     /// V51: Three-pass contract analysis.
     /// Pass 1 (claude-sonnet-4): AI audit — structured checklist + cross-article + mandatory clauses
-    /// Pass 2 (deepseek-reasoner): Deep reasoning — logical traps + ideal contract comparison
+    /// Pass 2 (deepseek-r1-0528): Deep reasoning — logical traps + ideal contract comparison
     /// Pass 3 (Engine):             Deterministic risk scoring from all findings
     /// </summary>
     public async Task<ContractAnalysisResult> AnalyzeContractAsync(string contractText)
@@ -399,7 +399,7 @@ public class ContractAnalysisService
             var reasoningOptions = new ChatCompletionOptions();
 
             // Run both passes in parallel for maximum speed
-            _logger.LogInformation("V51 Starting parallel passes: Pass 1 (claude-sonnet audit) + Pass 2 (deepseek-reasoner)");
+            _logger.LogInformation("V52 Starting parallel passes: Pass 1 (claude-sonnet audit) + Pass 2 (deepseek-r1-0528)");
             var auditTask = _auditClient.CompleteChatAsync(auditMessages, auditOptions);
             var reasoningTask = _reasoningClient.CompleteChatAsync(reasoningMessages, reasoningOptions);
 
