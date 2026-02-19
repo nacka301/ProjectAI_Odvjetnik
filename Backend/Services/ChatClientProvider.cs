@@ -81,7 +81,10 @@ public class ChatClientProvider
         var credential = new ApiKeyCredential(apiKey);
         var options = new OpenAIClientOptions
         {
-            Endpoint = new Uri(baseUrl)
+            Endpoint = new Uri(baseUrl),
+            // DeepSeek R1 reasoning can take 2-4 minutes for complex legal analysis.
+            // Default SDK timeout is 100s which causes TaskCanceledException + 4 retries.
+            NetworkTimeout = TimeSpan.FromMinutes(5)
         };
 
         Fast = new ChatClient(fastModel, credential, options);
