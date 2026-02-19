@@ -705,7 +705,7 @@ public class EvaluateController : ControllerBase
                     Citation = "čl. 4., čl. 19., čl. 24. ZPVN",
                     Reasoning = $"Engine: {engineResult.CalculatedPricePerM2:N0}€/m², {engineResult.UsablePricePoints} usporedivih. AI: {aiResult.EstimatedValueEur:N0}€. Pouzdanost: {engineResult.ConfidenceLevel}.",
                     Confidence = engineResult.ConfidenceLevel == "HIGH" ? "VISOKO" : engineResult.ConfidenceLevel == "MEDIUM" ? "SREDNJE" : "NISKO",
-                    ModelUsed = "gpt-4o",
+                    ModelUsed = "openai/gpt-4o",
                     ModelTemperature = 0.10
                 });
             }

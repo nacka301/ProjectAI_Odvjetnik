@@ -1,14 +1,22 @@
+using System.ClientModel;
+using OpenAI;
 using OpenAI.Chat;
 
 namespace Backend.Services;
 
 /// <summary>
-/// V50: Multi-model ChatClient provider — routes tasks to the optimal OpenAI model.
+/// V51: Multi-model ChatClient provider via OpenRouter gateway.
+/// 
+/// OpenRouter acts as a unified gateway to all AI providers (OpenAI, Anthropic,
+/// DeepSeek, Meta, Mistral, etc.) using a single API key.
 /// 
 /// Routing philosophy:
-///   Fast      (gpt-4o-mini) = extraction, classification, summaries — cheap &amp; fast
-///   Heavy     (gpt-4o)      = complex reasoning, legal strategy, final reports
-///   Reasoning (o3-mini)    = deep logical reasoning, trap detection, second opinion
+///   Fast      (openai/gpt-4o-mini) = extraction, classification, summaries — cheap &amp; fast
+///   Heavy     (openai/gpt-4o)      = complex reasoning, legal strategy, final reports
+///   Reasoning (openai/o3-mini)     = deep logical reasoning, trap detection, second opinion
+///
+/// Model format: "provider/model" (e.g., "openai/gpt-4o", "anthropic/claude-3.5-sonnet")
+/// To switch providers, just change the model string in appsettings.json.
 ///
 /// Task → Model mapping:
 ///   ExtractPropertyInfo (PDF)           → Fast
@@ -19,7 +27,7 @@ namespace Backend.Services;
 ///   Legal Feed (dashboard summary)      → Fast
 ///   ValuationAgent (contextual report)  → Heavy
 ///   ContractAnalysis Pass 1 (audit)     → Heavy
-///   ContractAnalysis Pass 2 (traps)     → Reasoning  ← NEW
+///   ContractAnalysis Pass 2 (traps)     → Reasoning
 ///   Legal Strategy (precedent ranking)  → Heavy
 ///   Precedent Search (RAG simulation)   → Heavy
 ///   Auto-Valuation (final narrative)    → Heavy
@@ -42,7 +50,7 @@ public class ChatClientProvider
 
     /// <summary>
     /// Reasoning model — for deep logical reasoning and trap detection.
-    /// Uses o3-mini chain-of-thought for catching subtle contractual traps.
+    /// Uses chain-of-thought for catching subtle contractual traps.
     /// </summary>
     public ChatClient Reasoning { get; }
 
@@ -53,17 +61,31 @@ public class ChatClientProvider
     public string HeavyModel { get; }
     public string ReasoningModel { get; }
 
+    /// <summary>
+    /// Base URL of the AI gateway (OpenRouter by default).
+    /// </summary>
+    public string BaseUrl { get; }
+
     public ChatClientProvider(
         string apiKey,
-        string fastModel = "gpt-4o-mini",
-        string heavyModel = "gpt-4o",
-        string reasoningModel = "o3-mini")
+        string baseUrl = "https://openrouter.ai/api/v1",
+        string fastModel = "openai/gpt-4o-mini",
+        string heavyModel = "openai/gpt-4o",
+        string reasoningModel = "openai/o3-mini")
     {
+        BaseUrl = baseUrl;
         FastModel = fastModel;
         HeavyModel = heavyModel;
         ReasoningModel = reasoningModel;
-        Fast = new ChatClient(fastModel, apiKey);
-        Heavy = new ChatClient(heavyModel, apiKey);
-        Reasoning = new ChatClient(reasoningModel, apiKey);
+
+        var credential = new ApiKeyCredential(apiKey);
+        var options = new OpenAIClientOptions
+        {
+            Endpoint = new Uri(baseUrl)
+        };
+
+        Fast = new ChatClient(fastModel, credential, options);
+        Heavy = new ChatClient(heavyModel, credential, options);
+        Reasoning = new ChatClient(reasoningModel, credential, options);
     }
 }

@@ -923,7 +923,7 @@ export default function ProvjeriIshodPage() {
                   </p>
                   <p className="text-xs text-blue-800 leading-relaxed">
                     {result.data_provenance ||
-                      "Rezultati se temelje na GPT-4o modelu koji analizira kontekst slučaja u usporedbi s općim načelima sudske prakse. Citirane presude su ILUSTRATIVNE — generirane na temelju ustaljenih pravnih stajališta, a ne pretragom stvarne baze sudskih odluka."}
+                      "Rezultati se temelje na AI modelu koji analizira kontekst slučaja u usporedbi s općim načelima sudske prakse. Citirane presude su ILUSTRATIVNE — generirane na temelju ustaljenih pravnih stajališta, a ne pretragom stvarne baze sudskih odluka."}
                   </p>
                 </div>
               </div>
@@ -969,7 +969,7 @@ export default function ProvjeriIshodPage() {
                       />
                     </div>
                     <p className="text-[10px] text-slate-400">
-                      60% ukupne ocjene — GPT-4o procjena specifičnih činjenica
+                      60% ukupne ocjene — AI procjena specifičnih činjenica
                     </p>
                   </div>
                 </div>

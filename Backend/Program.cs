@@ -124,18 +124,18 @@ builder.Services.AddRateLimiter(options =>
     };
 });
 
-// V35: Multi-model OpenAI routing — Fast (extraction) + Heavy (reasoning)
-var openAiKey = builder.Configuration["OpenAI:ApiKey"]
-    ?? Environment.GetEnvironmentVariable("OpenAI__ApiKey")
-    ?? Environment.GetEnvironmentVariable("OPENAI_API_KEY")
-    ?? Environment.GetEnvironmentVariable("OPENAI_APIKEY")
+// V51: OpenRouter gateway — single API key for all AI providers
+var openRouterKey = builder.Configuration["OpenRouter:ApiKey"]
+    ?? Environment.GetEnvironmentVariable("OPENROUTER_API_KEY")
+    ?? Environment.GetEnvironmentVariable("OpenRouter__ApiKey")
     ?? throw new InvalidOperationException(
-        "OpenAI API key is not configured. Set OpenAI__ApiKey or OPENAI_API_KEY environment variable.");
+        "OpenRouter API key is not configured. Set OPENROUTER_API_KEY environment variable.");
 
-var fastModel = builder.Configuration["OpenAI:FastModel"] ?? "gpt-4o-mini";
-var heavyModel = builder.Configuration["OpenAI:HeavyModel"] ?? "gpt-4o";
-var reasoningModel = builder.Configuration["OpenAI:ReasoningModel"] ?? "o3-mini";
-builder.Services.AddSingleton(new ChatClientProvider(openAiKey, fastModel, heavyModel, reasoningModel));
+var baseUrl = builder.Configuration["OpenRouter:BaseUrl"] ?? "https://openrouter.ai/api/v1";
+var fastModel = builder.Configuration["OpenRouter:FastModel"] ?? "openai/gpt-4o-mini";
+var heavyModel = builder.Configuration["OpenRouter:HeavyModel"] ?? "openai/gpt-4o";
+var reasoningModel = builder.Configuration["OpenRouter:ReasoningModel"] ?? "openai/o3-mini";
+builder.Services.AddSingleton(new ChatClientProvider(openRouterKey, baseUrl, fastModel, heavyModel, reasoningModel));
 builder.Services.AddScoped<PdfService>();
 builder.Services.AddScoped<ValuationService>();
 builder.Services.AddScoped<TextAnalysisService>();
