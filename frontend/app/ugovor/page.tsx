@@ -12,7 +12,6 @@ import {
   CheckCircle,
   PenLine,
   Shield,
-  Loader2,
   Scale,
   Quote,
   BookOpen,
@@ -23,6 +22,8 @@ import {
 } from "lucide-react";
 import { NormBadge, CitedNormsList, TemporalDatePicker } from "@/components/NormBadge";
 import { type CitedNorm } from "@/lib/normApi";
+import ContractProcessingView from "./ContractProcessingView";
+import { INITIAL_CONTRACT_STAGES, type ContractStage } from "./contractConstants";
 
 // ── Types matching backend ContractAnalysisResult (V49) ──
 
@@ -114,13 +115,17 @@ export default function ContractAnalysisPage() {
   const [mode, setMode] = useState<"pdf" | "text">("pdf");
   const [textInput, setTextInput] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ContractAnalysisResult | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const selectedFileRef = useRef<File | null>(null);
   // V42: Temporal Law Mode
   const [eventDate, setEventDate] = useState("");
+  // V57: SSE streaming state
+  const [stages, setStages] = useState<ContractStage[]>([]);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [viewState, setViewState] = useState<"INPUT" | "PROCESSING" | "RESULT">("INPUT");
+  const abortRef = useRef<AbortController | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -134,7 +139,13 @@ export default function ContractAnalysisPage() {
   const handleAnalyze = async () => {
     setError(null);
     setResult(null);
-    setLoading(true);
+    setStages(INITIAL_CONTRACT_STAGES.map((s) => ({ ...s })));
+    setIsStreaming(true);
+    setViewState("PROCESSING");
+
+    const state = { streamedResult: null as ContractAnalysisResult | null };
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     try {
       let response: Response;
@@ -142,40 +153,109 @@ export default function ContractAnalysisPage() {
       if (mode === "pdf") {
         if (!selectedFileRef.current) {
           setError("Molimo odaberite PDF datoteku.");
-          setLoading(false);
+          setIsStreaming(false);
+          setViewState("INPUT");
           return;
         }
         const formData = new FormData();
         formData.append("file", selectedFileRef.current);
-        response = await fetch(`${API}/api/contract/analyze-pdf`, {
+        response = await fetch(`${API}/api/contract/analyze-pdf-stream`, {
           method: "POST",
           body: formData,
+          signal: controller.signal,
         });
       } else {
         if (!textInput.trim() || textInput.trim().length < 50) {
           setError("Tekst ugovora mora imati barem 50 znakova.");
-          setLoading(false);
+          setIsStreaming(false);
+          setViewState("INPUT");
           return;
         }
-        response = await fetch(`${API}/api/contract/analyze-text`, {
+        response = await fetch(`${API}/api/contract/analyze-text-stream`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text: textInput }),
+          signal: controller.signal,
         });
       }
 
-      if (!response.ok) {
-        const err = await response.json().catch(() => null);
-        throw new Error(err?.error ?? `Greška ${response.status}`);
+      if (!response.ok || !response.body) {
+        throw new Error(`HTTP ${response.status}`);
       }
 
-      const data: ContractAnalysisResult = await response.json();
-      setResult(data);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      const processEvent = (line: string) => {
+        if (!line.startsWith("data: ")) return;
+        try {
+          const evt = JSON.parse(line.slice(6));
+          if (evt.type === "progress") {
+            const { stage, status, label, detail } = evt.data;
+            setStages((prev) =>
+              prev.map((s) =>
+                s.id === stage
+                  ? { ...s, status, label: label || s.label, detail: detail ?? s.detail }
+                  : s
+              )
+            );
+          } else if (evt.type === "error") {
+            const { stage, message } = evt.data;
+            setStages((prev) =>
+              prev.map((s) =>
+                s.id === stage ? { ...s, status: "error" as const, error: message } : s
+              )
+            );
+            setError(message);
+          } else if (evt.type === "result") {
+            state.streamedResult = evt.data;
+            setResult(evt.data);
+          }
+        } catch {
+          /* skip malformed */
+        }
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop()!;
+        for (const part of parts) processEvent(part.trim());
+      }
+      // Flush remaining buffer
+      if (buffer.trim()) processEvent(buffer.trim());
+
+      setIsStreaming(false);
+      if (state.streamedResult) setViewState("RESULT");
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Neočekivana greška");
+      setIsStreaming(false);
+      if (e instanceof DOMException && e.name === "AbortError") {
+        setError("Analiza je otkazana.");
+        setViewState("INPUT");
+      } else {
+        setError(e instanceof Error ? e.message : "Server ne odgovara. Pokušajte ponovno.");
+      }
     } finally {
-      setLoading(false);
+      abortRef.current = null;
     }
+  };
+
+  const cancelAnalysis = () => {
+    abortRef.current?.abort();
+    setIsStreaming(false);
+    setViewState("INPUT");
+  };
+
+  const resetAnalysis = () => {
+    abortRef.current?.abort();
+    setViewState("INPUT");
+    setStages([]);
+    setResult(null);
+    setError(null);
+    setIsStreaming(false);
   };
 
   const riskColor = (risk: string) => {
@@ -225,7 +305,19 @@ export default function ContractAnalysisPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 font-sans">
+    <>
+      {/* ═══ PROCESSING: Full-Screen Pipeline ═══ */}
+      {viewState === "PROCESSING" && (
+        <ContractProcessingView
+          stages={stages}
+          isStreaming={isStreaming}
+          error={error}
+          onCancel={cancelAnalysis}
+          onReset={resetAnalysis}
+        />
+      )}
+
+    <div className={`min-h-screen bg-gray-50 font-sans ${viewState === "PROCESSING" ? "hidden" : ""}`}>
       {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center gap-4">
@@ -246,7 +338,7 @@ export default function ContractAnalysisPage() {
 
       <main className="max-w-4xl mx-auto px-4 py-8">
         {/* ── Input Section ── */}
-        {!result && (
+        {viewState === "INPUT" && !result && (
           <div className="space-y-6">
             <div className="text-center mb-8">
               <p className="text-gray-500 text-lg">
@@ -337,33 +429,21 @@ export default function ContractAnalysisPage() {
             {/* Analyze Button */}
             <button
               onClick={handleAnalyze}
-              disabled={loading}
+              disabled={isStreaming}
               className="w-full py-4 rounded-xl bg-emerald-600 text-white font-semibold text-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center justify-center gap-2"
             >
-              {loading ? (
-                <>
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                  AI analizira ugovor...
-                </>
-              ) : (
-                <>
-                  <Shield className="h-5 w-5" />
-                  Analiziraj ugovor
-                </>
-              )}
+              <Shield className="h-5 w-5" />
+              Analiziraj ugovor
             </button>
           </div>
         )}
 
         {/* ── Results Section ── */}
-        {result && (
+        {viewState === "RESULT" && result && (
           <div className="space-y-6">
             {/* Back / New Analysis */}
             <button
-              onClick={() => {
-                setResult(null);
-                setError(null);
-              }}
+              onClick={resetAnalysis}
               className="text-sm text-emerald-600 hover:underline flex items-center gap-1"
             >
               <ArrowLeft className="h-4 w-4" /> Nova analiza
@@ -882,5 +962,6 @@ export default function ContractAnalysisPage() {
         )}
       </main>
     </div>
+    </>
   );
 }

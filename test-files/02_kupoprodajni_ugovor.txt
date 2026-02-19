@@ -89,3 +89,42 @@ Zagreb, 10. veljače 2026.
 PRODAVATELJ:                          KUPAC:
 _________________________             _________________________
 Marko Horvat                          Ana Kovačević
+REZULTAT ANALIZE:
+Vrsta dokumenta
+Glavni Ugovor
+Ugovor o kupoprodaji stana u Zagrebu između Marka Horvata i Ane Kovačević.
+
+Rizik: Srednji
+Nizak rizik
+65/100
+Visok rizik
+1
+Crvene zastavice
+1
+Upozorenja
+2
+Pozitivno
+Kritične crvene zastavice (1)
+Hipoteka na nekretnini
+MAIOR: Sukladno čl. 430.-437. ZOO, prodavatelj je dužan osigurati da je nekretnina slobodna od prava trećih osoba. MINOR: U članku 7. ugovora navedeno je da postoji hipoteka u korist Zagrebačke banke d.d. CONCLUSIO: Postoji rizik da prodavatelj ne ispuni obvezu brisanja hipoteke prije predaje u posjed, što može otežati ili onemogućiti prijenos vlasništva.
+
+Hipoteka u korist Zagrebačke banke d.d. u iznosu od 50.000 EUR (Prodavatelj se obvezuje brisati hipoteku prije predaje u posjed)
+
+čl. 430.-437. ZOO
+Upozorenja i nedostaci (1)
+Kapara i raskid ugovora
+Kapara je pravilno definirana, ali nije jasno navedeno da li se primjenjuje pravilo dvostrukog vraćanja kapare u slučaju raskida ugovora zbog krivnje prodavatelja, što može dovesti do nesporazuma.
+
+Ukoliko Kupac ne uplati ostatak kupoprodajne cijene u roku iz članka 3b, Prodavatelj ima pravo raskinuti ugovor i zadržati kaparu u cijelosti.
+
+čl. 303.-306. ZOO
+Pozitivne strane (2)
+Precizno definirana tabularna izjava u članku 10.
+Jasno definirani rokovi za plaćanje i predaju u posjed.
+Prijedlozi izmjena (1)
+Članak 7.
+Trenutni tekst
+Hipoteka u korist Zagrebačke banke d.d. u iznosu od 50.000 EUR (Prodavatelj se obvezuje brisati hipoteku prije predaje u posjed)
+Predloženi tekst
+Prodavatelj se obvezuje brisati hipoteku u korist Zagrebačke banke d.d. u iznosu od 50.000 EUR najkasnije 30 dana prije predaje u posjed, te dostaviti Kupcu dokaz o brisanju.
+Osiguranje da će hipoteka biti pravovremeno brisana kako bi se omogućio nesmetan prijenos vlasništva.

@@ -331,7 +331,16 @@ public class ContractAnalysisService
     /// Pass 2 (deepseek-r1-0528): Deep reasoning — logical traps + ideal contract comparison
     /// Pass 3 (Engine):             Deterministic risk scoring from all findings
     /// </summary>
-    public async Task<ContractAnalysisResult> AnalyzeContractAsync(string contractText)
+    public Task<ContractAnalysisResult> AnalyzeContractAsync(string contractText)
+        => AnalyzeContractAsync(contractText, null);
+
+    /// <summary>
+    /// V57: Three-pass contract analysis with optional SSE progress callback.
+    /// onProgress(stage, status, label, detail) — called at each stage transition.
+    /// </summary>
+    public async Task<ContractAnalysisResult> AnalyzeContractAsync(
+        string contractText,
+        Func<string, string, string, string?, Task>? onProgress)
     {
         if (string.IsNullOrWhiteSpace(contractText) || contractText.Length < 50)
         {
@@ -351,6 +360,13 @@ public class ContractAnalysisService
         try
         {
             _logger.LogInformation("V51 Contract analysis: {Len} chars — 3-pass (audit + reasoning + scoring)", text.Length);
+
+            // ── Progress: reading done ──
+            if (onProgress != null)
+            {
+                await onProgress("reading", "done", "Ugovor učitan", $"{text.Length} znakova");
+                await onProgress("audit", "active", "Pass 1: Pravni audit", null);
+            }
 
             // ── PASS 1 (Heavy/claude): Structured Audit ──
             var auditMessages = new List<ChatMessage>
@@ -403,13 +419,27 @@ public class ContractAnalysisService
             var auditTask = _auditClient.CompleteChatAsync(auditMessages, auditOptions);
             var reasoningTask = _reasoningClient.CompleteChatAsync(reasoningMessages, reasoningOptions);
 
-            await Task.WhenAll(auditTask, reasoningTask);
-
-            var auditJson = auditTask.Result.Value.Content[0].Text;
-            var reasoningJson = reasoningTask.Result.Value.Content[0].Text;
-
+            // V57: Await individually to report progress per pass
+            var auditCompletion = await auditTask;
+            var auditJson = auditCompletion.Value.Content[0].Text;
             _logger.LogDebug("V51 Pass 1 audit: {Len} chars", auditJson.Length);
+
+            if (onProgress != null)
+            {
+                await onProgress("audit", "done", "Pravni audit završen", null);
+                await onProgress("reasoning", "active", "Pass 2: Dubinska analiza", null);
+            }
+
+            // Pass 2 may already be complete (was running in parallel)
+            var reasoningCompletion = await reasoningTask;
+            var reasoningJson = reasoningCompletion.Value.Content[0].Text;
             _logger.LogDebug("V51 Pass 2 reasoning: {Len} chars", reasoningJson.Length);
+
+            if (onProgress != null)
+            {
+                await onProgress("reasoning", "done", "Dubinska analiza završena", null);
+                await onProgress("scoring", "active", "Pass 3: Bodovanje rizika", null);
+            }
 
             // ── Parse Pass 1: Audit output ──
             var result = ParseAuditResponse(auditJson);
@@ -420,6 +450,11 @@ public class ContractAnalysisService
             // ── PASS 3: DETERMINISTIC RISK SCORING ──
             ComputeRiskScore(result);
             result.Disclaimer = Disclaimer;
+
+            if (onProgress != null)
+            {
+                await onProgress("scoring", "done", "Bodovanje završeno", $"Rizik: {result.OverallRisk} ({result.RiskScore}/100)");
+            }
 
             _logger.LogInformation(
                 "V51 Contract analysis complete: type={Type}, risk={Risk}({Score}), " +
