@@ -290,8 +290,8 @@ public class LegalIntelligenceService
 
     public LegalIntelligenceService(ChatClientProvider clients, ILogger<LegalIntelligenceService> logger)
     {
-        _fastClient = clients.Fast;    // gpt-5-mini — legal feed generation
-        _heavyClient = clients.Heavy;  // gpt-5.2 — legal strategy + precedent analysis
+        _fastClient = clients.Fast;    // Fast model — legal feed generation
+        _heavyClient = clients.Heavy;  // Heavy model — legal strategy + precedent analysis
         _logger = logger;
     }
 
@@ -387,7 +387,8 @@ public class LegalIntelligenceService
             var options = new ChatCompletionOptions
             {
                 Temperature = 0.1f,  // Legal analysis demands precision
-                ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
+                ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat(),
+                MaxOutputTokenCount = 8192  // Claude default may truncate large JSON
             };
 
             ChatCompletion completion = await _heavyClient.CompleteChatAsync(messages, options);  // Heavy: strategy

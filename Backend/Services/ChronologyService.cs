@@ -97,7 +97,7 @@ public class ChronologyService
 
     public ChronologyService(ChatClientProvider clients, ILogger<ChronologyService> logger)
     {
-        _chatClient = clients.Fast;  // gpt-5-mini — document event extraction
+        _chatClient = clients.Fast;  // Fast model — document event extraction
         _logger = logger;
     }
 

@@ -93,7 +93,7 @@ public class ContractController : ControllerBase
                 Citation = "čl. 247.–269. ZOO",
                 Reasoning = result.Summary,
                 Confidence = result.RiskScore >= 70 ? "VISOKO" : result.RiskScore >= 40 ? "SREDNJE" : "NISKO",
-                ModelUsed = "gpt-4o",
+                ModelUsed = "anthropic/claude-sonnet-4 + deepseek/deepseek-reasoner",
                 ModelTemperature = 0.10
             });
         }
@@ -147,7 +147,7 @@ public class ContractController : ControllerBase
                 Citation = "čl. 247.–269. ZOO",
                 Reasoning = result.Summary,
                 Confidence = result.RiskScore >= 70 ? "VISOKO" : result.RiskScore >= 40 ? "SREDNJE" : "NISKO",
-                ModelUsed = "gpt-4o",
+                ModelUsed = "anthropic/claude-sonnet-4 + deepseek/deepseek-reasoner",
                 ModelTemperature = 0.10
             });
         }

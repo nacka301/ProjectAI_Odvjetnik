@@ -477,8 +477,8 @@ public class ValuationService
 
     public ValuationService(ChatClientProvider clients, ILogger<ValuationService> logger)
     {
-        _fastClient = clients.Fast;    // gpt-5-mini — PDF extraction + listing features
-        _heavyClient = clients.Heavy;  // gpt-5.2 — auto-valuation report
+        _fastClient = clients.Fast;    // Fast model — PDF extraction + listing features
+        _heavyClient = clients.Heavy;  // Heavy model — auto-valuation report
         _logger = logger;
     }
 

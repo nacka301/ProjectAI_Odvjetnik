@@ -136,7 +136,7 @@ public class TextAnalysisService
 
     public TextAnalysisService(ChatClientProvider clients, ILogger<TextAnalysisService> logger)
     {
-        _chatClient = clients.Fast;  // gpt-5-mini — listing description extraction
+        _chatClient = clients.Fast;  // Fast model — listing description extraction
         _logger = logger;
     }
 

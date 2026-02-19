@@ -257,7 +257,7 @@ public class ZkUnifiedController : ControllerBase
                 Citation = "čl. 2., čl. 8., čl. 30. ZZK",
                 Reasoning = $"AI je parsirao A/B/C listove ZK izvatka. Status: {zkResult.OverallStatus}. {zkResult.LawyerComment}",
                 Confidence = zkResult.RiskScore == "HIGH" ? "VISOKO" : "SREDNJE",
-                ModelUsed = "anthropic/claude-sonnet-4",
+                ModelUsed = "openai/gpt-4o-mini",
                 ModelTemperature = 0.10
             });
         }

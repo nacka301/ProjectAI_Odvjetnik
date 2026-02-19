@@ -111,7 +111,7 @@ public class ValuationAgentService
 
     public ValuationAgentService(ChatClientProvider clients, ILogger<ValuationAgentService> logger)
     {
-        _chatClient = clients.Heavy;  // gpt-5.2 — contextual property reasoning
+        _chatClient = clients.Heavy;  // Heavy model — contextual property reasoning
         _logger = logger;
     }
 

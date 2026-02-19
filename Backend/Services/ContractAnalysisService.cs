@@ -1,3 +1,4 @@
+using System.ClientModel;
 using System.Text.Json;
 using Backend.Models;
 using OpenAI.Chat;
@@ -5,10 +6,10 @@ using OpenAI.Chat;
 namespace Backend.Services;
 
 /// <summary>
-/// V50: AI Contract Auditor — "The Legal Auditor" with Deep Reasoning
+/// V51: AI Contract Auditor — “The Legal Auditor” with Deep Reasoning via OpenRouter
 /// Three-pass architecture:
-///   Pass 1 (Heavy/gpt-4o): Structured audit checklist — mandatory elements, cross-article analysis, missing clauses
-///   Pass 2 (Reasoning/o3-mini): Deep logical reasoning — trap detection, RAG comparison with ideal contract
+///   Pass 1 (Heavy/claude-sonnet-4): Structured audit checklist — mandatory elements, cross-article analysis, missing clauses
+///   Pass 2 (Reasoning/deepseek-reasoner): Deep logical reasoning — trap detection, RAG comparison with ideal contract
 ///   Pass 3 (Engine): Deterministic risk scoring from all findings
 /// </summary>
 public class ContractAnalysisService
@@ -93,7 +94,7 @@ public class ContractAnalysisService
         """;
 
     // ══════════════════════════════════════════════════════════
-    //  PASS 1: AUDITOR PROMPT — gpt-4o structured audit
+    //  PASS 1: AUDITOR PROMPT — Heavy model structured audit
     // ══════════════════════════════════════════════════════════
     private const string AuditorPrompt = """
         PERSONA:
@@ -269,13 +270,13 @@ public class ContractAnalysisService
 
     public ContractAnalysisService(ChatClientProvider clients, ILogger<ContractAnalysisService> logger)
     {
-        _auditClient = clients.Heavy;        // gpt-4o — structured audit (Pass 1)
-        _reasoningClient = clients.Reasoning; // o3-mini — deep reasoning (Pass 2)
+        _auditClient = clients.Heavy;        // claude-sonnet-4 — structured audit (Pass 1)
+        _reasoningClient = clients.Reasoning; // deepseek-reasoner — deep reasoning (Pass 2)
         _logger = logger;
     }
 
     // ══════════════════════════════════════════════════════════
-    //  PASS 2: o3-mini DEEP REASONING PROMPT
+    //  PASS 2: DEEP REASONING PROMPT (reasoning model)
     // ══════════════════════════════════════════════════════════
     private const string DeepReasoningPrompt = """
         Ti si forenzički pravni analitičar specijaliziran za otkrivanje SKRIVENIH ZAMKI
@@ -325,10 +326,10 @@ public class ContractAnalysisService
         """;
 
     /// <summary>
-    /// V50: Three-pass contract analysis.
-    /// Pass 1 (gpt-4o):     AI audit — structured checklist + cross-article + mandatory clauses
-    /// Pass 2 (o3-mini):  Deep reasoning — logical traps + ideal contract comparison
-    /// Pass 3 (Engine):      Deterministic risk scoring from all findings
+    /// V51: Three-pass contract analysis.
+    /// Pass 1 (claude-sonnet-4): AI audit — structured checklist + cross-article + mandatory clauses
+    /// Pass 2 (deepseek-reasoner): Deep reasoning — logical traps + ideal contract comparison
+    /// Pass 3 (Engine):             Deterministic risk scoring from all findings
     /// </summary>
     public async Task<ContractAnalysisResult> AnalyzeContractAsync(string contractText)
     {
@@ -349,9 +350,9 @@ public class ContractAnalysisService
 
         try
         {
-            _logger.LogInformation("V50 Contract analysis: {Len} chars — 3-pass (audit + reasoning + scoring)", text.Length);
+            _logger.LogInformation("V51 Contract analysis: {Len} chars — 3-pass (audit + reasoning + scoring)", text.Length);
 
-            // ── PASS 1 (gpt-4o): Structured Audit ──
+            // ── PASS 1 (Heavy/claude): Structured Audit ──
             var auditMessages = new List<ChatMessage>
             {
                 new SystemChatMessage(AuditorPrompt),
@@ -370,10 +371,11 @@ public class ContractAnalysisService
             var auditOptions = new ChatCompletionOptions
             {
                 Temperature = 0.0f,
-                ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
+                ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat(),
+                MaxOutputTokenCount = 8192  // Claude default may truncate large JSON
             };
 
-            // ── PASS 2 (o3-mini): Deep Reasoning — runs in PARALLEL with Pass 1 ──
+            // ── PASS 2 (Reasoning): Deep Reasoning — runs in PARALLEL with Pass 1 ──
             var reasoningMessages = new List<ChatMessage>
             {
                 new UserChatMessage(
@@ -406,8 +408,8 @@ public class ContractAnalysisService
             var auditJson = auditTask.Result.Value.Content[0].Text;
             var reasoningJson = reasoningTask.Result.Value.Content[0].Text;
 
-            _logger.LogDebug("V50 Pass 1 audit: {Len} chars", auditJson.Length);
-            _logger.LogDebug("V50 Pass 2 reasoning: {Len} chars", reasoningJson.Length);
+            _logger.LogDebug("V51 Pass 1 audit: {Len} chars", auditJson.Length);
+            _logger.LogDebug("V51 Pass 2 reasoning: {Len} chars", reasoningJson.Length);
 
             // ── Parse Pass 1: Audit output ──
             var result = ParseAuditResponse(auditJson);
@@ -420,7 +422,7 @@ public class ContractAnalysisService
             result.Disclaimer = Disclaimer;
 
             _logger.LogInformation(
-                "V50 Contract analysis complete: type={Type}, risk={Risk}({Score}), " +
+                "V51 Contract analysis complete: type={Type}, risk={Risk}({Score}), " +
                 "checklist={CL}, cross={CA}, mandatory={MC}, flags={Flags}, warnings={Warn}, " +
                 "traps={Traps}, deviations={Dev}",
                 result.DocumentType, result.OverallRisk, result.RiskScore,
@@ -430,13 +432,25 @@ public class ContractAnalysisService
 
             return result;
         }
+        catch (ClientResultException ex)
+        {
+            _logger.LogError(ex, "V51 Contract analysis failed — OpenRouter API error (HTTP {Status})", ex.Status);
+            return new ContractAnalysisResult
+            {
+                DocumentType = "Greška",
+                Summary = $"AI analiza nije uspjela: API greška (HTTP {ex.Status}). Pokušajte ponovno.",
+                OverallRisk = "Nepoznat",
+                RiskScore = 0,
+                Disclaimer = Disclaimer
+            };
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "V50 Contract analysis failed");
             return new ContractAnalysisResult
             {
                 DocumentType = "Greška",
-                Summary = $"AI analiza nije uspjela: {ex.Message}",
+                Summary = "AI analiza nije uspjela. Pokušajte ponovno ili kontaktirajte podršku.",
                 OverallRisk = "Nepoznat",
                 RiskScore = 0,
                 Disclaimer = Disclaimer
@@ -448,7 +462,7 @@ public class ContractAnalysisService
     //  PASS 3: DETERMINISTIC RISK SCORING ENGINE
     // ══════════════════════════════════════════════════════════
     /// <summary>
-    /// V50: Compute risk score mathematically from ALL findings (audit + reasoning).
+    /// V51: Compute risk score mathematically from ALL findings (audit + reasoning).
     /// No AI guessing — pure formula.
     /// </summary>
     internal static void ComputeRiskScore(ContractAnalysisResult result)
@@ -501,7 +515,7 @@ public class ContractAnalysisService
         if (result.Warnings.Count > 0)
             breakdown.Add($"+{result.Warnings.Count * 3} Upozorenja ({result.Warnings.Count}×3)");
 
-        // ── V50: Logical traps from o3-mini ──
+        // ── V51: Logical traps from reasoning model ──
         foreach (var trap in result.LogicalTraps)
         {
             int pts = trap.Severity?.ToUpperInvariant() switch
@@ -514,7 +528,7 @@ public class ContractAnalysisService
             breakdown.Add($"+{pts} 🪤 Zamka (o1): {trap.Title} ({trap.Severity})");
         }
 
-        // ── V50: Ideal contract deviations ──
+        // ── V51: Ideal contract deviations ──
         foreach (var dev in result.IdealContractDeviations)
         {
             int pts = dev.Severity?.ToUpperInvariant() switch
@@ -551,7 +565,7 @@ public class ContractAnalysisService
     }
 
     // ══════════════════════════════════════════════════════════
-    //  PASS 2 PARSER — o3-mini reasoning output → structured models
+    //  PASS 2 PARSER — reasoning model output → structured models
     // ══════════════════════════════════════════════════════════
     private void ParseReasoningResponse(string json, ContractAnalysisResult result)
     {
@@ -601,12 +615,12 @@ public class ContractAnalysisService
                 }
             }
 
-            _logger.LogInformation("V50 Reasoning parsed: traps={Traps}, deviations={Dev}",
+            _logger.LogInformation("V51 Reasoning parsed: traps={Traps}, deviations={Dev}",
                 result.LogicalTraps.Count, result.IdealContractDeviations.Count);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "V50 Failed to parse o3-mini reasoning output — continuing without deep analysis");
+            _logger.LogWarning(ex, "V51 Failed to parse reasoning output — continuing without deep analysis");
             // Non-fatal: Pass 1 audit results are still valid
         }
     }
@@ -737,7 +751,7 @@ public class ContractAnalysisService
         }
 
         _logger.LogInformation(
-            "V50 Audit parsed: type={Type}, checklist={CL}, cross={CA}, mandatory={MC}, flags={RF}, warnings={W}",
+            "V51 Audit parsed: type={Type}, checklist={CL}, cross={CA}, mandatory={MC}, flags={RF}, warnings={W}",
             result.DocumentType, result.Checklist.Count, result.CrossArticleIssues.Count,
             result.MandatoryClauses.Count, result.RedFlags.Count, result.Warnings.Count);
 

@@ -198,7 +198,7 @@ public class ChronologyController : ControllerBase
                 Citation = "čl. 219., čl. 223. ZPP",
                 Reasoning = $"AI je obradio {processed} PDF dokumenata i ekstrahirao {allEvents.Count} kronoloških događaja. Greške: {errors.Count}.",
                 Confidence = errors.Count == 0 ? "VISOKO" : "SREDNJE",
-                ModelUsed = "gpt-4o",
+                ModelUsed = "openai/gpt-4o-mini",
                 ModelTemperature = 0.10
             });
         }
