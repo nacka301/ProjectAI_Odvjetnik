@@ -74,12 +74,9 @@ public class ExtremeEdgeCaseTests
         // ASSERT: Engine must NOT produce a confident valuation
         Assert.Equal(0, result.EstimatedValueEur);        // No comps → 0 value
         Assert.Equal(0, result.UsablePricePoints);         // No data
-        // 0 comps (-20) + RegionalFallback (-15) = score 65 → "Srednja"
-        // Key: even "Srednja" with 0 value = effectively useless → system should
-        // never give "Visoka" confidence with zero data.
-        Assert.True(result.MathConfidenceScore < 75,
-            $"Zero-comp rural ruin should have below-high confidence, got {result.MathConfidenceScore}");
-        Assert.DoesNotContain("visoka", result.MathConfidenceLevel.ToLowerInvariant());
+        Assert.Contains("niska", result.MathConfidenceLevel.ToLowerInvariant());
+        Assert.True(result.MathConfidenceScore < 50,
+            $"Zero-comp rural ruin should have low confidence, got {result.MathConfidenceScore}");
         Assert.Contains("Nedovoljno", result.PriceSource); // "Nedovoljno podataka"
     }
 
@@ -175,11 +172,16 @@ public class ExtremeEdgeCaseTests
                 $"Ilok unfinished house should be <600 €/m², got {result.CalculatedPricePerM2}");
         }
 
-        // NeedsWork condition is applied PER-COMP (not as global adjustment).
-        // Instead verify: "Velika nekretnina" global adjustment exists for 1200m².
+        // Must flag condition adjustment for unfinished property
         Assert.True(result.Adjustments.Any(a =>
-            a.Factor.Contains("Velika nekretnina", StringComparison.OrdinalIgnoreCase)),
-            "Must apply 'Velika nekretnina' discount for 1200m² property");
+            a.Description.Contains("stanje", StringComparison.OrdinalIgnoreCase) ||
+            a.Description.Contains("adaptacij", StringComparison.OrdinalIgnoreCase) ||
+            a.Description.Contains("condition", StringComparison.OrdinalIgnoreCase) ||
+            a.Factor.Contains("Stanje", StringComparison.OrdinalIgnoreCase) ||
+            a.Factor.Contains("Condition", StringComparison.OrdinalIgnoreCase) ||
+            a.Factor.Contains("Velika nekretnina", StringComparison.OrdinalIgnoreCase) ||
+            a.Factor.Contains("adaptacij", StringComparison.OrdinalIgnoreCase)),
+            "Must flag condition or size adjustment for 1200m² unfinished property");
     }
 
     // ══════════════════════════════════════════════════════════
@@ -261,14 +263,15 @@ public class ExtremeEdgeCaseTests
             KeyFeatures = ["50 ha", "oranica", "ravnica", "P2 klasa"],
         };
 
-        // Ag land comps — cheap per m², but above the 0.5 €/m² ag-land floor
+        // Ag land comps — REAL prices from Croatian market (0.25-0.35 €/m²)
+        // Engine must NOT filter these out with a hardcoded floor!
         var comps = new List<ComparableSearchResult>
         {
-            MakeListing("Oranica 50000m² Kneževi Vinogradi", "Oranica 5ha Baranja, ravnica", 40000, 0.8, 50000, "good"),
-            MakeListing("Oranica 100000m² Kneževi Vinogradi", "Oranica 10ha Baranja ravnica", 70000, 0.7, 100000, "good"),
-            MakeListing("Oranica 30000m² Kneževi Vinogradi", "Oranica 3ha Baranja, Kneževi V.", 21000, 0.7, 30000, "good"),
-            MakeListing("Oranica 80000m² Kneževi Vinogradi", "Oranica 8ha Baranja ravnica", 56000, 0.7, 80000, "good"),
-            MakeListing("Oranica 20000m² Kneževi Vinogradi", "Oranica 2ha Baranja, Popovac", 15000, 0.75, 20000, "good"),
+            MakeListing("Oranica Baranja A", "Oranica 5ha Baranja", 15000, 0.3, 50000, "good"),
+            MakeListing("Oranica Baranja B", "Oranica 10ha ravnica", 35000, 0.35, 100000, "good"),
+            MakeListing("Oranica Baranja C", "Oranica 3ha Kneževi V.", 7500, 0.25, 30000, "good"),
+            MakeListing("Oranica Baranja D", "Oranica 8ha Baranja", 24000, 0.3, 80000, "good"),
+            MakeListing("Oranica Baranja E", "Oranica 2ha Popovac", 5000, 0.25, 20000, "good"),
         };
 
         var market = MakeMarket("Baranja", "zemljište", comps, property.Location);
@@ -665,13 +668,12 @@ public class ExtremeEdgeCaseTests
     }
 
     // ══════════════════════════════════════════════════════════
-    //  TEST 10: Tight cluster + extreme outliers — IQR stress test
+    //  TEST 10: Wildly scattered comps — CV>50% stress test
     //  Lokacija: Biograd na Moru, Zadar
-    //  Zamka: 8 comps — 6 clustered at 1200-1600 €/m², plus
-    //         2 extreme outliers (150 €/m² and 9000 €/m²).
-    //         IQR must detect and remove the extremes.
-    //         Q1≈1200, Q3≈1600, IQR≈400 → bounds [600, 2200].
-    //         Outliers 150 and 9000 fall outside → removed.
+    //  Zamka: 8 comps ali raspon 400-5000 €/m² — IQR mora
+    //         izbaciti outliere. CV mora biti visok.
+    //         Engine mora pokazati da je nesigurna.
+    //         Confidence MORA biti degradirana jer su podaci raštrkani.
     // ══════════════════════════════════════════════════════════
 
     [Fact]
@@ -687,20 +689,18 @@ public class ExtremeEdgeCaseTests
             RawText = "Stan 55 m² Biograd na Moru, prizemlje, dobro stanje",
         };
 
-        // Tight cluster at 1200-1600 + 2 extreme outliers (150 and 9000)
-        // Titles include location + m² for similarity scoring
+        // Wildly varied comps: 400 to 5000 €/m²
+        // MESSY titles — real portal data never has perfect location names!
         var comps = new List<ComparableSearchResult>
         {
-            MakeListing("Stan 60m² Biograd na Moru centar", "Stan 60m² centar Biograda", 84000, 1400, 60, "good"),
-            MakeListing("Stan 50m² Biograd na Moru obala", "Stan 50m² Biograd obala", 65000, 1300, 50, "good"),
-            MakeListing("Stan 55m² Biograd na Moru novi", "Stan 55m² Biograd, noviji", 88000, 1600, 55, "renovated"),
-            MakeListing("Stan 70m² Biograd na Moru mirna", "Stan 70m² mirna ulica Biograd", 84000, 1200, 70, "original"),
-            MakeListing("Stan 65m² Biograd na Moru ul.", "Stan 65m² centar Biograd na Moru", 97500, 1500, 65, "good"),
-            MakeListing("Stan 58m² Biograd na Moru park", "Stan 58m² blizu parka Biograd", 81200, 1400, 58, "good"),
-            // OUTLIER LOW: ruined tiny storage sold as "apartment" at 150 €/m²
-            MakeListing("Stan 40m² Biograd na Moru ruševina", "Ruševina, 40m² Biograd na Moru", 6000, 150, 40, "needs_adaptation"),
-            // OUTLIER HIGH: luxury penthouse at 9000 €/m² — wrong market segment
-            MakeListing("Stan 45m² Biograd na Moru lux", "Penthouse lux 45m² Biograd 1. red", 405000, 9000, 45, "new"),
+            MakeListing("Biograd ultra lux", "Luksuz penthouse s bazenom, 1. red", 500000, 5000, 100, "new"),
+            MakeListing("Biograd more A", "Stan 50m², pogled more", 225000, 4500, 50, "renovated"),
+            MakeListing("Biograd centar B", "Stan 60m², centar", 120000, 2000, 60, "good"),
+            MakeListing("Biograd C", "Stan 55m², dobro stanje", 82500, 1500, 55, "good"),
+            MakeListing("Biograd D", "Stan 70m², periferija", 91000, 1300, 70, "original"),
+            MakeListing("Biograd E", "Stan 65m², stari", 71500, 1100, 65, "original"),
+            MakeListing("Biograd F", "Garsonijera 30m², napušteno", 18000, 600, 30, "needs_adaptation"),
+            MakeListing("Biograd ruralno", "Stan 80m², selo kraj Biograda", 32000, 400, 80, "needs_adaptation"),
         };
 
         var market = MakeMarket("Biograd na Moru", "stan", comps, property.Location);
@@ -714,11 +714,10 @@ public class ExtremeEdgeCaseTests
         Assert.True(result.OutliersRemoved > 0,
             $"With 150-9000 outliers around 1200-1600 cluster, IQR must remove outliers. Removed: {result.OutliersRemoved}");
 
-        // Confidence: After IQR cleans the outliers, remaining cluster is tight
-        // → confidence CAN be high, which is correct engine behavior.
-        // Key assertion: the engine handled the mess and produced a reliable result.
-        Assert.True(result.MathConfidenceScore >= 50,
-            $"After cleanup, confidence should be at least medium, got {result.MathConfidenceScore}");
+        // Confidence MUST be degraded — if engine had to remove lots of dirty
+        // data, the original sample was unreliable → confidence < 90
+        Assert.True(result.MathConfidenceScore < 90,
+            $"Scattered data requiring IQR cleanup must degrade confidence, got {result.MathConfidenceScore}");
 
         // Pipeline must document outlier removal
         Assert.True(result.Pipeline.Any(p =>

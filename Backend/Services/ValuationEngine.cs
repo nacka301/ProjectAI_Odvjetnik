@@ -216,7 +216,12 @@ public class ValuationEngine
     private const double MinSalePriceEur_AgriLand    =    500;
     private const double MinPricePerM2_Building      =    200;
     private const double MinPricePerM2_BuildLand     =     15;
-    private const double MinPricePerM2_AgriLand      =    0.5;
+    //  V78: Ag-land floor lowered from 0.5 to 0.05 €/m².
+    //  Real agricultural land in Baranja/Slavonija sells for 0.25-0.35 €/m².
+    //  A hardcoded 0.5 floor was silently rejecting VALID market data.
+    //  The market dictates prices, not our constants. Floor 0.05 only catches
+    //  zero/negative/corrupt entries.
+    private const double MinPricePerM2_AgriLand      =   0.05;
 
     private static readonly string[] RentalKeywords =
     [
@@ -476,10 +481,33 @@ public class ValuationEngine
                         }
                         else
                         {
-                            // No clear location signal — log but don't filter
-                            pipeline.Add($"V23 Location Cluster: detected 2 clusters " +
-                                $"(lower={lowerCluster.Count}@{lowerAvg:F0}, upper={upperCluster.Count}@{upperAvg:F0}) " +
-                                $"but no clear premium/peripheral signal → keeping all");
+                            // V78: No clear premium/peripheral signal, but if one cluster is
+                            // significantly larger, the majority cluster is statistically more
+                            // representative. Pick it instead of averaging outliers in.
+                            int majorCount = Math.Max(lowerCluster.Count, upperCluster.Count);
+                            int minorCount = Math.Min(lowerCluster.Count, upperCluster.Count);
+                            if (majorCount >= 2 * minorCount && majorCount >= 3)
+                            {
+                                bool keepLower = lowerCluster.Count >= upperCluster.Count;
+                                int removed = keepLower ? upperCluster.Count : lowerCluster.Count;
+                                double keptAvg = keepLower ? lowerAvg : upperAvg;
+                                cleanPrices = keepLower ? lowerCluster : upperCluster;
+                                outlierLog.Add(
+                                    $"V78 Majority Cluster: {(keepLower ? "LOWER" : "UPPER")} cluster " +
+                                    $"({majorCount} vs {minorCount}) → kept {majorCount} comps " +
+                                    $"(avg {keptAvg:F0} €/m²), discarded {removed} minority outliers. " +
+                                    $"Split at {splitPoint:F0} €/m².");
+                                pipeline.Add(
+                                    $"V78 Majority Cluster: kept {majorCount} comps (avg {keptAvg:F0} €/m²), " +
+                                    $"removed {removed} minority outliers at split {splitPoint:F0}");
+                            }
+                            else
+                            {
+                                // Clusters are balanced — no clear winner → keep all
+                                pipeline.Add($"V23 Location Cluster: detected 2 clusters " +
+                                    $"(lower={lowerCluster.Count}@{lowerAvg:F0}, upper={upperCluster.Count}@{upperAvg:F0}) " +
+                                    $"but no clear premium/peripheral signal → keeping all");
+                            }
                         }
                     }
                 }
@@ -1465,7 +1493,8 @@ public class ValuationEngine
 
         // ── 10. Mathematical Confidence Score ──
         var mathConfidence = CalculateMathConfidence(
-            cleanPrices.Count, coeffVar, priceSource, searchPhase, outlierMethod, usedEstimatedSize);
+            cleanPrices.Count, coeffVar, priceSource, searchPhase, outlierMethod, usedEstimatedSize,
+            outliersRemoved: result.OutliersRemoved, totalRawComps: rawPrices.Count);
         result.MathConfidenceScore = mathConfidence.Score;
         result.MathConfidenceLevel = mathConfidence.Level;
         result.MathConfidenceExplanation = mathConfidence.Explanation;
@@ -1526,6 +1555,10 @@ public class ValuationEngine
         string compTextNorm = StripDiacritics(compText);
         string targetLocNorm = StripDiacritics(targetLoc);
 
+        // V78: URL slugs use dashes as word separators ("biograd-na-moru"),
+        // but location parts use spaces ("biograd na moru"). Normalize both.
+        string compTextSlug = compTextNorm.Replace("-", " ");
+
         var locParts = targetLocNorm.Split(new[] { ',', '-', '/' }, StringSplitOptions.RemoveEmptyEntries)
             .Select(s => s.Trim())
             .Where(s => s.Length > 2)
@@ -1537,15 +1570,18 @@ public class ValuationEngine
             .Where(s => s.Length > 2)
             .ToList();
 
-        // V48: Match helper — checks both diacritics and stripped versions
-        bool ContainsPart(string text, string textNorm, string partOrig, string partNorm)
-            => text.Contains(partOrig) || textNorm.Contains(partNorm);
+        // V78: Match helper — checks title, diacritics-stripped, AND dash-normalized
+        // This is essential: "biograd na moru" must match URL slug "biograd-na-moru"
+        bool ContainsPart(string text, string textNorm, string slugText, string partOrig, string partNorm)
+            => text.Contains(partOrig)
+            || textNorm.Contains(partNorm)
+            || slugText.Contains(partNorm.Replace("-", " "));
 
         // ── Location (max 0.70) — 70% of total ──
         bool neighborhoodInComp = locParts.Count >= 2
-            && ContainsPart(compText, compTextNorm, locPartsOrig[0], locParts[0]);
+            && ContainsPart(compText, compTextNorm, compTextSlug, locPartsOrig[0], locParts[0]);
         bool cityInComp = locParts.Count >= 2
-            && ContainsPart(compText, compTextNorm, locPartsOrig[^1], locParts[^1]);
+            && ContainsPart(compText, compTextNorm, compTextSlug, locPartsOrig[^1], locParts[^1]);
 
         if (neighborhoodInComp && cityInComp)
         {
@@ -1555,7 +1591,7 @@ public class ValuationEngine
         {
             score += 0.60; // Neighborhood match without city context
         }
-        else if (locPartsOrig.Select((part, i) => ContainsPart(compText, compTextNorm, part, locParts[i])).Any(x => x))
+        else if (locPartsOrig.Select((part, i) => ContainsPart(compText, compTextNorm, compTextSlug, part, locParts[i])).Any(x => x))
         {
             score += 0.25; // Same city but WRONG neighborhood
         }
@@ -1802,7 +1838,8 @@ public class ValuationEngine
     private MathConfidence CalculateMathConfidence(
         int compCount, double coeffVar, string priceSource,
         SearchPhase searchPhase, string outlierMethod,
-        bool usedEstimatedSize = false)
+        bool usedEstimatedSize = false,
+        int outliersRemoved = 0, int totalRawComps = 0)
     {
         int score = 100;
         var penalties = new List<string>();
@@ -1870,6 +1907,35 @@ public class ValuationEngine
         {
             score -= 10;
             penalties.Add("-10: površina nekretnine estimirana (nije poznata iz ulaznih podataka)");
+        }
+
+        // V78: Penalty when IQR/filtering removed outliers — original sample was noisy.
+        // If you had to throw away data, you can't be 100% confident in what remains.
+        if (outliersRemoved > 0 && totalRawComps > 0)
+        {
+            double removalRatio = (double)outliersRemoved / totalRawComps;
+            if (removalRatio >= 0.40)
+            {
+                score -= 15;
+                penalties.Add($"-15: IQR uklonio {outliersRemoved}/{totalRawComps} ({removalRatio:P0}) — vrlo nesiguran uzorak");
+            }
+            else if (removalRatio >= 0.20)
+            {
+                score -= 10;
+                penalties.Add($"-10: IQR uklonio {outliersRemoved}/{totalRawComps} ({removalRatio:P0}) — nesiguran uzorak");
+            }
+            else if (outliersRemoved >= 1)
+            {
+                score -= 5;
+                penalties.Add($"-5: IQR uklonio {outliersRemoved} outlier(a) — blago degradirano");
+            }
+        }
+
+        // V78: Hard ceiling when zero value was produced (no useful data)
+        if (compCount == 0 && priceSource.Contains("Nedovoljno"))
+        {
+            score = Math.Min(score, 45); // Force below "Visoka" threshold
+            penalties.Add($"CAP@45: nema podataka → pouzdanost ne može biti visoka");
         }
 
         // Bonus: many high-quality comps
