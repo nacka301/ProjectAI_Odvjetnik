@@ -127,7 +127,7 @@ export default function ProcessingView({ stages, isStreaming, error, onCancel, o
             const isError = s.status === "error";
 
             return (
-              <div key={s.id} className="flex gap-3" style={{ paddingBottom: idx < stages.length - 1 ? "0.75rem" : 0 }}>
+              <div key={s.id} data-stage-id={s.id} data-stage-status={s.status} className="flex gap-3" style={{ paddingBottom: idx < stages.length - 1 ? "0.75rem" : 0 }}>
                 {/* Icon circle + connector line */}
                 <div className="flex flex-col items-center">
                   <div

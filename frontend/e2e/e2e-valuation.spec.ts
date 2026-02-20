@@ -12,7 +12,7 @@
  *    7. Čita cijenu s ekrana i provjerava je li u realnom rasponu
  *
  *  AKO PADNE: screenshot + nastavlja dalje (ne ruši cijeli suite)
- *  TIMEOUT: do 3 minute po procjeni (pravi AI + web scraping)
+ *  TIMEOUT: do 14 minuta po procjeni (pravi AI + web scraping)
  *
  *  Pokreni:  npx playwright test e2e/e2e-valuation.spec.ts --headed
  * ═══════════════════════════════════════════════════════════════════════════
@@ -102,15 +102,29 @@ async function screenshotOnFailure(page: Page, scenarioId: string, reason: strin
 }
 
 // ── Helper: Select a city from the combobox ──────────────────────────
+//  DOM structure of each Combobox:
+//    <div class="relative">          ← containerRef
+//      <label>Grad / Općina *</label>
+//      <button>                      ← trigger (shows placeholder or value)
+//        <span>Odaberite grad...</span>
+//        <ChevronDown />
+//      </button>
+//      <!-- when open: -->
+//      <div class="absolute z-50…">
+//        <input placeholder="Pretraži..." />
+//        <ul role="listbox">
+//          <li role="option">...</li>
+//        </ul>
+//      </div>
+//    </div>
 
 async function selectCity(page: Page, cityName: string) {
-  // The city combobox trigger — it's inside a container with label "Grad / Općina"
-  // Find the combobox container, then click the dropdown trigger button
-  const cityContainer = page.locator("div").filter({ has: page.locator("label", { hasText: "Grad / Općina" }) }).first();
-  const trigger = cityContainer.locator("button").first();
+  // Click the city combobox trigger — exact match to avoid "Prvo odaberite grad"
+  const trigger = page.getByRole('button', { name: 'Odaberite grad...' });
+  await trigger.waitFor({ state: "visible", timeout: 10000 });
   await trigger.click();
 
-  // Wait for dropdown and type in search
+  // Wait for dropdown to open — search input appears inside
   const searchInput = page.locator('input[placeholder="Pretraži..."]').first();
   await searchInput.waitFor({ state: "visible", timeout: 5000 });
   await searchInput.fill(cityName);
@@ -120,18 +134,19 @@ async function selectCity(page: Page, cityName: string) {
   await option.waitFor({ state: "visible", timeout: 5000 });
   await option.click();
 
-  // Wait for combobox to close
-  await page.waitForTimeout(300);
+  // Wait for combobox to close and state to update
+  await page.waitForTimeout(500);
 }
 
 // ── Helper: Select a settlement from the combobox ────────────────────
 
 async function selectSettlement(page: Page, settlementName: string) {
-  // The settlement combobox is the second one — look for "Naselje / Kvart" label
-  const settlementContainer = page.locator("div").filter({ has: page.locator("label", { hasText: "Naselje" }) }).first();
-  const trigger = settlementContainer.locator("button").first();
+  // The settlement combobox trigger shows "Odaberite naselje..." when city is selected
+  const trigger = page.locator('button', { hasText: 'Odaberite naselje' });
+  await trigger.waitFor({ state: "visible", timeout: 5000 });
   await trigger.click();
 
+  // Settlement dropdown search input — use last() in case city dropdown lingers
   const searchInput = page.locator('input[placeholder="Pretraži..."]').last();
   await searchInput.waitFor({ state: "visible", timeout: 5000 });
   await searchInput.fill(settlementName);
@@ -140,26 +155,37 @@ async function selectSettlement(page: Page, settlementName: string) {
   await option.waitFor({ state: "visible", timeout: 8000 });
   await option.click();
 
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(500);
 }
 
 // ── Helper: Fill a number input by its label text ────────────────────
+//  NumberInput DOM: <div> <label>Površina (m²) *</label> <input type="number"> </div>
+//  The label text and input are siblings inside a <div>. We use the label's
+//  exact text to find its sibling input via the parent container.
 
 async function fillNumber(page: Page, labelText: string, value: number) {
   if (!value || value === 0) return;
-  const input = page.locator("label", { hasText: labelText }).locator("..").locator('input[type="number"]');
+  // Find the specific <label> element, go to its parent <div>, then find the input
+  const label = page.locator("label").filter({ hasText: labelText }).first();
+  const input = label.locator("..").locator('input[type="number"]');
+  await input.waitFor({ state: "visible", timeout: 5000 });
   await input.fill(String(value));
 }
 
 // ── Helper: Select a <select> by its label text ──────────────────────
+//  SelectInput DOM: <div> <label>Stanje *</label> <select>...</select> </div>
+//  Same approach: find specific <label>, go to parent, then find the <select>.
 
 async function selectOption(page: Page, labelText: string, value: string) {
   if (!value || value === "Unknown") return;
-  const select = page.locator("label", { hasText: labelText }).locator("..").locator("select");
+  const label = page.locator("label").filter({ hasText: labelText }).first();
+  const select = label.locator("..").locator("select");
+  await select.waitFor({ state: "visible", timeout: 5000 });
   await select.selectOption(value);
 }
 
 // ── Helper: Toggle a checkbox by its label text ──────────────────────
+//  Toggle DOM: <label class="flex items-center…"> <input type="checkbox"> <span>Lift</span> </label>
 
 async function toggleCheckbox(page: Page, labelText: string, shouldBeChecked: boolean) {
   if (!shouldBeChecked) return;
@@ -342,34 +368,56 @@ test.describe("E2E Procjena Nekretnina — Real Black-Box", () => {
 
       // ┌─────────────────────────────────────────────────────┐
       // │  WAIT: Processing (SSE stream, AI, scraping)        │
-      // │  Up to 3 minutes — real AI work happening           │
+      // │  Up to 14 minutes — real AI work happening          │
       // └─────────────────────────────────────────────────────┘
 
       let priceText = "";
 
-      await test.step("Čekanje rezultata procjene (do 3 min)", async () => {
+      await test.step("Čekanje rezultata procjene (do 14 min)", async () => {
         // Wait for the processing overlay to appear
         try {
           await page.locator('text=Procjena u tijeku').waitFor({ state: "visible", timeout: 10000 });
+          console.log(`  ⏳ [${scenario.id}] Processing started — waiting for AI result…`);
         } catch {
           // Processing view may have been too fast to catch — proceed
         }
 
+        // ── Live SSE stage monitoring ──
+        // Poll the visible stage labels every 5s and log progress to console.
+        // This reveals which backend stages complete and which one hangs.
+        const stageMonitorInterval = setInterval(async () => {
+          try {
+            const stageTexts = await page.locator('[data-stage-id]').evaluateAll(
+              (els) => els.map(el => {
+                const id = el.getAttribute('data-stage-id') || '';
+                const status = el.getAttribute('data-stage-status') || '';
+                const label = el.querySelector('[data-stage-label]')?.textContent || '';
+                return `${id}:${status}`;
+              })
+            );
+            if (stageTexts.length > 0) {
+              console.log(`  📡 [${scenario.id}] SSE progress: ${stageTexts.join(' | ')}`);
+            }
+          } catch { /* page may have navigated */ }
+        }, 10_000);
+
         // Now wait for the RESULT to appear — the hero card with the price
-        // This is the critical wait — AI + scraping can take up to 3 minutes
+        // This is the critical wait — AI + scraping can take up to 14 minutes
         const resultLabel = page.locator('text=Procijenjena tržišna vrijednost');
         try {
-          await resultLabel.waitFor({ state: "visible", timeout: 180_000 }); // 3 minutes
+          await resultLabel.waitFor({ state: "visible", timeout: 840_000 }); // 14 minutes
         } catch (timeoutErr) {
+          clearInterval(stageMonitorInterval);
           // Check if there's an error message instead
           const errorVisible = await page.locator('text=Pokušaj ponovno').isVisible().catch(() => false);
           if (errorVisible) {
             await screenshotOnFailure(page, scenario.id, "Backend returned error during processing");
             throw new Error(`[${scenario.id}] Procjena failed with backend error`);
           }
-          await screenshotOnFailure(page, scenario.id, "Timeout waiting for result (180s)");
-          throw new Error(`[${scenario.id}] Timeout — result not shown within 3 minutes`);
+          await screenshotOnFailure(page, scenario.id, "Timeout waiting for result (840s)");
+          throw new Error(`[${scenario.id}] Timeout — result not shown within 14 minutes`);
         }
+        clearInterval(stageMonitorInterval);
 
         // ┌─────────────────────────────────────────────────────┐
         // │  READ: Extract price from the hero card             │

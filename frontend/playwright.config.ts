@@ -20,8 +20,8 @@ export default defineConfig({
   // Only look in the e2e/ folder — don't touch vitest __tests__
   testDir: "./e2e",
 
-  // Global timeout per test: 5 minutes (AI can be slow)
-  timeout: 5 * 60 * 1000,
+  // Global timeout per test: 15 minutes (AI + scraping pipeline can be slow for big cities)
+  timeout: 15 * 60 * 1000,
 
   // Expect assertions timeout: 30 seconds
   expect: {

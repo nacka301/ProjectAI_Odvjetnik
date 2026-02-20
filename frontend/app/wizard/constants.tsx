@@ -6,6 +6,8 @@ import {
   Cpu,
   Bot,
   Save,
+  Eye,
+  Sparkles,
 } from "lucide-react";
 import type {
   PropertyCondition,
@@ -24,7 +26,9 @@ export const INITIAL_STAGES: StreamStage[] = [
   { id: "reading", label: "Pripremam podatke za procjenu...", status: "pending" },
   { id: "searching", label: "Pretražujem Njuškalo i tržište nekretnina...", status: "pending" },
   { id: "ai_features", label: "AI analizira značajke oglasa...", status: "pending" },
+  { id: "sherlock", label: "Dubinska analiza tekstova oglasa...", status: "pending" },
   { id: "engine", label: "Engine izračunava tržišnu vrijednost...", status: "pending" },
+  { id: "agent", label: "AI agent analizira nekretninu...", status: "pending" },
   { id: "ai_opinion", label: "AI generira stručno mišljenje...", status: "pending" },
   { id: "saving", label: "Spremam rezultate...", status: "pending" },
 ];
@@ -83,7 +87,9 @@ export const STAGE_ICONS: Record<string, ReactNode> = {
   reading: <FileSearch className="h-5 w-5" />,
   searching: <Search className="h-5 w-5" />,
   ai_features: <Brain className="h-5 w-5" />,
+  sherlock: <Eye className="h-5 w-5" />,
   engine: <Cpu className="h-5 w-5" />,
+  agent: <Sparkles className="h-5 w-5" />,
   ai_opinion: <Bot className="h-5 w-5" />,
   saving: <Save className="h-5 w-5" />,
 };
@@ -108,12 +114,24 @@ export const STAGE_MICROCOPY: Record<string, string[]> = {
     "Detektiram renovacije i opremu...",
     "Klasificiram stanja objekata...",
   ],
+  sherlock: [
+    "Čitam opise oglasa...",
+    "Detektiram hitnost prodaje...",
+    "Analiziram tip zemljišta...",
+    "Provjeravam konzistentnost podataka...",
+  ],
   engine: [
     "Računam baznu cijenu po m²...",
     "Primjenjujem korekcijske faktore...",
     "Uklanjam statističke outliere...",
     "Izračunavam diskont tražene cijene...",
     "Validam pouzdanost procjene...",
+  ],
+  agent: [
+    "Analiziram kontekst nekretnine...",
+    "Provjeravam pravne specifičnosti...",
+    "Uspoređujem s benchmarkom...",
+    "Primjenjujem kontekstualne korekcije...",
   ],
   ai_opinion: [
     "Generiram stručno mišljenje...",
