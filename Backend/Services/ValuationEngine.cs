@@ -2577,7 +2577,10 @@ public class ValuationEngine
         var prices = new List<ExtractedPrice>();
         double minPpm2 = isAgriLand ? MinPricePerM2_AgriLand : (isLand ? MinPricePerM2_BuildLand : MinPricePerM2_Building);
         double minTotal = isAgriLand ? MinSalePriceEur_AgriLand : (isLand ? MinSalePriceEur_BuildLand : MinSalePriceEur_Building);
-        double maxPpm2 = isLand ? 1500 : 15000;  // Land rarely above 1500 €/m²
+        // V76: Increased caps for premium markets.
+        // Dubrovnik Old Town apartments can reach 8-12k €/m².
+        // Premium coastal building plots (Dubrovnik, Hvar) can reach 2-3k €/m².
+        double maxPpm2 = isLand ? 5000 : 20000;
 
         foreach (var listing in listings)
         {
@@ -2598,7 +2601,11 @@ public class ValuationEngine
             if (listing.ListedPriceEur > 0)
             {
                 double sizeForCalc = listing.AiSizeM2 > 0 ? listing.AiSizeM2.Value : ExtractMainSize(text);
-                if (sizeForCalc <= 0 && targetSizeM2 > 0) sizeForCalc = targetSizeM2;
+                // V76: Removed circular targetSizeM2 fallback.
+                // Using the SUBJECT's size to compute a COMP's €/m² is circular and causes
+                // severe distortion (e.g. 300k€ listing for 120m² apt computed as 300k/65=4615€/m²
+                // when target is only 65m²). If neither AI nor text gives a size, skip to Tier 2
+                // which uses the portal's pre-computed ListedPricePerM2 instead.
 
                 if (sizeForCalc > 0)
                 {

@@ -575,18 +575,24 @@ public class EvaluateController : ControllerBase
             $"AI procjena: {aiResult.EstimatedValueEur:N0} €");
 
         // ── Merge ──
+        // V76: Engine value ALWAYS wins when available. The deterministic engine
+        // is based on real comparable data with statistical methodology (IQR, weighted
+        // median, twin comparison). The AI's job is narrative/explanation only.
+        // Previously 50/50 average when deviation ≤40% — this allowed AI hallucination
+        // to drag the deterministic value up/down by up to 20%.
         int finalValue = engineResult.EstimatedValueEur;
         string finalReasoning = aiResult.ValuationReasoning;
         if (aiResult.EstimatedValueEur > 0 && engineResult.EstimatedValueEur > 0)
         {
             double deviation = Math.Abs(aiResult.EstimatedValueEur - engineResult.EstimatedValueEur)
                 / (double)engineResult.EstimatedValueEur;
-            if (deviation <= 0.40)
-                finalValue = (int)Math.Round(
-                    (aiResult.EstimatedValueEur + engineResult.EstimatedValueEur) / 2.0);
-            else
+            if (deviation > 0.40)
                 finalReasoning = SseHelpers.PatchReasoningValue(
                     aiResult.ValuationReasoning, aiResult.EstimatedValueEur, engineResult.EstimatedValueEur);
+            // Engine value used regardless — AI narrative only.
+            _logger.LogInformation(
+                "V76 Merge: Engine={Engine}€, AI={AI}€, deviation={Dev:P1} → using ENGINE value",
+                engineResult.EstimatedValueEur, aiResult.EstimatedValueEur, deviation);
         }
         else if (engineResult.EstimatedValueEur <= 0 && aiResult.EstimatedValueEur > 0)
         {

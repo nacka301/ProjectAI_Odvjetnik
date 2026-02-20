@@ -861,9 +861,19 @@ public class ValuationService
 
         if (result is not null)
         {
-            // V22: Increased from 500→2000 to preserve "Dodatne informacije" notes
-            // which are appended at the END of the description string.
-            result.RawText = pdfText.Length > 2000 ? pdfText[..2000] + "..." : pdfText;
+            // V76: Smart truncation — preserve BOTH the beginning (ZK legal data)
+            // AND the end ("Dodatne informacije" — user's critical notes about
+            // micro-location, landmarks, renovation status etc.).
+            // The AI prompt says this is the "NAJVAŽNIJI DIO unosa".
+            if (pdfText.Length > 4000)
+            {
+                // Keep first 2500 chars (ZK data) + last 1500 chars (user notes)
+                result.RawText = pdfText[..2500] + "\n... [skraćeno] ...\n" + pdfText[^1500..];
+            }
+            else
+            {
+                result.RawText = pdfText;
+            }
         }
 
         return result ?? throw new InvalidOperationException("Failed to extract property info from PDF.");

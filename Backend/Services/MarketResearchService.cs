@@ -151,7 +151,10 @@ public class MarketResearchService
         { "Solin", "Split" }, { "Podstrana", "Split" },
         { "Stobreč", "Split" }, { "Stobrec", "Split" },
         // Rijeka suburbs
-        { "Opatija", "Rijeka" },
+        // V76: Opatija removed from BroaderRegion→Rijeka.
+        // Opatija is an independent premium market (3-5x Rijeka prices),
+        // and ForbiddenCityPairs blocks opatija↔rijeka, creating a deadlock.
+        // Opatija uses SubDistricts (Lovran, Ičići, Matulji) instead.
         // NOTE: Crikvenica intentionally NOT mapped to Rijeka (Location Lock — City Integrity).
         // Zadar suburbs
         { "Nin", "Zadar" }, { "Sukošan", "Zadar" }, { "Sukosan", "Zadar" },
@@ -160,7 +163,11 @@ public class MarketResearchService
         { "Vodice", "Šibenik" }, { "Tribunj", "Šibenik" },
         { "Primošten", "Šibenik" }, { "Primosten", "Šibenik" },
         // Split coast
-        { "Makarska", "Split" }, { "Omiš", "Split" }, { "Omis", "Split" },
+        // V76: Makarska removed from BroaderRegion→Split.
+        // Makarska is an independent coastal market (different price dynamics),
+        // and ForbiddenCityPairs blocks makarska↔split, creating a deadlock.
+        // Makarska uses SubDistricts instead.
+        { "Omiš", "Split" }, { "Omis", "Split" },
         { "Trogir", "Split" }, { "Supetar", "Split" },
         // Istra
         { "Rovinj", "Pula" }, { "Poreč", "Pula" }, { "Porec", "Pula" },
@@ -195,7 +202,10 @@ public class MarketResearchService
         { "Kman", "Split" }, { "Brda", "Split" }, { "Gripe", "Split" },
         { "Lovret", "Split" }, { "Lučac", "Split" }, { "Lucac", "Split" },
         // V23: Split center/historic core neighborhoods
-        { "Grad", "Split" }, { "centar", "Split" }, { "centar Split", "Split" }, { "stari grad", "Split" },
+        { "Grad", "Split" },
+        // V76: Removed generic "centar"→"Split" — it false-matched Zagreb/Rijeka/Zadar
+        // center properties to Split. Only keep explicit "centar Split".
+        { "centar Split", "Split" }, { "stari grad Split", "Split" },
         { "Trstenik", "Split" },
         { "Pujanke", "Split" }, { "Ravne njive", "Split" },
         { "Mejaši", "Split" }, { "Mejasi", "Split" },
@@ -477,8 +487,13 @@ public class MarketResearchService
         { "Prelog", "Čakovec" },
         // ── Ličko-senjska županija ──
         { "Otočac", "Gospić" }, { "Otocac", "Gospić" },
-        { "Senj", "Rijeka" }, { "Novalja", "Zadar" },
-        { "Gospić", "Zadar" }, { "Gospic", "Zadar" },
+        { "Senj", "Rijeka" },
+        // V76: Novalja is a premium tourist island (Pag/Zrće) — NOT comparable to Zadar city.
+        // Uses SubDistricts (Stara Novalja, Zubovići, Caska) instead.
+        { "Novalja", "Senj" },
+        // V76: Gospić is inland Lika (5-10x cheaper than Zadar coast).
+        // Map to Otočac (same region/county) not Zadar.
+        { "Gospić", "Otočac" }, { "Gospic", "Otočac" },
         // ── Zadarska (inland/small) ──
         { "Benkovac", "Zadar" }, { "Obrovac", "Zadar" },
         { "Biograd na Moru", "Zadar" }, { "Gračac", "Zadar" }, { "Gracac", "Zadar" },
@@ -487,7 +502,9 @@ public class MarketResearchService
         // ── Splitsko-dalmatinska (inland/small) ──
         { "Sinj", "Split" }, { "Imotski", "Split" },
         { "Vrgorac", "Split" }, { "Trilj", "Split" },
-        { "Bol", "Split" },
+        // V76: Bol (Brač island, premium resort — Golden Horn beach)
+        // is NOT comparable to Split city. Map to Supetar (both on Brač island).
+        { "Bol", "Supetar" },
         // ── Dubrovačko-neretvanska (inland/small) ──
         { "Metković", "Dubrovnik" }, { "Metkovic", "Dubrovnik" },
         { "Ploče", "Dubrovnik" }, { "Ploce", "Dubrovnik" },
@@ -517,7 +534,9 @@ public class MarketResearchService
         "dogovor", "po dogovoru"
     ];
 
-    private static readonly int[] StaleYears = [2018, 2019, 2020, 2021, 2022];
+    // V76: Dynamic stale years — anything older than 3 years from now is stale.
+    // Previously hardcoded [2018-2022] which became outdated as calendar advanced.
+    private static readonly int[] StaleYears = Enumerable.Range(2015, Math.Max(1, DateTime.Now.Year - 3 - 2015)).ToArray();
 
     public MarketResearchService(HttpClient httpClient, IConfiguration config, ILogger<MarketResearchService> logger)
     {
@@ -2687,7 +2706,10 @@ public class MarketResearchService
     // Dynamic: land has much lower floors (30-150 €/m² is normal)
     private const double MinSalePriceEur_Building = 15_000;   // V14: lowered from 35k to avoid data starvation
     private const double MinSalePriceEur_Land     =  5_000;
-    private const double MinPricePerM2_Building    =    800;
+    // V76: Lowered from 800→200 to match ValuationEngine. Rural continental
+    // houses (Požega, Slavonija, Zagorje) are typically 300-700 €/m² and were
+    // being silently filtered out, starving the engine of valid comparables.
+    private const double MinPricePerM2_Building    =    200;
     private const double MinPricePerM2_Land        =     15;  // Land can be 20-150 €/m²
 
     // ── Article / junk keywords — not actual listings ──

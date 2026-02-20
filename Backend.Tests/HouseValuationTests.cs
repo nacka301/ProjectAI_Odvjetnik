@@ -872,13 +872,14 @@ public class HouseValuationTests
     }
 
     [Fact]
-    public void House_AboveMaxPricePerM2_15000_Filtered()
+    public void House_AboveMaxPricePerM2_20000_Filtered()
     {
-        // Above max 15,000 €/m² → filtered
+        // V76: Cap raised to 20,000 €/m² for premium markets
+        // Above max 20,000 €/m² → filtered
         var comps = new List<ComparableSearchResult>
         {
-            MakeListing("Kuća A", "Kuća 100 m²", 1600000, 16000, 100, "new"),
-            MakeListing("Kuća B", "Kuća 80 m²", 1440000, 18000, 80, "new"),
+            MakeListing("Kuća A", "Kuća 100 m²", 2200000, 22000, 100, "new"),
+            MakeListing("Kuća B", "Kuća 80 m²", 2000000, 25000, 80, "new"),
             // One valid listing
             MakeListing("Kuća C", "Kuća 150 m²", 750000, 5000, 150, "new"),
         };
@@ -886,9 +887,9 @@ public class HouseValuationTests
         var property = MakeHouseProperty("Kuća 120 m²", 120, "Dubrovnik, centar", "new");
         var result = RunEngine(property, "Dubrovnik", comps, "Dubrovnik, centar");
 
-        // 16k and 18k should be filtered, only 5k should be used
-        Assert.True(result.CalculatedPricePerM2 < 15000,
-            $"Should filter above 15k €/m², got {result.CalculatedPricePerM2}");
+        // 22k and 25k should be filtered, only 5k should be used
+        Assert.True(result.CalculatedPricePerM2 < 20000,
+            $"Should filter above 20k €/m², got {result.CalculatedPricePerM2}");
     }
 
     [Fact]
