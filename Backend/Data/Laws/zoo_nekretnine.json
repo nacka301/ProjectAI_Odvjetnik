@@ -1,0 +1,127 @@
+{
+  "law": "ZOO",
+  "full_name": "Zakon o obveznim odnosima",
+  "nn_reference": "NN 35/05, 41/08, 125/11, 78/15, 29/18",
+  "articles": [
+    {
+      "article": "248",
+      "title": "Bitni sastojci ugovora",
+      "content": "(1) Ugovor je sklopljen kad su se ugovorne strane suglasile o bitnim sastojcima ugovora. (2) Bitni su oni sastojci ugovora koji su određeni zakonom, kao i oni koje je bilo koja strana označila kao bitne za sklapanje ugovora. (3) Za ugovor o kupoprodaji bitni su sastojci stvar (predmet kupoprodaje) i cijena. (4) Sporedni (akcidentalni) sastojci, o kojima se ugovorne strane nisu izričito sporazumjele, uređuju se prema dispozitivnim zakonskim odredbama, običajima i praksi utvrđenoj između strana.",
+      "tags": ["forma", "bitni_sastojci", "sklapanje_ugovora", "kupoprodaja"]
+    },
+    {
+      "article": "286",
+      "title": "Oblik ugovora — opće pravilo",
+      "content": "(1) Ugovor se može sklopiti u bilo kojem obliku, osim ako je zakonom drukčije određeno. (2) Zahtjev zakona da ugovor bude sklopljen u određenom obliku važi i za sve kasnije izmjene i dopune ugovora. (3) Smatra se da je oblik propisan za valjanost ugovora, osim ako iz cilja propisa kojim je određen oblik ne proizlazi što drugo.",
+      "tags": ["forma", "oblik_ugovora"]
+    },
+    {
+      "article": "289",
+      "title": "Ugovor o prijenosu nekretnina — obvezni pisani oblik",
+      "content": "(1) Ugovor o prijenosu prava vlasništva ili drugih stvarnih prava na nekretnini mora biti sklopljen u pisanom obliku. (2) Potpisi ugovornih strana na ugovoru moraju biti ovjereni kod javnog bilježnika ako je to posebnim zakonom propisano. (3) Ugovor o kupoprodaji nekretnine koji nije sklopljen u pisanom obliku je ništetan (čl. 290. ZOO).",
+      "tags": ["forma", "pisani_oblik", "nekretnina", "kupoprodaja"]
+    },
+    {
+      "article": "290",
+      "title": "Posljedice nedostajanja propisanog oblika",
+      "content": "(1) Ugovor koji nije sklopljen u propisanom obliku nema pravni učinak, osim ako iz cilja propisa kojim je određen oblik ne proizlazi što drugo. (2) Ugovor o kupoprodaji nekretnine koji nije sklopljen u pisanom obliku je ništetan — ne proizvodi pravne učinke, ne prenosi vlasništvo i ne obvezuje stranke.",
+      "tags": ["forma", "ništetnost", "nekretnina"]
+    },
+    {
+      "article": "303",
+      "title": "Kapara",
+      "content": "(1) Ako je u trenutku sklapanja ugovora jedna strana dala drugoj izvjestan iznos novca ili izvjesnu količinu drugih zamjenljivih stvari kao znak da je ugovor sklopljen (kapara), ugovor se smatra sklopljenim kad je kapara dana, ako nije drukčije ugovoreno. (2) Kapara je dokaz da je ugovor sklopljen. Strana koja je primila kaparu dužna ju je uračunati u ispunjenje obveze ili je vratiti ako se ne može uračunati. (3) Ako se ugovor ispuni, kapara se uračunava u cijenu. Ako se ne može uračunati, mora se vratiti.",
+      "tags": ["kapara", "plaćanje", "kupoprodaja", "sklapanje_ugovora"]
+    },
+    {
+      "article": "304",
+      "title": "Prava iz kapare kod neispunjenja",
+      "content": "(1) Ako je za neispunjenje ugovora odgovorna strana koja je dala kaparu, druga strana može po svom izboru tražiti ispunjenje ugovora, ako je to još moguće, ili tražiti naknadu štete, a kaparu uračunati u naknadu, ili se zadovoljiti primljenom kaparom. (2) Ako je za neispunjenje ugovora odgovorna strana koja je kaparu primila, druga strana može po svom izboru tražiti ispunjenje ugovora, ako je to još moguće, ili tražiti naknadu štete i povrat kapare, ili tražiti vraćanje DVOSTRUKE kapare. (3) Pravo na dvostruko vraćanje kapare je ključna zaštita kupca u kupoprodaji nekretnina — osigurava simetričnu zaštitu obiju strana.",
+      "tags": ["kapara", "neispunjenje", "dvostruka_kapara", "zaštita_kupca", "šteta"]
+    },
+    {
+      "article": "305",
+      "title": "Kapara kod djelomičnog ispunjenja",
+      "content": "(1) Ako je ugovor djelomično ispunjen, kapara se stavlja u odnos prema postotku neispunjenog dijela ugovora. (2) Vjerovnik nema pravo zadržati kaparu ako je dužnik djelomično ispunio obvezu, već samo razmjerni dio kapare.",
+      "tags": ["kapara", "djelomično_ispunjenje"]
+    },
+    {
+      "article": "306",
+      "title": "Odustatnina",
+      "content": "(1) Ako je uz kaparu ugovorena i odustatnina (arrha poenitentialis), svaka strana može odustati od ugovora. U tom slučaju strana koja je dala kaparu gubi je, a strana koja ju je primila mora je vratiti dvostruko. (2) KLJUČNA RAZLIKA: Kapara je DOKAZ sklapanja ugovora (čl. 303.) — odustatnina je PRAVO NA ODUSTANAK. (3) Ako ugovor ne predviđa izričito pravo na odustanak uz gubitak kapare, radi se o kapari, a ne o odustatnini. Sud će u slučaju nejasnoće tumačiti da je ugovorena kapara. (4) Odustatnina mora biti izričito ugovorena — ne može se presumirati.",
+      "tags": ["odustatnina", "kapara", "odustanak", "razlika_kapara_odustatnina"]
+    },
+    {
+      "article": "321",
+      "title": "Raskid ugovora zbog neispunjenja",
+      "content": "(1) Kad u dvostranom ugovoru jedna strana ne ispuni svoju obvezu, druga strana može, ako nije što drugo određeno, zahtijevati ispunjenje ili, pod pretpostavkama predviđenim u sljedećim člancima, raskinuti ugovor prostom izjavom, ako raskid ugovora ne nastupa po samom zakonu, a u svakom slučaju ima pravo na naknadu štete. (2) U kupoprodaji nekretnina, raskidni uvjet štiti kupca — ako prodavatelj ne ispuni obvezu (npr. ne briše teret), kupac može raskinuti ugovor i tražiti povrat kapare/cijene.",
+      "tags": ["raskid", "neispunjenje", "dvostruki_ugovor", "naknada_štete"]
+    },
+    {
+      "article": "323",
+      "title": "Raskid s naknadnim rokom",
+      "content": "(1) Vjerovnik može raskinuti ugovor bez ostavljanja dužniku naknadnog roka za ispunjenje ako iz dužnikova držanja proizlazi da on svoju obvezu neće ispuniti ni u naknadnom roku. (2) Ako rok nije bitan sastojak ugovora, vjerovnik mora ostaviti dužniku primjereni naknadni rok za ispunjenje. (3) Rok mora biti razuman s obzirom na okolnosti — za brisanje hipoteke u praksi 30-60 dana.",
+      "tags": ["raskid", "naknadni_rok", "neispunjenje", "hipoteka"]
+    },
+    {
+      "article": "325",
+      "title": "Učinci raskida ugovora",
+      "content": "(1) Raskidom ugovora obje su strane oslobođene svojih obveza, osim obveze na naknadu eventualne štete. (2) Ako je jedna strana ispunila ugovor potpuno ili djelomično, ima pravo na povrat onoga što je dala. (3) Svaka strana duguje drugoj naknadu za koristi koje je u međuvremenu imala od onoga što je dužna vratiti, odnosno nadoknaditi. (4) U kupoprodaji nekretnina: kupac ima pravo na povrat kapare i svih uplaćenih iznosa plus zakonske zatezne kamate.",
+      "tags": ["raskid", "povrat", "restitucija", "kapara"]
+    },
+    {
+      "article": "345",
+      "title": "Ugovorna kazna — pojam",
+      "content": "(1) Ugovorne strane mogu sporazumno odrediti da će dužnik platiti vjerovniku određeni novčani iznos ili pribaviti neku drugu materijalnu korist ako ne ispuni svoju obvezu ili ako zakasni s njezinim ispunjenjem (ugovorna kazna). (2) U ugovorima o kupoprodaji nekretnina, ugovorna kazna za kašnjenje s predajom posjeda tipično iznosi 0,5-1% kupoprodajne cijene mjesečno, ili dnevni iznos (per diem).",
+      "tags": ["ugovorna_kazna", "kašnjenje", "neispunjenje", "predaja_posjeda"]
+    },
+    {
+      "article": "350",
+      "title": "Ugovorna kazna i naknada štete",
+      "content": "(1) Vjerovnik ima pravo zahtijevati ugovorenu kaznu bez obzira na to je li pretrpio kakvu štetu ili nije. (2) Ako je šteta koju je vjerovnik pretrpio veća od iznosa ugovorne kazne, on ima pravo zahtijevati razliku do potpune naknade štete. (3) Ugovorna kazna i naknada štete su komplementarni pravni lijekovi za kupce nekretnina.",
+      "tags": ["ugovorna_kazna", "naknada_štete", "kupac"]
+    },
+    {
+      "article": "357",
+      "title": "Zastarni rokovi",
+      "content": "(1) Tražbine zastarijevaju za pet godina, ako zakonom nije određen drukčiji rok zastare. (2) Tražbine iz ugovora u gospodarstvu zastarijevaju za tri godine. (3) U kupoprodaji nekretnina: tražbina na isplatu kupoprodajne cijene zastarijeva za 5 godina. Tražbina na povrat dvostruke kapare zastarijeva za 5 godina od dana neispunjenja.",
+      "tags": ["zastara", "rok", "tražbina", "kupoprodaja"]
+    },
+    {
+      "article": "373",
+      "title": "Odgovornost za materijalne nedostatke — pojam",
+      "content": "(1) Prodavatelj odgovara za materijalne nedostatke stvari koji su postojali u času prijelaza rizika na kupca, bez obzira na to je li mu to bilo poznato. (2) Prodavatelj odgovara i za one materijalne nedostatke koji se pojave nakon prijelaza rizika na kupca ako su posljedica uzroka koji je postojao prije toga. (3) Materijalni nedostaci nekretnine uključuju: skrivene građevinske nedostatke, nezakonitu gradnju, probleme s vlasništvom, terete koji nisu deklarirani.",
+      "tags": ["materijalni_nedostaci", "odgovornost_prodavatelja", "nekretnina", "skriveni_nedostaci"]
+    },
+    {
+      "article": "376",
+      "title": "Rokovi za obavijest o materijalnim nedostacima",
+      "content": "(1) Kupac je dužan pregledati primljenu stvar u uobičajeno vrijeme ili je dati na pregled i o vidljivim nedostacima obavijestiti prodavatelja u roku od osam dana. (2) Kod nekretnina kupac mora obavijestiti prodavatelja o skrivenim nedostacima čim ih otkrije, najkasnije u roku od dvije godine od predaje nekretnine. (3) Prodavatelj koji je znao za nedostatak ne može se pozivati na to da kupac nije na vrijeme obavijestio o nedostatku.",
+      "tags": ["materijalni_nedostaci", "rokovi", "pregled", "nekretnina", "skriveni_nedostaci"]
+    },
+    {
+      "article": "454",
+      "title": "Kupoprodaja — pojam",
+      "content": "(1) Ugovorom o kupoprodaji prodavatelj se obvezuje predati kupcu stvar u vlasništvo (odnosno prenijeti na njega pravo vlasništva), a kupac se obvezuje platiti mu cijenu u novcu. (2) Za kupoprodaju nekretnina: prodavatelj se obvezuje predati nekretninu slobodnu od tereta (osim izričito prihvaćenih), prenijeti vlasništvo (clausula intabulandi), a kupac platiti ugovorenu cijenu.",
+      "tags": ["kupoprodaja", "pojam", "obveze", "nekretnina"]
+    },
+    {
+      "article": "460",
+      "title": "Obveze prodavatelja",
+      "content": "(1) Prodavatelj je dužan: a) predati stvar kupcu; b) prenijeti na kupca pravo vlasništva; c) jamčiti za materijalne nedostatke stvari; d) jamčiti za pravne nedostatke (evikcija). (2) Kod nekretnina prodavatelj dodatno mora: a) predati nekretninu slobodnu od osoba i stvari (ispražnjenje); b) dati clausulu intabulandi ovjerenu kod javnog bilježnika; c) predati svu dokumentaciju (uporabna dozvola, energetski certifikat); d) razgraničiti režijske troškove na dan primopredaje.",
+      "tags": ["obveze_prodavatelja", "predaja", "vlasništvo", "clausula_intabulandi", "jamstvo"]
+    },
+    {
+      "article": "466",
+      "title": "Prijelaz rizika na kupca",
+      "content": "(1) Rizik slučajne propasti ili oštećenja stvari prelazi na kupca u trenutku kad mu je stvar predana. (2) Ako je kupac u zakašnjenju s preuzimanjem, rizik prelazi na njega od trenutka zakašnjenja. (3) Kod kupoprodaje nekretnina: rizik prelazi primopredajom nekretnine — ključan je datum primopredajnog zapisnika koji mora biti precizno određen u ugovoru.",
+      "tags": ["prijelaz_rizika", "predaja", "nekretnina", "primopredaja"]
+    },
+    {
+      "article": "1088",
+      "title": "Fiducija — prijenos vlasništva radi osiguranja",
+      "content": "(1) Vjerovnik i dužnik mogu ugovoriti da dužnik prenese na vjerovnika vlasništvo neke stvari ili neko pravo radi osiguranja tražbine, s obvezom vjerovnika da mu, nakon prestanka osigurane tražbine, vrati stvar odnosno pravo. (2) Fiducijarna kupoprodaja nekretnina: prijenos vlasništva osigurava potraživanje, ali kupac ne može raspolagati nekretninom do ispunjenja uvjeta — koristi se kao alternativa escrow računu u HR praksi.",
+      "tags": ["fiducija", "osiguranje", "prijenos_vlasništva", "escrow_alternativa"]
+    }
+  ]
+}

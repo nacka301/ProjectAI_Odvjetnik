@@ -5,6 +5,8 @@
 # --- Backend (.NET) ---
 Backend/bin/
 Backend/obj/
+Backend.Tests/bin/
+Backend.Tests/obj/
 Backend/appsettings.Development.json
 Backend/Properties/launchSettings.json
 

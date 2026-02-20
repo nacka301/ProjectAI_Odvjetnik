@@ -1,0 +1,73 @@
+{
+  "law": "ZV",
+  "full_name": "Zakon o vlasništvu i drugim stvarnim pravima",
+  "nn_reference": "NN 91/96, 68/98, 137/99, 22/00, 73/00, 114/01, 79/06, 141/06, 146/08, 38/09, 153/09, 143/12, 152/14",
+  "articles": [
+    {
+      "article": "30",
+      "title": "Stjecanje prava vlasništva na temelju pravnog posla",
+      "content": "(1) Na temelju valjano sklopljenog pravnog posla koji je sposoban za prijenos prava vlasništva na nekretnini, pravo vlasništva stječe se upisom u zemljišnu knjigu (uknjižbom). (2) Pravni posao (ugovor o kupoprodaji) je pravna osnova (titulus), a upis u zemljišnu knjigu je način stjecanja (modus acquirendi). (3) Bez upisa u zemljišnu knjigu kupac ne stječe pravo vlasništva, čak ni ako je platio punu cijenu i preuzeo posjed nekretnine.",
+      "tags": ["stjecanje_vlasništva", "upis", "zemljišna_knjiga", "pravni_posao"]
+    },
+    {
+      "article": "31",
+      "title": "Pretpostavke stjecanja na temelju pravnog posla",
+      "content": "(1) Za stjecanje prava vlasništva na nekretnini na temelju pravnog posla potrebno je: a) valjani pravni posao (kupoprodajni ugovor u pisanom obliku); b) sposobnost stjecatelja; c) tabularna isprava podobna za uknjižbu; d) upis u zemljišnu knjigu (uknjižba). (2) Pravni posao mora sadržavati clausulu intabulandi — izjavu prodavatelja kojom bezuvjetno dopušta uknjižbu prava vlasništva u korist kupca.",
+      "tags": ["pretpostavke_stjecanja", "clausula_intabulandi", "tabularna_isprava", "uknjižba"]
+    },
+    {
+      "article": "37",
+      "title": "Stjecanje nekretnine — posebna pravila",
+      "content": "(1) Pravo vlasništva na nekretnini stječe se upisom u zemljišnu knjigu na temelju: a) valjanog pravnog posla (ugovora) i clausule intabulandi; b) odluke suda ili drugog nadležnog tijela; c) nasljeđivanja; d) zakona. (2) Glede stjecanja prava vlasništva na nekretnini, treće osobe imaju pravo pouzdati se u potpunost i istinitost zemljišne knjige. (3) Kupac koji se u dobroj vjeri pouzdao u zemljišnu knjigu zaštićen je, čak i ako je upis bio neistinit.",
+      "tags": ["stjecanje_nekretnine", "zemljišna_knjiga", "dobra_vjera", "pouzdanje"]
+    },
+    {
+      "article": "36",
+      "title": "Bračna stečevina — suglasnost supružnika",
+      "content": "(1) Nekretnina koja je bračna stečevina suvlasništvo je oba supružnika. Za raspolaganje nekretninom koja je bračna stečevina potrebna je suglasnost oba supružnika. (2) Pravni posao kojim jedan supružnik raspolaže bračnom stečevinom bez suglasnosti drugog supružnika može se poništiti na zahtjev supružnika čija suglasnost nije dana, pod uvjetom da je druga ugovorna strana znala ili morala znati da je nekretnina bračna stečevina (čl. 37. ObZ). (3) PRAKTIČNA PROVJERA: U ugovoru o kupoprodaji nekretnine mora biti navedeno: a) je li nekretnina bračna stečevina; b) ako jest — suglasnost supružnika ovjerena kod javnog bilježnika.",
+      "tags": ["bračna_stečevina", "suglasnost_supružnika", "suvlasništvo", "ObZ"]
+    },
+    {
+      "article": "114",
+      "title": "Etažno vlasništvo — pojam",
+      "content": "(1) Vlasništvo posebnog dijela nekretnine (etažno vlasništvo) je vlasništvo određenog posebnog dijela zgrade (stana, poslovnog prostora, garaže) koje je neodvojivo povezano sa suvlasničkim dijelom na cijeloj nekretnini na kojem je etažno vlasništvo uspostavljeno. (2) Poseban dio zgrade mora biti oznacen etažnom oznakom (npr. E-1, E-2) u zemljišnoj knjizi. (3) Kupovina stana je kupovina etažnog vlasništva — kupac stječe vlasništvo na stanu i odgovarajući suvlasnički dio zajedničkih dijelova zgrade.",
+      "tags": ["etažno_vlasništvo", "stan", "posebni_dio", "suvlasnički_dio"]
+    },
+    {
+      "article": "119",
+      "title": "Uspostava etažnog vlasništva",
+      "content": "(1) Etažno vlasništvo uspostavlja se upisivanjem u zemljišnu knjigu na temelju: a) suglasnosti svih suvlasnika (ugovor o uspostavi etažnog vlasništva); b) odluke suda u postupku razvrgnuća suvlasništva; c) potvrde nadležnog upravnog tijela o samostalnosti posebnog dijela. (2) Za upis etažnog vlasništva potrebna je potvrda o posebnom dijelu zgrade (etažni elaborat). (3) PROVJERA: Pri kupnji stana provjeriti je li etažno vlasništvo pravilno uspostavljeno i upisano u ZK.",
+      "tags": ["etažno_vlasništvo", "uspostava", "zemljišna_knjiga", "etažni_elaborat"]
+    },
+    {
+      "article": "161",
+      "title": "Služnosti — pojam i vrste",
+      "content": "(1) Služnost je ograničeno stvarno pravo na tuđoj stvari koje ovlašćuje nositelja da se na određeni način služi tuđom nekretninom (stvarna služnost) ili koje od vlasnika zahtijeva da trpi ili propušta nešto što bi inače imao pravo činiti. (2) Vrste služnosti: a) pravo prolaza; b) pravo provoza; c) služnost voda; d) služnost crpljenja vode; e) služnost grijanja; f) stanovanja (habitatio). (3) Služnosti se upisuju u zemljišnu knjigu — kupac mora provjeriti postoje li služnosti na nekretnini jer one opterećuju nekretninu i prelaze na novog vlasnika.",
+      "tags": ["služnost", "stvarna_prava", "teret", "nekretnina"]
+    },
+    {
+      "article": "210",
+      "title": "Plodouživanje",
+      "content": "(1) Plodouživanje je osobna služnost koja ovlašćuje plodouživatelja da se služi tuđom stvari u skladu s njezinom namjenom i pribira njezine plodove. (2) Plodouživanje se upisuje u zemljišnu knjigu kao teret i opterećuje nekretninu. Kupac koji kupi nekretninu opterećenu plodouživanjem mora trpjeti plodouživanje do njegovog prestanka. (3) Plodouživanje prestaje: a) smrću plodouživatelja; b) istekom roka; c) odreknućem; d) konsolidacijom (sjedinjenjem vlasništva i plodouživanja). (4) UPOZORENJE: Kupoprodajni ugovor za nekretninu s upisanim plodouživanjem mora sadržavati mehanizam brisanja plodouživanja kao uvjet prijenosa.",
+      "tags": ["plodouživanje", "služnost", "teret", "brisanje"]
+    },
+    {
+      "article": "296",
+      "title": "Založno pravo — pojam (hipoteka)",
+      "content": "(1) Založno pravo je ograničeno stvarno pravo na nekretnini koje ovlašćuje založnog vjerovnika da određenu tražbinu, ako mu ne bude pravodobno ispunjena, namiri iz vrijednosti te nekretnine. (2) Hipoteka je založno pravo na nekretnini koje se upisuje u zemljišnu knjigu. (3) Hipoteka opterećuje nekretninu i prelazi na svakog novog vlasnika — kupac koji kupi nekretninu s upisanom hipotekom preuzima teret hipoteke osim ako se ona briše. (4) KRITIČNO za kupoprodaju: Ako na nekretnini postoji hipoteka, ugovor MORA sadržavati mehanizam brisanja hipoteke (brisovnica) prije ili istovremeno s prijenosom vlasništva.",
+      "tags": ["hipoteka", "založno_pravo", "teret", "nekretnina", "brisovnica"]
+    },
+    {
+      "article": "305",
+      "title": "Upis i brisanje hipoteke",
+      "content": "(1) Hipoteka se stječe upisom u zemljišnu knjigu (uknjižbom) na temelju valjanog pravnog posla (ugovor o kreditu, založna izjava). (2) Hipoteka se briše na temelju brisovnice — izbrisne dozvole koju izdaje založni vjerovnik (banka) nakon namirenja osigurane tražbine. (3) Brisovnica mora biti ovjerena kod javnog bilježnika i sadržavati bezuvjetan pristanak za brisanje hipoteke. (4) MEHANIZAM U KUPOPRODAJI: a) Banka izdaje brisovnicu nakon otplate kredita; b) Kupoprodajna cijena ili njezin dio preusmjerava se banci radi otplate preostalog kredita; c) Tek nakon brisanja hipoteke kupac može izvršiti prijenos vlasništva bez tereta.",
+      "tags": ["hipoteka", "upis", "brisanje", "brisovnica", "banka"]
+    },
+    {
+      "article": "322",
+      "title": "Razvrgnuće suvlasništva",
+      "content": "(1) Svaki suvlasnik može u svako doba zahtijevati razvrgnuće suvlasništva, osim u nevrijeme. (2) Kod kupoprodaje suvlasničkog dijela nekretnine, drugi suvlasnici imaju zakonsko pravo prvokupa (pravo preče kupnje). (3) Prodavatelj mora ponuditi suvlasničke dijelove preostalim suvlasnicima pod istim uvjetima pod kojima namjerava prodati. (4) Ako suvlasnici ne iskoriste pravo prvokupa u zakonskom roku (30 dana), prodavatelj može slobodno prodati trećoj osobi.",
+      "tags": ["suvlasništvo", "razvrgnuće", "pravo_prvokupa", "preča_kupnja"]
+    }
+  ]
+}

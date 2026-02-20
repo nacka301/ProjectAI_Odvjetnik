@@ -154,6 +154,14 @@ builder.Services.AddScoped<LegalIntelligenceService>();
 builder.Services.AddSingleton<NormValidityService>();
 builder.Services.AddScoped<InvoiceService>();
 builder.Services.AddHttpClient<EmailService>();
+builder.Services.AddHttpClient<EmbeddingService>(client =>
+{
+    client.Timeout = TimeSpan.FromMinutes(2);
+});
+builder.Services.AddHttpClient<LawRAGService>(client =>
+{
+    client.Timeout = TimeSpan.FromMinutes(3);
+});
 builder.Services.AddHttpClient<MarketResearchService>(client =>
 {
     // V20d: Increased timeout — deep dive of 20+ listings can take 60-120s total

@@ -18,4 +18,9 @@
     <PackageReference Include="UglyToad.PdfPig" Version="1.7.0-custom-5" />
   </ItemGroup>
 
+  <!-- V69: Copy law data files to output for RAG seeding -->
+  <ItemGroup>
+    <None Include="Data\Laws\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

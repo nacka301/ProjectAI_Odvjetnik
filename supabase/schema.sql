@@ -341,3 +341,115 @@ CREATE POLICY "service_role_full_access" ON valuation_audits
 DROP POLICY IF EXISTS "anon_select" ON valuation_audits;
 CREATE POLICY "anon_select" ON valuation_audits
     FOR SELECT USING (true);
+
+-- ========================================
+-- V69: Semantic RAG — Law Chunks with pgvector embeddings
+-- Stores Croatian law articles as vector-embedded chunks
+-- for semantic retrieval during contract analysis.
+-- Requires pgvector extension (enable in Supabase Dashboard → Extensions).
+-- ========================================
+
+-- Enable pgvector extension
+CREATE EXTENSION IF NOT EXISTS vector;
+
+CREATE TABLE IF NOT EXISTS law_chunks (
+    id              UUID            DEFAULT uuid_generate_v4() PRIMARY KEY,
+    created_at      TIMESTAMPTZ     DEFAULT now() NOT NULL,
+    law             TEXT            NOT NULL,            -- 'ZOO', 'ZV', 'ZZK'
+    full_name       TEXT            NOT NULL DEFAULT '', -- 'Zakon o obveznim odnosima'
+    nn_reference    TEXT            NOT NULL DEFAULT '', -- 'NN 35/05, ...'
+    article         TEXT            NOT NULL,            -- '303'
+    title           TEXT            NOT NULL DEFAULT '', -- 'Kapara'
+    content         TEXT            NOT NULL,            -- Full article text
+    topic_tags      TEXT[]          NOT NULL DEFAULT '{}', -- '{kapara,plaćanje,kupoprodaja}'
+    embedding       vector(1536)                         -- OpenAI text-embedding-3-small dimension
+);
+
+-- Unique constraint: one record per law+article combination
+CREATE UNIQUE INDEX IF NOT EXISTS idx_law_chunks_law_article ON law_chunks (law, article);
+
+-- IVFFlat index for fast vector similarity search (cosine distance)
+-- lists = sqrt(n) ≈ 10 for ~60-80 articles
+CREATE INDEX IF NOT EXISTS idx_law_chunks_embedding ON law_chunks
+    USING ivfflat (embedding vector_cosine_ops) WITH (lists = 10);
+
+-- Index for filtering by law
+CREATE INDEX IF NOT EXISTS idx_law_chunks_law ON law_chunks (law);
+CREATE INDEX IF NOT EXISTS idx_law_chunks_created_at ON law_chunks (created_at DESC);
+
+-- RPC function for vector similarity search
+-- Usage: SELECT * FROM match_law_chunks(query_embedding, 0.5, 10);
+CREATE OR REPLACE FUNCTION match_law_chunks(
+    query_embedding vector(1536),
+    match_threshold float DEFAULT 0.5,
+    match_count int DEFAULT 10
+)
+RETURNS TABLE (
+    id UUID,
+    law TEXT,
+    full_name TEXT,
+    nn_reference TEXT,
+    article TEXT,
+    title TEXT,
+    content TEXT,
+    topic_tags TEXT[],
+    similarity float
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        lc.id,
+        lc.law,
+        lc.full_name,
+        lc.nn_reference,
+        lc.article,
+        lc.title,
+        lc.content,
+        lc.topic_tags,
+        1 - (lc.embedding <=> query_embedding) AS similarity
+    FROM law_chunks lc
+    WHERE 1 - (lc.embedding <=> query_embedding) > match_threshold
+    ORDER BY lc.embedding <=> query_embedding
+    LIMIT match_count;
+END;
+$$;
+
+-- RLS for law_chunks
+ALTER TABLE law_chunks ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "service_role_full_access" ON law_chunks;
+CREATE POLICY "service_role_full_access" ON law_chunks
+    FOR ALL USING (auth.role() = 'service_role');
+DROP POLICY IF EXISTS "anon_select" ON law_chunks;
+CREATE POLICY "anon_select" ON law_chunks
+    FOR SELECT USING (true);
+
+-- RPC function for upserting a law chunk with embedding
+-- Used by LawRAGService.SeedAllLawsAsync()
+CREATE OR REPLACE FUNCTION upsert_law_chunk(
+    p_law TEXT,
+    p_full_name TEXT,
+    p_nn_reference TEXT,
+    p_article TEXT,
+    p_title TEXT,
+    p_content TEXT,
+    p_topic_tags TEXT[],
+    p_embedding vector(1536)
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    INSERT INTO law_chunks (law, full_name, nn_reference, article, title, content, topic_tags, embedding)
+    VALUES (p_law, p_full_name, p_nn_reference, p_article, p_title, p_content, p_topic_tags, p_embedding)
+    ON CONFLICT (law, article)
+    DO UPDATE SET
+        full_name = EXCLUDED.full_name,
+        nn_reference = EXCLUDED.nn_reference,
+        title = EXCLUDED.title,
+        content = EXCLUDED.content,
+        topic_tags = EXCLUDED.topic_tags,
+        embedding = EXCLUDED.embedding;
+END;
+$$;

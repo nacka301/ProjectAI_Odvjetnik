@@ -15,6 +15,7 @@ namespace Backend.Services;
 public class ContractAnalysisService
 {
     private readonly ChatClient _client;  // V65: Single DeepSeek V3.2 for everything
+    private readonly LawRAGService _ragService;  // V69: Semantic RAG for law article retrieval
     private readonly ILogger<ContractAnalysisService> _logger;
 
     private const string Disclaimer =
@@ -412,9 +413,10 @@ public class ContractAnalysisService
         }
         """;
 
-    public ContractAnalysisService(ChatClientProvider clients, ILogger<ContractAnalysisService> logger)
+    public ContractAnalysisService(ChatClientProvider clients, LawRAGService ragService, ILogger<ContractAnalysisService> logger)
     {
         _client = clients.Heavy;  // V65: Single model for all analysis
+        _ragService = ragService;  // V69: Semantic RAG
         _logger = logger;
     }
 
@@ -456,10 +458,28 @@ public class ContractAnalysisService
             if (onProgress != null)
             {
                 await onProgress("reading", "done", "Ugovor učitan", $"{text.Length} znakova");
+                await onProgress("rag", "active", "Dohvat relevantnih zakona...", null);
+            }
+
+            // ── V69: RAG — retrieve relevant Croatian law articles ──
+            var ragContext = await _ragService.RetrieveRelevantArticlesAsync(text);
+            var ragSection = ragContext.FormattedPromptSection;
+
+            if (onProgress != null)
+            {
+                var ragDetail = ragContext.UsedVectorSearch
+                    ? $"{ragContext.Articles.Count} članaka, {ragContext.RetrievalTimeMs:F0}ms"
+                    : "bez vektorske pretrage";
+                await onProgress("rag", "done", "Zakoni dohvaćeni", ragDetail);
                 await onProgress("audit", "active", "AI analiza ugovora...", null);
             }
 
-            // ── V65: SINGLE UNIFIED CALL — audit + traps + deviations in one request ──
+            _logger.LogInformation(
+                "V69 RAG: {Count} articles retrieved in {Ms:F0}ms (vectorSearch={Used}, ≈{Tokens}tok)",
+                ragContext.Articles.Count, ragContext.RetrievalTimeMs,
+                ragContext.UsedVectorSearch, ragContext.TotalTokensEstimate);
+
+            // ── V65+V69: SINGLE UNIFIED CALL — audit + traps + deviations + RAG law context ──
             var messages = new List<ChatMessage>
             {
                 new SystemChatMessage(UnifiedPrompt),
@@ -470,7 +490,7 @@ public class ContractAnalysisService
                     provjeri sve obvezne zaštitne klauzule, pronađi skrivene zamke,
                     i usporedi s idealnim ugovorom.
                     Svaki rizik MORA citirati konkretan tekst iz ugovora.
-
+                    {ragSection}
                     ════════════════════════════════════════════════
                     IDEALNI REFERENTNI UGOVOR (za usporedbu):
                     ════════════════════════════════════════════════
@@ -490,8 +510,8 @@ public class ContractAnalysisService
                 MaxOutputTokenCount = 16384
             };
 
-            // V65: Estimate input tokens for diagnostics
-            int promptChars = UnifiedPrompt.Length + IdealContractTemplate.Length + text.Length + 300;
+            // V65+V69: Estimate input tokens for diagnostics (now includes RAG section)
+            int promptChars = UnifiedPrompt.Length + IdealContractTemplate.Length + text.Length + ragSection.Length + 300;
             _logger.LogInformation(
                 "V65 Single-pass call — estimated input: ≈{Tok}tok ({Chars}chars)",
                 promptChars / 4, promptChars);

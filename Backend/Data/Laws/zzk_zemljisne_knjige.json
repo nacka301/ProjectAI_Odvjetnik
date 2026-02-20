@@ -1,0 +1,91 @@
+{
+  "law": "ZZK",
+  "full_name": "Zakon o zemljišnim knjigama",
+  "nn_reference": "NN 91/96, 137/99, 114/01, 100/04, 107/07, 152/08, 55/13, 60/13, 108/17",
+  "articles": [
+    {
+      "article": "30",
+      "title": "Načelo upisa",
+      "content": "(1) Prava na nekretninama stječu se, prenose, ograničavaju i prestaju upisom u zemljišnu knjigu, osim ako zakonom nije drukčije određeno. (2) Ovo je temeljno načelo hrvatskog sustava zemljišnih knjiga — bez upisa nema prava vlasništva na nekretnini, čak ni ako postoji valjani ugovor i izvršena isplata. (3) Načelo upisa osigurava pravnu sigurnost u prometu nekretnina jer treće osobe mogu pouzdano provjeriti tko je vlasnik i koji tereti postoje.",
+      "tags": ["načelo_upisa", "zemljišna_knjiga", "stjecanje_vlasništva"]
+    },
+    {
+      "article": "31",
+      "title": "Načelo javnosti",
+      "content": "(1) Zemljišna knjiga je javna. Nitko ne može tvrditi da mu je bilo nepoznato ono što je upisano u zemljišnu knjigu. (2) Svaka osoba ima pravo uvida u zemljišnu knjigu i dobiti ovjereni izvadak. (3) Praktična primjena: Kupac je DUŽAN pregledati zemljišnoknjižni uložak prije sklapanja ugovora. Ako postoje upisani tereti ili plombe, kupac se ne može pozivati na neznanje.",
+      "tags": ["načelo_javnosti", "javnost", "uvid", "teret"]
+    },
+    {
+      "article": "32",
+      "title": "Načelo pouzdanja u zemljišnu knjigu",
+      "content": "(1) Tko je u dobroj vjeri postupao s pouzdanjem u istinitost i potpunost zemljišne knjige, ne može snositi nikakvu štetu. (2) Smatra se da je zemljišna knjiga istinita i potpuna. (3) Osobi koja je u dobroj vjeri stekla pravo vlasništvo oslanjajući se na zemljišnu knjigu ne može se uspješno osporavati stečeno pravo. (4) ZAŠTITA KUPCA: Kupac koji je u dobroj vjeri kupio nekretninu prema stanju u ZK zaštićen je, čak i ako je prethodni upis bio nevaljani. Ovo načelo štiti sigurnost pravnog prometa.",
+      "tags": ["načelo_pouzdanja", "dobra_vjera", "zaštita_kupca", "istinitost"]
+    },
+    {
+      "article": "40",
+      "title": "Tabularna isprava",
+      "content": "(1) Za upis prava vlasništva i drugih stvarnih prava u zemljišnu knjigu potrebna je tabularna isprava (isprava sposobna za upis). (2) Tabularna isprava mora sadržavati: a) točnu oznaku nekretnine (katastarska općina, katastarski broj čestice, ZK uložak); b) točnu oznaku prava koje se stječe ili prenosi; c) clausulu intabulandi — bezuvjetnu izjavu osobe čije se pravo prenosi, ograničava ili prestaje; d) potpise ovjerene kod javnog bilježnika. (3) Kupoprodajni ugovor za nekretninu je tabularna isprava ako sadržava sve navedene elemente.",
+      "tags": ["tabularna_isprava", "upis", "clausula_intabulandi", "javni_bilježnik"]
+    },
+    {
+      "article": "41",
+      "title": "Clausula intabulandi",
+      "content": "(1) Clausula intabulandi je izjava osobe čije se pravo prenosi, ograničava ili prestaje, kojom ona bezuvjetno dopušta da se u zemljišnom knjizi izvrši upis u korist stjecatelja. (2) Clausula intabulandi mora biti: a) bezuvjetna — ne smije biti uvjetovana budućim događajem; b) dana od osobe koju upis pogađa (prodavatelja); c) potpis mora biti ovjeren kod javnog bilježnika. (3) Bez clausule intabulandi upis prava vlasništva u zemljišnu knjigu NIJE MOGUĆ. (4) KRITIČNA PROVJERA u kupoprodajnom ugovoru: a) Postoji li clausula intabulandi? b) Je li bezuvjetna? c) Je li potpis prodavatelja ovjeren kod javnog bilježnika? (5) Uvjetna clausula intabulandi (npr. 'nakon plaćanja pune cijene') je NEDOPUŠTENA i čini upis nemogućim do ispunjenja uvjeta, što stavlja kupca u izuzetno nepovoljan položaj.",
+      "tags": ["clausula_intabulandi", "upis", "vlasništvo", "javni_bilježnik", "bezuvjetna"]
+    },
+    {
+      "article": "43",
+      "title": "Uvjeti za uknjižbu",
+      "content": "(1) Uknjižba prava vlasništva na nekretnini dopustit će se ako: a) je isprava podobna za upis (tabularna isprava s clausulom intabulandi); b) je pravo upisano u korist osobe protiv koje se traži upis; c) nema zapreke za upis (npr. plomba, zabrana raspolaganja). (2) Sud provjerava formalne pretpostavke za upis — ne ispituje materijalnu valjanost ugovora. (3) Ako je na nekretnini upisana plomba, sud neće dopustiti daljnji upis dok se ne riješi predmet plombe.",
+      "tags": ["uknjižba", "uvjeti", "tabularna_isprava", "plomba"]
+    },
+    {
+      "article": "52",
+      "title": "Predbilježba",
+      "content": "(1) Predbilježba je upis kojim se stjecanje, prijenos, ograničenje ili prestanak knjižnog prava uvjetno upisuje, s učinkom da se tim upisom to pravo stječe, prenosi, ograničava ili prestaje samo pod uvjetom da predbilježba bude naknadno opravdana. (2) Predbilježba štiti kupca — daje prvenstveni red za naknadni upis. (3) Kupac koji nije u mogućnosti odmah izvršiti uknjižbu (npr. jer još nije isplaćena cijena) može zatražiti predbilježbu radi osiguranja svog prava.",
+      "tags": ["predbilježba", "uvjetni_upis", "osiguranje", "kupac"]
+    },
+    {
+      "article": "55",
+      "title": "Vrste upisa u zemljišnu knjigu",
+      "content": "(1) U zemljišnu knjigu upisuju se: a) UKNJIŽBA — konačan upis kojim se pravo bezuvjetno stječe, prenosi, ograničava ili prestaje; b) PREDBILJEŽBA — uvjetan upis (čl. 52.); c) ZABILJEŽBA — upis koji se odnosi na osobne odnose nositelja knjižnog prava ili na pravne činjenice koje su od značaja za raspolaganje nekretninom (npr. zabilježba spora, ovrhe). (2) Zabilježba spora upozorava treće osobe da je nekretnina predmet sudskog postupka. (3) Zabilježba ovrhe znači da se protiv vlasnika vodi ovršni postupak.",
+      "tags": ["uknjižba", "predbilježba", "zabilježba", "vrste_upisa"]
+    },
+    {
+      "article": "85",
+      "title": "Plomba",
+      "content": "(1) Kad zahtjev za upis u zemljišnu knjigu stigne sudu, sud odmah stavlja plombu na odgovarajući uložak. (2) Plomba označava da je zaprimljen zahtjev za upis i da se o njemu odlučuje. Dok plomba postoji, svaka treća osoba upozorena je na to da stanje u zemljišnoj knjizi MOŽDA NIJE KONAČNO. (3) Plomba sprečava nove upise dok se ne riješi prethodni zahtjev (načelo prvenstvenog reda). (4) UPOZORENJE ZA KUPCE: Ako postoji plomba na nekretnini, kupac NE SMIJE kupiti nekretninu bez prethodnog pojašnjenja što je predmet plombe — može se raditi o prijenosu vlasništva na treću osobu, ovrsi, ili sudskom sporu.",
+      "tags": ["plomba", "upis", "upozorenje", "nekretnina", "rizik"]
+    },
+    {
+      "article": "87",
+      "title": "Načelo prvenstvenog reda",
+      "content": "(1) Redoslijed upisa u zemljišnu knjigu određuje se prema trenutku kada je zahtjev za upis stigao sudu (tzv. načelo prioriteta). (2) Raniji zahtjev ima prednost pred kasnijim. Ovo je ključno za kupce — tko prvi podnese zahtjev za uknjižbu, taj ima prednost. (3) Istovremenost: Ako dva zahtjeva stignu istovremeno, upisuju se s jednakim prvenstvenim redom. (4) Plomba osigurava prvenstveni red — od trenutka stavljanja plombe, zahtjev ima prednost pred svim kasnijim zahtjevima.",
+      "tags": ["prvenstveni_red", "prioritet", "upis", "plomba"]
+    },
+    {
+      "article": "109",
+      "title": "Brisanje upisa",
+      "content": "(1) Upis se briše na temelju: a) brisovnice (izbrisne dozvole); b) pravomoćne sudske odluke; c) zakona. (2) Brisovnica je isprava kojom nositelj upisanog prava (npr. banka za hipoteku) daje bezuvjetan pristanak za brisanje upisa. (3) Brisanje hipoteke na temelju brisovnice obavlja se na zahtjev vlasnika nekretnine ili osobe koja ima pravni interes. (4) MEHANIZAM U KUPOPRODAJI: Prodavatelj mora osigurati brisovnicu od banke nakon otplate kredita i podmiriti troškove brisanja hipoteke prije ili istovremeno s prijenosom vlasništva kupcu.",
+      "tags": ["brisanje", "brisovnica", "hipoteka", "upis"]
+    },
+    {
+      "article": "181",
+      "title": "Brisovnica — izbrisna dozvola",
+      "content": "(1) Brisovnica (izbrisna dozvola) je isprava kojom nositelj upisanog prava daje bezuvjetan pristanak za brisanje svog prava iz zemljišne knjige. (2) Brisovnica za hipoteku izdaje banka ili drugi založni vjerovnik nakon što je osigurana tražbina podmirena (kredit otplaćen). (3) Brisovnica mora biti: a) pisana; b) potpis izdavatelja ovjeren kod javnog bilježnika; c) s točnim podatcima o nekretnini i teretu koji se briše. (4) U kupoprodaji nekretnine s hipotekom: a) kupoprodajna cijena ili njezin dio uplaćuje se direktno banci radi otplate kredita; b) banka izdaje brisovnicu; c) kupac podnosi brisovnicu sudu za brisanje hipoteke; d) tek nakon brisanja hipoteke nekretnina je čista za prijenos vlasništva. (5) ROKOVI: Ugovor mora sadržavati precizan rok do kojeg prodavatelj mora ishoditi brisovnicu (u praksi 30-60 dana od potpisa ugovora).",
+      "tags": ["brisovnica", "izbrisna_dozvola", "hipoteka", "banka", "rok"]
+    },
+    {
+      "article": "183",
+      "title": "Brisanje tereta kao uvjet kupoprodaje",
+      "content": "(1) Ako se nekretnina prodaje s teretom (hipoteka, služnost), kupoprodajni ugovor mora sadržavati odredbu o brisanju tereta s preciznim rokom i mehanizmom. (2) Prodavatelj je dužan osigurati brisanje tereta o svom trošku, osim ako je ugovorom drukčije određeno. (3) ZAŠTITA KUPCA: a) Isplata punog iznosa kupoprodajne cijene treba biti UVJETOVANA brisanjem tereta; b) Alternativno, dio cijene se uplaćuje na zaštićeni račun (javnobilježnički polog) i isplaćuje prodavatelju tek nakon brisanja tereta; c) Rok za brisanje mora biti precizan i kratak (30-60 dana). (4) Bez mehanizma brisanja tereta kupac rizikuje stjecanje vlasništva nad nekretninom opterećenom hipotekom ili služnošću.",
+      "tags": ["brisanje_tereta", "hipoteka", "služnost", "kupoprodaja", "zaštita_kupca"]
+    },
+    {
+      "article": "64",
+      "title": "Zemljišnoknjižni uložak — sadržaj",
+      "content": "(1) Svaka nekretnina u zemljišnoj knjizi vodi se u zemljišnoknjižnom ulošku koji sadrži tri lista: a) POSJEDOVNICA (list A) — opis nekretnine (katastarska općina, katastarski broj, površina, kultura); b) VLASTOVNICA (list B) — upis vlasnika i ograničenja prava vlasništva; c) TERETOVNICA (list C) — upis tereta (hipoteke, služnosti, plodouživanja, prava građenja, ovrhe). (2) Kupac mora provjeriti SVI TRI LISTA prije kupnje — nekretnina može imati upisane terete u listu C koji ograničavaju pravo vlasništva.",
+      "tags": ["zemljišnoknjižni_uložak", "posjedovnica", "vlastovnica", "teretovnica", "list_A_B_C"]
+    }
+  ]
+}
