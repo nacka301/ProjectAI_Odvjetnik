@@ -545,26 +545,57 @@ public class ContractAnalysisService
             // Now also parse logical_traps and ideal_contract_deviations from the same JSON.
             ParseReasoningFromUnified(responseJson, result);
 
-            // ── DETERMINISTIC RISK SCORING ──
+            // ── DETERMINISTIC RISK SCORING (pre-critic) ──
             ComputeRiskScore(result);
-            result.Disclaimer = Disclaimer;
+
+            int preScore = result.RiskScore;
+            string preRisk = result.OverallRisk;
 
             if (onProgress != null)
             {
                 await onProgress("scoring", "done", "Bodovanje završeno", $"Rizik: {result.OverallRisk} ({result.RiskScore}/100)");
             }
 
+            // ── V72: CRITIC AGENT (Agent 2) — Multi-Agent Anti-Hallucination ──
+            if (onProgress != null)
+                await onProgress("critic", "active", "Kritička revizija analize...", null);
+
+            var criticReview = await RunCriticReviewAsync(text, result);
+            result.CriticReview = criticReview;
+
+            if (criticReview.Corrections.Count > 0)
+            {
+                // Apply corrections and re-score
+                ApplyCriticCorrections(result, criticReview);
+                ComputeRiskScore(result);
+
+                _logger.LogInformation(
+                    "V72 Critic: {Corrections} corrections, score {Pre}→{Post} ({PreRisk}→{PostRisk})",
+                    criticReview.Corrections.Count, preScore, result.RiskScore, preRisk, result.OverallRisk);
+            }
+
+            result.Disclaimer = Disclaimer;
+
+            if (onProgress != null)
+            {
+                var criticDetail = criticReview.Corrections.Count > 0
+                    ? $"{criticReview.FalsePositivesRemoved} lažnih uzbuna uklonjeno, {criticReview.SeverityDowngrades} korekcija"
+                    : "Analiza potvrđena bez korekcija";
+                await onProgress("critic", "done", "Kritička revizija završena", criticDetail);
+            }
+
             sw.Stop();
             _logger.LogInformation(
-                "V65 ═══ ANALYSIS COMPLETE ═══ Total: {Sec:F1}s " +
+                "V72 ═══ ANALYSIS COMPLETE ═══ Total: {Sec:F1}s " +
                 "type={Type}, risk={Risk}({Score}), " +
                 "checklist={CL}, cross={CA}, mandatory={MC}, flags={Flags}, warnings={Warn}, " +
-                "traps={Traps}, deviations={Dev}",
+                "traps={Traps}, deviations={Dev}, criticCorrections={Critic}",
                 sw.Elapsed.TotalSeconds,
                 result.DocumentType, result.OverallRisk, result.RiskScore,
                 result.Checklist.Count, result.CrossArticleIssues.Count,
                 result.MandatoryClauses.Count, result.RedFlags.Count, result.Warnings.Count,
-                result.LogicalTraps.Count, result.IdealContractDeviations.Count);
+                result.LogicalTraps.Count, result.IdealContractDeviations.Count,
+                criticReview.Corrections.Count);
 
             return result;
         }
@@ -698,6 +729,416 @@ public class ContractAnalysisService
             _ => "Nizak"
         };
         result.RiskScoreBreakdown = breakdown;
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  V72: CRITIC AGENT (Agent 2) — Multi-Agent Anti-Hallucination
+    // ══════════════════════════════════════════════════════════
+
+    private const string CriticPrompt = """
+        PERSONA:
+        Ti si REVIZOR PRAVNE ANALIZE — drugi, nezavisni agent čiji je JEDINI zadatak
+        pronaći GREŠKE u analizi prvog agenta (Analitičara).
+        Tvoja uloga je kontrola kvalitete: ukloni lažne uzbune, ispravi pretjerane
+        ocjene rizika, i otkrij Common Law kontaminaciju.
+
+        ████████████████████████████████████████████████████████
+        TVOJ ZADATAK — PRONAĐI GREŠKE U ANALIZI
+        ████████████████████████████████████████████████████████
+
+        Dobio si:
+        1. Originalni tekst ugovora
+        2. JSON izvještaj Analitičara (Agent 1)
+
+        Provjeri SVAKI nalaz Analitičara prema ovim kriterijima:
+
+        KRITERIJ 1: COMMON LAW KONTAMINACIJA
+        - Je li Analitičar preporučio "escrow" kao KRITIČAN ili VISOK rizik
+          na nekretnini BEZ tereta? → To je Common Law false positive.
+          U HR praksi escrow je standard SAMO kad postoje tereti za brisanje.
+        - Je li koristio pojmove: "title insurance", "contingency", "closing costs",
+          "due diligence checklist" (M&A stil), "lien"? → Kontaminacija.
+
+        KRITERIJ 2: LAŽNE UZBUNE (FALSE POSITIVES)
+        - Je li Analitičar označio nešto kao VISOK ili KRITIČAN rizik,
+          ali citirao tekst iz ugovora koji ZAPRAVO to uređuje?
+          (Npr. tvrdi "nema kapare" ali ugovor jasno navodi kaparu)
+        - Je li prijavio "zamku" za nešto što je STANDARDNA HR praksa?
+        - Je li prijavio rizik koji ugovor EKSPLICITNO adresira?
+
+        KRITERIJ 3: LOGIČKE KONTRADIKCIJE
+        - Je li Analitičar utvrdio da nekretnina NEMA tereta,
+          ali IPAK traži escrow/brisovnicu kao KRITIČAN?
+        - Je li utvrdio da je kapara simetrična, ali IPAK označio
+          plaćanje kao visokorizično?
+        - Je li utvrdio da je clausula intabulandi bezuvjetna, ali
+          IPAK označio prijenos vlasništva kao rizičan?
+
+        KRITERIJ 4: PRETJERANA STROGOST
+        - Je li Analitičar koristio KRITIČNO za nešto što je zapravo
+          best-practice preporuka? (npr. energetski certifikat, ugovorna kazna)
+        - Je li inflirao broj red_flags s nalazima koji su zapravo warnings?
+        - Je li severity devijacija od idealnog ugovora pretjeran?
+          (Idealni ugovor je M&A standard — obični stan ne treba SVE elemente)
+
+        ████████████████████████████████████████████████████████
+        FORMAT ODGOVORA — ISKLJUČIVO JSON
+        ████████████████████████████████████████████████████████
+
+        Vrati ISKLJUČIVO čisti JSON (bez markdown fencing-a):
+        {
+          "verdict": "POTVRĐENO | KORIGIRANO",
+          "summary": "Kratki opis što si našao (1-2 rečenice)",
+          "corrections": [
+            {
+              "category": "red_flag | warning | checklist | mandatory_clause | logical_trap | deviation",
+              "original_title": "Naslov originalnog nalaza koji ispravljaš",
+              "action": "REMOVE | DOWNGRADE | CORRECT",
+              "reason": "Zašto je ovo greška Analitičara — konkretan argument",
+              "original_severity": "KRITIČNO | VISOK | SREDNJI (originalna ocjena)",
+              "new_severity": "NIZAK | SREDNJI | null (ako REMOVE)"
+            }
+          ]
+        }
+
+        Ako analiza Analitičara NEMA grešaka, vrati:
+        {
+          "verdict": "POTVRĐENO",
+          "summary": "Analiza Analitičara je točna i kalibrirana prema HR praksi.",
+          "corrections": []
+        }
+
+        VAŽNO:
+        - NEMOJ dodavati nove nalaze — samo ispravljaj postojeće
+        - NEMOJ snižavati sve na NIZAK — samo ono što je stvarno pretjerano
+        - Budi konkretan: citiraj što Analitičar tvrdi i zašto je to krivo
+        - Ako je analiza dobra, potvrdi je — ne traži greške na silu
+        """;
+
+    /// <summary>
+    /// V72: Run Critic Agent (Agent 2) to review and correct Agent 1's analysis.
+    /// Uses a separate AI call with a review-focused prompt.
+    /// </summary>
+    private async Task<CriticReview> RunCriticReviewAsync(string contractText, ContractAnalysisResult analysisResult)
+    {
+        var review = new CriticReview();
+        var criticSw = System.Diagnostics.Stopwatch.StartNew();
+
+        try
+        {
+            // Serialize Agent 1's key findings for the Critic to review
+            var findingsSummary = SerializeAnalysisForCritic(analysisResult);
+
+            // Truncate contract if needed (Critic doesn't need as much)
+            string contractForCritic = contractText.Length > 8000 ? contractText[..8000] : contractText;
+
+            var messages = new List<ChatMessage>
+            {
+                new SystemChatMessage(CriticPrompt),
+                new UserChatMessage(
+                    $"""
+                    ════════════════════════════════════════════════
+                    IZVJEŠTAJ ANALITIČARA (Agent 1) — PROVJERI GREŠKE:
+                    ════════════════════════════════════════════════
+                    {findingsSummary}
+
+                    ════════════════════════════════════════════════
+                    ORIGINALNI TEKST UGOVORA:
+                    ════════════════════════════════════════════════
+                    {contractForCritic}
+                    """)
+            };
+
+            var options = new ChatCompletionOptions
+            {
+                Temperature = 0.0f,
+                ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat(),
+                MaxOutputTokenCount = 4096
+            };
+
+            _logger.LogInformation("V72 Critic Agent: reviewing analysis ({FindingsLen} chars findings, {ContractLen} chars contract)",
+                findingsSummary.Length, contractForCritic.Length);
+
+            var completion = await _client.CompleteChatAsync(messages, options);
+            var responseJson = completion.Value.Content.Count > 0
+                ? completion.Value.Content[0].Text ?? ""
+                : "";
+
+            criticSw.Stop();
+            review.CriticTimeSeconds = criticSw.Elapsed.TotalSeconds;
+
+            // Log token usage
+            var usage = completion.Value.Usage;
+            _logger.LogInformation(
+                "V72 Critic DONE in {Sec:F1}s — tokens: in={InTok} out={OutTok}",
+                criticSw.Elapsed.TotalSeconds,
+                usage?.InputTokenCount ?? 0,
+                usage?.OutputTokenCount ?? 0);
+
+            // Parse critic response
+            ParseCriticResponse(responseJson, review);
+
+            return review;
+        }
+        catch (Exception ex)
+        {
+            criticSw.Stop();
+            _logger.LogWarning(ex, "V72 Critic Agent failed — proceeding with uncorrected analysis");
+            review.CriticTimeSeconds = criticSw.Elapsed.TotalSeconds;
+            review.Verdict = "GREŠKA";
+            review.Summary = "Kritička revizija nije uspjela — analiza nije korigirana.";
+            return review;
+        }
+    }
+
+    /// <summary>
+    /// Serialize the analysis result into a concise text summary for the Critic to review.
+    /// </summary>
+    private static string SerializeAnalysisForCritic(ContractAnalysisResult result)
+    {
+        var sb = new System.Text.StringBuilder();
+
+        sb.AppendLine($"Tip dokumenta: {result.DocumentType}");
+        sb.AppendLine($"Sažetak: {result.Summary}");
+        sb.AppendLine($"Ukupni rizik: {result.OverallRisk} (score: {result.RiskScore}/100)");
+        sb.AppendLine();
+
+        if (result.RedFlags.Count > 0)
+        {
+            sb.AppendLine("═══ CRVENE ZASTAVICE ═══");
+            foreach (var rf in result.RedFlags)
+                sb.AppendLine($"  🔴 [{rf.Title}] {rf.Description} | Citat: \"{rf.QuotedText}\" | Osnova: {rf.LegalBasis}");
+            sb.AppendLine();
+        }
+
+        if (result.Warnings.Count > 0)
+        {
+            sb.AppendLine("═══ UPOZORENJA ═══");
+            foreach (var w in result.Warnings)
+                sb.AppendLine($"  🟡 [{w.Title}] {w.Description} | Citat: \"{w.QuotedText}\" | Osnova: {w.LegalBasis}");
+            sb.AppendLine();
+        }
+
+        if (result.Checklist.Count > 0)
+        {
+            sb.AppendLine("═══ CHECKLIST ═══");
+            foreach (var cl in result.Checklist)
+                sb.AppendLine($"  [{cl.Status}/{cl.Risk}] {cl.Category}: {cl.Check} → {cl.Finding}");
+            sb.AppendLine();
+        }
+
+        if (result.MandatoryClauses.Count > 0)
+        {
+            sb.AppendLine("═══ OBVEZNE KLAUZULE ═══");
+            foreach (var mc in result.MandatoryClauses)
+                sb.AppendLine($"  [{(mc.Present ? "DA" : "NE")}/{mc.Importance}] {mc.Clause}: {mc.Description}");
+            sb.AppendLine();
+        }
+
+        if (result.LogicalTraps.Count > 0)
+        {
+            sb.AppendLine("═══ LOGIČKE ZAMKE ═══");
+            foreach (var lt in result.LogicalTraps)
+                sb.AppendLine($"  🪤 [{lt.Severity}] {lt.Title}: {lt.Explanation} | Članovi: {string.Join(", ", lt.Articles)}");
+            sb.AppendLine();
+        }
+
+        if (result.IdealContractDeviations.Count > 0)
+        {
+            sb.AppendLine("═══ DEVIJACIJE OD IDEALNOG UGOVORA ═══");
+            foreach (var dev in result.IdealContractDeviations)
+                sb.AppendLine($"  📋 [{dev.Severity}] {dev.Element}: {dev.ActualText} → preporučeno: {dev.Recommendation}");
+            sb.AppendLine();
+        }
+
+        if (result.CrossArticleIssues.Count > 0)
+        {
+            sb.AppendLine("═══ CROSS-ARTICLE PROBLEMI ═══");
+            foreach (var ca in result.CrossArticleIssues)
+                sb.AppendLine($"  ⚠️ [{ca.Risk}] {ca.Title}: {ca.Description}");
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Parse the Critic's JSON response into a CriticReview.
+    /// </summary>
+    private void ParseCriticResponse(string json, CriticReview review)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(json)) return;
+
+            json = json.Trim();
+            if (json.StartsWith("```json", StringComparison.OrdinalIgnoreCase))
+                json = json.Substring(7);
+            else if (json.StartsWith("```"))
+                json = json.Substring(3);
+            if (json.EndsWith("```"))
+                json = json.Substring(0, json.Length - 3);
+            json = json.Trim();
+            json = RepairTruncatedJson(json);
+
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            review.Verdict = GetString(root, "verdict", "POTVRĐENO");
+            review.Summary = GetString(root, "summary", "");
+
+            if (root.TryGetProperty("corrections", out var corrections) && corrections.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in corrections.EnumerateArray())
+                {
+                    var correction = new CriticCorrection
+                    {
+                        Category = GetString(item, "category"),
+                        OriginalTitle = GetString(item, "original_title"),
+                        Action = GetString(item, "action", "CORRECT"),
+                        Reason = GetString(item, "reason"),
+                        OriginalSeverity = GetStringOrNull(item, "original_severity"),
+                        NewSeverity = GetStringOrNull(item, "new_severity")
+                    };
+                    review.Corrections.Add(correction);
+                }
+            }
+
+            _logger.LogInformation("V72 Critic parsed: verdict={Verdict}, corrections={Count}",
+                review.Verdict, review.Corrections.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "V72 Failed to parse Critic response");
+            review.Verdict = "GREŠKA";
+            review.Summary = "Greška pri parsiranju odgovora kritičara.";
+        }
+    }
+
+    /// <summary>
+    /// Apply Critic corrections to the analysis result — remove false positives,
+    /// downgrade inflated severities, etc.
+    /// </summary>
+    private void ApplyCriticCorrections(ContractAnalysisResult result, CriticReview review)
+    {
+        int removed = 0;
+        int downgraded = 0;
+
+        foreach (var correction in review.Corrections)
+        {
+            string titleLower = correction.OriginalTitle.ToLowerInvariant();
+            string action = correction.Action.ToUpperInvariant();
+
+            switch (correction.Category.ToLowerInvariant())
+            {
+                case "red_flag":
+                    if (action == "REMOVE")
+                    {
+                        int before = result.RedFlags.Count;
+                        result.RedFlags.RemoveAll(rf =>
+                            rf.Title.Contains(correction.OriginalTitle, StringComparison.OrdinalIgnoreCase));
+                        if (result.RedFlags.Count < before) removed++;
+                    }
+                    else if (action == "DOWNGRADE")
+                    {
+                        // Move from RedFlags to Warnings
+                        var toMove = result.RedFlags
+                            .Where(rf => rf.Title.Contains(correction.OriginalTitle, StringComparison.OrdinalIgnoreCase))
+                            .ToList();
+                        foreach (var rf in toMove)
+                        {
+                            result.RedFlags.Remove(rf);
+                            result.Warnings.Add(rf);
+                            downgraded++;
+                        }
+                    }
+                    break;
+
+                case "warning":
+                    if (action == "REMOVE")
+                    {
+                        int before = result.Warnings.Count;
+                        result.Warnings.RemoveAll(w =>
+                            w.Title.Contains(correction.OriginalTitle, StringComparison.OrdinalIgnoreCase));
+                        if (result.Warnings.Count < before) removed++;
+                    }
+                    break;
+
+                case "checklist":
+                    if (action == "DOWNGRADE" && correction.NewSeverity != null)
+                    {
+                        var items = result.Checklist
+                            .Where(cl => cl.Check.Contains(correction.OriginalTitle, StringComparison.OrdinalIgnoreCase)
+                                      || cl.Category.Contains(correction.OriginalTitle, StringComparison.OrdinalIgnoreCase));
+                        foreach (var cl in items)
+                        {
+                            cl.Risk = correction.NewSeverity;
+                            downgraded++;
+                        }
+                    }
+                    break;
+
+                case "mandatory_clause":
+                    if (action == "DOWNGRADE" && correction.NewSeverity != null)
+                    {
+                        var clauses = result.MandatoryClauses
+                            .Where(mc => mc.Clause.Contains(correction.OriginalTitle, StringComparison.OrdinalIgnoreCase));
+                        foreach (var mc in clauses)
+                        {
+                            mc.Importance = correction.NewSeverity == "NIZAK" || correction.NewSeverity == "SREDNJI"
+                                ? "PREPORUČENO"
+                                : mc.Importance;
+                            downgraded++;
+                        }
+                    }
+                    break;
+
+                case "logical_trap":
+                    if (action == "REMOVE")
+                    {
+                        int before = result.LogicalTraps.Count;
+                        result.LogicalTraps.RemoveAll(lt =>
+                            lt.Title.Contains(correction.OriginalTitle, StringComparison.OrdinalIgnoreCase));
+                        if (result.LogicalTraps.Count < before) removed++;
+                    }
+                    else if (action == "DOWNGRADE" && correction.NewSeverity != null)
+                    {
+                        var traps = result.LogicalTraps
+                            .Where(lt => lt.Title.Contains(correction.OriginalTitle, StringComparison.OrdinalIgnoreCase));
+                        foreach (var lt in traps)
+                        {
+                            lt.Severity = correction.NewSeverity;
+                            downgraded++;
+                        }
+                    }
+                    break;
+
+                case "deviation":
+                    if (action == "REMOVE")
+                    {
+                        int before = result.IdealContractDeviations.Count;
+                        result.IdealContractDeviations.RemoveAll(d =>
+                            d.Element.Contains(correction.OriginalTitle, StringComparison.OrdinalIgnoreCase));
+                        if (result.IdealContractDeviations.Count < before) removed++;
+                    }
+                    else if (action == "DOWNGRADE" && correction.NewSeverity != null)
+                    {
+                        var devs = result.IdealContractDeviations
+                            .Where(d => d.Element.Contains(correction.OriginalTitle, StringComparison.OrdinalIgnoreCase));
+                        foreach (var d in devs)
+                        {
+                            d.Severity = correction.NewSeverity;
+                            downgraded++;
+                        }
+                    }
+                    break;
+            }
+        }
+
+        review.FalsePositivesRemoved = removed;
+        review.SeverityDowngrades = downgraded;
+
+        _logger.LogInformation("V72 Corrections applied: {Removed} removed, {Downgraded} downgraded",
+            removed, downgraded);
     }
 
     // ══════════════════════════════════════════════════════════

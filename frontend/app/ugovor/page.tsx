@@ -24,6 +24,7 @@ import {
   X,
   ChevronDown,
   ChevronUp,
+  ShieldCheck,
 } from "lucide-react";
 import { NormBadge, CitedNormsList, TemporalDatePicker } from "@/components/NormBadge";
 import { type CitedNorm } from "@/lib/normApi";
@@ -112,7 +113,26 @@ interface ContractAnalysisResult {
   logical_traps?: LogicalTrap[];
   ideal_contract_deviations?: IdealContractDeviation[];
   cited_norms?: CitedNorm[];
+  critic_review?: CriticReview;
   disclaimer: string;
+}
+
+interface CriticCorrection {
+  category: string;
+  original_title: string;
+  action: string; // REMOVE | DOWNGRADE | CORRECT
+  reason: string;
+  original_severity?: string;
+  new_severity?: string;
+}
+
+interface CriticReview {
+  verdict: string;
+  summary: string;
+  corrections: CriticCorrection[];
+  false_positives_removed: number;
+  severity_downgrades: number;
+  critic_time_seconds: number;
 }
 
 // V58: Generated improved contract types
@@ -1183,6 +1203,54 @@ export default function ContractAnalysisPage() {
                 </ul>
                 <div className="px-6 py-2 bg-gray-50 border-t border-gray-200 text-sm font-bold text-gray-800 font-mono">
                   = {result.risk_score}/100 → {result.overall_risk}
+                </div>
+              </div>
+            )}
+
+            {/* V72: 🛡️ Critic Review — Multi-Agent Anti-Hallucination */}
+            {result.critic_review && result.critic_review.corrections.length > 0 && (
+              <div className="bg-white rounded-xl border border-indigo-200 shadow-sm overflow-hidden">
+                <div className="bg-indigo-50 px-6 py-3 border-b border-indigo-200 flex items-center gap-2">
+                  <ShieldCheck className="h-5 w-5 text-indigo-600" />
+                  <h2 className="font-bold text-indigo-800">
+                    Agent 2: Kritička revizija
+                  </h2>
+                  <span className="ml-auto text-xs bg-indigo-200 text-indigo-800 px-2 py-0.5 rounded-full font-semibold">
+                    {result.critic_review.corrections.length} korekcij{result.critic_review.corrections.length === 1 ? "a" : "e"}
+                  </span>
+                </div>
+                <div className="px-6 py-3 text-sm text-gray-700 border-b border-indigo-100 bg-indigo-50/50">
+                  <p className="font-medium text-indigo-900 mb-1">Zaključak: {result.critic_review.verdict}</p>
+                  <p>{result.critic_review.summary}</p>
+                </div>
+                <ul className="divide-y divide-indigo-50">
+                  {result.critic_review.corrections.map((c, i) => (
+                    <li key={i} className="px-6 py-3">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded ${
+                          c.action === "REMOVE"
+                            ? "bg-green-100 text-green-700"
+                            : c.action === "DOWNGRADE"
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-blue-100 text-blue-700"
+                        }`}>
+                          {c.action === "REMOVE" ? "UKLONJENO" : c.action === "DOWNGRADE" ? "SMANJENO" : "KORIGIRANO"}
+                        </span>
+                        <span className="text-sm font-semibold text-gray-800">{c.original_title}</span>
+                        {c.original_severity && c.new_severity && (
+                          <span className="text-xs text-gray-500">
+                            {c.original_severity} → {c.new_severity}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-600">{c.reason}</p>
+                    </li>
+                  ))}
+                </ul>
+                <div className="px-6 py-2 bg-indigo-50 border-t border-indigo-200 text-xs text-indigo-600 flex items-center gap-4">
+                  <span>Lažnih uzbuna uklonjeno: {result.critic_review.false_positives_removed}</span>
+                  <span>Korekcije ozbiljnosti: {result.critic_review.severity_downgrades}</span>
+                  <span>Vrijeme: {result.critic_review.critic_time_seconds.toFixed(1)}s</span>
                 </div>
               </div>
             )}

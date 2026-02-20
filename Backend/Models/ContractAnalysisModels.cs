@@ -52,6 +52,9 @@ public class ContractAnalysisResult
     /// <summary>V42: All norms cited in this analysis — structured for validity badges</summary>
     public List<CitedNorm> CitedNorms { get; set; } = [];
 
+    /// <summary>V72: Critic agent review — corrections applied by the LLM Critic (Agent 2)</summary>
+    public CriticReview? CriticReview { get; set; }
+
     /// <summary>Legal disclaimer (always present)</summary>
     public string Disclaimer { get; set; } = "";
 }
@@ -234,4 +237,58 @@ public class GenerateContractRequest
 
     /// <summary>Analysis result from the contract analysis</summary>
     public ContractAnalysisResult? AnalysisResult { get; set; }
+}
+
+// ══════════════════════════════════════════════════════════
+//  V72: CRITIC AGENT (Agent 2) — Multi-Agent Anti-Hallucination
+// ══════════════════════════════════════════════════════════
+
+/// <summary>
+/// V72: Result of the Critic agent review — corrections and false positive removals.
+/// The Critic receives Agent 1's analysis + original contract and identifies hallucinations,
+/// false positives, Common Law contamination, and logical contradictions.
+/// </summary>
+public class CriticReview
+{
+    /// <summary>List of corrections the Critic made</summary>
+    public List<CriticCorrection> Corrections { get; set; } = [];
+
+    /// <summary>Critic's overall verdict: "POTVRĐENO" (confirmed) or "KORIGIRANO" (corrected)</summary>
+    public string Verdict { get; set; } = "POTVRĐENO";
+
+    /// <summary>Number of false positives removed</summary>
+    public int FalsePositivesRemoved { get; set; }
+
+    /// <summary>Number of severity downgrades applied</summary>
+    public int SeverityDowngrades { get; set; }
+
+    /// <summary>Critic execution time in seconds</summary>
+    public double CriticTimeSeconds { get; set; }
+
+    /// <summary>Summary of changes (shown to user)</summary>
+    public string Summary { get; set; } = "";
+}
+
+/// <summary>
+/// V72: Individual correction made by the Critic agent.
+/// </summary>
+public class CriticCorrection
+{
+    /// <summary>What category was corrected: "red_flag", "warning", "checklist", "mandatory_clause", "logical_trap", "deviation"</summary>
+    public string Category { get; set; } = "";
+
+    /// <summary>Title of the item that was corrected</summary>
+    public string OriginalTitle { get; set; } = "";
+
+    /// <summary>Action taken: "REMOVED" (false positive), "DOWNGRADED" (severity reduced), "CORRECTED" (text fixed)</summary>
+    public string Action { get; set; } = "";
+
+    /// <summary>Explanation of why this correction was needed</summary>
+    public string Reason { get; set; } = "";
+
+    /// <summary>Original severity/risk level (before correction)</summary>
+    public string? OriginalSeverity { get; set; }
+
+    /// <summary>New severity/risk level (after correction, null if REMOVED)</summary>
+    public string? NewSeverity { get; set; }
 }
