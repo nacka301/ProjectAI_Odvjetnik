@@ -55,6 +55,10 @@ public class ContractAnalysisResult
     /// <summary>V72: Critic agent review — corrections applied by the LLM Critic (Agent 2)</summary>
     public CriticReview? CriticReview { get; set; }
 
+    /// <summary>V75: Detected contract type used for dynamic few-shot routing
+    /// (e.g., "Kupoprodajni ugovor", "Ugovor o najmu / zakupu", "Ugovor o građenju")</summary>
+    public string DetectedContractType { get; set; } = "";
+
     /// <summary>Legal disclaimer (always present)</summary>
     public string Disclaimer { get; set; } = "";
 }

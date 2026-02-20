@@ -26,82 +26,14 @@ public class ContractAnalysisService
         "anonimizaciju osjetljivih podataka osim ako je izričita privola dana. " +
         "Prije potpisa konzultirajte se sa stručnjakom.";
 
-    // ══════════════════════════════════════════════════════════
-    //  IDEAL CONTRACT TEMPLATE — RAG reference for comparison
-    // ══════════════════════════════════════════════════════════
-    private const string IdealContractTemplate = """
-        IDEALNI KUPOPRODAJNI UGOVOR ZA NEKRETNINU — REFERENTNI PREDLOŽAK
-
-        Ovaj predložak sadrži sve elemente koje kvalitetan kupoprodajni ugovor
-        za nekretninu u Republici Hrvatskoj MORA sadržavati radi zaštite kupca.
-
-        1. IDENTIFIKACIJA STRANAKA
-           - Puno ime i prezime / naziv tvrtke obiju stranaka
-           - OIB obiju stranaka (čl. 7. Zakona o OIB-u, NN 60/08)
-           - Adresa prebivališta / sjedišta
-           - Ako je bračna stečevina: suglasnost supružnika (čl. 37. ObZ)
-
-        2. PREDMET UGOVORA — NEKRETNINA
-           - Katastarska općina i katastarski broj (k.o., k.č.br.)
-           - Zemijšnoknjižni uložak (ZK uložak)
-           - Etažna jedinica (ako primjenjivo) — točna oznaka E-xx
-           - Površina u m² (korisna/neto)
-           - Adresa nekretnine
-           - Izjava prodavatelja da je nekretnina slobodna od tereta
-             ili popis tereta s mehanizmom brisanja
-
-        3. CIJENA I PLAĆANJE
-           - Ukupna cijena u EUR (jasno navedena)
-           - Dinamika plaćanja (kapara + ostatak) s točnim rokovima
-           - Kapara: jasno definirano da je KAPARA, ne odustatnina (čl. 303. ZOO)
-           - Dvostruko vraćanje kapare ako prodavatelj odustane (čl. 304. st. 2. ZOO)
-           - Zaštićeni mehanizam plaćanja: escrow račun / javnobilježnički polog / 
-             uvjetna isplata — PREPORUČENO za bolju zaštitu kupca
-             NAPOMENA: U HR praksi direktna uplata je standard za čiste nekretnine.
-             Escrow je OBAVEZAN samo ako postoje tereti (hipoteke, služnosti)
-             koje treba brisati kao uvjet prijenosa vlasništva.
-
-        4. TERETI I HIPOTEKE
-           - Izjava o postojećim teretima (hipoteka, služnost, plodouživanje)
-           - Mehanizam brisanja s KONKRETNIM rokom (npr. 30 dana od potpisa)
-           - Isplata UVJETOVANA brisanjem tereta — ne obrnuto
-           - Brisovnica: obveza prodavatelja da ishodi brisovnicu
-           - Blockain: ako postoji hipoteka, ostatak kupoprodajne cijene ide
-             direktno banci za otplatu kredita, ne prodavatelju
-
-        5. CLAUSULA INTABULANDI
-           - Bezuvjetna clausula intabulandi
-           - Ovjerena kod javnog bilježnika
-           - Bez dodatnih uvjeta osim plaćanja cijene
-           - Jasno navedeno da je kupac ovlašten izvršiti upis vlasništva
-             u zemljišnu knjigu bez daljnje suglasnosti prodavatelja
-
-        6. PRIJENOS POSJEDA (Predaja nekretnine)
-           - Rok predaje nekretnine u posjed kupcu
-           - Obveza ispražnjenja nekretnine (osobe i stvari)
-           - Razgraničenje režijskih troškova (datum prijelaza)
-           - Primopredajni zapisnik
-
-        7. ZAŠTITNE KLAUZULE
-           - Raskidni uvjet (jednostrani raskid ako prodavatelj ne ispuni obvezu)
-           - Ugovorna kazna za zakašnjenje (npr. 0,5% mjesečno)
-           - Klauzula o naknadi štete
-           - Energetski certifikat (obveza prema Zakonu o gradnji)
-           - Izjava o legalnosti gradnje (uporabna dozvola)
-
-        8. ZAVRŠNE ODREDBE
-           - Mjerodavno pravo: RH
-           - Nadležni sud
-           - Broj primjeraka
-           - Troškovi javnog bilježnika i poreza (tko snosi)
-        """;
+    // V75: IdealContractTemplate moved to ContractFewShotRouter (type-specific ideal templates)
 
     // ══════════════════════════════════════════════════════════
-    //  V65: UNIFIED PROMPT — Single call does audit + traps + deviations
+    //  V65+V75: UNIFIED PROMPT — Split into base + format for dynamic few-shot routing
     // ══════════════════════════════════════════════════════════
-    private const string UnifiedPrompt = """
+    private const string UnifiedPromptBase = """
         PERSONA:
-        Ti si PRAVNI REVIZOR ugovora o nekretninama s doktoratom iz pravnih znanosti (dr.sc.iur.)
+        Ti si PRAVNI REVIZOR ugovora s doktoratom iz pravnih znanosti (dr.sc.iur.)
         i 25 godina iskustva u hrvatskom pravosuđu. Radiš kao forenzički auditor ugovora —
         ne "čitaš" ugovor, nego ga KONTROLIRAŠ prema striktnoj metodologiji.
         Također si forenzički analitičar specijaliziran za otkrivanje SKRIVENIH ZAMKI.
@@ -300,32 +232,12 @@ public class ContractAnalysisService
            - Devijacija od idealnog ugovora NIJE AUTOMATSKI rizik! Idealni
              ugovor je M&A/korporativni standard — uobičajeni ugovor za
              kupnju stana ne mora imati SVE elemente idealnog ugovora.
+        """;
 
-        ████████████████████████████████████████████████████████
-        DIO E: FEW-SHOT PRIMJER — KAKO ANALIZIRATI ČIST UGOVOR
-        ████████████████████████████████████████████████████████
+    // V75: This section is now injected dynamically via ContractFewShotRouter
+    // based on detected contract type (kupoprodajni, najam, građenje, doživotno uzdržavanje)
 
-        PRIMJER: Ugovor o kupoprodaji stana bez tereta, s jasnom kaparom,
-        clausulom intabulandi i rokom predaje.
-
-        ISPRAVAN ODGOVOR za takav ugovor:
-        - document_type: "Glavni Ugovor"
-        - summary: "Kupoprodajni ugovor za stan u XY, cijena Z EUR, bez tereta"
-        - checklist: sve stavke UREĐENO/NIZAK osim eventualnih manjih propusta
-        - red_flags: PRAZAN ARRAY [] — čist ugovor NEMA crvenih zastavica
-        - warnings: eventualno 1-2 manja upozorenja (npr. nema energetskog certifikata)
-        - mandatory_clauses za escrow: present=false, importance="PREPORUČENO" (NE "KRITIČNO")
-        - logical_traps: PRAZAN ARRAY [] — čist ugovor NEMA zamki
-        - ideal_contract_deviations: samo minor devijacije sa severity="NIZAK"
-        - Ukupni rizik nakon scoringa: NIZAK (0-29)
-
-        NEISPRAVAN ODGOVOR (klasične AI greške koje MORAŠ izbjegavati):
-        ❌ Označiti izostanak escrowa kao VISOK RIZIK na čistoj nekretnini
-        ❌ Dodati "crvenu zastavicu" za direktno plaćanje kada nema tereta
-        ❌ Napisati "kupac nije zaštićen" kada postoji simetrična kapara
-        ❌ Prijaviti "zamku" za nešto što je standardna HR praksa
-        ❌ Koristiti severity="KRITIČNO" za best-practice preporuke
-        ❌ Proturječiti sam sebi (utvrditi da nema tereta PA onda tražiti escrow)
+    private const string UnifiedPromptFormat = """
 
         ████████████████████████████████████████████████████████
 
@@ -452,7 +364,14 @@ public class ContractAnalysisService
 
         try
         {
-            _logger.LogInformation("V65 Contract analysis: {Len} chars — single-pass (Heavy model + scoring)", text.Length);
+            // ── V75: Detect contract type for dynamic few-shot routing ──
+            var contractType = ContractFewShotRouter.DetectContractType(text);
+            var contractTypeName = ContractFewShotRouter.GetContractTypeName(contractType);
+            var fewShotBlock = ContractFewShotRouter.GetFewShotExamples(contractType);
+            var idealTemplate = ContractFewShotRouter.GetIdealContractTemplate(contractType);
+            var systemPrompt = UnifiedPromptBase + "\n" + fewShotBlock + "\n" + UnifiedPromptFormat;
+
+            _logger.LogInformation("V65 Contract analysis: {Len} chars — single-pass (Heavy model + scoring), type={Type}", text.Length, contractTypeName);
 
             // ── Progress: reading done ──
             if (onProgress != null)
@@ -479,22 +398,23 @@ public class ContractAnalysisService
                 ragContext.Articles.Count, ragContext.RetrievalTimeMs,
                 ragContext.UsedVectorSearch, ragContext.TotalTokensEstimate);
 
-            // ── V65+V69: SINGLE UNIFIED CALL — audit + traps + deviations + RAG law context ──
+            // ── V65+V69+V75: SINGLE UNIFIED CALL — audit + traps + deviations + RAG + type-specific few-shot ──
             var messages = new List<ChatMessage>
             {
-                new SystemChatMessage(UnifiedPrompt),
+                new SystemChatMessage(systemPrompt),
                 new UserChatMessage(
                     $"""
                     PROVEDI KOMPLETNU PRAVNU REVIZIJU ovog ugovora.
+                    DETEKTIRANI TIP UGOVORA: {contractTypeName}
                     Slijedi sva 4 koraka revizije, provjeri cross-article usklađenost,
                     provjeri sve obvezne zaštitne klauzule, pronađi skrivene zamke,
-                    i usporedi s idealnim ugovorom.
+                    i usporedi s idealnim ugovorom ZA OVAJ TIP UGOVORA.
                     Svaki rizik MORA citirati konkretan tekst iz ugovora.
                     {ragSection}
                     ════════════════════════════════════════════════
                     IDEALNI REFERENTNI UGOVOR (za usporedbu):
                     ════════════════════════════════════════════════
-                    {IdealContractTemplate}
+                    {idealTemplate}
 
                     ════════════════════════════════════════════════
                     TEKST UGOVORA ZA ANALIZU:
@@ -510,11 +430,11 @@ public class ContractAnalysisService
                 MaxOutputTokenCount = 16384
             };
 
-            // V65+V69: Estimate input tokens for diagnostics (now includes RAG section)
-            int promptChars = UnifiedPrompt.Length + IdealContractTemplate.Length + text.Length + ragSection.Length + 300;
+            // V65+V69+V75: Estimate input tokens for diagnostics
+            int promptChars = systemPrompt.Length + idealTemplate.Length + text.Length + ragSection.Length + 300;
             _logger.LogInformation(
-                "V65 Single-pass call — estimated input: ≈{Tok}tok ({Chars}chars)",
-                promptChars / 4, promptChars);
+                "V65 Single-pass call — estimated input: ≈{Tok}tok ({Chars}chars), contractType={Type}",
+                promptChars / 4, promptChars, contractTypeName);
 
             var sw = System.Diagnostics.Stopwatch.StartNew();
             var completion = await _client.CompleteChatAsync(messages, options);
@@ -575,6 +495,7 @@ public class ContractAnalysisService
             }
 
             result.Disclaimer = Disclaimer;
+            result.DetectedContractType = contractTypeName; // V75: dynamic few-shot routing info
 
             if (onProgress != null)
             {
@@ -1630,6 +1551,10 @@ public class ContractAnalysisService
         {
             _logger.LogInformation("V58 Generating improved contract from {Len} chars + analysis", text.Length);
 
+            // V75: Use type-specific ideal template
+            var genContractType = ContractFewShotRouter.DetectContractType(text);
+            var genIdealTemplate = ContractFewShotRouter.GetIdealContractTemplate(genContractType);
+
             if (onProgress != null)
                 await onProgress("preparing", "active", "Pripremam analizu...", null);
 
@@ -1662,7 +1587,7 @@ public class ContractAnalysisService
                     ════════════════════════════════════════════════
                     IDEALNI REFERENTNI PREDLOŽAK (za usporedbu):
                     ════════════════════════════════════════════════
-                    {IdealContractTemplate}
+                    {genIdealTemplate}
                     """)
             };
 
