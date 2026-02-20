@@ -342,6 +342,113 @@ export async function getRecentActivity(limitPerTable = 10): Promise<ActivityIte
 }
 
 // ═══════════════════════════════════════════════════════════
+//  Delete Records — actual Supabase deletion
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Delete an evaluation and its dependent valuation_audits.
+ * Also unlinks any zk_analyses referencing this evaluation.
+ */
+export async function deleteEvaluation(id: string): Promise<boolean> {
+  if (!supabase) return false;
+
+  // 1. Delete dependent valuation_audits (FK without CASCADE)
+  const { error: auditErr } = await supabase
+    .from("valuation_audits")
+    .delete()
+    .eq("evaluation_id", id);
+  if (auditErr) {
+    console.error("Failed to delete valuation_audits:", auditErr.message);
+    return false;
+  }
+
+  // 2. Unlink zk_analyses (SET NULL on nullable FK)
+  const { error: zkErr } = await supabase
+    .from("zk_analyses")
+    .update({ evaluation_id: null })
+    .eq("evaluation_id", id);
+  if (zkErr) {
+    console.error("Failed to unlink zk_analyses:", zkErr.message);
+    // Non-critical — continue
+  }
+
+  // 3. Delete the evaluation itself
+  const { error } = await supabase
+    .from("evaluations")
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    console.error("Failed to delete evaluation:", error.message);
+    return false;
+  }
+
+  return true;
+}
+
+/** Delete a contract analysis by ID. */
+export async function deleteContractAnalysis(id: string): Promise<boolean> {
+  if (!supabase) return false;
+  const { error } = await supabase.from("contract_analyses").delete().eq("id", id);
+  if (error) {
+    console.error("Failed to delete contract_analysis:", error.message);
+    return false;
+  }
+  return true;
+}
+
+/** Delete a chronology by ID. */
+export async function deleteChronology(id: string): Promise<boolean> {
+  if (!supabase) return false;
+  const { error } = await supabase.from("chronologies").delete().eq("id", id);
+  if (error) {
+    console.error("Failed to delete chronology:", error.message);
+    return false;
+  }
+  return true;
+}
+
+/** Delete a legal strategy (and its audit_logs) by ID. */
+export async function deleteLegalStrategy(id: string): Promise<boolean> {
+  if (!supabase) return false;
+
+  // Delete related audit_logs first
+  await supabase.from("audit_logs").delete().eq("analysis_id", id);
+
+  const { error } = await supabase.from("legal_strategies").delete().eq("id", id);
+  if (error) {
+    console.error("Failed to delete legal_strategy:", error.message);
+    return false;
+  }
+  return true;
+}
+
+/** Delete an invoice by ID. */
+export async function deleteInvoice(id: string): Promise<boolean> {
+  if (!supabase) return false;
+  const { error } = await supabase.from("invoices").delete().eq("id", id);
+  if (error) {
+    console.error("Failed to delete invoice:", error.message);
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Delete any activity item by type and ID — dispatcher.
+ */
+export async function deleteActivityItem(type: ActivityType, id: string): Promise<boolean> {
+  switch (type) {
+    case "valuation":   return deleteEvaluation(id);
+    case "contract":    return deleteContractAnalysis(id);
+    case "chronology":  return deleteChronology(id);
+    case "legal":       return deleteLegalStrategy(id);
+    case "invoice":     return deleteInvoice(id);
+    default:            return false;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
 //  Valuation Audit Results (Perplexity AI Layer)
 // ═══════════════════════════════════════════════════════════
 

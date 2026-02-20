@@ -17,9 +17,11 @@ import {
   ScrollText,
   Gavel,
   Receipt,
+  Trash2,
 } from "lucide-react";
 import {
   getRecentActivity,
+  deleteActivityItem,
   type ActivityItem,
   type ActivityType,
   getEvaluations,
@@ -85,6 +87,7 @@ export default function HistoryPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [pdfLoadingId, setPdfLoadingId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>("all");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -135,6 +138,33 @@ export default function HistoryPage() {
       console.error("PDF export failed:", e);
     } finally {
       setPdfLoadingId(null);
+    }
+  };
+
+  const handleDelete = async (item: ActivityItem) => {
+    const confirmed = window.confirm(
+      `Jeste li sigurni da želite obrisati "${item.title}"?\nOvaj zapis će biti trajno izbrisan.`
+    );
+    if (!confirmed) return;
+
+    setDeletingId(item.id);
+    try {
+      const ok = await deleteActivityItem(item.type, item.id);
+      if (ok) {
+        setActivity((prev) => prev.filter((a) => a.id !== item.id));
+        setEvaluationMap((prev) => {
+          const next = new Map(prev);
+          next.delete(item.id);
+          return next;
+        });
+        if (expandedId === item.id) setExpandedId(null);
+      } else {
+        alert("Greška pri brisanju zapisa. Pokušajte ponovo.");
+      }
+    } catch {
+      alert("Greška pri brisanju zapisa.");
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -262,8 +292,23 @@ export default function HistoryPage() {
                       )}
                     </div>
 
-                    <div className="shrink-0 text-gray-400">
-                      {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                    <div className="shrink-0 flex items-center gap-1">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(item);
+                        }}
+                        disabled={deletingId === item.id}
+                        className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition disabled:opacity-50"
+                        title="Obriši zapis"
+                      >
+                        {deletingId === item.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                      </button>
+                      {isExpanded ? <ChevronUp className="h-5 w-5 text-gray-400" /> : <ChevronDown className="h-5 w-5 text-gray-400" />}
                     </div>
                   </div>
 

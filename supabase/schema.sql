@@ -85,6 +85,9 @@ DROP POLICY IF EXISTS "anon_insert_only" ON evaluations;
 DROP POLICY IF EXISTS "anon_select" ON evaluations;
 CREATE POLICY "anon_select" ON evaluations
     FOR SELECT USING (true);
+DROP POLICY IF EXISTS "anon_delete" ON evaluations;
+CREATE POLICY "anon_delete" ON evaluations
+    FOR DELETE USING (true);
 
 -- zk_analyses
 ALTER TABLE zk_analyses ENABLE ROW LEVEL SECURITY;
@@ -93,6 +96,12 @@ CREATE POLICY "service_role_full_access" ON zk_analyses
     FOR ALL USING (auth.role() = 'service_role');
 DROP POLICY IF EXISTS "anon_insert_only" ON zk_analyses;
 -- anon INSERT removed — backend writes via service_role
+DROP POLICY IF EXISTS "anon_update" ON zk_analyses;
+CREATE POLICY "anon_update" ON zk_analyses
+    FOR UPDATE USING (true);
+DROP POLICY IF EXISTS "anon_delete" ON zk_analyses;
+CREATE POLICY "anon_delete" ON zk_analyses
+    FOR DELETE USING (true);
 
 -- ========================================
 -- Contract Analyses table — stores AI contract risk analyses
@@ -118,6 +127,9 @@ CREATE POLICY "service_role_full_access" ON contract_analyses
 DROP POLICY IF EXISTS "anon_select" ON contract_analyses;
 CREATE POLICY "anon_select" ON contract_analyses
     FOR SELECT USING (true);
+DROP POLICY IF EXISTS "anon_delete" ON contract_analyses;
+CREATE POLICY "anon_delete" ON contract_analyses
+    FOR DELETE USING (true);
 
 -- ========================================
 -- Chronologies table — stores timeline extractions
@@ -141,6 +153,9 @@ CREATE POLICY "service_role_full_access" ON chronologies
 DROP POLICY IF EXISTS "anon_select" ON chronologies;
 CREATE POLICY "anon_select" ON chronologies
     FOR SELECT USING (true);
+DROP POLICY IF EXISTS "anon_delete" ON chronologies;
+CREATE POLICY "anon_delete" ON chronologies
+    FOR DELETE USING (true);
 
 -- ========================================
 -- Legal Strategies table — stores "Provjeri ishod" analyses
@@ -167,6 +182,9 @@ CREATE POLICY "service_role_full_access" ON legal_strategies
 DROP POLICY IF EXISTS "anon_select" ON legal_strategies;
 CREATE POLICY "anon_select" ON legal_strategies
     FOR SELECT USING (true);
+DROP POLICY IF EXISTS "anon_delete" ON legal_strategies;
+CREATE POLICY "anon_delete" ON legal_strategies
+    FOR DELETE USING (true);
 
 -- ========================================
 -- V42: Norm Registry — Croatian legal norms reference data
@@ -259,6 +277,9 @@ CREATE POLICY "service_role_full_access" ON audit_logs
 DROP POLICY IF EXISTS "anon_select" ON audit_logs;
 CREATE POLICY "anon_select" ON audit_logs
     FOR SELECT USING (true);
+DROP POLICY IF EXISTS "anon_delete" ON audit_logs;
+CREATE POLICY "anon_delete" ON audit_logs
+    FOR DELETE USING (true);
 
 -- ========================================
 -- V47: Fiskalizacija 2.0 — e-Invoices
@@ -302,6 +323,9 @@ CREATE POLICY "service_role_full_access" ON invoices
 DROP POLICY IF EXISTS "anon_select" ON invoices;
 CREATE POLICY "anon_select" ON invoices
     FOR SELECT USING (true);
+DROP POLICY IF EXISTS "anon_delete" ON invoices;
+CREATE POLICY "anon_delete" ON invoices
+    FOR DELETE USING (true);
 
 -- ========================================
 -- Perplexity AI Audit Layer — Valuation Verification
@@ -341,6 +365,9 @@ CREATE POLICY "service_role_full_access" ON valuation_audits
 DROP POLICY IF EXISTS "anon_select" ON valuation_audits;
 CREATE POLICY "anon_select" ON valuation_audits
     FOR SELECT USING (true);
+DROP POLICY IF EXISTS "anon_delete" ON valuation_audits;
+CREATE POLICY "anon_delete" ON valuation_audits
+    FOR DELETE USING (true);
 
 -- ========================================
 -- V69: Semantic RAG — Law Chunks with pgvector embeddings
