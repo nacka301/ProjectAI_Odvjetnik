@@ -1144,7 +1144,7 @@ public class ContractAnalysisService
     // ══════════════════════════════════════════════════════════
     //  V65: Parse logical_traps + ideal_contract_deviations from unified JSON
     // ══════════════════════════════════════════════════════════
-    private void ParseReasoningFromUnified(string json, ContractAnalysisResult result)
+    internal void ParseReasoningFromUnified(string json, ContractAnalysisResult result)
     {
         try
         {
@@ -1304,7 +1304,7 @@ public class ContractAnalysisService
     // ══════════════════════════════════════════════════════════
     //  PASS 1 PARSER — AI audit output → structured models
     // ══════════════════════════════════════════════════════════
-    private ContractAnalysisResult ParseAuditResponse(string json)
+    internal ContractAnalysisResult ParseAuditResponse(string json)
     {
         var result = new ContractAnalysisResult { Disclaimer = Disclaimer };
 
