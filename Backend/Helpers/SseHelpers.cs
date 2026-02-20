@@ -62,6 +62,63 @@ public static class SseHelpers
     }
 
     /// <summary>
+    /// Send an SSE comment as a keepalive ping to prevent reverse proxy (Render, Nginx, Cloudflare)
+    /// from killing idle connections. SSE spec says lines starting with ":" are comments
+    /// and MUST be silently ignored by clients.
+    /// </summary>
+    public static async Task SendKeepAlive(HttpResponse response)
+    {
+        if (response.HttpContext.RequestAborted.IsCancellationRequested)
+            return;
+        try
+        {
+            await response.WriteAsync(": keepalive\n\n", response.HttpContext.RequestAborted);
+            await response.Body.FlushAsync(response.HttpContext.RequestAborted);
+        }
+        catch (Exception) when (response.HttpContext.RequestAborted.IsCancellationRequested)
+        {
+            // Client disconnected — expected
+        }
+    }
+
+    /// <summary>
+    /// Run a long-running task while sending periodic SSE keepalive pings every 10 seconds
+    /// to prevent Render.com (and other reverse proxies) from killing the connection.
+    /// 
+    /// Usage:
+    ///   var result = await SseHelpers.WithKeepAlive(Response, () => _service.LongAiCallAsync(...));
+    /// </summary>
+    public static async Task<T> WithKeepAlive<T>(HttpResponse response, Func<Task<T>> work, int intervalSeconds = 10)
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(response.HttpContext.RequestAborted);
+        var workTask = work();
+
+        // Send keepalive pings until the work completes
+        while (!workTask.IsCompleted)
+        {
+            var delay = Task.Delay(TimeSpan.FromSeconds(intervalSeconds), cts.Token);
+            var finished = await Task.WhenAny(workTask, delay);
+
+            if (finished == workTask)
+                break; // Work is done
+
+            // Still working — send a keepalive ping
+            if (!cts.Token.IsCancellationRequested)
+                await SendKeepAlive(response);
+        }
+
+        return await workTask; // Propagate result or exception
+    }
+
+    /// <summary>
+    /// Void overload — for tasks that don't return a value.
+    /// </summary>
+    public static async Task WithKeepAlive(HttpResponse response, Func<Task> work, int intervalSeconds = 10)
+    {
+        await WithKeepAlive<object?>(response, async () => { await work(); return null; }, intervalSeconds);
+    }
+
+    /// <summary>
     /// Patch reasoning: replace AI's wrong final value with engine's authoritative value.
     /// </summary>
     public static string PatchReasoningValue(string reasoning, double aiValue, int engineValue)

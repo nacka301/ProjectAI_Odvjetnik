@@ -3,6 +3,7 @@ using Backend.Models;
 using Backend.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using static Backend.Helpers.SseHelpers;
 
 namespace Backend.Controllers;
 
@@ -375,8 +376,8 @@ public class ZkUnifiedController : ControllerBase
         MarketResearchResult marketData;
         try
         {
-            marketData = await _marketResearchService
-                .SearchComparables(property.Location, property.SizeM2, pdfText);
+            marketData = await WithKeepAlive(Response, () => _marketResearchService
+                .SearchComparables(property.Location, property.SizeM2, pdfText));
         }
         catch (Exception ex)
         {
@@ -457,7 +458,8 @@ public class ZkUnifiedController : ControllerBase
         AutoValuationResult aiResult;
         try
         {
-            aiResult = await _valuationService.GenerateAutoValuationAsync(property, marketData, engineResult);
+            aiResult = await WithKeepAlive(Response, () =>
+                _valuationService.GenerateAutoValuationAsync(property, marketData, engineResult));
         }
         catch (Exception ex)
         {

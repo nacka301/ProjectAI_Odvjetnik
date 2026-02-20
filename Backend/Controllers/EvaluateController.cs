@@ -3,6 +3,7 @@ using Backend.Models;
 using Backend.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using static Backend.Helpers.SseHelpers;
 
 namespace Backend.Controllers;
 
@@ -334,9 +335,9 @@ public class EvaluateController : ControllerBase
         MarketResearchResult marketData;
         try
         {
-            marketData = await _marketResearchService
+            marketData = await WithKeepAlive(Response, () => _marketResearchService
                 .SearchComparables(property.Location, property.SizeM2, pdfText,
-                    property.MicroLocation, property.KeyFeatures);
+                    property.MicroLocation, property.KeyFeatures));
         }
         catch (Exception ex)
         {
@@ -489,14 +490,14 @@ public class EvaluateController : ControllerBase
                 ? engineResult.MarketAverageAsking
                 : engineResult.CalculatedPricePerM2;
 
-            var agentAdjustments = await _valuationAgentService.AnalyzePropertyAsync(
+            var agentAdjustments = await WithKeepAlive(Response, () => _valuationAgentService.AnalyzePropertyAsync(
                 propertyType: marketData.DetectedPropertyType,
                 sizeM2: property.SizeM2,
                 location: property.Location,
                 description: descriptionText,
                 additionalNotes: property.RawText ?? "",
                 benchmarkPricePerM2: benchmarkPrice,
-                existingAdjustments: engineResult.Adjustments);
+                existingAdjustments: engineResult.Adjustments));
 
             if (agentAdjustments.Count > 0)
             {
@@ -559,7 +560,8 @@ public class EvaluateController : ControllerBase
         AutoValuationResult aiResult;
         try
         {
-            aiResult = await _valuationService.GenerateAutoValuationAsync(property, marketData, engineResult);
+            aiResult = await WithKeepAlive(Response, () =>
+                _valuationService.GenerateAutoValuationAsync(property, marketData, engineResult));
         }
         catch (Exception ex)
         {

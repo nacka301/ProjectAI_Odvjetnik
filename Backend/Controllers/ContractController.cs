@@ -3,6 +3,7 @@ using Backend.Models;
 using Backend.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using static Backend.Helpers.SseHelpers;
 
 namespace Backend.Controllers;
 
@@ -265,13 +266,13 @@ public class ContractController : ControllerBase
     {
         try
         {
-            // V58: Send extracted text to client so it can be used for generate-stream later
+            // V57: Send extracted text to client so it can be used for generate-stream later
             await SseHelpers.SendSSE(Response, "source_text", new { text = contractText });
 
-            var result = await _contractService.AnalyzeContractAsync(contractText, async (stage, status, label, detail) =>
+            var result = await WithKeepAlive(Response, () => _contractService.AnalyzeContractAsync(contractText, async (stage, status, label, detail) =>
             {
                 await SendProgress(stage, status, label, detail);
-            });
+            }));
 
             // ── Save to Supabase ──
             await SendProgress("saving", "active", "Spremam rezultate...");
