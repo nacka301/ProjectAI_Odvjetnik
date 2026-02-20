@@ -377,11 +377,19 @@ CREATE INDEX IF NOT EXISTS idx_law_chunks_embedding ON law_chunks
 CREATE INDEX IF NOT EXISTS idx_law_chunks_law ON law_chunks (law);
 CREATE INDEX IF NOT EXISTS idx_law_chunks_created_at ON law_chunks (created_at DESC);
 
+-- Full-text search index (fallback when embeddings unavailable)
+CREATE INDEX IF NOT EXISTS law_chunks_content_fts_idx
+    ON law_chunks USING GIN (to_tsvector('simple', content));
+
+-- Tag-based filtering index
+CREATE INDEX IF NOT EXISTS law_chunks_tags_idx
+    ON law_chunks USING GIN (topic_tags);
+
 -- RPC function for vector similarity search
--- Usage: SELECT * FROM match_law_chunks(query_embedding, 0.5, 10);
+-- Usage: SELECT * FROM match_law_chunks(query_embedding, 0.3, 10);
 CREATE OR REPLACE FUNCTION match_law_chunks(
     query_embedding vector(1536),
-    match_threshold float DEFAULT 0.5,
+    match_threshold float DEFAULT 0.3,
     match_count int DEFAULT 10
 )
 RETURNS TABLE (
@@ -395,10 +403,8 @@ RETURNS TABLE (
     topic_tags TEXT[],
     similarity float
 )
-LANGUAGE plpgsql
+LANGUAGE sql STABLE
 AS $$
-BEGIN
-    RETURN QUERY
     SELECT
         lc.id,
         lc.law,
@@ -410,10 +416,78 @@ BEGIN
         lc.topic_tags,
         1 - (lc.embedding <=> query_embedding) AS similarity
     FROM law_chunks lc
-    WHERE 1 - (lc.embedding <=> query_embedding) > match_threshold
+    WHERE lc.embedding IS NOT NULL
+      AND 1 - (lc.embedding <=> query_embedding) > match_threshold
     ORDER BY lc.embedding <=> query_embedding
     LIMIT match_count;
-END;
+$$;
+
+-- RPC function: full-text search (fallback when embeddings unavailable)
+CREATE OR REPLACE FUNCTION search_law_chunks_text(
+    search_query text,
+    max_results int DEFAULT 10
+)
+RETURNS TABLE (
+    id UUID,
+    law TEXT,
+    full_name TEXT,
+    nn_reference TEXT,
+    article TEXT,
+    title TEXT,
+    content TEXT,
+    topic_tags TEXT[],
+    rank float
+)
+LANGUAGE sql STABLE
+AS $$
+    SELECT
+        lc.id,
+        lc.law,
+        lc.full_name,
+        lc.nn_reference,
+        lc.article,
+        lc.title,
+        lc.content,
+        lc.topic_tags,
+        ts_rank(to_tsvector('simple', lc.content), plainto_tsquery('simple', search_query))::float AS rank
+    FROM law_chunks lc
+    WHERE to_tsvector('simple', lc.content) @@ plainto_tsquery('simple', search_query)
+    ORDER BY rank DESC
+    LIMIT max_results;
+$$;
+
+-- RPC function: tag-based search
+CREATE OR REPLACE FUNCTION search_law_chunks_by_tags(
+    search_tags text[],
+    max_results int DEFAULT 10
+)
+RETURNS TABLE (
+    id UUID,
+    law TEXT,
+    full_name TEXT,
+    nn_reference TEXT,
+    article TEXT,
+    title TEXT,
+    content TEXT,
+    topic_tags TEXT[],
+    overlap_count int
+)
+LANGUAGE sql STABLE
+AS $$
+    SELECT
+        lc.id,
+        lc.law,
+        lc.full_name,
+        lc.nn_reference,
+        lc.article,
+        lc.title,
+        lc.content,
+        lc.topic_tags,
+        (SELECT count(*)::int FROM unnest(lc.topic_tags) t WHERE t = ANY(search_tags)) AS overlap_count
+    FROM law_chunks lc
+    WHERE lc.topic_tags && search_tags
+    ORDER BY overlap_count DESC, lc.law, lc.article
+    LIMIT max_results;
 $$;
 
 -- RLS for law_chunks
