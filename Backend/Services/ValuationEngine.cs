@@ -265,8 +265,28 @@ public class ValuationEngine
         bool isAgriLand = IsAgriculturalLand(marketData.DetectedPropertyType, property);
         double minPricePerM2 = isAgriLand ? MinPricePerM2_AgriLand : (isLand ? MinPricePerM2_BuildLand : MinPricePerM2_Building);
         double minSalePrice  = isAgriLand ? MinSalePriceEur_AgriLand : (isLand ? MinSalePriceEur_BuildLand : MinSalePriceEur_Building);
-        var rawPrices = ExtractPricesFromListings(marketData.AllResults, property.SizeM2, isLand, isAgriLand);
+
+        // V71: When SizeM2 = 0 (e.g. ZK izvadak without building area), use an estimated size
+        // so the engine can still compute €/m² from total-price-only listings.
+        // Without this fallback, ALL listings without explicit €/m² would be skipped.
+        double effectiveSizeM2 = property.SizeM2;
+        bool usedEstimatedSize = false;
+        if (effectiveSizeM2 <= 0)
+        {
+            effectiveSizeM2 = EstimateSizeFromContext(property);
+            usedEstimatedSize = true;
+            _logger.LogWarning(
+                "V71: SizeM2=0 → using estimated size {EstSize:F0} m² for price extraction",
+                effectiveSizeM2);
+            pipeline.Add($"V71: Površina nepoznata → estimirana na {effectiveSizeM2:F0} m² za ekstrakciju cijena");
+        }
+
+        var rawPrices = ExtractPricesFromListings(marketData.AllResults, effectiveSizeM2, isLand, isAgriLand);
         pipeline.Add($"Izvučeno {rawPrices.Count} cijena iz {result.TotalListingsFound} oglasa (agri={isAgriLand})");
+
+        // V71: Track estimated size usage in result
+        result.UsedEstimatedSize = usedEstimatedSize;
+        result.EstimatedSizeM2 = usedEstimatedSize ? effectiveSizeM2 : 0;
 
         // ── 3. IQR Outlier Detection ──
         string outlierMethod;
@@ -1445,7 +1465,7 @@ public class ValuationEngine
 
         // ── 10. Mathematical Confidence Score ──
         var mathConfidence = CalculateMathConfidence(
-            cleanPrices.Count, coeffVar, priceSource, searchPhase, outlierMethod);
+            cleanPrices.Count, coeffVar, priceSource, searchPhase, outlierMethod, usedEstimatedSize);
         result.MathConfidenceScore = mathConfidence.Score;
         result.MathConfidenceLevel = mathConfidence.Level;
         result.MathConfidenceExplanation = mathConfidence.Explanation;
@@ -1781,7 +1801,8 @@ public class ValuationEngine
     // ══════════════════════════════════════════════════════════
     private MathConfidence CalculateMathConfidence(
         int compCount, double coeffVar, string priceSource,
-        SearchPhase searchPhase, string outlierMethod)
+        SearchPhase searchPhase, string outlierMethod,
+        bool usedEstimatedSize = false)
     {
         int score = 100;
         var penalties = new List<string>();
@@ -1842,6 +1863,13 @@ public class ValuationEngine
         {
             score -= 5;
             penalties.Add("-5: IQR fallback koristen");
+        }
+
+        // V71: Penalty for estimated size (unknown building area)
+        if (usedEstimatedSize)
+        {
+            score -= 10;
+            penalties.Add("-10: površina nekretnine estimirana (nije poznata iz ulaznih podataka)");
         }
 
         // Bonus: many high-quality comps
@@ -2932,7 +2960,16 @@ public class ValuationEngine
         // V22: Include AdditionalNotes for size detection from user notes
         string text = $"{property.Description} {property.RawText} {property.AdditionalNotes}";
         double size = ExtractSize(text);
-        return size > 0 ? size : 50; // Default assumption
+        if (size > 0) return size;
+
+        // V71: Type-aware default when no size found at all
+        string descLower = (property.Description ?? "").ToLowerInvariant();
+        if (descLower.Contains("kuća") || descLower.Contains("kuca") || descLower.Contains("vila"))
+            return 100; // Houses typically 80-150 m²
+        if (descLower.Contains("poslovni") || descLower.Contains("ured") || descLower.Contains("lokal"))
+            return 60;  // Commercial spaces vary widely
+
+        return 55; // Default — typical Croatian apartment
     }
 
     private static SearchPhase ParseSearchPhase(string phaseStr)
@@ -3313,6 +3350,8 @@ public class DeterministicValuation
     // ── Data quality ──
     public int TotalListingsFound { get; set; }
     public int UsablePricePoints { get; set; }
+    public bool UsedEstimatedSize { get; set; }      // V71: true when SizeM2 was unknown and estimated
+    public double EstimatedSizeM2 { get; set; }       // V71: the estimated size used (0 if real size was available)
     public int OutliersRemoved { get; set; }
 
     // ── V4: Robust Estimator fields ──
