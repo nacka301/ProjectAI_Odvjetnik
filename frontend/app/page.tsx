@@ -26,6 +26,7 @@ import {
   Receipt,
   Landmark,
   Construction,
+  Calculator,
 } from "lucide-react";
 import LegalFeed from "@/components/LegalFeed";
 import { getRecentActivity, type ActivityItem, type ActivityType } from "@/lib/supabase";
@@ -71,32 +72,37 @@ const BADGE_COLORS: Record<string, string> = {
 const TOUR_STEPS = [
   {
     target: "card-procjena",
-    title: "1/5 · Tržišna Procjena",
+    title: "1/7 · Tržišna Procjena",
     text: "Ovdje izračunavate realnu vrijednost nekretnine. Unesite podatke ili zalijepite link oglasa.",
   },
   {
     target: "card-ugovor",
-    title: "2/5 · Analiza Ugovora",
+    title: "2/7 · Analiza Ugovora",
     text: "Učitajte nacrt ugovora — AI pronalazi pravne zamke i predlaže sigurnije klauzule.",
   },
   {
     target: "card-kronologija",
-    title: "3/5 · Kronologija Spisa",
+    title: "3/7 · Kronologija Spisa",
     text: "Ubacite sve dokumente odjednom — AI slaže interaktivnu kronologiju za pripremu tužbe.",
   },
   {
     target: "card-zk",
-    title: "4/6 · ZK Izvadak",
+    title: "4/7 · ZK Izvadak",
     text: "Učitajte ZK izvadak — AI identificira terete, hipoteke, plombe i pravne rizike.",
   },
   {
     target: "card-sudska-praksa",
-    title: "5/6 · Sudska Praksa",
+    title: "5/7 · Sudska Praksa",
     text: "AI traži relevantne presude Vrhovnog suda i analizira izglede Vašeg predmeta.",
   },
   {
+    target: "card-troskovnik",
+    title: "6/7 · Odvjetnički Troškovnik",
+    text: "Izračunajte nagradu i troškove prema službenoj tarifi — odaberite radnje, a bodovi se računaju automatski.",
+  },
+  {
     target: "card-fiskalizacija",
-    title: "6/6 · Fiskalizacija 2.0",
+    title: "7/7 · Fiskalizacija 2.0",
     text: "Generirajte e-račun (UBL 2.1) izravno povezan s predmetom — spremno za e-Račun sustav.",
   },
 ];
@@ -294,6 +300,19 @@ const FEATURE_CARDS: FeatureCard[] = [
     description: "Pretraga i analiza relevantnih presuda za Vaš pravni slučaj.",
     howItWorks:
       "Opišite Vaš slučaj ili učitajte tužbu. AI traži relevantne presude Vrhovnog suda i analizira izglede vašeg predmeta.",
+  },
+  {
+    id: "card-troskovnik",
+    href: "/troskovnik",
+    icon: <Calculator className="h-6 w-6" />,
+    iconBg: "bg-indigo-100 group-hover:bg-indigo-200",
+    iconColor: "text-indigo-600",
+    accentBorder: "hover:border-indigo-400",
+    accentBg: "bg-indigo-50 group-hover:bg-indigo-100",
+    title: "Odvjetnički Troškovnik",
+    description: "Izračun nagrade i troškova prema Tarifi o nagradama za rad odvjetnika (NN 2023).",
+    howItWorks:
+      "Unesite vrijednost predmeta spora, odaberite obavljene radnje — sustav automatski računa bodove i iznos u EUR prema službenoj tarifi (1 bod = 2,00 €).",
   },
   {
     id: "card-fiskalizacija",
