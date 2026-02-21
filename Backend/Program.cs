@@ -168,6 +168,7 @@ builder.Services.AddHttpClient<MarketResearchService>(client =>
     client.Timeout = TimeSpan.FromMinutes(5);
 });
 builder.Services.AddHttpClient<SupabaseService>();
+builder.Services.AddHttpClient<ClientCaseService>();
 builder.Services.AddHttpClient<PerplexityAuditService>(client =>
 {
     client.Timeout = TimeSpan.FromMinutes(2);

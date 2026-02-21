@@ -554,3 +554,122 @@ BEGIN
         embedding = EXCLUDED.embedding;
 END;
 $$;
+
+-- ========================================
+-- V80: Clients (Stranke) — Central entity for client management
+-- One client can have many cases and many troškovnici (1-to-N).
+-- RLS: each user sees only their own clients.
+-- ========================================
+
+CREATE TABLE IF NOT EXISTS clients (
+    id                  UUID            DEFAULT uuid_generate_v4() PRIMARY KEY,
+    created_at          TIMESTAMPTZ     DEFAULT now() NOT NULL,
+    updated_at          TIMESTAMPTZ     DEFAULT now() NOT NULL,
+    user_id             UUID            NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    ime_naziv           TEXT            NOT NULL DEFAULT '',       -- Ime i prezime / naziv tvrtke
+    oib                 TEXT,                                      -- OIB (11 digits, optional)
+    adresa              TEXT,                                      -- Ulica i kućni broj
+    grad                TEXT,                                      -- Grad
+    postanski_broj      TEXT,                                      -- Poštanski broj
+    email               TEXT,                                      -- E-mail kontakt
+    telefon             TEXT,                                      -- Telefon
+    tip                 TEXT            NOT NULL DEFAULT 'fizicka', -- 'fizicka' | 'pravna'
+    napomena            TEXT                                       -- Slobodna bilješka
+);
+
+CREATE INDEX IF NOT EXISTS idx_clients_user_id ON clients (user_id);
+CREATE INDEX IF NOT EXISTS idx_clients_oib ON clients (oib) WHERE oib IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_clients_created_at ON clients (created_at DESC);
+
+-- RLS: user sees only their own clients
+ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "service_role_full_access" ON clients;
+CREATE POLICY "service_role_full_access" ON clients
+    FOR ALL USING (auth.role() = 'service_role');
+
+DROP POLICY IF EXISTS "users_own_clients" ON clients;
+CREATE POLICY "users_own_clients" ON clients
+    FOR ALL USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
+
+-- ========================================
+-- V81: Cases (Predmeti) — Legal cases linked to clients
+-- Each case belongs to one client and one user.
+-- ========================================
+
+CREATE TABLE IF NOT EXISTS cases (
+    id                  UUID            DEFAULT uuid_generate_v4() PRIMARY KEY,
+    created_at          TIMESTAMPTZ     DEFAULT now() NOT NULL,
+    updated_at          TIMESTAMPTZ     DEFAULT now() NOT NULL,
+    user_id             UUID            NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    client_id           UUID            REFERENCES clients(id) ON DELETE SET NULL,
+    broj_predmeta       TEXT            NOT NULL DEFAULT '',       -- Poslovni broj predmeta (npr. P-123/2026)
+    naziv               TEXT            NOT NULL DEFAULT '',       -- Kratki naziv predmeta
+    opis                TEXT,                                      -- Detaljni opis
+    vrsta               TEXT            NOT NULL DEFAULT 'parnica',-- parnica, ovrha, savjetovanje, kazneni, upravni, ostalo
+    status              TEXT            NOT NULL DEFAULT 'aktivan',-- aktivan, zatvoren, mirovanje, arhiviran
+    vrijednost_spora    NUMERIC(14, 2),                            -- EUR
+    sud                 TEXT,                                      -- Nadležni sud
+    sudac               TEXT,                                      -- Ime suca
+    datum_pokretanja    DATE,                                      -- Kad je predmet pokrenut
+    datum_zatvaranja    DATE                                       -- Kad je predmet zatvoren
+);
+
+CREATE INDEX IF NOT EXISTS idx_cases_user_id ON cases (user_id);
+CREATE INDEX IF NOT EXISTS idx_cases_client_id ON cases (client_id);
+CREATE INDEX IF NOT EXISTS idx_cases_status ON cases (status);
+CREATE INDEX IF NOT EXISTS idx_cases_created_at ON cases (created_at DESC);
+
+-- RLS: user sees only their own cases
+ALTER TABLE cases ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "service_role_full_access" ON cases;
+CREATE POLICY "service_role_full_access" ON cases
+    FOR ALL USING (auth.role() = 'service_role');
+
+DROP POLICY IF EXISTS "users_own_cases" ON cases;
+CREATE POLICY "users_own_cases" ON cases
+    FOR ALL USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
+
+-- ========================================
+-- V82: Troškovnici — Persisted lawyer fee calculations
+-- Each troškovnik can be linked to a client and/or a case.
+-- ========================================
+
+CREATE TABLE IF NOT EXISTS troskovnici (
+    id                  UUID            DEFAULT uuid_generate_v4() PRIMARY KEY,
+    created_at          TIMESTAMPTZ     DEFAULT now() NOT NULL,
+    user_id             UUID            NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    client_id           UUID            REFERENCES clients(id) ON DELETE SET NULL,
+    case_id             UUID            REFERENCES cases(id) ON DELETE SET NULL,
+    opis_predmeta       TEXT,
+    vrijednost_spora    NUMERIC(14, 2)  NOT NULL DEFAULT 0,
+    ukupno_bodova       INTEGER         NOT NULL DEFAULT 0,
+    ukupno_eur_bez_pdv  NUMERIC(12, 2)  NOT NULL DEFAULT 0,
+    pdv                 NUMERIC(12, 2)  NOT NULL DEFAULT 0,
+    ukupno_eur_s_pdv    NUMERIC(12, 2)  NOT NULL DEFAULT 0,
+    klijent_ime         TEXT,
+    klijent_oib         TEXT,
+    odvjetnik_ime       TEXT,
+    odvjetnik_oib       TEXT,
+    raw_json_output     JSONB           NOT NULL DEFAULT '{}'::jsonb  -- Full TroskovnikResponse
+);
+
+CREATE INDEX IF NOT EXISTS idx_troskovnici_user_id ON troskovnici (user_id);
+CREATE INDEX IF NOT EXISTS idx_troskovnici_client_id ON troskovnici (client_id);
+CREATE INDEX IF NOT EXISTS idx_troskovnici_case_id ON troskovnici (case_id);
+CREATE INDEX IF NOT EXISTS idx_troskovnici_created_at ON troskovnici (created_at DESC);
+
+-- RLS: user sees only their own troškovnici
+ALTER TABLE troskovnici ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "service_role_full_access" ON troskovnici;
+CREATE POLICY "service_role_full_access" ON troskovnici
+    FOR ALL USING (auth.role() = 'service_role');
+
+DROP POLICY IF EXISTS "users_own_troskovnici" ON troskovnici;
+CREATE POLICY "users_own_troskovnici" ON troskovnici
+    FOR ALL USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
