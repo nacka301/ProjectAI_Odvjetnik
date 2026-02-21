@@ -598,7 +598,8 @@ public class ValuationService
     /// </summary>
     public async Task ExtractListingFeaturesAsync(
         List<ComparableSearchResult> listings,
-        ExtractedPropertyInfo? subjectProperty = null)
+        ExtractedPropertyInfo? subjectProperty = null,
+        CancellationToken ct = default)
     {
         if (listings.Count == 0) return;
 
@@ -652,7 +653,7 @@ public class ValuationService
                 ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
             };
 
-            ChatCompletion completion = await _fastClient.CompleteChatAsync(messages, options);  // Fast: listing extraction
+            ChatCompletion completion = await _fastClient.CompleteChatAsync(messages, options, ct);  // Fast: listing extraction
             var json = completion.Content[0].Text;
 
             _logger.LogInformation("AI feature extraction completed for {Count} listings", listings.Count);
@@ -848,7 +849,7 @@ public class ValuationService
     /// <summary>
     /// Extract property details from PDF text using AI.
     /// </summary>
-    public async Task<ExtractedPropertyInfo> ExtractPropertyInfoAsync(string pdfText)
+    public async Task<ExtractedPropertyInfo> ExtractPropertyInfoAsync(string pdfText, CancellationToken ct = default)
     {
         var messages = new List<ChatMessage>
         {
@@ -862,7 +863,7 @@ public class ValuationService
             ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
         };
 
-        ChatCompletion completion = await _fastClient.CompleteChatAsync(messages, options);  // Fast: PDF extraction
+        ChatCompletion completion = await _fastClient.CompleteChatAsync(messages, options, ct);  // Fast: PDF extraction
         var json = completion.Content[0].Text;
 
         _logger.LogInformation("Property extraction from PDF completed.");
@@ -899,7 +900,8 @@ public class ValuationService
     /// </summary>
     public async Task<AutoValuationResult> GenerateAutoValuationAsync(
         ExtractedPropertyInfo property, MarketResearchResult marketData,
-        DeterministicValuation? engineResult = null)
+        DeterministicValuation? engineResult = null,
+        CancellationToken ct = default)
     {
         // Build active listings block
         var activeBlock = marketData.ActiveListings.Count > 0
@@ -1062,7 +1064,7 @@ public class ValuationService
             ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
         };
 
-        ChatCompletion completion = await _heavyClient.CompleteChatAsync(messages, options);  // Heavy: final narrative
+        ChatCompletion completion = await _heavyClient.CompleteChatAsync(messages, options, ct);  // Heavy: final narrative
         var json = completion.Content[0].Text;
 
         _logger.LogInformation("Auto-valuation opinion generated successfully.");

@@ -215,7 +215,8 @@ public class TextAnalysisService
     /// Returns a dictionary mapping listing index → ListingAttributes.
     /// </summary>
     public async Task<Dictionary<int, ListingAttributes>> AnalyzeBatchAsync(
-        List<(int Index, string Description)> items)
+        List<(int Index, string Description)> items,
+        CancellationToken ct = default)
     {
         var result = new Dictionary<int, ListingAttributes>();
         if (items.Count == 0) return result;
@@ -246,7 +247,7 @@ public class TextAnalysisService
                 ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
             };
 
-            ChatCompletion completion = await _chatClient.CompleteChatAsync(messages, options);
+            ChatCompletion completion = await _chatClient.CompleteChatAsync(messages, options, ct);
             var json = completion.Content[0].Text;
 
             using var doc = JsonDocument.Parse(json);

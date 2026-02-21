@@ -576,10 +576,14 @@ public class MarketResearchService
     //  MAIN ENTRY POINT — V4 "SHOTGUN"
     // ══════════════════════════════════════════════════════════
 
+    // V85-FIX: Added CancellationToken so the controller can abort long-running searches
+    // when the client disconnects (prevents wasted Tavily/BrightData credits).
     public async Task<MarketResearchResult> SearchComparables(
         string location, double sizeM2, string pdfText = "",
-        string microLocation = "", List<string>? keyFeatures = null)
+        string microLocation = "", List<string>? keyFeatures = null,
+        CancellationToken ct = default)
     {
+        _ct = ct;  // V85-FIX: Store for internal methods (Transient service = safe)
         var detectedType = DetectPropertyType(pdfText);
         _currentDetectedType = detectedType;   // Set for PriceFirstFilter gates
         _currentSubjectRegion = ExtractRegionName(location);  // Set for City Integrity gate
@@ -1242,7 +1246,7 @@ public class MarketResearchService
     {
         _logger.LogInformation("Phase0: Tavily Extract → {Url}", njuskaloUrl);
 
-        var extractedText = await ExecuteTavilyExtract(njuskaloUrl);
+        var extractedText = await ExecuteTavilyExtract(njuskaloUrl, _ct);
         List<ComparableSearchResult> listings = [];
 
         if (!string.IsNullOrWhiteSpace(extractedText))
@@ -1501,7 +1505,7 @@ public class MarketResearchService
         {
             try
             {
-                var rawText = await ExecuteTavilyExtract(listing.Url);
+                var rawText = await ExecuteTavilyExtract(listing.Url, _ct);
                 if (!string.IsNullOrWhiteSpace(rawText) && rawText.Length > 300)
                 {
                     listing.Content = $"[DEEP DIVE] {(rawText.Length > 3000 ? rawText[..3000] : rawText)} [ORIGINAL] {listing.Content}";
@@ -1569,9 +1573,12 @@ public class MarketResearchService
         var toDiscard = new System.Collections.Concurrent.ConcurrentBag<ComparableSearchResult>();
         var semaphore = new SemaphoreSlim(4); // Max 4 concurrent BrightData connections
 
-        var tasks = scored.Select(listing => Task.Run(async () =>
+        // V85-FIX: Removed Task.Run wrapping — async I/O does NOT need ThreadPool threads.
+        // Task.Run was causing ThreadPool starvation when 2+ valuations ran in parallel
+        // (each spawned up to 25 Task.Run calls, exhausting the pool and blocking the other request).
+        var tasks = scored.Select(async listing =>
         {
-            await semaphore.WaitAsync();
+            await semaphore.WaitAsync(_ct);
             try
             {
                 return await DeepDiveOneListingAsync(listing, toDiscard);
@@ -1580,7 +1587,7 @@ public class MarketResearchService
             {
                 semaphore.Release();
             }
-        }));
+        });
 
         var results = await Task.WhenAll(tasks);
         int enriched = results.Count(r => r);
@@ -1650,7 +1657,7 @@ public class MarketResearchService
             if (!hasRawText)
             {
                 // ── Tavily Extract (works for non-Njuškalo, or as Njuškalo fallback) ──
-                rawText = await ExecuteTavilyExtract(listing.Url);
+                rawText = await ExecuteTavilyExtract(listing.Url, _ct);
                 if (string.IsNullOrWhiteSpace(rawText))
                 {
                     listing.DeepDiveStatus = _brightDataWsEndpoint != null
@@ -1693,7 +1700,7 @@ public class MarketResearchService
                         string fallbackSnippet = "";
                         try
                         {
-                            var fallbackResults = await ExecuteTavilySearch($"site:njuskalo.hr {listing.Url}", 1);
+                            var fallbackResults = await ExecuteTavilySearch($"site:njuskalo.hr {listing.Url}", 1, _ct);
                             if (fallbackResults.Count > 0)
                             {
                                 fallbackSnippet = fallbackResults[0].Content ?? "";
@@ -2313,7 +2320,7 @@ public class MarketResearchService
     /// Call Tavily Extract API to fetch content from a specific URL.
     /// Returns the raw text content of the page.
     /// </summary>
-    private async Task<string> ExecuteTavilyExtract(string url)
+    private async Task<string> ExecuteTavilyExtract(string url, CancellationToken ct = default)
     {
         var requestBody = new
         {
@@ -2334,10 +2341,10 @@ public class MarketResearchService
         };
         request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _apiKey);
 
-        var response = await _httpClient.SendAsync(request);
+        var response = await _httpClient.SendAsync(request, ct);
         response.EnsureSuccessStatusCode();
 
-        var responseJson = await response.Content.ReadAsStringAsync();
+        var responseJson = await response.Content.ReadAsStringAsync(ct);
         using var doc = JsonDocument.Parse(responseJson);
 
         if (doc.RootElement.TryGetProperty("results", out var results) && results.GetArrayLength() > 0)
@@ -2684,7 +2691,7 @@ public class MarketResearchService
     {
         _logger.LogInformation("[{Phase}] Firing {Count} parallel queries", phaseName, queries.Count);
 
-        var tasks = queries.Select(q => ExecuteTavilySearch(q, maxResultsPerQuery));
+        var tasks = queries.Select(q => ExecuteTavilySearch(q, maxResultsPerQuery, _ct));
         var results = await Task.WhenAll(tasks);
 
         var merged = new List<ComparableSearchResult>();
@@ -2780,6 +2787,13 @@ public class MarketResearchService
     /// <summary>Track how many listings were rejected by city integrity. Thread-local per search call.</summary>
     private int _cityIntegrityRejections;
     private readonly List<string> _rejectedCityNames = [];
+
+    /// <summary>
+    /// V85-FIX: Per-call CancellationToken — propagated to all HTTP calls (Tavily, BrightData).
+    /// Safe because MarketResearchService is registered as Transient (one instance per DI request).
+    /// Allows the controller to abort all pending HTTP calls when the client disconnects.
+    /// </summary>
+    private CancellationToken _ct;
 
     private List<ComparableSearchResult> PriceFirstFilter(
         List<ComparableSearchResult> results, string phaseName,
@@ -3262,7 +3276,7 @@ public class MarketResearchService
     // ══════════════════════════════════════════════════════════
 
     private async Task<List<ComparableSearchResult>> ExecuteTavilySearch(
-        string query, int maxResults = 5)
+        string query, int maxResults = 5, CancellationToken ct = default)
     {
         try
         {
@@ -3283,10 +3297,10 @@ public class MarketResearchService
                 System.Text.Encoding.UTF8,
                 "application/json");
 
-            var response = await _httpClient.PostAsync(TavilySearchUrl, jsonContent);
+            var response = await _httpClient.PostAsync(TavilySearchUrl, jsonContent, ct);
             response.EnsureSuccessStatusCode();
 
-            var responseJson = await response.Content.ReadAsStringAsync();
+            var responseJson = await response.Content.ReadAsStringAsync(ct);
 
             var tavilyResponse = JsonSerializer.Deserialize<TavilyResponse>(
                 responseJson, new JsonSerializerOptions

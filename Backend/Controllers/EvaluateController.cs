@@ -143,7 +143,7 @@ public class EvaluateController : ControllerBase
             try
             {
                 pdfText = _pdfService.ExtractText(file);
-                property = await _valuationService.ExtractPropertyInfoAsync(pdfText);
+                property = await _valuationService.ExtractPropertyInfoAsync(pdfText, ct);
                 ApplyLocationOverride(property, city, neighborhood);
             }
             catch (Exception ex)
@@ -205,7 +205,7 @@ public class EvaluateController : ControllerBase
             ExtractedPropertyInfo property;
             try
             {
-                property = await _valuationService.ExtractPropertyInfoAsync(request.Text);
+                property = await _valuationService.ExtractPropertyInfoAsync(request.Text, ct);
                 ApplyLocationOverride(property, request.City, request.Neighborhood);
 
                 // Safety net: if the original text clearly says one land type
@@ -337,7 +337,7 @@ public class EvaluateController : ControllerBase
         {
             marketData = await WithKeepAlive(Response, () => _marketResearchService
                 .SearchComparables(property.Location, property.SizeM2, pdfText,
-                    property.MicroLocation, property.KeyFeatures));
+                    property.MicroLocation, property.KeyFeatures, ct));
         }
         catch (Exception ex)
         {
@@ -368,7 +368,7 @@ public class EvaluateController : ControllerBase
         ct.ThrowIfCancellationRequested();
         try
         {
-            await _valuationService.ExtractListingFeaturesAsync(marketData.ActiveListings, property);
+            await _valuationService.ExtractListingFeaturesAsync(marketData.ActiveListings, property, ct);
             _valuationService.FilterByAiPropertyType(
                 marketData.ActiveListings, marketData.DetectedPropertyType);
 
@@ -406,7 +406,7 @@ public class EvaluateController : ControllerBase
 
             if (toAnalyze.Count > 0)
             {
-                var sherlockResults = await _textAnalysisService.AnalyzeBatchAsync(toAnalyze);
+                var sherlockResults = await _textAnalysisService.AnalyzeBatchAsync(toAnalyze, ct);
                 foreach (var (idx, attrs) in sherlockResults)
                 {
                     if (idx >= 0 && idx < marketData.ActiveListings.Count)
@@ -497,7 +497,8 @@ public class EvaluateController : ControllerBase
                 description: descriptionText,
                 additionalNotes: property.RawText ?? "",
                 benchmarkPricePerM2: benchmarkPrice,
-                existingAdjustments: engineResult.Adjustments));
+                existingAdjustments: engineResult.Adjustments,
+                ct: ct));
 
             if (agentAdjustments.Count > 0)
             {
@@ -561,7 +562,7 @@ public class EvaluateController : ControllerBase
         try
         {
             aiResult = await WithKeepAlive(Response, () =>
-                _valuationService.GenerateAutoValuationAsync(property, marketData, engineResult));
+                _valuationService.GenerateAutoValuationAsync(property, marketData, engineResult, ct));
         }
         catch (Exception ex)
         {

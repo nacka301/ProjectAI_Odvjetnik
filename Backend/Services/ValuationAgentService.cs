@@ -126,7 +126,8 @@ public class ValuationAgentService
         string description,
         string additionalNotes,
         double benchmarkPricePerM2,
-        List<ValuationAdjustment> existingAdjustments)
+        List<ValuationAdjustment> existingAdjustments,
+        CancellationToken ct = default)
     {
         var result = new List<AgentAdjustment>();
 
@@ -182,7 +183,7 @@ public class ValuationAgentService
                 ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat()
             };
 
-            ChatCompletion completion = await _chatClient.CompleteChatAsync(messages, options);
+            ChatCompletion completion = await _chatClient.CompleteChatAsync(messages, options, ct);
             var json = completion.Content[0].Text;
 
             using var doc = JsonDocument.Parse(json);

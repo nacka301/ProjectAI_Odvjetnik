@@ -377,7 +377,7 @@ public class ZkUnifiedController : ControllerBase
         try
         {
             marketData = await WithKeepAlive(Response, () => _marketResearchService
-                .SearchComparables(property.Location, property.SizeM2, pdfText));
+                .SearchComparables(property.Location, property.SizeM2, pdfText, ct: ct));
         }
         catch (Exception ex)
         {
@@ -400,7 +400,7 @@ public class ZkUnifiedController : ControllerBase
         ct.ThrowIfCancellationRequested();
         try
         {
-            await _valuationService.ExtractListingFeaturesAsync(marketData.ActiveListings, property);
+            await _valuationService.ExtractListingFeaturesAsync(marketData.ActiveListings, property, ct);
             _valuationService.FilterByAiPropertyType(
                 marketData.ActiveListings, marketData.DetectedPropertyType);
 
@@ -459,7 +459,7 @@ public class ZkUnifiedController : ControllerBase
         try
         {
             aiResult = await WithKeepAlive(Response, () =>
-                _valuationService.GenerateAutoValuationAsync(property, marketData, engineResult));
+                _valuationService.GenerateAutoValuationAsync(property, marketData, engineResult, ct));
         }
         catch (Exception ex)
         {
