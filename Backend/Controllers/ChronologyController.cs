@@ -35,6 +35,10 @@ public class ChronologyController : ControllerBase
         _logger = logger;
     }
 
+    // SECURITY: Extract user_id from x-user-id header (set by frontend auth)
+    private string? GetUserId() =>
+        Request.Headers.TryGetValue("x-user-id", out var val) ? val.FirstOrDefault() : null;
+
     private Task SendSSE(string type, object? payload)
         => SseHelpers.SendSSE(Response, type, payload);
 
@@ -186,6 +190,7 @@ public class ChronologyController : ControllerBase
         {
             var id = await _supabaseService.SaveChronologyAsync(new ChronologyRecord
             {
+                UserId = GetUserId(),
                 TotalDocuments = processed,
                 TotalEvents = allEvents.Count,
                 DateRange = dateRange,
@@ -193,6 +198,7 @@ public class ChronologyController : ControllerBase
             });
             await _supabaseService.SaveAuditLogAsync(new AuditLogRecord
             {
+                UserId = GetUserId(),
                 Module = "chronology",
                 AnalysisId = id,
                 Step = 1,

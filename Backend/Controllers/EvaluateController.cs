@@ -51,6 +51,12 @@ public class EvaluateController : ControllerBase
     }
 
     // ══════════════════════════════════════════════════════════
+    //  SECURITY: Extract user_id from x-user-id header (set by frontend auth)
+    // ══════════════════════════════════════════════════════════
+    private string? GetUserId() =>
+        Request.Headers.TryGetValue("x-user-id", out var val) ? val.FirstOrDefault() : null;
+
+    // ══════════════════════════════════════════════════════════
     //  LOCATION OVERRIDE — use frontend-supplied city/neighborhood
     //  instead of AI-guessed location from the PDF/text.
     // ══════════════════════════════════════════════════════════
@@ -695,6 +701,7 @@ public class EvaluateController : ControllerBase
         {
             var evaluationId = await _supabaseService.SaveEvaluationAsync(new EvaluationRecord
             {
+                UserId = GetUserId(),
                 PropertyType = marketData.DetectedPropertyType,
                 Location = property.Location,
                 SizeM2 = property.SizeM2 > 0 ? property.SizeM2 : null,
@@ -709,6 +716,7 @@ public class EvaluateController : ControllerBase
             {
                 await _supabaseService.SaveAuditLogAsync(new AuditLogRecord
                 {
+                    UserId = GetUserId(),
                     Module = "valuation",
                     AnalysisId = evaluationId,
                     Step = 1,

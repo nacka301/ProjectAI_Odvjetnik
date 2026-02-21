@@ -1,6 +1,14 @@
 -- ========================================
--- Supabase Schema: evaluations table
+-- Supabase Schema: PravoTek AI — Security-Hardened
 -- Run this in Supabase SQL Editor
+-- ========================================
+-- SECURITY MODEL:
+--   • Backend uses service_role key → bypasses RLS (trusted server)
+--   • All user data tables have user_id column → each lawyer sees ONLY their own data
+--   • Authenticated users: SELECT/INSERT/UPDATE/DELETE on own rows (auth.uid() = user_id)
+--   • Anon key: NO access to user data — zero leakage
+--   • Reference data (norms, law_chunks): public SELECT for all (no user data)
+--   • audit_logs: immutable for users — SELECT only (no UPDATE/DELETE)
 -- ========================================
 
 -- Enable UUID extension if not already enabled
@@ -10,6 +18,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE IF NOT EXISTS evaluations (
     id              UUID            DEFAULT uuid_generate_v4() PRIMARY KEY,
     created_at      TIMESTAMPTZ     DEFAULT now() NOT NULL,
+    user_id         UUID            REFERENCES auth.users(id) ON DELETE SET NULL,  -- SECURITY: owner
     property_type   TEXT            NOT NULL,           -- 'stan', 'kuća', 'zemljište', 'poslovni prostor'
     location        TEXT            NOT NULL,           -- e.g. 'Split, Bačvice'
     size_m2         NUMERIC(10, 2),                     -- property size
@@ -24,14 +33,17 @@ CREATE INDEX IF NOT EXISTS idx_evaluations_location ON evaluations (location);
 -- Index for date-range queries
 CREATE INDEX IF NOT EXISTS idx_evaluations_created_at ON evaluations (created_at DESC);
 
+-- Index for user-scoped queries
+CREATE INDEX IF NOT EXISTS idx_evaluations_user_id ON evaluations (user_id);
+
 -- ========================================
 -- ZK Analysis table — stores parsed ZK izvadak data
--- Run in Supabase SQL Editor after evaluations table
 -- ========================================
 
 CREATE TABLE IF NOT EXISTS zk_analyses (
     id                      UUID            DEFAULT uuid_generate_v4() PRIMARY KEY,
     created_at              TIMESTAMPTZ     DEFAULT now() NOT NULL,
+    user_id                 UUID            REFERENCES auth.users(id) ON DELETE SET NULL,  -- SECURITY: owner
     property_id             TEXT            NOT NULL,           -- k.o. + čestica
     cadastral_municipality  TEXT,
     parcel_number           TEXT,
@@ -53,6 +65,7 @@ CREATE TABLE IF NOT EXISTS zk_analyses (
 CREATE INDEX IF NOT EXISTS idx_zk_analyses_property_id ON zk_analyses (property_id);
 CREATE INDEX IF NOT EXISTS idx_zk_analyses_location ON zk_analyses (location);
 CREATE INDEX IF NOT EXISTS idx_zk_analyses_created_at ON zk_analyses (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_zk_analyses_user_id ON zk_analyses (user_id);
 
 -- ========================================
 -- Supabase Storage: create bucket for PDFs
@@ -62,17 +75,10 @@ CREATE INDEX IF NOT EXISTS idx_zk_analyses_created_at ON zk_analyses (created_at
 -- ========================================
 
 -- ========================================
--- Row Level Security
--- Backend uses the service_role key, which bypasses RLS.
--- The anon key (exposed in frontend) is limited:
---   • SELECT allowed for dashboard display (TODO: scope to user_id when auth is added)
---   • INSERT blocked — only service_role (backend) can write
---
--- SECURITY TODO (before production):
---   1. Add user_id UUID column to all data tables
---   2. Implement Supabase Auth (JWT) in frontend
---   3. Replace anon_select policies with: USING (auth.uid() = user_id)
---   4. Consider encrypting OIB fields at rest
+-- Row Level Security — HARDENED
+-- Backend uses service_role key → bypasses RLS (trusted server).
+-- Authenticated users see ONLY their own rows (auth.uid() = user_id).
+-- Anon key gets ZERO access to user data tables.
 -- ========================================
 
 -- evaluations
@@ -81,13 +87,12 @@ DROP POLICY IF EXISTS "service_role_full_access" ON evaluations;
 CREATE POLICY "service_role_full_access" ON evaluations
     FOR ALL USING (auth.role() = 'service_role');
 DROP POLICY IF EXISTS "anon_insert_only" ON evaluations;
--- anon INSERT removed — backend writes via service_role
 DROP POLICY IF EXISTS "anon_select" ON evaluations;
-CREATE POLICY "anon_select" ON evaluations
-    FOR SELECT USING (true);
 DROP POLICY IF EXISTS "anon_delete" ON evaluations;
-CREATE POLICY "anon_delete" ON evaluations
-    FOR DELETE USING (true);
+DROP POLICY IF EXISTS "users_own_evaluations" ON evaluations;
+CREATE POLICY "users_own_evaluations" ON evaluations
+    FOR ALL USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
 
 -- zk_analyses
 ALTER TABLE zk_analyses ENABLE ROW LEVEL SECURITY;
@@ -95,13 +100,12 @@ DROP POLICY IF EXISTS "service_role_full_access" ON zk_analyses;
 CREATE POLICY "service_role_full_access" ON zk_analyses
     FOR ALL USING (auth.role() = 'service_role');
 DROP POLICY IF EXISTS "anon_insert_only" ON zk_analyses;
--- anon INSERT removed — backend writes via service_role
 DROP POLICY IF EXISTS "anon_update" ON zk_analyses;
-CREATE POLICY "anon_update" ON zk_analyses
-    FOR UPDATE USING (true);
 DROP POLICY IF EXISTS "anon_delete" ON zk_analyses;
-CREATE POLICY "anon_delete" ON zk_analyses
-    FOR DELETE USING (true);
+DROP POLICY IF EXISTS "users_own_zk_analyses" ON zk_analyses;
+CREATE POLICY "users_own_zk_analyses" ON zk_analyses
+    FOR ALL USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
 
 -- ========================================
 -- Contract Analyses table — stores AI contract risk analyses
@@ -110,6 +114,7 @@ CREATE POLICY "anon_delete" ON zk_analyses
 CREATE TABLE IF NOT EXISTS contract_analyses (
     id              UUID            DEFAULT uuid_generate_v4() PRIMARY KEY,
     created_at      TIMESTAMPTZ     DEFAULT now() NOT NULL,
+    user_id         UUID            REFERENCES auth.users(id) ON DELETE SET NULL,  -- SECURITY: owner
     document_type   TEXT            NOT NULL DEFAULT '',       -- 'Kupoprodajni ugovor', 'Predugovor', etc.
     summary         TEXT            NOT NULL DEFAULT '',       -- AI-generated summary
     overall_risk    TEXT            NOT NULL DEFAULT '',       -- 'VISOK', 'SREDNJI', 'NIZAK'
@@ -119,17 +124,18 @@ CREATE TABLE IF NOT EXISTS contract_analyses (
 );
 
 CREATE INDEX IF NOT EXISTS idx_contract_analyses_created_at ON contract_analyses (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_contract_analyses_user_id ON contract_analyses (user_id);
 
 ALTER TABLE contract_analyses ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "service_role_full_access" ON contract_analyses;
 CREATE POLICY "service_role_full_access" ON contract_analyses
     FOR ALL USING (auth.role() = 'service_role');
 DROP POLICY IF EXISTS "anon_select" ON contract_analyses;
-CREATE POLICY "anon_select" ON contract_analyses
-    FOR SELECT USING (true);
 DROP POLICY IF EXISTS "anon_delete" ON contract_analyses;
-CREATE POLICY "anon_delete" ON contract_analyses
-    FOR DELETE USING (true);
+DROP POLICY IF EXISTS "users_own_contract_analyses" ON contract_analyses;
+CREATE POLICY "users_own_contract_analyses" ON contract_analyses
+    FOR ALL USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
 
 -- ========================================
 -- Chronologies table — stores timeline extractions
@@ -138,6 +144,7 @@ CREATE POLICY "anon_delete" ON contract_analyses
 CREATE TABLE IF NOT EXISTS chronologies (
     id                      UUID            DEFAULT uuid_generate_v4() PRIMARY KEY,
     created_at              TIMESTAMPTZ     DEFAULT now() NOT NULL,
+    user_id                 UUID            REFERENCES auth.users(id) ON DELETE SET NULL,  -- SECURITY: owner
     total_documents         INTEGER         NOT NULL DEFAULT 0,
     total_events            INTEGER         NOT NULL DEFAULT 0,
     date_range              TEXT            NOT NULL DEFAULT '',   -- "01.01.2020 — 15.02.2026"
@@ -145,17 +152,18 @@ CREATE TABLE IF NOT EXISTS chronologies (
 );
 
 CREATE INDEX IF NOT EXISTS idx_chronologies_created_at ON chronologies (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_chronologies_user_id ON chronologies (user_id);
 
 ALTER TABLE chronologies ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "service_role_full_access" ON chronologies;
 CREATE POLICY "service_role_full_access" ON chronologies
     FOR ALL USING (auth.role() = 'service_role');
 DROP POLICY IF EXISTS "anon_select" ON chronologies;
-CREATE POLICY "anon_select" ON chronologies
-    FOR SELECT USING (true);
 DROP POLICY IF EXISTS "anon_delete" ON chronologies;
-CREATE POLICY "anon_delete" ON chronologies
-    FOR DELETE USING (true);
+DROP POLICY IF EXISTS "users_own_chronologies" ON chronologies;
+CREATE POLICY "users_own_chronologies" ON chronologies
+    FOR ALL USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
 
 -- ========================================
 -- Legal Strategies table — stores "Provjeri ishod" analyses
@@ -164,6 +172,7 @@ CREATE POLICY "anon_delete" ON chronologies
 CREATE TABLE IF NOT EXISTS legal_strategies (
     id                  UUID            DEFAULT uuid_generate_v4() PRIMARY KEY,
     created_at          TIMESTAMPTZ     DEFAULT now() NOT NULL,
+    user_id             UUID            REFERENCES auth.users(id) ON DELETE SET NULL,  -- SECURITY: owner
     key_legal_issue     TEXT            NOT NULL DEFAULT '',
     client_position     TEXT            NOT NULL DEFAULT 'kupac',
     win_probability     INTEGER         NOT NULL DEFAULT 0,       -- 0-100
@@ -174,17 +183,18 @@ CREATE TABLE IF NOT EXISTS legal_strategies (
 );
 
 CREATE INDEX IF NOT EXISTS idx_legal_strategies_created_at ON legal_strategies (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_legal_strategies_user_id ON legal_strategies (user_id);
 
 ALTER TABLE legal_strategies ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "service_role_full_access" ON legal_strategies;
 CREATE POLICY "service_role_full_access" ON legal_strategies
     FOR ALL USING (auth.role() = 'service_role');
 DROP POLICY IF EXISTS "anon_select" ON legal_strategies;
-CREATE POLICY "anon_select" ON legal_strategies
-    FOR SELECT USING (true);
 DROP POLICY IF EXISTS "anon_delete" ON legal_strategies;
-CREATE POLICY "anon_delete" ON legal_strategies
-    FOR DELETE USING (true);
+DROP POLICY IF EXISTS "users_own_legal_strategies" ON legal_strategies;
+CREATE POLICY "users_own_legal_strategies" ON legal_strategies
+    FOR ALL USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
 
 -- ========================================
 -- V42: Norm Registry — Croatian legal norms reference data
@@ -251,9 +261,11 @@ CREATE POLICY "anon_select" ON norm_amendments
 ALTER TABLE legal_strategies ADD COLUMN IF NOT EXISTS audit_trail JSONB NOT NULL DEFAULT '[]'::jsonb;
 
 -- Standalone audit_logs table — for cross-module, queryable audit history
+-- IMMUTABLE: users can only SELECT their own logs (no UPDATE/DELETE)
 CREATE TABLE IF NOT EXISTS audit_logs (
     id                  UUID            DEFAULT uuid_generate_v4() PRIMARY KEY,
     created_at          TIMESTAMPTZ     DEFAULT now() NOT NULL,
+    user_id             UUID            REFERENCES auth.users(id) ON DELETE SET NULL,  -- SECURITY: owner
     module              TEXT            NOT NULL DEFAULT 'legal_strategy',   -- Which module generated this
     analysis_id         UUID,                                               -- FK to the parent analysis (legal_strategies.id, etc.)
     step                INTEGER         NOT NULL DEFAULT 1,
@@ -269,17 +281,18 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_module ON audit_logs (module);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_analysis_id ON audit_logs (analysis_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs (user_id);
 
 ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "service_role_full_access" ON audit_logs;
 CREATE POLICY "service_role_full_access" ON audit_logs
     FOR ALL USING (auth.role() = 'service_role');
 DROP POLICY IF EXISTS "anon_select" ON audit_logs;
-CREATE POLICY "anon_select" ON audit_logs
-    FOR SELECT USING (true);
 DROP POLICY IF EXISTS "anon_delete" ON audit_logs;
-CREATE POLICY "anon_delete" ON audit_logs
-    FOR DELETE USING (true);
+-- IMMUTABLE: users can only read their own audit logs (EU AI Act Article 13 compliance)
+DROP POLICY IF EXISTS "users_select_own_audit_logs" ON audit_logs;
+CREATE POLICY "users_select_own_audit_logs" ON audit_logs
+    FOR SELECT USING (auth.uid() = user_id);
 
 -- ========================================
 -- V47: Fiskalizacija 2.0 — e-Invoices
@@ -291,6 +304,7 @@ CREATE POLICY "anon_delete" ON audit_logs
 CREATE TABLE IF NOT EXISTS invoices (
     id                  UUID            DEFAULT uuid_generate_v4() PRIMARY KEY,
     created_at          TIMESTAMPTZ     DEFAULT now() NOT NULL,
+    user_id             UUID            REFERENCES auth.users(id) ON DELETE SET NULL,  -- SECURITY: owner
     invoice_number      TEXT            NOT NULL UNIQUE,             -- YYYY-NNNNN format
     issue_date          TEXT            NOT NULL DEFAULT '',          -- ISO 8601
     due_date            TEXT            NOT NULL DEFAULT '',          -- ISO 8601
@@ -315,17 +329,18 @@ CREATE INDEX IF NOT EXISTS idx_invoices_invoice_number ON invoices (invoice_numb
 CREATE INDEX IF NOT EXISTS idx_invoices_client_oib ON invoices (client_oib);
 CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices (status);
 CREATE INDEX IF NOT EXISTS idx_invoices_module ON invoices (module);
+CREATE INDEX IF NOT EXISTS idx_invoices_user_id ON invoices (user_id);
 
 ALTER TABLE invoices ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "service_role_full_access" ON invoices;
 CREATE POLICY "service_role_full_access" ON invoices
     FOR ALL USING (auth.role() = 'service_role');
 DROP POLICY IF EXISTS "anon_select" ON invoices;
-CREATE POLICY "anon_select" ON invoices
-    FOR SELECT USING (true);
 DROP POLICY IF EXISTS "anon_delete" ON invoices;
-CREATE POLICY "anon_delete" ON invoices
-    FOR DELETE USING (true);
+DROP POLICY IF EXISTS "users_own_invoices" ON invoices;
+CREATE POLICY "users_own_invoices" ON invoices
+    FOR ALL USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
 
 -- ========================================
 -- Perplexity AI Audit Layer — Valuation Verification
@@ -336,6 +351,7 @@ CREATE POLICY "anon_delete" ON invoices
 CREATE TABLE IF NOT EXISTS valuation_audits (
     id                  UUID            DEFAULT uuid_generate_v4() PRIMARY KEY,
     created_at          TIMESTAMPTZ     DEFAULT now() NOT NULL,
+    user_id             UUID            REFERENCES auth.users(id) ON DELETE SET NULL,  -- SECURITY: owner
     evaluation_id       UUID            NOT NULL REFERENCES evaluations(id),
     verdict             TEXT            NOT NULL DEFAULT 'SUSPICIOUS',   -- CONFIRMED, SUSPICIOUS, REJECTED
     overall_confidence  INTEGER         NOT NULL DEFAULT 0,             -- 0-100
@@ -357,17 +373,18 @@ CREATE TABLE IF NOT EXISTS valuation_audits (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_valuation_audits_eval ON valuation_audits (evaluation_id);
 CREATE INDEX IF NOT EXISTS idx_valuation_audits_created_at ON valuation_audits (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_valuation_audits_verdict ON valuation_audits (verdict);
+CREATE INDEX IF NOT EXISTS idx_valuation_audits_user_id ON valuation_audits (user_id);
 
 ALTER TABLE valuation_audits ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "service_role_full_access" ON valuation_audits;
 CREATE POLICY "service_role_full_access" ON valuation_audits
     FOR ALL USING (auth.role() = 'service_role');
 DROP POLICY IF EXISTS "anon_select" ON valuation_audits;
-CREATE POLICY "anon_select" ON valuation_audits
-    FOR SELECT USING (true);
 DROP POLICY IF EXISTS "anon_delete" ON valuation_audits;
-CREATE POLICY "anon_delete" ON valuation_audits
-    FOR DELETE USING (true);
+DROP POLICY IF EXISTS "users_own_valuation_audits" ON valuation_audits;
+CREATE POLICY "users_own_valuation_audits" ON valuation_audits
+    FOR ALL USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
 
 -- ========================================
 -- V69: Semantic RAG — Law Chunks with pgvector embeddings

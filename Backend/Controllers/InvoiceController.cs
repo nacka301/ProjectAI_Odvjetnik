@@ -27,6 +27,10 @@ public class InvoiceController : ControllerBase
         _logger = logger;
     }
 
+    // SECURITY: Extract user_id from x-user-id header (set by frontend auth)
+    private string? GetUserId() =>
+        Request.Headers.TryGetValue("x-user-id", out var val) ? val.FirstOrDefault() : null;
+
     /// <summary>
     /// POST /api/invoice/generate — Generate a UBL 2.1 e-invoice.
     /// </summary>
@@ -71,7 +75,7 @@ public class InvoiceController : ControllerBase
                 "Invoice generation request: module={Module}, client={Client}, net={Net:F2}",
                 request.Module, request.Client.Name, request.NetAmount);
 
-            var result = await _invoiceService.GenerateInvoiceAsync(request);
+            var result = await _invoiceService.GenerateInvoiceAsync(request, GetUserId());
             return Ok(result);
         }
         catch (Exception ex)

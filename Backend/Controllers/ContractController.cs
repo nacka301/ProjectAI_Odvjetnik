@@ -36,6 +36,10 @@ public class ContractController : ControllerBase
         _logger = logger;
     }
 
+    // SECURITY: Extract user_id from x-user-id header (set by frontend auth)
+    private string? GetUserId() =>
+        Request.Headers.TryGetValue("x-user-id", out var val) ? val.FirstOrDefault() : null;
+
     /// <summary>
     /// POST /api/contract/analyze-pdf — Upload a PDF contract for analysis.
     /// </summary>
@@ -81,6 +85,7 @@ public class ContractController : ControllerBase
         {
             var id = await _supabaseService.SaveContractAnalysisAsync(new ContractAnalysisRecord
             {
+                UserId = GetUserId(),
                 DocumentType = result.DocumentType,
                 Summary = result.Summary,
                 OverallRisk = result.OverallRisk,
@@ -90,6 +95,7 @@ public class ContractController : ControllerBase
             });
             await _supabaseService.SaveAuditLogAsync(new AuditLogRecord
             {
+                UserId = GetUserId(),
                 Module = "contract_analysis",
                 AnalysisId = id,
                 Step = 1,
@@ -135,6 +141,7 @@ public class ContractController : ControllerBase
         {
             var id = await _supabaseService.SaveContractAnalysisAsync(new ContractAnalysisRecord
             {
+                UserId = GetUserId(),
                 DocumentType = result.DocumentType,
                 Summary = result.Summary,
                 OverallRisk = result.OverallRisk,
@@ -144,6 +151,7 @@ public class ContractController : ControllerBase
             });
             await _supabaseService.SaveAuditLogAsync(new AuditLogRecord
             {
+                UserId = GetUserId(),
                 Module = "contract_analysis",
                 AnalysisId = id,
                 Step = 1,
@@ -280,6 +288,7 @@ public class ContractController : ControllerBase
             {
                 var id = await _supabaseService.SaveContractAnalysisAsync(new ContractAnalysisRecord
                 {
+                    UserId = GetUserId(),
                     DocumentType = result.DocumentType,
                     Summary = result.Summary,
                     OverallRisk = result.OverallRisk,
@@ -289,6 +298,7 @@ public class ContractController : ControllerBase
                 });
                 await _supabaseService.SaveAuditLogAsync(new AuditLogRecord
                 {
+                    UserId = GetUserId(),
                     Module = "contract_analysis",
                     AnalysisId = id,
                     Step = 1,
@@ -366,6 +376,7 @@ public class ContractController : ControllerBase
             {
                 await _supabaseService.SaveAuditLogAsync(new AuditLogRecord
                 {
+                    UserId = GetUserId(),
                     Module = "contract_generate",
                     Step = 1,
                     Action = $"Poboljšani ugovor generiran: {result.ChangesSummary.Count} izmjena",

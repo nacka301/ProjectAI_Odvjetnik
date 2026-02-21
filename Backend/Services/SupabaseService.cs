@@ -252,6 +252,7 @@ public class SupabaseService
 
 public class EvaluationRecord
 {
+    public string? UserId { get; set; }
     public string PropertyType { get; set; } = "";
     public string Location { get; set; } = "";
     public double? SizeM2 { get; set; }
@@ -261,6 +262,7 @@ public class EvaluationRecord
 
 public class ContractAnalysisRecord
 {
+    public string? UserId { get; set; }
     public string DocumentType { get; set; } = "";
     public string Summary { get; set; } = "";
     public string OverallRisk { get; set; } = "";
@@ -271,6 +273,7 @@ public class ContractAnalysisRecord
 
 public class ChronologyRecord
 {
+    public string? UserId { get; set; }
     public int TotalDocuments { get; set; }
     public int TotalEvents { get; set; }
     public string DateRange { get; set; } = "";
@@ -279,6 +282,7 @@ public class ChronologyRecord
 
 public class LegalStrategyRecord
 {
+    public string? UserId { get; set; }
     public string KeyLegalIssue { get; set; } = "";
     public string ClientPosition { get; set; } = "kupac";
     public int WinProbability { get; set; }
@@ -290,6 +294,7 @@ public class LegalStrategyRecord
 
 public class InvoiceRecord
 {
+    public string? UserId { get; set; }
     public string InvoiceNumber { get; set; } = "";
     public string IssueDate { get; set; } = "";
     public string DueDate { get; set; } = "";
@@ -316,6 +321,7 @@ public class InvoiceRecord
 /// <summary>Record written to valuation_audits table.</summary>
 public class AuditResultRecord
 {
+    public string? UserId { get; set; }
     public string EvaluationId { get; set; } = "";
     public string Verdict { get; set; } = "";
     public int OverallConfidence { get; set; }
@@ -336,6 +342,7 @@ public class AuditResultRecord
 /// <summary>Record written to zk_analyses table.</summary>
 public class ZkAnalysisRecord
 {
+    public string? UserId { get; set; }
     public string PropertyId { get; set; } = "";
     public string? CadastralMunicipality { get; set; }
     public string? ParcelNumber { get; set; }
@@ -356,6 +363,7 @@ public class ZkAnalysisRecord
 /// <summary>Record written to audit_logs table (EU AI Act Article 13 compliance).</summary>
 public class AuditLogRecord
 {
+    public string? UserId { get; set; }
     public string Module { get; set; } = "";
     public string? AnalysisId { get; set; }
     public int Step { get; set; } = 1;
@@ -373,6 +381,7 @@ public class EvaluationReadRecord
 {
     public string Id { get; set; } = "";
     public string CreatedAt { get; set; } = "";
+    public string? UserId { get; set; }
     public string PropertyType { get; set; } = "";
     public string Location { get; set; } = "";
     public double? SizeM2 { get; set; }

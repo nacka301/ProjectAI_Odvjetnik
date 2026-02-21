@@ -32,7 +32,7 @@ public class InvoiceService
     /// Generate an e-invoice from an InvoiceRequest.
     /// Returns the full InvoiceResult with UBL 2.1 XML.
     /// </summary>
-    public async Task<InvoiceResult> GenerateInvoiceAsync(InvoiceRequest request)
+    public async Task<InvoiceResult> GenerateInvoiceAsync(InvoiceRequest request, string? userId = null)
     {
         _logger.LogInformation(
             "Generating e-invoice: module={Module}, net={Net:F2} EUR, PDV={Pdv}%",
@@ -91,6 +91,7 @@ public class InvoiceService
         // Save to Supabase
         await _supabaseService.SaveInvoiceAsync(new InvoiceRecord
         {
+            UserId = userId,
             InvoiceNumber = result.InvoiceNumber,
             IssueDate = result.IssueDate,
             DueDate = result.DueDate,

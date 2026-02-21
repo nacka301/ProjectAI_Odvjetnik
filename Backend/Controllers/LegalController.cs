@@ -39,6 +39,10 @@ public class LegalController : ControllerBase
         _logger = logger;
     }
 
+    // SECURITY: Extract user_id from x-user-id header (set by frontend auth)
+    private string? GetUserId() =>
+        Request.Headers.TryGetValue("x-user-id", out var val) ? val.FirstOrDefault() : null;
+
     // ═══════════════════════════════════════════════════════════
     //  1. LEGAL FEED — Dashboard widget
     // ═══════════════════════════════════════════════════════════
@@ -115,8 +119,10 @@ public class LegalController : ControllerBase
     /// <summary>Helper: persist strategy result to Supabase + audit log.</summary>
     private async Task SaveStrategyAsync(LegalStrategyResult result, string clientPosition)
     {
+        var userId = GetUserId();
         var id = await _supabaseService.SaveLegalStrategyAsync(new LegalStrategyRecord
         {
+            UserId = userId,
             KeyLegalIssue = result.KeyLegalIssue,
             ClientPosition = clientPosition,
             WinProbability = result.WinProbability,
@@ -131,6 +137,7 @@ public class LegalController : ControllerBase
         {
             new()
             {
+                UserId = userId,
                 Module = "legal_strategy",
                 AnalysisId = id,
                 Step = 1,
@@ -150,6 +157,7 @@ public class LegalController : ControllerBase
         {
             auditLogs.Add(new AuditLogRecord
             {
+                UserId = userId,
                 Module = "legal_strategy",
                 AnalysisId = id,
                 Step = step++,
