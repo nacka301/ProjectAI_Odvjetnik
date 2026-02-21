@@ -203,16 +203,16 @@ public class ValuationEngineDataDrivenTests
     [Fact]
     public void Meta_MinimumScenarioCount()
     {
-        Assert.True(_scenarios.Count >= 50,
-            $"Expected at least 50 scenarios, got {_scenarios.Count}");
+        Assert.True(_scenarios.Count >= 100,
+            $"Expected at least 100 scenarios, got {_scenarios.Count}");
     }
 
     [Fact]
     public void Meta_CategoriesAreDisverse()
     {
         var categories = _scenarios.Select(s => s.Category).Distinct().ToList();
-        Assert.True(categories.Count >= 8,
-            $"Expected at least 8 diverse categories, got {categories.Count}: {string.Join(", ", categories)}");
+        Assert.True(categories.Count >= 12,
+            $"Expected at least 12 diverse categories, got {categories.Count}: {string.Join(", ", categories)}");
     }
 
     // ══════════════════════════════════════════════════════════

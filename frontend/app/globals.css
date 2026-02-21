@@ -15,6 +15,21 @@
 body {
   background: var(--background);
   color: var(--foreground);
+  -webkit-text-size-adjust: 100%;
+  /* Prevent horizontal overflow from any child elements */
+  overflow-x: hidden;
+}
+
+/* Safe area insets for notched phones (iPhone X+) */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Tap highlight for touch devices */
+@media (hover: none) {
+  button, a, [role="button"] {
+    -webkit-tap-highlight-color: rgba(99, 102, 241, 0.1);
+  }
 }
 
 /* ═══ Processing screen animations ═══ */

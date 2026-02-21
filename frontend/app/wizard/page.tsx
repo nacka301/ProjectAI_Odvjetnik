@@ -283,7 +283,7 @@ export default function WizardPage() {
 
     {/* Normal page wrapper — hidden during PROCESSING */}
     {viewState !== "PROCESSING" && (
-    <div className="min-h-screen bg-gray-50 py-12 px-4 font-sans">
+    <div className="min-h-screen bg-gray-50 py-6 sm:py-12 px-4 font-sans">
       <div className="mx-auto max-w-3xl">
         <Link href="/" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mb-6">
           <ArrowLeft className="h-4 w-4" /> Natrag
@@ -292,8 +292,8 @@ export default function WizardPage() {
         {/* Header + Step indicator — INPUT only */}
         {viewState === "INPUT" && (
           <>
-            <div className="text-center mb-10">
-              <h1 className="text-3xl font-bold text-gray-900">
+            <div className="text-center mb-6 sm:mb-10">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
                 🏠 Wizard — Unos nekretnine
               </h1>
               <p className="mt-2 text-gray-500">
@@ -327,16 +327,16 @@ export default function WizardPage() {
           <div className="space-y-6">
             <div className="rounded-xl bg-white border border-gray-200 p-6">
               <h3 className="text-sm font-semibold text-gray-700 mb-4">Tip nekretnine</h3>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-3 gap-2 sm:gap-4">
                 {([
-                  { type: "Apartment" as PropertyType, icon: <Building2 className="h-8 w-8" />, label: "Stan" },
-                  { type: "House" as PropertyType, icon: <Home className="h-8 w-8" />, label: "Kuća" },
-                  { type: "Land" as PropertyType, icon: <TreePine className="h-8 w-8" />, label: "Zemljište" },
+                  { type: "Apartment" as PropertyType, icon: <Building2 className="h-6 w-6 sm:h-8 sm:w-8" />, label: "Stan" },
+                  { type: "House" as PropertyType, icon: <Home className="h-6 w-6 sm:h-8 sm:w-8" />, label: "Kuća" },
+                  { type: "Land" as PropertyType, icon: <TreePine className="h-6 w-6 sm:h-8 sm:w-8" />, label: "Zemljište" },
                 ]).map((opt) => (
                   <button
                     key={opt.type}
                     onClick={() => setPropertyType(opt.type)}
-                    className={`flex flex-col items-center gap-2 rounded-xl border-2 p-6 transition ${
+                    className={`flex flex-col items-center gap-1.5 sm:gap-2 rounded-xl border-2 p-3 sm:p-6 transition ${
                       propertyType === opt.type
                         ? "border-blue-500 bg-blue-50 text-blue-700"
                         : "border-gray-200 text-gray-500 hover:border-gray-300"
@@ -382,9 +382,9 @@ export default function WizardPage() {
 
             {/* ── APARTMENT ── */}
             {propertyType === "Apartment" && (
-              <div className="rounded-xl bg-white border border-gray-200 p-6 space-y-5">
+              <div className="rounded-xl bg-white border border-gray-200 p-4 sm:p-6 space-y-5">
                 <h3 className="text-sm font-semibold text-gray-700">🏢 Detalji stana</h3>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <NumberInput label="Površina (m²) *" value={apt.area_m2}
                     onChange={(v) => setApt({ ...apt, area_m2: v })} min={10} max={300} />
                   <NumberInput label="Broj soba *" value={apt.room_count}
@@ -401,7 +401,7 @@ export default function WizardPage() {
                 <SelectInput label="Stanje *" value={apt.condition}
                   options={Object.entries(CONDITION_LABELS).map(([k, v]) => ({ value: k, label: v }))}
                   onChange={(v) => setApt({ ...apt, condition: v as PropertyCondition })} />
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <SelectInput label="Orijentacija" value={apt.orientation}
                     options={Object.entries(ORIENTATION_LABELS).map(([k, v]) => ({ value: k, label: v }))}
                     onChange={(v) => setApt({ ...apt, orientation: v as Orientation })} />
@@ -425,9 +425,9 @@ export default function WizardPage() {
 
             {/* ── HOUSE ── */}
             {propertyType === "House" && (
-              <div className="rounded-xl bg-white border border-gray-200 p-6 space-y-5">
+              <div className="rounded-xl bg-white border border-gray-200 p-4 sm:p-6 space-y-5">
                 <h3 className="text-sm font-semibold text-gray-700">🏡 Detalji kuće</h3>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <NumberInput label="Stambena površina (m²) *" value={house.living_area_m2}
                     onChange={(v) => setHouse({ ...house, living_area_m2: v })} min={20} max={2000} />
                   <NumberInput label="Okućnica (m²) *" value={house.land_area_m2}
@@ -443,7 +443,7 @@ export default function WizardPage() {
                 <SelectInput label="Stanje *" value={house.condition}
                   options={Object.entries(CONDITION_LABELS).map(([k, v]) => ({ value: k, label: v }))}
                   onChange={(v) => setHouse({ ...house, condition: v as PropertyCondition })} />
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <SelectInput label="Orijentacija" value={house.orientation}
                     options={Object.entries(ORIENTATION_LABELS).map(([k, v]) => ({ value: k, label: v }))}
                     onChange={(v) => setHouse({ ...house, orientation: v as Orientation })} />
@@ -462,9 +462,9 @@ export default function WizardPage() {
 
             {/* ── LAND ── */}
             {propertyType === "Land" && (
-              <div className="rounded-xl bg-white border border-gray-200 p-6 space-y-5">
+              <div className="rounded-xl bg-white border border-gray-200 p-4 sm:p-6 space-y-5">
                 <h3 className="text-sm font-semibold text-gray-700">🌳 Detalji zemljišta</h3>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <NumberInput label="Površina (m²) *" value={land.land_area_m2}
                     onChange={(v) => setLand({ ...land, land_area_m2: v })} min={50} max={1000000} />
                   <NumberInput label="Udaljenost od mora (m)" value={land.distance_to_sea_m || 0}

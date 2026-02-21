@@ -215,7 +215,7 @@ export default function AuditPage() {
 
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center justify-center gap-3">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center justify-center gap-2 sm:gap-3">
             <ShieldCheck className="h-8 w-8 text-indigo-600" />
             AI Audit — Verifikacija Procjena
           </h1>

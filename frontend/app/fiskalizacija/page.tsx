@@ -301,8 +301,8 @@ export default function FiskalizacijaPage() {
               </div>
 
               {/* Amounts */}
-              <div className="bg-gradient-to-r from-slate-50 to-slate-100 rounded-xl p-5 mb-6">
-                <div className="grid grid-cols-4 gap-4 text-center">
+              <div className="bg-gradient-to-r from-slate-50 to-slate-100 rounded-xl p-4 sm:p-5 mb-6">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 text-center">
                   <div>
                     <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Neto</p>
                     <p className="text-lg font-bold text-slate-900">{result.net_amount.toLocaleString("hr-HR", { minimumFractionDigits: 2 })} €</p>
@@ -326,17 +326,17 @@ export default function FiskalizacijaPage() {
               <div className="mb-6">
                 <h3 className="text-xs font-semibold text-slate-800 uppercase tracking-wider mb-2">Stavke</h3>
                 <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-                  <div className="grid grid-cols-[auto_1fr_auto_auto] gap-3 px-4 py-2 bg-slate-50 text-[10px] text-slate-500 uppercase tracking-wider font-semibold border-b border-slate-200">
+                  <div className="grid grid-cols-[auto_1fr_auto] sm:grid-cols-[auto_1fr_auto_auto] gap-2 sm:gap-3 px-3 sm:px-4 py-2 bg-slate-50 text-[10px] text-slate-500 uppercase tracking-wider font-semibold border-b border-slate-200">
                     <span>#</span>
                     <span>Opis usluge</span>
-                    <span>Kol.</span>
+                    <span className="hidden sm:block">Kol.</span>
                     <span className="text-right">Iznos</span>
                   </div>
                   {result.line_items.map((item) => (
-                    <div key={item.line_number} className="grid grid-cols-[auto_1fr_auto_auto] gap-3 px-4 py-3 text-sm">
+                    <div key={item.line_number} className="grid grid-cols-[auto_1fr_auto] sm:grid-cols-[auto_1fr_auto_auto] gap-2 sm:gap-3 px-3 sm:px-4 py-3 text-sm">
                       <span className="text-slate-400 font-mono">{item.line_number}.</span>
-                      <span className="text-slate-800">{item.description}</span>
-                      <span className="text-slate-500">{item.quantity}</span>
+                      <span className="text-slate-800 break-words">{item.description}</span>
+                      <span className="text-slate-500 hidden sm:block">{item.quantity}</span>
                       <span className="text-right font-medium text-slate-900">{item.line_net_amount.toLocaleString("hr-HR", { minimumFractionDigits: 2 })} €</span>
                     </div>
                   ))}
@@ -344,7 +344,7 @@ export default function FiskalizacijaPage() {
               </div>
 
               {/* Actions */}
-              <div className="flex flex-wrap gap-3 mb-6">
+              <div className="flex flex-wrap gap-2 sm:gap-3 mb-6">
                 <button
                   onClick={downloadXml}
                   className="inline-flex items-center gap-2 bg-emerald-600 text-white text-sm font-medium px-5 py-2.5 rounded-lg hover:bg-emerald-700 transition"
@@ -487,7 +487,7 @@ export default function FiskalizacijaPage() {
                     }`}
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">Adresa</label>
                     <input
@@ -583,7 +583,7 @@ export default function FiskalizacijaPage() {
                     }`}
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">Adresa</label>
                     <input
@@ -637,7 +637,7 @@ export default function FiskalizacijaPage() {
               <CreditCard className="h-4 w-4 text-amber-600" />
               Financijski podaci
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Neto iznos (EUR) *</label>
                 <input
@@ -733,9 +733,9 @@ export default function FiskalizacijaPage() {
       {/* Footer */}
       <footer className="max-w-5xl mx-auto px-4 sm:px-6 pb-6">
         <div className="border-t border-slate-200 pt-4 text-center space-y-1 text-[11px] text-slate-400">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-1">
             <span>PravoTek v5.0 · Fiskalizacija 2.0</span>
-            <span>
+            <span className="text-center">
               e-Račun sukladan EN 16931 / UBL 2.1 — Zakon o elektroničkom izdavanju računa
             </span>
           </div>

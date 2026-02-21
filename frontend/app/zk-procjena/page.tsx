@@ -701,19 +701,19 @@ export default function ZkProcjenaPage() {
 
             {/* PDF file selected — analyze button */}
             {mode === "pdf" && file && (
-              <div className="flex items-center justify-between rounded-lg bg-white border border-gray-200 p-4">
-                <div className="flex items-center gap-3">
-                  <FileText className="h-5 w-5 text-indigo-600" />
-                  <span className="text-sm font-medium text-gray-700 truncate max-w-xs">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-lg bg-white border border-gray-200 p-4">
+                <div className="flex items-center gap-3 min-w-0">
+                  <FileText className="h-5 w-5 text-indigo-600 shrink-0" />
+                  <span className="text-sm font-medium text-gray-700 truncate">
                     {file.name}
                   </span>
-                  <span className="text-xs text-gray-400">
+                  <span className="text-xs text-gray-400 shrink-0">
                     ({(file.size / 1024).toFixed(0)} KB)
                   </span>
                 </div>
                 <button
                   onClick={runUnified}
-                  className="rounded-lg bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition flex items-center gap-2"
+                  className="w-full sm:w-auto rounded-lg bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition flex items-center justify-center gap-2"
                 >
                   <BookOpen className="h-4 w-4" />
                   Analiziraj i procijeni
@@ -769,14 +769,14 @@ export default function ZkProcjenaPage() {
               />
             </div>
 
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                <Landmark className="h-6 w-6 text-indigo-600" />
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2">
+                <Landmark className="h-5 w-5 sm:h-6 sm:w-6 text-indigo-600 shrink-0" />
                 Izvještaj o pravnom statusu nekretnine
               </h2>
               <button
                 onClick={() => setShowZkDetails(!showZkDetails)}
-                className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1"
+                className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1 shrink-0"
               >
                 {showZkDetails ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                 {showZkDetails ? "Sakrij detalje" : "Prikaži detalje"}
@@ -789,8 +789,8 @@ export default function ZkProcjenaPage() {
               zkAnalysis.overall_status === "UVJETNO" ? "border-yellow-500 bg-yellow-50" :
               "border-green-500 bg-green-50"
             }`}>
-              <div className="flex items-center gap-4">
-                <div className={`flex items-center justify-center h-16 w-16 rounded-full text-3xl ${
+              <div className="flex items-center gap-3 sm:gap-4">
+                <div className={`flex items-center justify-center h-12 w-12 sm:h-16 sm:w-16 rounded-full text-xl sm:text-3xl shrink-0 ${
                   zkAnalysis.overall_status === "RIZIČNO" ? "bg-red-200" :
                   zkAnalysis.overall_status === "UVJETNO" ? "bg-yellow-200" :
                   "bg-green-200"
@@ -799,8 +799,8 @@ export default function ZkProcjenaPage() {
                    zkAnalysis.overall_status === "UVJETNO" ? "🟡" : "🟢"}
                 </div>
                 <div className="flex-1">
-                  <div className="flex items-center gap-3">
-                    <h3 className={`text-2xl font-bold ${
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                    <h3 className={`text-xl sm:text-2xl font-bold ${
                       zkAnalysis.overall_status === "RIZIČNO" ? "text-red-800" :
                       zkAnalysis.overall_status === "UVJETNO" ? "text-yellow-800" :
                       "text-green-800"
@@ -879,9 +879,9 @@ export default function ZkProcjenaPage() {
             )}
 
             {/* ─── DUE DILIGENCE QUICK CHECKS ─── */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
               {/* Ownership Check */}
-              <div className={`rounded-xl border p-5 ${
+              <div className={`rounded-xl border p-4 sm:p-5 ${
                 zkAnalysis.ownership_status === "1/1 ČISTO" ? "border-green-200 bg-green-50" :
                 zkAnalysis.ownership_status === "NERAZJAŠNJENO" ? "border-red-200 bg-red-50" :
                 "border-yellow-200 bg-yellow-50"
@@ -1119,7 +1119,7 @@ export default function ZkProcjenaPage() {
                 </div>
 
                 {/* Metric grid */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-4">
                   <div className="rounded-lg bg-white/70 p-3 text-center">
                     <p className="text-2xl font-bold text-gray-900">{zkAnalysis.encumbrance_risk_matrix.total_active}</p>
                     <p className="text-[10px] font-semibold text-gray-500 uppercase">Ukupno aktivni</p>
@@ -1293,8 +1293,8 @@ export default function ZkProcjenaPage() {
 
             {/* ─── DUE DILIGENCE SUMMARY ─── */}
             {zkAnalysis.due_diligence_summary && (
-              <div className="rounded-xl bg-gradient-to-br from-slate-50 to-indigo-50 border border-indigo-200 p-6">
-                <div className="flex items-center justify-between mb-3">
+              <div className="rounded-xl bg-gradient-to-br from-slate-50 to-indigo-50 border border-indigo-200 p-4 sm:p-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
                   <h3 className="text-sm font-semibold text-indigo-800 uppercase tracking-wide flex items-center gap-2">
                     <ShieldCheck className="h-4 w-4" />
                     Pravno mišljenje
@@ -1474,14 +1474,14 @@ export default function ZkProcjenaPage() {
         {/* ===================== VALUATION RESULTS ===================== */}
         {hasResult && valuation && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                <Scale className="h-6 w-6 text-blue-600" />
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2">
+                <Scale className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600 shrink-0" />
                 Procjena tržišne vrijednosti
               </h2>
               <button
                 onClick={() => setShowValuation(!showValuation)}
-                className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1"
+                className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1 shrink-0"
               >
                 {showValuation ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                 {showValuation ? "Sakrij" : "Prikaži"}
@@ -1491,11 +1491,11 @@ export default function ZkProcjenaPage() {
             {showValuation && (
               <div className="space-y-6">
                 {/* Value Card */}
-                <div className="rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 p-8 text-center text-white shadow-lg">
-                  <p className="text-sm uppercase tracking-wide opacity-80 mb-1">
+                <div className="rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 p-5 sm:p-8 text-center text-white shadow-lg">
+                  <p className="text-xs sm:text-sm uppercase tracking-wide opacity-80 mb-1">
                     Procijenjena tržišna vrijednost
                   </p>
-                  <p className="text-4xl font-bold">
+                  <p className="text-3xl sm:text-4xl font-bold">
                     {valuation.estimated_value_eur.toLocaleString("hr-HR")} €
                   </p>
                   {/* V4 Math Confidence (primary) */}
@@ -1939,7 +1939,7 @@ export default function ZkProcjenaPage() {
 
                 {/* Valuation Reasoning */}
                 <div className="rounded-xl bg-white border border-gray-200 overflow-hidden">
-                  <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 bg-gray-50">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 sm:px-5 py-3 border-b border-gray-100 bg-gray-50">
                     <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
                       Obrazloženje procjene
                     </h3>

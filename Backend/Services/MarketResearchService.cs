@@ -2973,6 +2973,17 @@ public class MarketResearchService
                 continue;
             }
 
+            // ── GATE 5b (V83): INDEX OGLASI category page filter ──
+            // INDEX OGLASI search result pages are category/aggregation pages,
+            // not individual listings. They contain multiple prices and pollute
+            // the comp pool. Reject any result whose title contains "| INDEX OGLASI".
+            if (r.Title.Contains("| INDEX OGLASI", StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogDebug("[{Phase}] REJECTED (INDEX OGLASI category page): {Title}",
+                    phaseName, Truncate(r.Title, 60));
+                continue;
+            }
+
             // ── GATE 6: TYPE GATE — reject OBVIOUS wrong property types ──
             // Only catches clear mismatches (stan vs kuća, building vs land).
             // Subtle distinctions (građevinsko vs poljoprivredno) are handled by
@@ -3418,6 +3429,15 @@ public class MarketResearchService
         detectedType.Contains("zemljišt", StringComparison.OrdinalIgnoreCase) ||
         detectedType.Contains("parcela", StringComparison.OrdinalIgnoreCase) ||
         detectedType.Contains("oranica", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// V84: Returns true if detected type is an apartment/flat.
+    /// Used by sanity check — apartments have higher price floor than houses.
+    /// </summary>
+    public static bool IsApartmentType(string detectedType) =>
+        detectedType.Contains("stan", StringComparison.OrdinalIgnoreCase) ||
+        detectedType.Contains("apartman", StringComparison.OrdinalIgnoreCase) ||
+        detectedType.Contains("garsonijera", StringComparison.OrdinalIgnoreCase);
 
     private static string Truncate(string text, int maxLength) =>
         text.Length <= maxLength ? text : text[..maxLength] + "…";

@@ -551,34 +551,34 @@ export default function ChronologyPage() {
             </div>
 
             {/* Summary Card */}
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-              <div className="grid grid-cols-3 gap-4 text-center">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 sm:p-6">
+              <div className="grid grid-cols-3 gap-2 sm:gap-4 text-center">
                 <div>
-                  <div className="text-3xl font-bold text-violet-600">
+                  <div className="text-2xl sm:text-3xl font-bold text-violet-600">
                     {result.total_documents_processed}
                   </div>
-                  <div className="text-xs text-gray-400 mt-1">
-                    Dokumenata obrađeno
+                  <div className="text-[10px] sm:text-xs text-gray-400 mt-1">
+                    Dokumenata
                   </div>
                 </div>
                 <div>
-                  <div className="text-3xl font-bold text-gray-900">
+                  <div className="text-2xl sm:text-3xl font-bold text-gray-900">
                     {result.total_events_extracted}
                   </div>
-                  <div className="text-xs text-gray-400 mt-1">
-                    Događaja pronađeno
+                  <div className="text-[10px] sm:text-xs text-gray-400 mt-1">
+                    Događaja
                   </div>
                 </div>
                 <div>
-                  <div className="text-3xl font-bold text-red-500">
+                  <div className="text-2xl sm:text-3xl font-bold text-red-500">
                     {result.errors.length}
                   </div>
-                  <div className="text-xs text-gray-400 mt-1">Grešaka</div>
+                  <div className="text-[10px] sm:text-xs text-gray-400 mt-1">Grešaka</div>
                 </div>
               </div>
 
               {/* Confidence Legend */}
-              <div className="flex items-center justify-center gap-6 mt-4 pt-4 border-t border-gray-100">
+              <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-6 mt-4 pt-4 border-t border-gray-100">
                 <div className="flex items-center gap-1.5 text-xs text-gray-500">
                   <span className="w-2.5 h-2.5 rounded-full bg-green-500" />
                   Potvrđen datum
@@ -649,14 +649,14 @@ export default function ChronologyPage() {
                               </div>
 
                               {/* Event card */}
-                              <div className="flex-1 bg-white rounded-lg border border-gray-200 shadow-sm p-4 hover:shadow-md transition">
-                                <div className="flex items-start justify-between gap-3">
+                              <div className="flex-1 bg-white rounded-lg border border-gray-200 shadow-sm p-3 sm:p-4 hover:shadow-md transition">
+                                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 sm:gap-3">
                                   <p className="text-sm text-gray-800 leading-relaxed flex-1">
                                     {evt.event_description}
                                   </p>
                                   <ConfidenceBadge level={evt.confidence} />
                                 </div>
-                                <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
+                                <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-2 text-xs text-gray-400">
                                   {evt.time && (
                                     <span className="flex items-center gap-1">
                                       <Clock className="h-3 w-3" />

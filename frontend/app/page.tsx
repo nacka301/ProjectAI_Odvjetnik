@@ -169,8 +169,8 @@ function TourOverlay({
       {/* Backdrop */}
       <div className="absolute inset-0 bg-slate-900/60 pointer-events-auto" onClick={onSkip} />
       {/* Tooltip (centered at bottom) */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 pointer-events-auto">
-        <div className="bg-white rounded-xl shadow-2xl border border-slate-200 p-5 w-[380px]">
+      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 pointer-events-auto w-[calc(100%-2rem)] max-w-[380px]">
+        <div className="bg-white rounded-xl shadow-2xl border border-slate-200 p-4 sm:p-5">
           <div className="flex items-center gap-2 mb-2">
             <Eye className="h-4 w-4 text-blue-600" />
             <span className="text-sm font-bold text-slate-900">{title}</span>
@@ -414,28 +414,28 @@ export default function Dashboard() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             <button
               onClick={() => { setShowTour(true); setTourStep(0); }}
-              className="text-xs text-slate-500 hover:text-white transition flex items-center gap-1"
+              className="text-xs text-slate-500 hover:text-white transition flex items-center gap-1 p-1.5 sm:p-0"
               title="Pokreni vodič"
             >
-              <CircleHelp className="h-3.5 w-3.5" />
-              Vodič
+              <CircleHelp className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
+              <span className="hidden sm:inline">Vodič</span>
             </button>
             <Link
               href="/history"
-              className="text-xs text-slate-400 hover:text-white transition flex items-center gap-1"
+              className="text-xs text-slate-400 hover:text-white transition flex items-center gap-1 p-1.5 sm:p-0"
             >
-              <Clock className="h-3.5 w-3.5" />
-              Puna povijest
+              <Clock className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
+              <span className="hidden sm:inline">Puna povijest</span>
             </Link>
             <Link
               href="/audit"
-              className="text-xs text-slate-400 hover:text-white transition flex items-center gap-1"
+              className="text-xs text-slate-400 hover:text-white transition flex items-center gap-1 p-1.5 sm:p-0"
             >
-              <ShieldAlert className="h-3.5 w-3.5" />
-              AI Audit
+              <ShieldAlert className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
+              <span className="hidden sm:inline">AI Audit</span>
             </Link>
           </div>
         </div>
@@ -657,10 +657,10 @@ export default function Dashboard() {
             {!loading && activity.length > 0 && (
               <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                 {/* Table header */}
-                <div className="grid grid-cols-[1fr_auto_auto_44px] gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-[11px] text-slate-400 uppercase tracking-wider font-medium">
+                <div className="grid grid-cols-[1fr_44px] sm:grid-cols-[1fr_auto_auto_44px] gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-[11px] text-slate-400 uppercase tracking-wider font-medium">
                   <span>Predmet</span>
-                  <span className="w-28 text-center">Status</span>
-                  <span className="w-24 text-center">e-Sud</span>
+                  <span className="w-28 text-center hidden sm:block">Status</span>
+                  <span className="w-24 text-center hidden sm:block">e-Sud</span>
                   <span />
                 </div>
 
@@ -669,7 +669,7 @@ export default function Dashboard() {
                   {activity.slice(0, 12).map((item) => (
                     <div
                       key={item.id}
-                      className="grid grid-cols-[1fr_auto_auto_44px] gap-2 items-center px-4 py-3 hover:bg-slate-50 transition group"
+                      className="grid grid-cols-[1fr_44px] sm:grid-cols-[1fr_auto_auto_44px] gap-2 items-center px-3 sm:px-4 py-3 hover:bg-slate-50 transition group"
                     >
                       {/* Left: type icon + title + subtitle */}
                       <Link href="/history" className="flex items-center gap-3 min-w-0">
@@ -694,7 +694,7 @@ export default function Dashboard() {
                       </Link>
 
                       {/* Badge */}
-                      <div className="w-28 flex justify-center">
+                      <div className="w-28 justify-center hidden sm:flex">
                         {item.badge && (
                           <span className={`inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full ${
                             item.badgeColor ? BADGE_COLORS[item.badgeColor] || "text-slate-500 bg-slate-100" : "text-slate-500 bg-slate-100"
@@ -705,7 +705,7 @@ export default function Dashboard() {
                       </div>
 
                       {/* e-Komunikacija button */}
-                      <div className="w-24 flex justify-center">
+                      <div className="w-24 justify-center hidden sm:flex">
                         <button
                           onClick={(e) => {
                             e.preventDefault();
@@ -780,13 +780,13 @@ export default function Dashboard() {
       {/* Footer */}
       <footer className="max-w-7xl mx-auto px-4 sm:px-6 pb-6">
         <div className="border-t border-slate-200 pt-4 text-center space-y-1 text-[11px] text-slate-400">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-1">
             <span>PravoTek v2.0</span>
-            <span>
+            <span className="text-center">
               AI analiza ne predstavlja pravni savjet sukladno čl. 1. Zakona o odvjetništvu (NN 9/94, 18/11)
             </span>
           </div>
-          <p>Obrada osobnih podataka provodi se sukladno Uredbi (EU) 2016/679 (GDPR). Korisnik potvrđuje da ima pravo na pristup dostavljenom dokumentu.</p>
+          <p className="px-2 sm:px-0">Obrada osobnih podataka provodi se sukladno Uredbi (EU) 2016/679 (GDPR). Korisnik potvrđuje da ima pravo na pristup dostavljenom dokumentu.</p>
         </div>
       </footer>
     </div>

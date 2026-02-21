@@ -640,11 +640,11 @@ export default function ContractAnalysisPage() {
             </div>
 
             {/* V58: Generate Improved Contract Button */}
-            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl border border-emerald-200 shadow-sm p-5">
-              <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl border border-emerald-200 shadow-sm p-4 sm:p-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
                 <div className="flex-1 min-w-0">
                   <h3 className="font-bold text-emerald-800 flex items-center gap-2">
-                    <Sparkles className="h-5 w-5 text-emerald-600" />
+                    <Sparkles className="h-5 w-5 text-emerald-600 shrink-0" />
                     Generiraj poboljšani ugovor
                   </h3>
                   <p className="text-sm text-emerald-600 mt-1">
@@ -746,27 +746,27 @@ export default function ContractAnalysisPage() {
               </div>
 
               {/* Stats */}
-              <div className="grid grid-cols-4 gap-4 mt-4 pt-4 border-t border-gray-100">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mt-4 pt-4 border-t border-gray-100">
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-red-600">
+                  <div className="text-xl sm:text-2xl font-bold text-red-600">
                     {result.red_flags.length}
                   </div>
                   <div className="text-xs text-gray-400">Crvene zastavice</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-red-800">
+                  <div className="text-xl sm:text-2xl font-bold text-red-800">
                     {result.logical_traps?.length ?? 0}
                   </div>
                   <div className="text-xs text-gray-400">Zamke (o1)</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-amber-600">
+                  <div className="text-xl sm:text-2xl font-bold text-amber-600">
                     {result.warnings.length}
                   </div>
                   <div className="text-xs text-gray-400">Upozorenja</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-green-600">
+                  <div className="text-xl sm:text-2xl font-bold text-green-600">
                     {result.positives.length}
                   </div>
                   <div className="text-xs text-gray-400">Pozitivno</div>
@@ -1247,7 +1247,7 @@ export default function ContractAnalysisPage() {
                     </li>
                   ))}
                 </ul>
-                <div className="px-6 py-2 bg-indigo-50 border-t border-indigo-200 text-xs text-indigo-600 flex items-center gap-4">
+                <div className="px-4 sm:px-6 py-2 bg-indigo-50 border-t border-indigo-200 text-xs text-indigo-600 flex flex-wrap items-center gap-2 sm:gap-4">
                   <span>Lažnih uzbuna uklonjeno: {result.critic_review.false_positives_removed}</span>
                   <span>Korekcije ozbiljnosti: {result.critic_review.severity_downgrades}</span>
                   <span>Vrijeme: {result.critic_review.critic_time_seconds.toFixed(1)}s</span>
@@ -1258,10 +1258,10 @@ export default function ContractAnalysisPage() {
             {/* ═══ V58: GENERATED IMPROVED CONTRACT ═══ */}
             {showGenerated && generatedContract && generatedContract.improved_contract && (
               <div id="generated-contract" className="bg-white rounded-xl border-2 border-emerald-300 shadow-lg overflow-hidden">
-                <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-4 flex items-center justify-between">
+                <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div className="flex items-center gap-2 text-white">
-                    <Sparkles className="h-5 w-5" />
-                    <h2 className="font-bold text-lg">Poboljšani ugovor</h2>
+                    <Sparkles className="h-5 w-5 shrink-0" />
+                    <h2 className="font-bold text-base sm:text-lg">Poboljšani ugovor</h2>
                     <span className="text-emerald-200 text-sm ml-2">
                       ({generatedContract.changes_summary?.length || 0} izmjena)
                     </span>

@@ -1923,4 +1923,110 @@ public class HouseValuationTests
             AiSizeM2 = sizeM2,
             AiCondition = condition,
         };
+
+    // ╔═══════════════════════════════════════════════════════════════╗
+    // ║  V82 — AI Similarity Zero Override + Croatian Stem Matching  ║
+    // ╚═══════════════════════════════════════════════════════════════╝
+
+    /// <summary>
+    /// Reproduces the critical V82 bug: AI returns similarity_score=0 for ALL comps
+    /// despite them being from the SAME city (Hvar). Without the fix, all comps
+    /// are filtered out by similarity floor (45%), resulting in 0 EUR valuation.
+    /// With V82 fix, math fallback rescues the comps via CroatianStemMatch.
+    /// </summary>
+    [Fact]
+    public void V82_StoneHouseHvar_AiReturnsZero_MathFallbackRescues()
+    {
+        // Comps are from Hvar — titles use Croatian locative "Hvaru"
+        var comps = new List<ComparableSearchResult>
+        {
+            MakeListing("Autentičan okvir za novo poglavlje na otoku Hvaru", "Kamena kuća 120 m², Hvar, Dol", 280000, 2333, 120, "original"),
+            MakeListing("Hvar, Dol - djelomično renovirana kamena kuća", "Kamena kuća 90 m², Hvar", 220000, 2444, 90, "good"),
+            MakeListing("Kamena kuća s pogledom na more, Hvaru", "Kuća 100 m², Hvar", 350000, 3500, 100, "renovated"),
+            MakeListing("Kuća na otoku Hvaru, Stari Grad", "Kuća 80 m², kamena, Hvar", 180000, 2250, 80, "original"),
+            MakeListing("Prilika - kuća u Puli", "Kuća Pula 100 m²", 150000, 1500, 100, "good"),
+        };
+
+        // Simulate AI returning 0 for ALL comps (the bug)
+        foreach (var c in comps) c.AiSimilarityScore = 0.0;
+
+        var property = MakeHouseProperty("Kamena kuća na otoku Hvaru, kamena gradnja", 100, "Hvar, Stari Grad", "original");
+        var result = RunEngine(property, "Hvar", comps, "Hvar, Stari Grad");
+
+        // With fix: math fallback should rescue Hvar comps, resulting in non-zero valuation
+        Assert.True(result.EstimatedValueEur > 0,
+            $"V82 BUG: Stone house in Hvar should NOT be 0 EUR even when AI returns all zeros. Got {result.EstimatedValueEur}");
+        Assert.True(result.EstimatedValueEur > 50_000,
+            $"Hvar stone house should be >50k, got {result.EstimatedValueEur}");
+        Assert.True(result.EstimatedValueEur < 500_000,
+            $"Hvar stone house should be <500k, got {result.EstimatedValueEur}");
+    }
+
+    /// <summary>
+    /// Tests that Croatian locative forms ("u Puli", "u Rovinju") are correctly matched
+    /// when AI returns zero similarity, ensuring math fallback uses stem matching.
+    /// </summary>
+    [Fact]
+    public void V82_CroatianLocativeCase_PulaComps_AiZero_MathRescues()
+    {
+        var comps = new List<ComparableSearchResult>
+        {
+            MakeListing("Prilika u Puli - kuća s pogledom", "Kuća 120 m² u Puli", 200000, 1667, 120, "good"),
+            MakeListing("Kuća u Puli, Verudela", "Kuća 100 m², Pula, Verudela", 250000, 2500, 100, "renovated"),
+            MakeListing("Kamena kuća Pula centar", "Kuća 80 m², Pula centar", 180000, 2250, 80, "good"),
+            MakeListing("Kuća na atraktivnoj lokaciji u Puli", "Kuća 150 m², Pula", 270000, 1800, 150, "good"),
+        };
+
+        // AI gave 0 for all (the bug — Croatian dative "Puli" confused the model)
+        foreach (var c in comps) c.AiSimilarityScore = 0.0;
+
+        var property = MakeHouseProperty("Kuća u Puli centar", 110, "Pula, centar", "good");
+        var result = RunEngine(property, "Pula", comps, "Pula, centar");
+
+        Assert.True(result.EstimatedValueEur > 0,
+            $"V82 BUG: Pula house should NOT be 0 EUR. Got {result.EstimatedValueEur}");
+        Assert.True(result.EstimatedValueEur > 80_000,
+            $"Pula house should be >80k, got {result.EstimatedValueEur}");
+    }
+
+    /// <summary>
+    /// Ensures that AI zero override does NOT rescue comps from genuinely wrong cities.
+    /// Comps from Split should still get filtered when target is in Zagreb.
+    /// Uses manual market setup to keep comp URLs reflecting their actual city (Split).
+    /// </summary>
+    [Fact]
+    public void V82_AiZero_WrongCity_StillFiltered()
+    {
+        // Comps are from Split — URLs and titles reflect Split, NOT Zagreb
+        var comps = new List<ComparableSearchResult>
+        {
+            new() { Title = "Kuća u Splitu Meje", Content = "Kuća 120 m², Split, Meje",
+                     Url = "https://nekretnine.hr/split/meje/kuca-u-splitu-meje",
+                     ListedPriceEur = 300000, ListedPricePerM2 = 2500, AiSizeM2 = 120,
+                     AiCondition = "good", AiSimilarityScore = 0.0 },
+            new() { Title = "Kuća Split Firule", Content = "Kuća 100 m², Split, Firule",
+                     Url = "https://nekretnine.hr/split/firule/kuca-split-firule",
+                     ListedPriceEur = 250000, ListedPricePerM2 = 2500, AiSizeM2 = 100,
+                     AiCondition = "good", AiSimilarityScore = 0.0 },
+        };
+
+        var property = MakeHouseProperty("Kuća Zagreb centar", 110, "Zagreb, centar", "good");
+
+        var market = new MarketResearchResult
+        {
+            RegionName = "Zagreb",
+            DetectedPropertyType = "kuća",
+            ActiveListings = comps,
+            RegionalData = [],
+            SearchPhaseUsed = "Primary",
+            Confidence = new ConfidenceScore { Level = "Medium", Score = 60 },
+        };
+
+        var result = _engine.Calculate(property, market);
+
+        // These comps are truly from wrong city — math score will be low, 
+        // V82 override won't rescue them (mathScore <= 0.25 for wrong city)
+        Assert.True(result.EstimatedValueEur == 0 || result.UsablePricePoints == 0,
+            $"Wrong-city comps should be filtered when AI correctly returns 0. Value={result.EstimatedValueEur}, comps={result.UsablePricePoints}");
+    }
 }

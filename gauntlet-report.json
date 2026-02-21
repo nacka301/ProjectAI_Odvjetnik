@@ -1,0 +1,27 @@
+{
+  "timestamp": "2026-02-21T02:04:02.850Z",
+  "total": 1,
+  "passed": 0,
+  "failed": 1,
+  "passRate": "0.0%",
+  "failures": [
+    {
+      "id": 6,
+      "city": "Zadar",
+      "error": "EstimatedValueEur = 0",
+      "elapsed": "23.5"
+    }
+  ],
+  "results": [
+    {
+      "id": 6,
+      "city": "Zadar",
+      "status": "FAIL",
+      "value": null,
+      "expected": "40000-250000",
+      "elapsed": "23.5",
+      "confidence": null,
+      "comps": null
+    }
+  ]
+}

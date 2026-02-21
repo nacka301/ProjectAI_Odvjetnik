@@ -151,7 +151,10 @@ public class ValuationEngine
     private static readonly string[] CenterLocationKeywords =
         ["centar grada", "centar", "stari grad", "uži centar", "strogi centar",
          "strogom centru", "historijska jezgra", "povijesna jezgra",
-         "širem centru", "širi centar", "city center", "old town"];
+         "širem centru", "širi centar", "city center", "old town",
+         // V83: Croatian inflected forms — "staroj jezgri" is locative of "stara jezgra"
+         "stara jezgra", "staroj jezgri", "jezgra grada", "jezgri grada",
+         "jezgra", "jezgri"];
 
     private static readonly string[] PremiumLandmarkKeywords =
         ["dioklecijanova palača", "dioklecijanova", "riva", "marjan",
@@ -243,6 +246,47 @@ public class ValuationEngine
         return false;
     }
 
+    /// <summary>
+    /// V84: Returns TRUE if the listing is a news article, blog post, GoHome aggregator page,
+    /// or market intelligence (Phase6-Intel) — NOT a real property listing.
+    /// These must NEVER enter the math engine as comparable price points.
+    /// </summary>
+    private static bool IsNewsOrArticle(ComparableSearchResult listing)
+    {
+        // Phase6-Intel articles are tagged with this prefix
+        if (listing.Content.StartsWith("[REGIONALNI TRŽIŠNI PODACI]", StringComparison.Ordinal))
+            return true;
+
+        string urlLower = listing.Url.ToLowerInvariant();
+        string titleLower = listing.Title.ToLowerInvariant();
+
+        // GoHome aggregator — market reports, not real listings
+        if (urlLower.Contains("gohome.hr"))
+            return true;
+
+        // News/blog domains that are NOT listing portals
+        if (urlLower.Contains("/blog") || urlLower.Contains("/vijesti") ||
+            urlLower.Contains("/news") || urlLower.Contains("/article") ||
+            urlLower.Contains("/clanak") || urlLower.Contains("/magazin"))
+            return true;
+
+        // Market report indicators in title
+        if (titleLower.Contains("prosječna cijena") || titleLower.Contains("prosjecna cijena") ||
+            titleLower.Contains("tržište nekretnina") || titleLower.Contains("trziste nekretnina") ||
+            titleLower.Contains("market report") || titleLower.Contains("analiza tržišta") ||
+            titleLower.Contains("analiza trzista") || titleLower.Contains("cijena kvadrata"))
+            return true;
+
+        // No listed price AND no price per m² from portal → likely article scrape
+        // Real listings always have at least one of these from BrightData/Njuškalo
+        if (!listing.ListedPriceEur.HasValue && !listing.ListedPricePerM2.HasValue
+            && listing.AiSizeM2 is null or <= 0
+            && listing.Content.Contains("prosječn", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return false;
+    }
+
     public ValuationEngine(ILogger<ValuationEngine> logger)
     {
         _logger = logger;
@@ -286,8 +330,16 @@ public class ValuationEngine
             pipeline.Add($"V71: Površina nepoznata → estimirana na {effectiveSizeM2:F0} m² za ekstrakciju cijena");
         }
 
-        var rawPrices = ExtractPricesFromListings(marketData.AllResults, effectiveSizeM2, isLand, isAgriLand);
-        pipeline.Add($"Izvučeno {rawPrices.Count} cijena iz {result.TotalListingsFound} oglasa (agri={isAgriLand})");
+        // V84: BUG 1 FIX — ONLY use ActiveListings (real ad data from Njuškalo/Index)
+        // for price extraction. RegionalData (Phase6-Intel: news, blogs, GoHome aggregator,
+        // market articles) must NEVER enter the math engine. Those articles contain
+        // rough average prices (e.g. "575 €/m²") from market summaries that contaminate
+        // the IQR and Weighted Median with garbage price points 5-10× below real listings.
+        // RegionalData is ONLY for LLM text analysis (AI opinion layer).
+        var rawPrices = ExtractPricesFromListings(marketData.ActiveListings, effectiveSizeM2, isLand, isAgriLand);
+        pipeline.Add($"V84: Izvučeno {rawPrices.Count} cijena iz {marketData.ActiveListings.Count} PRAVIH oglasa (Intel/News isključen)");
+        if (marketData.RegionalData.Count > 0)
+            pipeline.Add($"V84: {marketData.RegionalData.Count} Intel/News članaka BLOKIRANO iz math enginea (koristi se samo za LLM)");
 
         // V71: Track estimated size usage in result
         result.UsedEstimatedSize = usedEstimatedSize;
@@ -489,17 +541,62 @@ public class ValuationEngine
                             if (majorCount >= 2 * minorCount && majorCount >= 3)
                             {
                                 bool keepLower = lowerCluster.Count >= upperCluster.Count;
-                                int removed = keepLower ? upperCluster.Count : lowerCluster.Count;
-                                double keptAvg = keepLower ? lowerAvg : upperAvg;
-                                cleanPrices = keepLower ? lowerCluster : upperCluster;
-                                outlierLog.Add(
-                                    $"V78 Majority Cluster: {(keepLower ? "LOWER" : "UPPER")} cluster " +
-                                    $"({majorCount} vs {minorCount}) → kept {majorCount} comps " +
-                                    $"(avg {keptAvg:F0} €/m²), discarded {removed} minority outliers. " +
-                                    $"Split at {splitPoint:F0} €/m².");
-                                pipeline.Add(
-                                    $"V78 Majority Cluster: kept {majorCount} comps (avg {keptAvg:F0} €/m²), " +
-                                    $"removed {removed} minority outliers at split {splitPoint:F0}");
+                                var minorityCluster = keepLower ? upperCluster : lowerCluster;
+
+                                // V83: Verified Listing Protection — real Njuškalo listings
+                                // (deep-dived with actual prices) must NEVER be discarded in
+                                // favor of article/regional price estimates. Articles extract
+                                // rough EUR/m² from news text, which is often 5-10× below real
+                                // listing prices (e.g., 600 EUR/m² article vs 5000 EUR/m² real
+                                // for Dubrovnik apartments).
+                                // V83-FIX: Only prefer minority when majority has NO verified
+                                // listings (= all article estimates). If both clusters have
+                                // verified listings, both contain real data → majority wins.
+                                var activeListingUrls = new HashSet<string>(
+                                    marketData.ActiveListings
+                                        .Where(l => !string.IsNullOrEmpty(l.Url))
+                                        .Select(l => l.Url),
+                                    StringComparer.OrdinalIgnoreCase);
+                                var majorityCluster = keepLower ? lowerCluster : upperCluster;
+                                int minorityVerified = minorityCluster
+                                    .Count(p => activeListingUrls.Contains(p.SourceUrl));
+                                int majorityVerified = majorityCluster
+                                    .Count(p => activeListingUrls.Contains(p.SourceUrl));
+
+                                if (minorityVerified > 0 && majorityVerified == 0)
+                                {
+                                    // Minority has real listings, majority is all article estimates
+                                    // → prefer verified minority prices over article estimates.
+                                    int removed = keepLower ? lowerCluster.Count : upperCluster.Count;
+                                    double keptAvg = keepLower ? upperAvg : lowerAvg;
+                                    cleanPrices = minorityCluster;
+                                    outlierLog.Add(
+                                        $"V83 Verified Listing Protection: minority cluster has " +
+                                        $"{minorityVerified} verified listings, majority has 0 " +
+                                        $"→ preferring verified prices (avg {keptAvg:F0} €/m²), " +
+                                        $"discarded {removed} article estimates. Split at {splitPoint:F0} €/m².");
+                                    pipeline.Add(
+                                        $"V83 Verified Listings: kept {minorityCluster.Count} real " +
+                                        $"listings (avg {keptAvg:F0} €/m²), removed {removed} article prices");
+                                    _logger.LogInformation(
+                                        "V83 Verified Listing Protection: kept {Kept} verified listings " +
+                                        "(avg {Avg:F0} €/m²), discarded {Removed} article estimates",
+                                        minorityCluster.Count, keptAvg, removed);
+                                }
+                                else
+                                {
+                                    int removed = keepLower ? upperCluster.Count : lowerCluster.Count;
+                                    double keptAvg = keepLower ? lowerAvg : upperAvg;
+                                    cleanPrices = keepLower ? lowerCluster : upperCluster;
+                                    outlierLog.Add(
+                                        $"V78 Majority Cluster: {(keepLower ? "LOWER" : "UPPER")} cluster " +
+                                        $"({majorCount} vs {minorCount}) → kept {majorCount} comps " +
+                                        $"(avg {keptAvg:F0} €/m²), discarded {removed} minority outliers. " +
+                                        $"Split at {splitPoint:F0} €/m².");
+                                    pipeline.Add(
+                                        $"V78 Majority Cluster: kept {majorCount} comps (avg {keptAvg:F0} €/m²), " +
+                                        $"removed {removed} minority outliers at split {splitPoint:F0}");
+                                }
                             }
                             else
                             {
@@ -933,6 +1030,16 @@ public class ValuationEngine
                 bool compIsBuildLand = compIsLand && (compText.Contains("građevinsk")
                     || compText.Contains("gradjevinsk"));
 
+                // V83: Building-type priority — if a comp is detected as BOTH
+                // apartment/house AND land (e.g. URL has "zemljište" but title says "Stan"),
+                // the building classification wins. "Stan na zemljištu" is still an apartment.
+                if ((compIsApt || compIsHouse) && compIsLand)
+                {
+                    compIsLand = false;
+                    compIsAgriLand = false;
+                    compIsBuildLand = false;
+                }
+
                 // V29 Sherlock: "Text Authority Rule" — Sherlock overrides scraper's land type
                 ComparableSearchResult? sherlockListing = null;
                 if (!string.IsNullOrEmpty(p.SourceUrl))
@@ -1012,10 +1119,28 @@ public class ValuationEngine
                 double mathScore = CalculateSimilarityScore(
                     price, property, marketData.DetectedPropertyType, marketData.RegionName);
 
+                // V82: AI returned exactly 0 — treat as "failed to score".
+                // The prompt's aggressive cross-city rule ("DRUGI GRAD = 0.00") combined
+                // with Croatian grammatical cases ("Hvaru", "Puli") causes gpt-4o-mini
+                // to default ALL comps to 0. When math confirms the comp IS in the same
+                // city/region (score > 0.25), discard the AI 0 and use math instead.
+                // V83: Changed from `== 0.0` to `< 0.05` — AI sometimes returns 0.01-0.04
+                //      for confused scores rather than exact 0, which bypassed the override.
+                if (simScore < 0.05 && mathScore > 0.25)
+                {
+                    _logger.LogInformation(
+                        "V82 AI Zero Override: {Title} — AI=0.00, Math={Math:F2} → using math",
+                        price.SourceTitle.Length > 50 ? price.SourceTitle[..50] : price.SourceTitle,
+                        mathScore);
+                    simScore = mathScore;
+                }
                 // V48e: Math-based floor — AI often underrates same-neighborhood comps
                 // (gives 0.50 "same city" when math confirms 0.90 "same neighborhood").
                 // If math confirms strong location match, don't let AI drag score down.
-                if (mathScore >= 0.55 && mathScore > simScore)
+                // V82: Lowered threshold from 0.55 to 0.45 — the Croatian stem matching
+                //      now gives correct city-level scores (0.25 → 0.70 for inflected forms),
+                //      but some edge cases still land at 0.45-0.55.
+                else if (mathScore >= 0.45 && mathScore > simScore)
                 {
                     _logger.LogInformation(
                         "V48e AI Floor: {Title} — AI={AI:F2}, Math={Math:F2} → boosted to math",
@@ -1167,7 +1292,10 @@ public class ValuationEngine
         //      (e.g. "split-bacvice" doesn't match "bačvice" due to diacritics).
         //      With V48 BroaderRegion fix, comps are now geo-relevant, so we can
         //      afford a lower threshold. AI scoring still gates quality above this.
-        const double MinSimilarityThreshold = 0.45;
+        // V83: Lowered from 0.45 to 0.35 — when V82 AI Zero Override activates and
+        //      falls back to math scoring, valid same-city comps (e.g. Dubrovnik)
+        //      can land at 0.40-0.43 and were being incorrectly excluded.
+        const double MinSimilarityThreshold = 0.35;
         {
             var belowFloor = compDetails.Where(c => !c.IsOutlier && c.SimilarityScore < MinSimilarityThreshold).ToList();
             if (belowFloor.Count > 0)
@@ -1491,6 +1619,45 @@ public class ValuationEngine
         result.PriceSource = priceSource;
         pipeline.Add($"Final: {adjustedPricePerM2:F0} EUR/m2 x {sizeM2:F0} m2 = {finalValue:N0} EUR");
 
+        // ── 9c. V84: BUG 3 FIX — SANITY CHECK: Minimum €/m² for buildings ──
+        // In Croatia in 2026, apartments cannot realistically sell below 500 €/m²
+        // even in the cheapest continental regions. Houses can be lower (rural).
+        // If the engine produces a price this low, the comparable sample was
+        // contaminated with article/news prices or wrong-type data.
+        // This is the LAST-RESORT safety net — BUG 1 (Intel filter) and BUG 2
+        // (city match) are the primary defenses.
+        if (!isLand && !isAgriLand && cleanPrices.Count > 0)
+        {
+            bool isApartment = MarketResearchService.IsApartmentType(marketData.DetectedPropertyType);
+            // Apartments: 400 EUR/m² absolute floor (even Vukovar/Slavonia is above this after gap)
+            // Houses: 150 EUR/m² floor (rural houses CAN be 200-400 EUR/m²)
+            double sanityFloorPerM2 = isApartment ? 400.0 : 150.0;
+
+            bool isRuin = false;
+            string allSubjectText = $"{property.Description} {property.PropertyState} {property.AdditionalNotes}"
+                .ToLowerInvariant();
+            foreach (var kw in NeedsWorkKeywords)
+            {
+                if (allSubjectText.Contains(kw)) { isRuin = true; break; }
+            }
+            // Also check explicit "ruševina" variants
+            if (allSubjectText.Contains("ru\u0161evin") || allSubjectText.Contains("rusevin")
+                || allSubjectText.Contains("devastiran") || allSubjectText.Contains("ru\u0161evn")
+                || allSubjectText.Contains("rusevn"))
+                isRuin = true;
+
+            if (!isRuin && adjustedPricePerM2 < sanityFloorPerM2)
+            {
+                string errorMsg = $"V84 SANITY CHECK FAILED: Izračunata cijena {adjustedPricePerM2:F0} €/m² " +
+                    $"< {sanityFloorPerM2} €/m² za {marketData.DetectedPropertyType} u {marketData.RegionName}. " +
+                    $"Uzorak cijena je kontaminiran — {cleanPrices.Count} comps, " +
+                    $"prosječna cijena {cleanPrices.Average(p => p.PricePerM2):F0} €/m². " +
+                    $"Pipeline: {string.Join(" → ", pipeline.TakeLast(5))}";
+                _logger.LogError(errorMsg);
+                throw new InvalidDataException(errorMsg);
+            }
+        }
+
         // ── 10. Mathematical Confidence Score ──
         var mathConfidence = CalculateMathConfidence(
             cleanPrices.Count, coeffVar, priceSource, searchPhase, outlierMethod, usedEstimatedSize,
@@ -1572,24 +1739,63 @@ public class ValuationEngine
 
         // V78: Match helper — checks title, diacritics-stripped, AND dash-normalized
         // This is essential: "biograd na moru" must match URL slug "biograd-na-moru"
+        // V82: Also applies Croatian stem matching — "Puli" must match "Pula",
+        //      "Zagrebu" must match "Zagreb", "Hvaru" must match "Hvar", etc.
+        //      Croatian locative/dative adds -u, -i, -e, -a to city names.
         bool ContainsPart(string text, string textNorm, string slugText, string partOrig, string partNorm)
             => text.Contains(partOrig)
             || textNorm.Contains(partNorm)
-            || slugText.Contains(partNorm.Replace("-", " "));
+            || slugText.Contains(partNorm.Replace("-", " "))
+            || CroatianStemMatch(textNorm, partNorm)
+            || CroatianStemMatch(slugText, partNorm);
 
         // ── Location (max 0.70) — 70% of total ──
+        // V83: Handle single-part locations (e.g., Location="Dubrovnik" with no neighborhood).
+        // When only a city is specified, a direct city match should score 0.60 ("city match"),
+        // not 0.25 ("wrong neighborhood"). The 0.25 is for multi-part locations where the
+        // neighborhood part doesn't match.
         bool neighborhoodInComp = locParts.Count >= 2
             && ContainsPart(compText, compTextNorm, compTextSlug, locPartsOrig[0], locParts[0]);
         bool cityInComp = locParts.Count >= 2
             && ContainsPart(compText, compTextNorm, compTextSlug, locPartsOrig[^1], locParts[^1]);
+        // V83: Single-part city match (Location = "Dubrovnik" → locParts = ["dubrovnik"])
+        bool singlePartCityMatch = locParts.Count == 1
+            && ContainsPart(compText, compTextNorm, compTextSlug, locPartsOrig[0], locParts[0]);
+
+        // V84: BUG 2 FIX — WORD-LEVEL CITY SAFETY NET.
+        // When Location = "Dubrovnik centar" (no comma), locParts = ["dubrovnik centar"]
+        // and the full-string match fails. Split into individual words and check each.
+        // If ANY word from target location appears in comp text → city match (0.60).
+        // This guarantees: if comp contains "Dubrovnik" and we search "Dubrovnik" → ≥60%.
+        bool wordLevelCityMatch = false;
+        if (!neighborhoodInComp && !singlePartCityMatch)
+        {
+            var locationWords = targetLocNorm
+                .Split(new[] { ' ', ',', '-', '/' }, StringSplitOptions.RemoveEmptyEntries)
+                .Where(w => w.Length >= 4)
+                .ToList();
+            var locationWordsOrig = targetLoc
+                .Split(new[] { ' ', ',', '-', '/' }, StringSplitOptions.RemoveEmptyEntries)
+                .Where(w => w.Length >= 4)
+                .ToList();
+            for (int i = 0; i < locationWords.Count; i++)
+            {
+                string wOrig = locationWordsOrig[Math.Min(i, locationWordsOrig.Count - 1)];
+                if (ContainsPart(compText, compTextNorm, compTextSlug, wOrig, locationWords[i]))
+                {
+                    wordLevelCityMatch = true;
+                    break;
+                }
+            }
+        }
 
         if (neighborhoodInComp && cityInComp)
         {
             score += 0.70; // Same neighborhood + city = full score
         }
-        else if (neighborhoodInComp)
+        else if (neighborhoodInComp || singlePartCityMatch || wordLevelCityMatch)
         {
-            score += 0.60; // Neighborhood match without city context
+            score += 0.60; // Neighborhood match OR city-word match
         }
         else if (locPartsOrig.Select((part, i) => ContainsPart(compText, compTextNorm, compTextSlug, part, locParts[i])).Any(x => x))
         {
@@ -1659,6 +1865,105 @@ public class ValuationEngine
         => text.Replace("č", "c").Replace("ć", "c")
                .Replace("đ", "d").Replace("ð", "d")
                .Replace("š", "s").Replace("ž", "z");
+
+    /// <summary>
+    /// V82: Croatian stem matching — handles grammatical cases (padeži).
+    /// Croatian cities change endings in locative/dative:
+    ///   Pula→Puli, Rijeka→Rijeci, Slatina→Slatini, Hvar→Hvaru, Zagreb→Zagrebu,
+    ///   Rovinj→Rovinju, Split→Splitu, Dubrovnik→Dubrovniku,
+    ///   Sisak→Sisku, Zadar→Zadru, Karlovac→Karlovcu (nepostojano 'a'),
+    ///   Trešnjevka→Trešnjevci (palatalization k→c).
+    /// Strategy: generate multiple stem candidates and check each against text.
+    /// For short parts (&lt; 4 chars) we skip to avoid false positives.
+    /// </summary>
+    internal static bool CroatianStemMatch(string text, string partNorm)
+    {
+        if (partNorm.Length < 4) return false;
+
+        var stems = GenerateCroatianStems(partNorm);
+        foreach (var stem in stems)
+        {
+            if (stem.Length < 3) continue;
+            if (MatchStemInText(text, stem))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Generate stem candidates for Croatian morphological matching.
+    /// Returns 1-3 stems covering: basic inflection, nepostojano 'a', and palatalization.
+    /// </summary>
+    private static List<string> GenerateCroatianStems(string partNorm)
+    {
+        var stems = new List<string>(3);
+        char lastChar = partNorm[^1];
+        bool endsInVowel = "aeiou".Contains(lastChar);
+
+        // Stem 1: basic — full word (consonant) or minus-last-char (vowel)
+        // "hvar" → "hvar" (matches "hvaru"), "pula" → "pul" (matches "puli")
+        string primary = endsInVowel ? partNorm[..^1] : partNorm;
+        stems.Add(primary);
+
+        if (!endsInVowel)
+        {
+            // Stem 2: "nepostojano a/e" — drop penultimate vowel for consonant endings.
+            // "sisak" → "sisk", "zadar" → "zadr", "karlovac" → "karlovc"
+            // Pattern: ...vowel+consonant$ → remove the vowel
+            if (partNorm.Length >= 4)
+            {
+                char penultimate = partNorm[^2];
+                if ("aeiou".Contains(penultimate))
+                {
+                    string nepA = partNorm[..^2] + partNorm[^1];
+                    stems.Add(nepA);
+                }
+            }
+        }
+        else
+        {
+            // Stem 3: palatalization k→c for vowel-ending words.
+            // "tresnjevka" → stem "tresnjevk" → also try "tresnjevc"
+            // "pescenica" → stem "pescenic" → already ends in 'c', no change needed
+            if (primary.Length >= 3 && primary[^1] == 'k')
+            {
+                stems.Add(primary[..^1] + "c");
+            }
+        }
+
+        return stems;
+    }
+
+    /// <summary>Check if any word in text starts with stem and has at most 3 extra chars.</summary>
+    private static bool MatchStemInText(string text, string stem)
+    {
+        int idx = 0;
+        while (idx < text.Length)
+        {
+            int pos = text.IndexOf(stem, idx, StringComparison.Ordinal);
+            if (pos < 0) break;
+
+            // Check that stem starts at a word boundary
+            bool startBoundary = pos == 0 || !char.IsLetterOrDigit(text[pos - 1]);
+            if (startBoundary)
+            {
+                // Find end of the word
+                int wordEnd = pos + stem.Length;
+                while (wordEnd < text.Length && char.IsLetterOrDigit(text[wordEnd]))
+                    wordEnd++;
+
+                int tailLen = wordEnd - pos - stem.Length;
+                // Accept if the remaining suffix is at most 3 chars (covers -u, -i, -om, -oj, etc.)
+                if (tailLen <= 3)
+                    return true;
+            }
+
+            idx = pos + 1;
+        }
+
+        return false;
+    }
 
     /// <summary>V48: Generate a Croatian similarity reason for math-fallback scoring.
     /// Provides useful context when AI feature extraction didn't produce one.</summary>
@@ -2654,6 +2959,14 @@ public class ValuationEngine
 
             // ── RENT-TRAP: Skip rental listings ──
             if (IsRentalListing(text))
+                continue;
+
+            // ── V84: NEWS/ARTICLE TRAP — extra safety net ──
+            // Even though we now only pass ActiveListings (not AllResults),
+            // guard against any article/news that might leak through.
+            // Phase6-Intel articles have "[REGIONALNI TRŽIŠNI PODACI]" prefix.
+            // GoHome, blog posts, and market reports are NOT real listings.
+            if (IsNewsOrArticle(listing))
                 continue;
 
             // ── V28: ALWAYS compute PricePerM2 = ListedPriceEur / Size when both are available.

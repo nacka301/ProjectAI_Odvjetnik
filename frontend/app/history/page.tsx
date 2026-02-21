@@ -189,8 +189,8 @@ export default function HistoryPage() {
         </Link>
 
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center justify-center gap-3">
-            <Clock className="h-8 w-8 text-indigo-600" /> Povijest predmeta
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center justify-center gap-2 sm:gap-3">
+            <Clock className="h-6 w-6 sm:h-8 sm:w-8 text-indigo-600" /> Povijest predmeta
           </h1>
           <p className="mt-2 text-gray-500">
             Pregled svih spremljenih analiza i procjena
@@ -409,7 +409,7 @@ export default function HistoryPage() {
                           {audit.recommendation && (
                             <p className="text-xs text-gray-500 mt-1 italic">💡 {audit.recommendation}</p>
                           )}
-                          <div className="grid grid-cols-4 gap-2 mt-2">
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2">
                             <div className="text-center">
                               <p className="text-[10px] text-gray-500">Cijena</p>
                               <p className="text-xs font-bold">{audit.price_score}/100</p>

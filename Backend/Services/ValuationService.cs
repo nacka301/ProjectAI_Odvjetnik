@@ -554,6 +554,19 @@ public class ValuationService
         Samo nekretnine iz ISTOG grada su usporedive za procjenu.
         ████████████████████████████████████████████████████████
 
+        ████████████████████████████████████████████████████████
+        KRITIČNO PRAVILO — HRVATSKI PADEŽI (GRAMMATICAL CASES):
+        Hrvatski jezik mijenja imena gradova u različitim padežima:
+          Pula→Puli, Rijeka→Rijeci, Hvar→Hvaru, Zagreb→Zagrebu,
+          Split→Splitu, Dubrovnik→Dubrovniku, Rovinj→Rovinju,
+          Slatina→Slatini, Osijek→Osijeku, Zadar→Zadru.
+        "na otoku Hvaru" ZNAČI "na otoku Hvar" — ISTI grad!
+        "u Puli" ZNAČI "u Pula" — ISTI grad!
+        "kuća u Rovinju" ZNAČI "kuća u Rovinj" — ISTI grad!
+        MORAŠ prepoznati sve padežne oblike kao ISTI grad.
+        NIKADA ne tretiraj inflektirani oblik kao DRUGI grad.
+        ████████████████████████████████████████████████████████
+
         PRIORITETI OCJENJIVANJA (po redoslijedu važnosti):
         1. LOKACIJA — koeficijent lokacije (50%): Isti kvart > isti gradski dio > isti grad > DRUGI GRAD = 0.00
            Provjeri "Lokacija:" strukturirano polje za preciznu lokaciju.
