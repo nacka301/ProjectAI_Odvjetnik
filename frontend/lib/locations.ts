@@ -637,6 +637,7 @@ export const LOCATIONS: County[] = [
       { name: "Brestovac", settlements: ["Brestovac", "Centar"] },
       { name: "Jakšić", settlements: ["Centar", "Jakšić"] },
       { name: "Kaptol", settlements: ["Centar", "Kaptol"] },
+      { name: "Kukunjevac", settlements: ["Centar", "Kukunjevac"] },
       { name: "Kutjevo", settlements: ["Centar", "Kutjevo"] },
       { name: "Lipik", settlements: ["Centar", "Lipik"] },
       { name: "Pakrac", settlements: ["Centar", "Pakrac"] },
