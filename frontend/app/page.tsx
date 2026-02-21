@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import {
   Search as SearchIcon,
@@ -27,9 +28,11 @@ import {
   Landmark,
   Construction,
   Calculator,
+  LogOut,
 } from "lucide-react";
 import LegalFeed from "@/components/LegalFeed";
 import { getRecentActivity, type ActivityItem, type ActivityType } from "@/lib/supabase";
+import { createSupabaseBrowser } from "@/lib/supabase/client";
 
 // ── Helpers ──
 
@@ -336,6 +339,7 @@ const FEATURE_CARDS: FeatureCard[] = [
 // ═══════════════════════════════════════════════════════════
 
 export default function Dashboard() {
+  const router = useRouter();
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [bannerDismissed, setBannerDismissed] = useState(false);
@@ -456,6 +460,20 @@ export default function Dashboard() {
               <ShieldAlert className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
               <span className="hidden sm:inline">AI Audit</span>
             </Link>
+            <div className="h-4 w-px bg-slate-700 hidden sm:block" />
+            <button
+              onClick={async () => {
+                const supabase = createSupabaseBrowser();
+                await supabase.auth.signOut();
+                router.push("/auth/login");
+                router.refresh();
+              }}
+              className="text-xs text-slate-500 hover:text-red-400 transition flex items-center gap-1 p-1.5 sm:p-0"
+              title="Odjavi se"
+            >
+              <LogOut className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
+              <span className="hidden sm:inline">Odjava</span>
+            </button>
           </div>
         </div>
       </header>
