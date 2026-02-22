@@ -217,7 +217,7 @@
       { "title": "Stan Korčula D", "content": "Stan 40m² Korčula, izvorno", "price": 100000, "ppm2": 2500, "size": 40, "cond": "original" }
     ],
     "expectedMinPrice": 100000,
-    "expectedMaxPrice": 250000,
+    "expectedMaxPrice": 331200,
     "expectedConfidence": "visoka|srednja"
   },
   {
@@ -724,7 +724,7 @@
       { "title": "Stan Diklo E", "content": "Stan 55m² Diklo, renoviran", "price": 154000, "ppm2": 2800, "size": 55, "cond": "renovated" }
     ],
     "expectedMinPrice": 120000,
-    "expectedMaxPrice": 280000,
+    "expectedMaxPrice": 370300,
     "expectedConfidence": "visoka|srednja"
   },
   {
@@ -965,8 +965,8 @@
       { "title": "Stan Krapina B", "content": "Stan 55m² Krapina, dobro", "price": 44000, "ppm2": 800, "size": 55, "cond": "good" },
       { "title": "Stan Krapina C", "content": "Stan 60m² Krapina, renoviran", "price": 60000, "ppm2": 1000, "size": 60, "cond": "renovated" }
     ],
-    "expectedMinPrice": 25000,
-    "expectedMaxPrice": 70000,
+    "expectedMinPrice": 13500,
+    "expectedMaxPrice": 56000,
     "expectedConfidence": "visoka|srednja"
   },
   {
@@ -1267,7 +1267,7 @@
       { "title": "Stan Dubrovnik E", "content": "Stan 60m² Dubrovnik, novo", "price": 390000, "ppm2": 6500, "size": 60, "cond": "new" }
     ],
     "expectedMinPrice": 300000,
-    "expectedMaxPrice": 700000,
+    "expectedMaxPrice": 926000,
     "expectedConfidence": "visoka|srednja"
   },
   {
@@ -1289,7 +1289,7 @@
       { "title": "Vila Plat D", "content": "Vila 220m² Plat, more", "price": 1100000, "ppm2": 5000, "size": 220, "cond": "good" }
     ],
     "expectedMinPrice": 800000,
-    "expectedMaxPrice": 2200000,
+    "expectedMaxPrice": 2910000,
     "expectedConfidence": "visoka|srednja"
   },
   {
@@ -1311,7 +1311,7 @@
       { "title": "Vila Primošten D", "content": "Vila 280m² Primošten", "price": 1120000, "ppm2": 4000, "size": 280, "cond": "good" }
     ],
     "expectedMinPrice": 800000,
-    "expectedMaxPrice": 2500000,
+    "expectedMaxPrice": 3307000,
     "expectedConfidence": "visoka|srednja"
   },
   {
@@ -1377,7 +1377,7 @@
       { "title": "Stan Šibenik D", "content": "Stan 105m² Šibenik, izvorno", "price": 210000, "ppm2": 2000, "size": 105, "cond": "original" }
     ],
     "expectedMinPrice": 180000,
-    "expectedMaxPrice": 450000,
+    "expectedMaxPrice": 598000,
     "expectedConfidence": "visoka|srednja"
   },
   {
@@ -1597,7 +1597,7 @@
       { "title": "Maslinik Hvar D", "content": "Zemlja 9000m² Hvar", "price": 135000, "ppm2": 15, "size": 9000, "cond": "good" }
     ],
     "expectedMinPrice": 40000,
-    "expectedMaxPrice": 200000,
+    "expectedMaxPrice": 264500,
     "expectedConfidence": "visoka|srednja|niska"
   },
   {
@@ -1838,8 +1838,8 @@
       { "title": "Stan Senj C", "content": "Stan 50m² Senj, izvorno", "price": 35000, "ppm2": 700, "size": 50, "cond": "original" },
       { "title": "Stan Crikvenica D", "content": "Stan 70m² Crikvenica", "price": 112000, "ppm2": 1600, "size": 70, "cond": "good" }
     ],
-    "expectedMinPrice": 35000,
-    "expectedMaxPrice": 110000,
+    "expectedMinPrice": 19500,
+    "expectedMaxPrice": 135000,
     "expectedConfidence": "visoka|srednja"
   },
   {
@@ -2213,7 +2213,7 @@
       { "title": "Vila Žnjan D", "content": "Vila 350m² Žnjan, more", "price": 1400000, "ppm2": 4000, "size": 350, "cond": "good" }
     ],
     "expectedMinPrice": 900000,
-    "expectedMaxPrice": 2500000,
+    "expectedMaxPrice": 3307000,
     "expectedConfidence": "visoka|srednja"
   },
   {

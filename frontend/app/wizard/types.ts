@@ -135,6 +135,32 @@ export interface ComparisonTableRow {
   similarity_reason?: string;  // V48: AI/math explanation of similarity
   deep_dive_status?: string;
   correction_reason?: string;
+  // V39: Elaborat-style correction coefficients
+  kc?: number;  // Koeficijent stanja
+  kl?: number;  // Koeficijent lokacije
+  ks?: number;  // Koeficijent veličine
+  ko?: number;  // Koeficijent orijentacije
+  k_total?: number;  // Kc × Kl × Ks × Ko
+}
+
+// V39: Elaborat-style statistical summary
+export interface ElaboratStatistics {
+  arithmetic_mean_per_m2: number;
+  std_dev_per_m2: number;
+  relative_std_dev_percent: number;
+  deviations_percent: number[];
+  two_sigma_test_passed: boolean;
+  two_sigma_excluded: number;
+  explanation: string;
+}
+
+// V39: Market adjustment factors (Fp + Ft)
+export interface MarketAdjustmentFactors {
+  fp: number;
+  ft: number;
+  combined: number;
+  fp_reason: string;
+  ft_reason: string;
 }
 
 export interface PriceRangeEstimate {
@@ -183,4 +209,8 @@ export interface ValuationResult {
   comparison_table?: ComparisonTableRow[];
   price_range?: PriceRangeEstimate;
   benchmark_summary?: string;
+  // V39: Elaborat-style output
+  elaborat_stats?: ElaboratStatistics;
+  market_factors?: MarketAdjustmentFactors;
+  valuation_method?: string;
 }

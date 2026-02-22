@@ -170,11 +170,27 @@ public static class SseHelpers
         int idx = 1;
         foreach (var c in engine.UsedComparables.Where(x => !x.IsOutlier).OrderByDescending(x => x.SimilarityScore))
         {
-            // V27: Only per-comp correction — NOT combined with global adjustments.
-            // The engine's weighted median already uses these corrected prices.
-            // Global adjustments are applied AFTER the weighted median in a separate step.
+            // V39: Per-comp correction now comes from elaborat-style coefficients (Kc×Kl×Ks×Ko).
+            // The engine sets CorrectionPercent = (KTotal - 1) × 100 in step 5a.
             double perCompCorr = c.CorrectionPercent;
             var adjustedPpm2 = c.PricePerM2 * (1 + perCompCorr / 100.0);
+
+            // V39: Parse individual coefficients from CorrectionReason
+            // Format: "Kc=0.85 Kl=1.00 Ks=0.95 Ko=1.00 → KTotal=0.81"
+            double kc = 1, kl = 1, ks = 1, ko = 1, kTotal = 1;
+            if (!string.IsNullOrEmpty(c.CorrectionReason) && c.CorrectionReason.Contains("Kc="))
+            {
+                var parts = c.CorrectionReason.Split(' ');
+                foreach (var part in parts)
+                {
+                    if (part.StartsWith("Kc=") && double.TryParse(part[3..], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var kcVal)) kc = kcVal;
+                    if (part.StartsWith("Kl=") && double.TryParse(part[3..], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var klVal)) kl = klVal;
+                    if (part.StartsWith("Ks=") && double.TryParse(part[3..], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var ksVal)) ks = ksVal;
+                    if (part.StartsWith("Ko=") && double.TryParse(part[3..], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var koVal)) ko = koVal;
+                    if (part.StartsWith("KTotal=") && double.TryParse(part[7..], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var ktVal)) kTotal = ktVal;
+                }
+            }
+
             rows.Add(new ComparisonTableRow
             {
                 Index = idx++,
@@ -190,6 +206,12 @@ public static class SseHelpers
                 SimilarityReason = c.SimilarityReason,
                 DeepDiveStatus = c.DeepDiveStatus,
                 CorrectionReason = c.CorrectionReason,
+                // V39: Elaborat-style correction coefficients
+                Kc = kc,
+                Kl = kl,
+                Ks = ks,
+                Ko = ko,
+                KTotal = kTotal,
             });
         }
         return rows;
@@ -229,14 +251,19 @@ public static class SseHelpers
             parts.Add($"Regija: {engine.RegionName}");
         if (!string.IsNullOrWhiteSpace(market.DetectedPropertyType))
             parts.Add($"Tip: {market.DetectedPropertyType}");
+        parts.Add($"Metoda: Poredbena (usporedna)");
         if (engine.MarketAverageAsking > 0)
-            parts.Add($"Prosjek traženih cijena: {engine.MarketAverageAsking:N0} €/m²");
+            parts.Add($"Aritmetička sredina: {engine.MarketAverageAsking:N0} €/m²");
         if (engine.CalculatedPricePerM2 > 0)
-            parts.Add($"Izračunata cijena: {engine.CalculatedPricePerM2:N0} €/m²");
+            parts.Add($"Korigirana cijena: {engine.CalculatedPricePerM2:N0} €/m²");
         if (engine.RealizationDiscountPercent != 0)
             parts.Add($"Diskont tražena→ostvarena: {engine.RealizationDiscountPercent:F1}%");
+        if (engine.MarketFactors != null)
+            parts.Add($"Tržišni faktor (Fp+Ft): {engine.MarketFactors.Combined:F2}");
         if (engine.UsablePricePoints > 0)
             parts.Add($"Korištenih usporedivih: {engine.UsablePricePoints}");
+        if (engine.ElaboratStats != null)
+            parts.Add($"2σ test: {(engine.ElaboratStats.TwoSigmaTestPassed ? "ZADOVOLJAVA" : "UPOZORENJE")}");
         if (engine.CoefficientOfVariation > 0)
             parts.Add($"Koeficijent varijacije: {engine.CoefficientOfVariation:F1}%");
         return string.Join(" | ", parts);

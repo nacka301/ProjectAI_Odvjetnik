@@ -42,6 +42,58 @@ public class ComparisonTableRow
 
     // V20: Per-comparable correction reason
     public string? CorrectionReason { get; set; }
+
+    // ── V39: Elaborat-style per-comparable correction coefficients ──
+    // Based on methodology from Procjembeni elaborat (Pravilnik NN 105/2015)
+    /// <summary>Koeficijent stanja (condition): 0.70–1.10 (FK Matrica inspired)</summary>
+    public double Kc { get; set; } = 1.0;
+    /// <summary>Koeficijent lokacije (micro-location): 0.80–1.20</summary>
+    public double Kl { get; set; } = 1.0;
+    /// <summary>Koeficijent veličine/površine (size): 0.90–1.10</summary>
+    public double Ks { get; set; } = 1.0;
+    /// <summary>Koeficijent orijentacije (orientation/floor/view): 0.90–1.10</summary>
+    public double Ko { get; set; } = 1.0;
+    /// <summary>Product of all correction coefficients: Kc × Kl × Ks × Ko</summary>
+    public double KTotal { get; set; } = 1.0;
+}
+
+/// <summary>
+/// V39: Elaborat-style statistical summary for comparison method.
+/// Mirrors "Statistička obrada" section from professional elaborats.
+/// </summary>
+public class ElaboratStatistics
+{
+    /// <summary>Aritmetička sredina korigiranih cijena (€/m²)</summary>
+    public double ArithmeticMeanPerM2 { get; set; }
+    /// <summary>Standardno odstupanje (€/m²)</summary>
+    public double StdDevPerM2 { get; set; }
+    /// <summary>Relativno standardno odstupanje (%)</summary>
+    public double RelativeStdDevPercent { get; set; }
+    /// <summary>Per-comparable deviations from mean (%)</summary>
+    public List<double> DeviationsPercent { get; set; } = [];
+    /// <summary>True if all comparables pass the 2σ test</summary>
+    public bool TwoSigmaTestPassed { get; set; }
+    /// <summary>Number of comparables that failed 2σ and were excluded</summary>
+    public int TwoSigmaExcluded { get; set; }
+    /// <summary>Human-readable explanation in Croatian</summary>
+    public string Explanation { get; set; } = "";
+}
+
+/// <summary>
+/// V39: Market adjustment factors applied AFTER the comparison table averaging.
+/// Based on Pravilnik čl. 61/62 methodology.
+/// </summary>
+public class MarketAdjustmentFactors
+{
+    /// <summary>Fp — Faktor površine/veličine. Houses &lt;100m² = +0.05, Land &gt;5000m² = -0.05, etc.</summary>
+    public double Fp { get; set; }
+    /// <summary>Ft — Faktor tržišta (ponuda/potražnja, tip lokacije). Rural = -0.20, Coast = +0.10, etc.</summary>
+    public double Ft { get; set; }
+    /// <summary>Combined = 1 + Fp + Ft</summary>
+    public double Combined { get; set; } = 1.0;
+    /// <summary>Human-readable explanation of each factor</summary>
+    public string FpReason { get; set; } = "";
+    public string FtReason { get; set; } = "";
 }
 
 /// <summary>Three-tier price range: conservative / realistic / optimistic.</summary>
@@ -147,4 +199,12 @@ public class FullEvaluationResult
     public List<ComparisonTableRow> ComparisonTable { get; set; } = [];
     public PriceRangeEstimate? PriceRange { get; set; }
     public string BenchmarkSummary { get; set; } = "";
+
+    // ── V39: Elaborat-style output (Pravilnik NN 105/2015) ──
+    /// <summary>Statistical analysis of comparables (arit. mean, StdDev, 2σ test)</summary>
+    public ElaboratStatistics? ElaboratStats { get; set; }
+    /// <summary>Market adjustment factors Fp + Ft applied after comparison table</summary>
+    public MarketAdjustmentFactors? MarketFactors { get; set; }
+    /// <summary>Valuation method used: "Poredbena" / "Troškovna" / "Kombinirana"</summary>
+    public string ValuationMethod { get; set; } = "Poredbena";
 }

@@ -1487,7 +1487,71 @@ public class ValuationEngine
             priceSource = $"Weighted Median ({cleanPrices.Count} comparables)";
             pipeline.Add($"Weighted Median = {basePricePerM2:F0} EUR/m2");
 
-            // ── 5b. Sanity Check: exact-match anchor ──
+            // ── 5a. V39: ELABORAT METHOD — Correction Coefficients + Arithmetic Mean + 2σ ──
+            // Per-comparable correction coefficients (Kc, Kl, Ks, Ko) following
+            // Procjembeni elaborat methodology (Pravilnik NN 105/2015).
+            var targetStateForCoeff = ParseTargetState(property);
+            var elaboratContext = DetectMarketContext(property.Location, marketData.RegionName);
+            var correctedComparables = new List<(double PricePerM2, string Title)>();
+
+            foreach (var p in cleanPrices)
+            {
+                var (kc, kl, ks, ko) = CalculateCorrectionCoefficients(
+                    property, p, elaboratContext, targetStateForCoeff, isLand);
+                double kTotal = kc * kl * ks * ko;
+                double correctedPrice = p.PricePerM2 * kTotal;
+                correctedComparables.Add((correctedPrice, p.SourceTitle));
+
+                // Update compDetails with coefficient data for ComparisonTable
+                var cd = compDetails.FirstOrDefault(c => c.Url == p.SourceUrl && !c.IsOutlier);
+                if (cd != null)
+                {
+                    double corrPct = (kTotal - 1.0) * 100.0;
+                    cd.CorrectionPercent = Math.Round(corrPct, 1);
+                    cd.CorrectionReason = $"Kc={kc:F2} Kl={kl:F2} Ks={ks:F2} Ko={ko:F2} → KTotal={kTotal:F2}";
+                }
+
+                string label = p.SourceTitle.Length > 30 ? p.SourceTitle[..30] : p.SourceTitle;
+                pipeline.Add($"  V39 Koef. '{label}': {p.PricePerM2:F0}→{correctedPrice:F0} €/m² " +
+                    $"[Kc={kc} Kl={kl} Ks={ks} Ko={ko} → {kTotal:F2}]");
+            }
+
+            // ── 5b. Arithmetic Mean with 2σ validation ──
+            var (arithMean, elaboratStats) = ArithmeticMeanWithTwoSigma(correctedComparables);
+
+            // Use arithmetic mean as primary, weighted median as sanity check
+            double elaboratBase = arithMean;
+            pipeline.Add($"V39 Aritmetička sredina (korigirano): {arithMean:F0} EUR/m2 " +
+                $"(WM ref: {basePricePerM2:F0}, StdDev: {elaboratStats.StdDevPerM2:F0}, " +
+                $"2σ: {(elaboratStats.TwoSigmaTestPassed ? "OK" : $"{elaboratStats.TwoSigmaExcluded} isključeno")})");
+
+            // If arithmetic mean is valid and 2σ test passed, use it as the base
+            // Otherwise fall back to weighted median
+            if (elaboratBase > 0 && cleanPrices.Count >= 2)
+            {
+                // Sanity: arith mean should be within 30% of weighted median
+                double divergence = basePricePerM2 > 0
+                    ? Math.Abs(elaboratBase - basePricePerM2) / basePricePerM2
+                    : 0;
+
+                if (divergence <= 0.30)
+                {
+                    basePricePerM2 = elaboratBase;
+                    priceSource = $"Aritmetička sredina ({cleanPrices.Count - elaboratStats.TwoSigmaExcluded} usporedivih, 2σ validacija)";
+                    pipeline.Add($"V39: Koristi se aritmetička sredina = {basePricePerM2:F0} EUR/m2");
+                }
+                else
+                {
+                    pipeline.Add($"V39: Arit. sredina ({elaboratBase:F0}) divergira {divergence * 100:F0}% " +
+                        $"od WM ({basePricePerM2:F0}) — koristi se WM kao sigurniji");
+                    elaboratBase = basePricePerM2; // sync for stats
+                }
+            }
+
+            // Store elaborat statistics in result
+            result.ElaboratStats = elaboratStats;
+
+            // ── 5c. Sanity Check: exact-match anchor ──
             // If final price >40% above lowest exact-match comp, re-evaluate using only exact-match comps.
             var exactMatchComps = cleanPrices.Where(p => p.IsExactNeighborhoodMatch).ToList();
             if (exactMatchComps.Count >= 2)
@@ -1497,21 +1561,22 @@ public class ValuationEngine
 
                 if (basePricePerM2 > sanityThreshold)
                 {
-                    // Re-run weighted median using ONLY exact-match comps
-                    var exactPairs = exactMatchComps.Select(p =>
+                    // Re-run arithmetic mean using ONLY exact-match comps
+                    var exactCorrected = new List<(double PricePerM2, string Title)>();
+                    foreach (var p in exactMatchComps)
                     {
-                        var m = compDetails.FirstOrDefault(c => c.Url == p.SourceUrl && !c.IsOutlier);
-                        double s = m?.SimilarityScore ?? 0.5;
-                        double w = Math.Max(s, 0.1) * 3.0; // keep the 3x boost
-                        return (Value: p.PricePerM2, Weight: w);
-                    }).ToList();
+                        var (kc, kl, ks, ko) = CalculateCorrectionCoefficients(
+                            property, p, elaboratContext, targetStateForCoeff, isLand);
+                        exactCorrected.Add((p.PricePerM2 * kc * kl * ks * ko, p.SourceTitle));
+                    }
+                    var (exactMean, _) = ArithmeticMeanWithTwoSigma(exactCorrected);
 
-                    double corrected = WeightedMedian(exactPairs);
                     pipeline.Add(
-                        $"SANITY CHECK: WM {basePricePerM2:F0} > {sanityThreshold:F0} (140% of lowest exact-match {lowestExactMatch:F0}) " +
-                        $"-> re-evaluated using {exactMatchComps.Count} exact-match comps: {corrected:F0} EUR/m2");
-                    basePricePerM2 = corrected;
-                    priceSource = $"Sanity-Corrected WM ({exactMatchComps.Count} exact-match comps)";
+                        $"SANITY CHECK: Base {basePricePerM2:F0} > {sanityThreshold:F0} " +
+                        $"(140% of lowest exact-match {lowestExactMatch:F0}) " +
+                        $"-> re-evaluated using {exactMatchComps.Count} exact-match comps: {exactMean:F0} EUR/m2");
+                    basePricePerM2 = exactMean;
+                    priceSource = $"Sanity-Corrected Arit. Sredina ({exactMatchComps.Count} exact-match comps)";
                 }
             }
         }
@@ -1568,6 +1633,20 @@ public class ValuationEngine
         result.AfterDiscountPerM2 = Math.Round(afterGap, 0);  // V27: store for UI sync
         pipeline.Add($"Realization gap: {realizationGap * 100:F1}% -> {afterGap:F0} EUR/m2");
 
+        // ── 7b. V39: Market Adjustment Factors (Fp + Ft) — Pravilnik čl. 61/62 ──
+        // Applied AFTER the realization gap, BEFORE contextual keyword adjustments.
+        // Based on real elaborat methodology:
+        //   Fp = size/surface factor (small houses premium, large plots discount)
+        //   Ft = market/location type factor (coast premium, rural discount)
+        var marketContextForFactors = DetectMarketContext(property.Location, marketData.RegionName);
+        var marketFactors = CalculateMarketFactors(property, marketContextForFactors, isLand, marketData.DetectedPropertyType);
+        result.MarketFactors = marketFactors;
+
+        double afterMarketFactors = afterGap * marketFactors.Combined;
+        pipeline.Add($"V39 Tržišni faktor: Fp={marketFactors.Fp:+0.00;-0.00} ({marketFactors.FpReason}) " +
+            $"+ Ft={marketFactors.Ft:+0.00;-0.00} ({marketFactors.FtReason}) " +
+            $"= {marketFactors.Combined:F2} → {afterMarketFactors:F0} EUR/m2");
+
         // ── 8. Contextual Adjustments (with hard cap ±40%) ──
         var adjustments = CalculateAdjustments(property, marketData);
         double totalAdjPercent = adjustments.Sum(a => a.Percent);
@@ -1576,14 +1655,17 @@ public class ValuationEngine
         if (totalAdjPercent > 40) totalAdjPercent = 40;
         if (totalAdjPercent < -40) totalAdjPercent = -40;
 
-        double adjustedPricePerM2 = afterGap * (1 + totalAdjPercent / 100.0);
+        double adjustedPricePerM2 = afterMarketFactors * (1 + totalAdjPercent / 100.0);
         pipeline.Add($"Adjustments: {totalAdjPercent:+0.0;-0.0}% -> {adjustedPricePerM2:F0} EUR/m2");
 
-        // V27: DEBUG — full transparent math chain
-        pipeline.Add($"V27 MATH CHAIN: Base(WM)={basePricePerM2:F0} × (1{realizationGap:+0.0%;-0.0%})={afterGap:F0} × (1{totalAdjPercent/100.0:+0.0%;-0.0%})={adjustedPricePerM2:F0} EUR/m2");
+        // V39: DEBUG — full transparent math chain (elaborat-style)
+        pipeline.Add($"V39 MATH CHAIN: Base(ArithMean)={basePricePerM2:F0} × " +
+            $"(1{realizationGap:+0.0%;-0.0%})={afterGap:F0} × " +
+            $"Ft={marketFactors.Combined:F2}={afterMarketFactors:F0} × " +
+            $"(1{totalAdjPercent/100.0:+0.0%;-0.0%})={adjustedPricePerM2:F0} EUR/m2");
         _logger.LogInformation(
-            "V27 Math: Base={Base:F0} × Discount={Gap:P1} = {AfterGap:F0} × Adj={Adj:+0.0;-0.0}% = {Final:F0} EUR/m2",
-            basePricePerM2, realizationGap, afterGap, totalAdjPercent, adjustedPricePerM2);
+            "V39 Math: Base={Base:F0} × Gap={Gap:P1} = {AfterGap:F0} × Ft={MF:F2} = {AfterMF:F0} × Adj={Adj:+0.0;-0.0}% = {Final:F0} EUR/m2",
+            basePricePerM2, realizationGap, afterGap, marketFactors.Combined, afterMarketFactors, totalAdjPercent, adjustedPricePerM2);
 
         result.CalculatedPricePerM2 = Math.Round(adjustedPricePerM2, 0);
         result.Adjustments = adjustments;
@@ -2041,6 +2123,346 @@ public class ValuationEngine
 
         return sorted[^1].Value;
     }
+
+    // ══════════════════════════════════════════════════════════
+    //  V39: ARITHMETIC MEAN WITH 2-SIGMA VALIDATION
+    //  Replaces WeightedMedian as the PRIMARY valuation method.
+    //  Based on Procjembeni elaborat methodology (Pravilnik NN 105/2015):
+    //    1. Calculate arithmetic mean of all comparables
+    //    2. Calculate standard deviation
+    //    3. Exclude any comparable >2σ from mean
+    //    4. Recalculate mean from remaining
+    //  Returns the validated mean and an ElaboratStatistics struct.
+    // ══════════════════════════════════════════════════════════
+    private static (double Mean, ElaboratStatistics Stats) ArithmeticMeanWithTwoSigma(
+        List<(double PricePerM2, string Title)> comparables)
+    {
+        var stats = new ElaboratStatistics();
+
+        if (comparables.Count == 0)
+            return (0, stats);
+
+        if (comparables.Count == 1)
+        {
+            stats.ArithmeticMeanPerM2 = comparables[0].PricePerM2;
+            stats.TwoSigmaTestPassed = true;
+            stats.Explanation = "Samo 1 usporediva — aritmetička sredina = ta cijena";
+            return (comparables[0].PricePerM2, stats);
+        }
+
+        // ── Pass 1: Calculate arithmetic mean and StdDev ──
+        var values = comparables.Select(c => c.PricePerM2).ToList();
+        double mean = values.Average();
+        double sumSqDiff = values.Sum(v => (v - mean) * (v - mean));
+        double stdDev = Math.Sqrt(sumSqDiff / values.Count);
+        double relativeStdDev = mean > 0 ? (stdDev / mean) * 100 : 0;
+
+        // ── Per-comparable deviations ──
+        var deviations = values.Select(v => mean > 0 ? ((v - mean) / mean) * 100 : 0).ToList();
+
+        // ── 2-sigma test: exclude any comparable with |deviation| > 2σ relative ──
+        double twoSigmaThreshold = 2 * stdDev;
+        var passed = new List<(double PricePerM2, string Title)>();
+        var failed = new List<string>();
+        int excluded = 0;
+
+        for (int i = 0; i < comparables.Count; i++)
+        {
+            double absDeviation = Math.Abs(comparables[i].PricePerM2 - mean);
+            if (absDeviation <= twoSigmaThreshold || twoSigmaThreshold < 0.01)
+            {
+                passed.Add(comparables[i]);
+            }
+            else
+            {
+                excluded++;
+                failed.Add($"{comparables[i].Title}: {comparables[i].PricePerM2:F0} €/m² " +
+                    $"(odstupanje {deviations[i]:+0.0;-0.0}%, >2σ={twoSigmaThreshold:F0})");
+            }
+        }
+
+        // ── Pass 2: Recalculate if any excluded ──
+        double finalMean;
+        if (excluded > 0 && passed.Count >= 1)
+        {
+            finalMean = passed.Average(p => p.PricePerM2);
+            var finalValues = passed.Select(p => p.PricePerM2).ToList();
+            double finalSumSq = finalValues.Sum(v => (v - finalMean) * (v - finalMean));
+            stdDev = Math.Sqrt(finalSumSq / finalValues.Count);
+            relativeStdDev = finalMean > 0 ? (stdDev / finalMean) * 100 : 0;
+            deviations = finalValues.Select(v => finalMean > 0 ? ((v - finalMean) / finalMean) * 100 : 0).ToList();
+        }
+        else
+        {
+            finalMean = mean;
+        }
+
+        stats.ArithmeticMeanPerM2 = Math.Round(finalMean, 2);
+        stats.StdDevPerM2 = Math.Round(stdDev, 2);
+        stats.RelativeStdDevPercent = Math.Round(relativeStdDev, 2);
+        stats.DeviationsPercent = deviations.Select(d => Math.Round(d, 1)).ToList();
+        stats.TwoSigmaTestPassed = excluded == 0;
+        stats.TwoSigmaExcluded = excluded;
+
+        var sb = new System.Text.StringBuilder();
+        sb.Append($"Aritmetička sredina: {finalMean:F2} €/m²");
+        sb.Append($" | Std. odstupanje: {stdDev:F2} €/m² ({relativeStdDev:F1}%)");
+        sb.Append($" | 2σ test: {(excluded == 0 ? "ZADOVOLJAVA" : $"{excluded} isključeno")}");
+        if (failed.Count > 0)
+            sb.Append($" | Isključeni: {string.Join("; ", failed)}");
+        stats.Explanation = sb.ToString();
+
+        return (finalMean, stats);
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  V39: MARKET ADJUSTMENT FACTORS (Fp + Ft)
+    //  Based on Pravilnik čl. 61/62 and real elaborat methodology.
+    //  Applied AFTER comparison method averaging, as tržišni prilagodni faktor.
+    //  Fp = size/surface factor  (small properties = slight premium)
+    //  Ft = market factor        (location type × demand category)
+    // ══════════════════════════════════════════════════════════
+    private static MarketAdjustmentFactors CalculateMarketFactors(
+        ExtractedPropertyInfo property,
+        MarketContext context,
+        bool isLand,
+        string detectedPropertyType)
+    {
+        var factors = new MarketAdjustmentFactors();
+
+        // ── Fp: Faktor površine/veličine ──
+        double sizeM2 = property.SizeM2;
+        bool isHouseType = detectedPropertyType.Contains("kuć", StringComparison.OrdinalIgnoreCase)
+            || detectedPropertyType.Contains("vila", StringComparison.OrdinalIgnoreCase);
+        bool isApartment = detectedPropertyType.Contains("stan", StringComparison.OrdinalIgnoreCase)
+            || detectedPropertyType.Contains("apartman", StringComparison.OrdinalIgnoreCase);
+
+        if (isLand)
+        {
+            // Land: very large plots have slight discount (harder to sell/develop in one piece)
+            if (sizeM2 > 10000)
+            {
+                factors.Fp = -0.10;
+                factors.FpReason = $"Velika parcela ({sizeM2:N0} m² >10.000) — otežana prodaja u cjelini";
+            }
+            else if (sizeM2 > 5000)
+            {
+                factors.Fp = -0.05;
+                factors.FpReason = $"Veća parcela ({sizeM2:N0} m² >5.000) — blagi diskont veličine";
+            }
+            else if (sizeM2 < 300)
+            {
+                factors.Fp = 0.05;
+                factors.FpReason = $"Mala parcela ({sizeM2:N0} m² <300) — veća potražnja za manje parcele";
+            }
+            else
+            {
+                factors.Fp = 0.0;
+                factors.FpReason = "Standardna veličina parcele — bez korekcije";
+            }
+        }
+        else if (isHouseType)
+        {
+            // Houses: small houses (<100m²) have Fp premium (high demand as weekend/starter)
+            if (sizeM2 > 0 && sizeM2 < 100)
+            {
+                factors.Fp = 0.05;
+                factors.FpReason = $"Kuća manja od 100 m² ({sizeM2:N0} m²) — povećana potražnja";
+            }
+            else if (sizeM2 > 300)
+            {
+                factors.Fp = -0.05;
+                factors.FpReason = $"Velika kuća ({sizeM2:N0} m² >300) — uži krug kupaca";
+            }
+            else
+            {
+                factors.Fp = 0.0;
+                factors.FpReason = "Standardna veličina kuće — bez korekcije";
+            }
+        }
+        else if (isApartment)
+        {
+            // Apartments: garsonijere (<35m²) have per-m² premium, very large (>120m²) slight discount
+            if (sizeM2 > 0 && sizeM2 < 35)
+            {
+                factors.Fp = 0.05;
+                factors.FpReason = $"Garsonijera/mali stan ({sizeM2:N0} m²) — viša cijena/m²";
+            }
+            else if (sizeM2 > 120)
+            {
+                factors.Fp = -0.05;
+                factors.FpReason = $"Veliki stan ({sizeM2:N0} m² >120) — uži krug kupaca";
+            }
+            else
+            {
+                factors.Fp = 0.0;
+                factors.FpReason = "Standardna veličina stana — bez korekcije";
+            }
+        }
+        else
+        {
+            factors.Fp = 0.0;
+            factors.FpReason = "Standardna veličina — bez korekcije";
+        }
+
+        // ── Ft: Faktor tržišta (tip lokacije × odnos ponude i potražnje) ──
+        // Based on elaborat's location type system: A=Zagreb Center, B=Large Coast,
+        // C=Large Inland/Small Coast, D=Small Inland/Suburban, E=Rural
+        switch (context)
+        {
+            case MarketContext.Coastal:
+                // Coastal = high demand, low supply → positive factor
+                factors.Ft = 0.10;
+                factors.FtReason = "Obalna lokacija (tip B/C) — pojačana potražnja, kategorija II/III";
+                break;
+
+            case MarketContext.Inland:
+                // Major inland cities = balanced market
+                factors.Ft = 0.0;
+                factors.FtReason = "Velika kontinentalna sredina (tip C/D) — uravnoteženo tržište, kategorija III";
+                break;
+
+            case MarketContext.Rural:
+                // Rural = low demand, high supply → significant negative factor
+                factors.Ft = -0.20;
+                factors.FtReason = "Ruralna lokacija (tip E) — slaba potražnja, kategorija IV";
+                break;
+
+            default:
+                factors.Ft = 0.0;
+                factors.FtReason = "Neodređena lokacija — bez korekcije";
+                break;
+        }
+
+        // ── Detect premium micro-locations that override the base Ft ──
+        string allText = $"{property.Description} {property.Location} {property.AdditionalNotes} " +
+            $"{property.MicroLocation} {string.Join(" ", property.KeyFeatures ?? [])}"
+            .ToLowerInvariant();
+
+        // Zagreb centar/Gornji grad/Donji grad → Tip A, kat. I
+        if ((allText.Contains("zagreb") && (allText.Contains("centar") || allText.Contains("gornji grad")
+            || allText.Contains("donji grad") || allText.Contains("ilica") || allText.Contains("ban jelačić")))
+            || allText.Contains("dubrovnik") && allText.Contains("stari grad"))
+        {
+            factors.Ft = 0.15;
+            factors.FtReason = "Premium lokacija (tip A) — vrhunska potražnja, kategorija I";
+        }
+
+        factors.Combined = Math.Round(1.0 + factors.Fp + factors.Ft, 2);
+        return factors;
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  V39: PER-COMPARABLE CORRECTION COEFFICIENTS
+    //  Calculates Kc (condition), Kl (location), Ks (size), Ko (orientation)
+    //  for each comparable vs the subject property.
+    //  These replace the old ad-hoc per-comp adjustments with a structured
+    //  coefficient system matching professional elaborat methodology.
+    // ══════════════════════════════════════════════════════════
+    private static (double Kc, double Kl, double Ks, double Ko) CalculateCorrectionCoefficients(
+        ExtractedPropertyInfo subject,
+        ExtractedPrice comp,
+        MarketContext context,
+        PropertyCondition targetState,
+        bool isLand)
+    {
+        // ── Kc: Koeficijent stanja (condition) ──
+        // FK Matrica-inspired: 5-point scale mapped to coefficients
+        // NeedsWork=0.70, Original=0.85, Good=1.00, Renovated=1.10, New=1.15
+        double kc = 1.0;
+        if (!isLand) // Land has no "condition"
+        {
+            double targetCoeff = StateToCoefficient(targetState);
+            double compCoeff = StateToCoefficient(comp.DetectedCondition);
+            // If subject is better → boost (comp understates), if worse → deduct
+            kc = compCoeff > 0 ? targetCoeff / compCoeff : 1.0;
+            kc = Math.Clamp(kc, 0.70, 1.30);
+        }
+
+        // ── Kl: Koeficijent lokacije (micro-location) ──
+        // Exact neighborhood match = 1.00, different = ±0.05 to ±0.15 based on signals
+        double kl = 1.0;
+        if (comp.IsExactNeighborhoodMatch)
+        {
+            kl = 1.0; // Perfect location match
+        }
+        else
+        {
+            // Different neighborhood: check center/periphery signals
+            string compText = $"{comp.SourceTitle}".ToLowerInvariant();
+            string subjectText = $"{subject.Location} {subject.MicroLocation} {subject.AdditionalNotes}"
+                .ToLowerInvariant();
+
+            bool subjectIsCenter = CenterLocationKeywords.Any(kw => subjectText.Contains(kw));
+            bool compIsCenter = CenterLocationKeywords.Any(kw => compText.Contains(kw));
+
+            if (subjectIsCenter && !compIsCenter)
+                kl = 1.10; // Subject in center, comp is not → comp underpriced for us
+            else if (!subjectIsCenter && compIsCenter)
+                kl = 0.90; // Subject peripheral, comp in center → comp overpriced for us
+            else
+                kl = 0.95; // Different neighborhood, same tier → slight discount for uncertainty
+        }
+
+        // ── Ks: Koeficijent veličine (size) ──
+        // Larger properties → lower €/m², smaller → higher €/m²
+        double ks = 1.0;
+        if (comp.DetectedSizeM2 > 0 && subject.SizeM2 > 0)
+        {
+            double sizeRatio = subject.SizeM2 / comp.DetectedSizeM2;
+            if (sizeRatio > 2.0)
+                ks = 0.90; // Subject is much larger → lower per-m² expected
+            else if (sizeRatio > 1.3)
+                ks = 0.95;
+            else if (sizeRatio < 0.5)
+                ks = 1.10; // Subject is much smaller → higher per-m² expected
+            else if (sizeRatio < 0.7)
+                ks = 1.05;
+        }
+
+        // ── Ko: Koeficijent orijentacije/etaže/pogleda ──
+        // Coastal: orientation + view matters a lot
+        // Inland: orientation matters less
+        double ko = 1.0;
+        if (context == MarketContext.Coastal)
+        {
+            // North-facing penalty
+            string subjectLower = $"{subject.Description} {subject.AdditionalNotes}".ToLowerInvariant();
+            bool subjectNorth = subjectLower.Contains("sjever") || subjectLower.Contains("sjeverna");
+            bool subjectSouth = subjectLower.Contains("južn") || subjectLower.Contains("juzn")
+                || subjectLower.Contains("zapad");
+
+            if (subjectNorth && comp.IsSouthFacing)
+                ko = 0.90;
+            else if (subjectSouth && comp.IsNorthFacing)
+                ko = 1.10;
+            else if (subjectNorth && !comp.IsNorthFacing)
+                ko = 0.95;
+
+            // Sea view differential
+            bool subjectHasView = subjectLower.Contains("pogled na more") || subjectLower.Contains("sea view");
+            if (!subjectHasView && comp.HasSeaView)
+                ko = Math.Min(ko, 0.85); // Comp has view we don't → deduct
+            else if (subjectHasView && !comp.HasSeaView)
+                ko = Math.Max(ko, 1.15); // We have view comp doesn't → boost
+        }
+
+        return (Math.Round(kc, 2), Math.Round(kl, 2), Math.Round(ks, 2), Math.Round(ko, 2));
+    }
+
+    /// <summary>
+    /// V39: Map PropertyCondition to FK Matrica-inspired coefficient.
+    /// Based on elaborat's 5-point scale for building condition assessment.
+    /// </summary>
+    private static double StateToCoefficient(PropertyCondition state) => state switch
+    {
+        PropertyCondition.NeedsWork => 0.70,   // Fk = 4-5, heavy depreciation
+        PropertyCondition.Original  => 0.85,   // Fk = 3-4, significant wear
+        PropertyCondition.Good      => 1.00,   // Fk = 2-3, standard/maintained
+        PropertyCondition.Renovated => 1.10,   // Fk = 1-2, recently updated
+        PropertyCondition.New       => 1.15,   // Fk = 1, new construction
+        _                           => 1.00,   // Unknown = assume Good
+    };
 
     // ══════════════════════════════════════════════════════════
     //  ADAPTIVE REALIZATION GAP (V5 — Liquidity-Based)
@@ -3765,6 +4187,10 @@ public class DeterministicValuation
 
     // ── V13: Sherlock Insight ──
     public string SherlockInsight { get; set; } = "";
+
+    // ── V39: Elaborat-style output (Pravilnik NN 105/2015) ──
+    public ElaboratStatistics? ElaboratStats { get; set; }
+    public MarketAdjustmentFactors? MarketFactors { get; set; }
 }
 
 public class UsedComparable

@@ -692,6 +692,11 @@ public class EvaluateController : ControllerBase
             ComparisonTable = SseHelpers.BuildComparisonTable(engineResult, engineResult.TotalAdjustmentPercent),
             PriceRange = SseHelpers.BuildPriceRange(engineResult, property.SizeM2),
             BenchmarkSummary = SseHelpers.BuildBenchmarkSummary(engineResult, marketData),
+
+            // V39: Elaborat-style output
+            ElaboratStats = engineResult.ElaboratStats,
+            MarketFactors = engineResult.MarketFactors,
+            ValuationMethod = "Poredbena",
         };
 
         // ── Save to Supabase ──

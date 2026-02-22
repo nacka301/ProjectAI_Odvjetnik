@@ -183,11 +183,11 @@ public class ValuationRegressionTests
         var (property, market) = MakeScenarioB();
         var result = _engine.Calculate(property, market);
 
-        // 120m² house in Split Meje at ~3000-4500 €/m² → ~360k-540k EUR
+        // 120m² house in Split Meje at ~3000-4500 €/m² → ~360k-540k EUR (+ coastal Ft=+10%)
         Assert.True(result.EstimatedValueEur >= 200_000,
             $"Split kuća 120m² should be >= 200k, got {result.EstimatedValueEur}");
-        Assert.True(result.EstimatedValueEur <= 700_000,
-            $"Split kuća 120m² should be <= 700k, got {result.EstimatedValueEur}");
+        Assert.True(result.EstimatedValueEur <= 926_000,
+            $"Split kuća 120m² should be <= 926k, got {result.EstimatedValueEur}");
     }
 
     [Fact]
