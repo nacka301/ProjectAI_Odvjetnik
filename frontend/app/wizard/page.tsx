@@ -61,12 +61,14 @@ const ResultView = dynamic(() => import("./ResultView"), {
 });
 
 import { API_BASE } from "@/lib/api";
+import { useUserId } from "@/lib/useUserId";
 
 // ═══════════════════════════════════════════
 //  MAIN COMPONENT
 // ═══════════════════════════════════════════
 
 export default function WizardPage() {
+  const userId = useUserId();
   // Wizard state
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [propertyType, setPropertyType] = useState<PropertyType | null>(null);
@@ -130,7 +132,7 @@ export default function WizardPage() {
     try {
       const res = await fetch(`${API_BASE}/api/valuation/draft`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(userId ? { "x-user-id": userId } : {}) },
         body: JSON.stringify(buildPayload()),
       });
 
@@ -179,7 +181,7 @@ export default function WizardPage() {
 
       const response = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(userId ? { "x-user-id": userId } : {}) },
         body,
         signal: controller.signal,
       });

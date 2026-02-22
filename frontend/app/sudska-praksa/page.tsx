@@ -37,6 +37,7 @@ import ResultActions from "@/components/ResultActions";
 import { generateLegalPdf } from "@/lib/generateModulePdfs";
 import { NormBadge, CitedNormsList, TemporalDatePicker, CitationModeToggle } from "@/components/NormBadge";
 import { type CitedNorm, fetchTemporalBatch, type TemporalNormResult } from "@/lib/normApi";
+import { useUserId } from "@/lib/useUserId";
 
 import { API_BASE } from "@/lib/api";
 const API = API_BASE;
@@ -408,6 +409,7 @@ const INITIAL_LEGAL_STAGES: ProcessingStage[] = [
 ];
 
 export default function ProvjeriIshodPage() {
+  const userId = useUserId();
   // Input state
   const [caseDescription, setCaseDescription] = useState("");
   const [contractText, setContractText] = useState("");
@@ -476,7 +478,7 @@ export default function ProvjeriIshodPage() {
     try {
       const response = await fetch(`${API}/api/legal/strategy/stream`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(userId ? { "x-user-id": userId } : {}) },
         body: JSON.stringify({
           case_description: caseDescription,
           contract_text: contractText || null,
@@ -583,6 +585,7 @@ export default function ProvjeriIshodPage() {
       const res = await fetch(`${API}/api/legal/strategy-pdf`, {
         method: "POST",
         body: formData,
+        headers: userId ? { "x-user-id": userId } : {},
       });
 
       if (!res.ok) {

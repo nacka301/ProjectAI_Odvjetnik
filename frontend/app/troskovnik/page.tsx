@@ -25,6 +25,7 @@ import {
   Info,
 } from "lucide-react";
 import { API_BASE } from "@/lib/api";
+import { useUserId } from "@/lib/useUserId";
 
 const API = API_BASE;
 const BOD_VALUE = 2.0;
@@ -158,6 +159,7 @@ function getCatColor(cat: string) {
 // ═══════════════════════════════════════════════════════════════
 
 export default function TroskovnikPage() {
+  const userId = useUserId();
   // ── Catalog state ──
   const [katalog, setKatalog] = useState<TarifnaStavka[]>([]);
   const [loadingKatalog, setLoadingKatalog] = useState(true);
@@ -192,7 +194,9 @@ export default function TroskovnikPage() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API}/api/troskovnik/katalog`);
+        const res = await fetch(`${API}/api/troskovnik/katalog`, {
+          headers: userId ? { "x-user-id": userId } : {},
+        });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data: TarifnaStavka[] = await res.json();
         setKatalog(data);
@@ -337,7 +341,7 @@ export default function TroskovnikPage() {
 
       const res = await fetch(`${API}/api/troskovnik/izracunaj`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(userId ? { "x-user-id": userId } : {}) },
         body: JSON.stringify(body),
       });
 

@@ -18,6 +18,7 @@ import {
 import SharedProcessingView, { type ProcessingStage } from "@/components/SharedProcessingView";
 import ResultActions from "@/components/ResultActions";
 import { generateChronologyPdf } from "@/lib/generateModulePdfs";
+import { useUserId } from "@/lib/useUserId";
 
 // ── Types ──
 
@@ -227,6 +228,7 @@ const INITIAL_CHRONO_STAGES: ProcessingStage[] = [
 ];
 
 export default function ChronologyPage() {
+  const userId = useUserId();
   const [files, setFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState<ProgressUpdate[]>([]);
@@ -292,6 +294,7 @@ export default function ChronologyPage() {
       const response = await fetch(`${API}/api/chronology/stream`, {
         method: "POST",
         body: formData,
+        headers: userId ? { "x-user-id": userId } : {},
       });
 
       if (!response.ok || !response.body) {

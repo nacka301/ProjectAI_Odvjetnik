@@ -32,6 +32,7 @@ import SharedProcessingView, { type ProcessingStage } from "@/components/SharedP
 import ResultActions from "@/components/ResultActions";
 import { INITIAL_CONTRACT_STAGES, CONTRACT_STAGE_ICONS, CONTRACT_STAGE_MICROCOPY, type ContractStage } from "./contractConstants";
 import { generateContractPdf } from "@/lib/generateModulePdfs";
+import { useUserId } from "@/lib/useUserId";
 
 // ── Types matching backend ContractAnalysisResult (V49) ──
 
@@ -176,6 +177,7 @@ import { API_BASE } from "@/lib/api";
 const API = API_BASE;
 
 export default function ContractAnalysisPage() {
+  const userId = useUserId();
   const [mode, setMode] = useState<"pdf" | "text">("pdf");
   const [textInput, setTextInput] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
@@ -241,6 +243,7 @@ export default function ContractAnalysisPage() {
           method: "POST",
           body: formData,
           signal: controller.signal,
+          headers: userId ? { "x-user-id": userId } : {},
         });
       } else {
         if (!textInput.trim() || textInput.trim().length < 50) {
@@ -251,7 +254,7 @@ export default function ContractAnalysisPage() {
         }
         response = await fetch(`${API}/api/contract/analyze-text-stream`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...(userId ? { "x-user-id": userId } : {}) },
           body: JSON.stringify({ text: textInput }),
           signal: controller.signal,
         });
@@ -359,7 +362,7 @@ export default function ContractAnalysisPage() {
     try {
       const response = await fetch(`${API}/api/contract/generate-stream`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(userId ? { "x-user-id": userId } : {}) },
         body: JSON.stringify({
           original_text: originalTextRef.current,
           analysis_result: result,
