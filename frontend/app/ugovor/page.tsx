@@ -33,6 +33,7 @@ import ResultActions from "@/components/ResultActions";
 import { INITIAL_CONTRACT_STAGES, CONTRACT_STAGE_ICONS, CONTRACT_STAGE_MICROCOPY, type ContractStage } from "./contractConstants";
 import { generateContractPdf } from "@/lib/generateModulePdfs";
 import { useUserId } from "@/lib/useUserId";
+import { PrivacyBanner } from "@/components/TrustComponents";
 
 // ── Types matching backend ContractAnalysisResult (V49) ──
 
@@ -536,6 +537,9 @@ export default function ContractAnalysisPage() {
                 Tekst
               </button>
             </div>
+
+            {/* Privacy Banner */}
+            <PrivacyBanner />
 
             {/* PDF Upload */}
             {mode === "pdf" && (

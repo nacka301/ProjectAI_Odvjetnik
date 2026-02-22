@@ -788,19 +788,6 @@ export default function Dashboard() {
           </div>
         </section>
       </main>
-
-      {/* Footer */}
-      <footer className="max-w-7xl mx-auto px-4 sm:px-6 pb-6">
-        <div className="border-t border-slate-200 pt-4 text-center space-y-1 text-[11px] text-slate-400">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-1">
-            <span>PravoTek v2.0</span>
-            <span className="text-center">
-              AI analiza ne predstavlja pravni savjet sukladno čl. 1. Zakona o odvjetništvu (NN 9/94, 18/11)
-            </span>
-          </div>
-          <p className="px-2 sm:px-0">Obrada osobnih podataka provodi se sukladno Uredbi (EU) 2016/679 (GDPR). Korisnik potvrđuje da ima pravo na pristup dostavljenom dokumentu.</p>
-        </div>
-      </footer>
     </div>
   );
 }

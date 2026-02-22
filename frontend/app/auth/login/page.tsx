@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Eye,
   EyeOff,
@@ -13,6 +13,7 @@ import {
   Lock,
 } from "lucide-react";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
+import { LoginTrustText } from "@/components/TrustComponents";
 import {
   isEmailValid,
   isLockedOut,
@@ -34,8 +35,18 @@ function GoogleLogo() {
 }
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginContent />
+    </Suspense>
+  );
+}
+
+function LoginContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createSupabaseBrowser();
+  const idleLogout = searchParams.get("reason") === "idle";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -141,6 +152,14 @@ export default function LoginPage() {
         </div>
 
         <div className="px-6 pb-6 sm:px-8 sm:pb-8 space-y-5">
+          {/* Idle logout notice */}
+          {idleLogout && !error && (
+            <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-700 animate-in fade-in duration-200">
+              <Lock className="h-4 w-4 shrink-0 mt-0.5 text-amber-500" />
+              <span>Automatski ste odjavljeni zbog neaktivnosti (15 min). Prijavite se ponovo.</span>
+            </div>
+          )}
+
           {/* Error */}
           {error && (
             <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700 animate-in fade-in duration-200">
@@ -248,6 +267,9 @@ export default function LoginPage() {
           Registrirajte se
         </Link>
       </p>
+
+      {/* Trust text */}
+      <LoginTrustText />
     </>
   );
 }

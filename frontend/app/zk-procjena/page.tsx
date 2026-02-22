@@ -42,6 +42,7 @@ import LocationSelector from "@/components/LocationSelector";
 import SharedProcessingView, { type ProcessingStage } from "@/components/SharedProcessingView";
 import ResultActions from "@/components/ResultActions";
 import { useUserId } from "@/lib/useUserId";
+import { PrivacyBanner } from "@/components/TrustComponents";
 
 import { API_BASE } from "@/lib/api";
 
@@ -656,6 +657,9 @@ export default function ZkProcjenaPage() {
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 placeholder-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               />
             </div>
+
+            {/* Privacy Banner */}
+            <PrivacyBanner />
 
             {/* PDF Drop Zone */}
             {mode === "pdf" && (

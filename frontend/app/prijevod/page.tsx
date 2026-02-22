@@ -15,6 +15,7 @@ import {
 import SharedProcessingView, { type ProcessingStage } from "@/components/SharedProcessingView";
 import { API_BASE } from "@/lib/api";
 import { useUserId } from "@/lib/useUserId";
+import { PrivacyBanner } from "@/components/TrustComponents";
 
 // ═══════════════════════════════════════════════════════════
 //  Sudski Tumač — Legal Translation & Transliteration
@@ -402,6 +403,7 @@ export default function TranslationPage() {
         </div>
 
         {/* Main Input Card */}
+        <PrivacyBanner />
         <div className="rounded-2xl bg-white shadow-lg border border-gray-200 overflow-hidden">
           {/* Mode Selector */}
           <div className="border-b border-gray-100 p-6">
