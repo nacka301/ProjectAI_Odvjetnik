@@ -15,11 +15,8 @@ test.describe("Navigation & Routes", () => {
       "/",
       "/wizard",
       "/ugovor",
-      "/kronologija",
-      "/sudska-praksa",
       "/zk-procjena",
       "/valuation",
-      "/fiskalizacija",
       "/history",
     ];
 

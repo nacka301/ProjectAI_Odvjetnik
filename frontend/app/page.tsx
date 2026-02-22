@@ -8,14 +8,12 @@ import {
   Search as SearchIcon,
   Scale,
   BookOpen,
-  ScrollText,
   Clock,
   Building2,
   ChevronRight,
   Loader2,
   ShieldAlert,
   ArrowRight,
-  Gavel,
   X,
   Info,
   Upload,
@@ -24,14 +22,12 @@ import {
   CircleHelp,
   Eye,
   Send,
-  Receipt,
   Landmark,
   Construction,
   Calculator,
   Users,
   LogOut,
 } from "lucide-react";
-import LegalFeed from "@/components/LegalFeed";
 import { getRecentActivity, type ActivityItem, type ActivityType } from "@/lib/supabase";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
 
@@ -52,9 +48,9 @@ function timeAgo(iso: string) {
 const ACTIVITY_ICONS: Record<ActivityType, React.ReactNode> = {
   valuation: <Building2 className="h-4 w-4 text-blue-500" />,
   contract: <ShieldAlert className="h-4 w-4 text-rose-500" />,
-  chronology: <ScrollText className="h-4 w-4 text-violet-500" />,
-  legal: <Gavel className="h-4 w-4 text-amber-500" />,
-  invoice: <Receipt className="h-4 w-4 text-teal-500" />,
+  chronology: <Building2 className="h-4 w-4 text-violet-500" />,
+  legal: <Building2 className="h-4 w-4 text-amber-500" />,
+  invoice: <Building2 className="h-4 w-4 text-teal-500" />,
 };
 
 const ACTIVITY_LABELS: Record<ActivityType, string> = {
@@ -76,43 +72,28 @@ const BADGE_COLORS: Record<string, string> = {
 const TOUR_STEPS = [
   {
     target: "card-procjena",
-    title: "1/8 · Tržišna Procjena",
+    title: "1/5 · Tržišna Procjena",
     text: "Ovdje izračunavate realnu vrijednost nekretnine. Unesite podatke ili zalijepite link oglasa.",
   },
   {
     target: "card-ugovor",
-    title: "2/8 · Analiza Ugovora",
+    title: "2/5 · Analiza Ugovora",
     text: "Učitajte nacrt ugovora — AI pronalazi pravne zamke i predlaže sigurnije klauzule.",
   },
   {
-    target: "card-kronologija",
-    title: "3/8 · Kronologija Spisa",
-    text: "Ubacite sve dokumente odjednom — AI slaže interaktivnu kronologiju za pripremu tužbe.",
-  },
-  {
     target: "card-zk",
-    title: "4/8 · ZK Izvadak",
+    title: "3/5 · ZK Izvadak",
     text: "Učitajte ZK izvadak — AI identificira terete, hipoteke, plombe i pravne rizike.",
   },
   {
-    target: "card-sudska-praksa",
-    title: "5/8 · Sudska Praksa",
-    text: "AI traži relevantne presude Vrhovnog suda i analizira izglede Vašeg predmeta.",
-  },
-  {
     target: "card-troskovnik",
-    title: "6/8 · Odvjetnički Troškovnik",
+    title: "4/5 · Odvjetnički Troškovnik",
     text: "Izračunajte nagradu i troškove prema službenoj tarifi — odaberite radnje, a bodovi se računaju automatski.",
   },
   {
     target: "card-stranke",
-    title: "7/8 · Stranke",
+    title: "5/5 · Stranke",
     text: "Upravljajte strankama, predmetima i troškovnicima — pregledajte kompletan dosje na jednom mjestu.",
-  },
-  {
-    target: "card-fiskalizacija",
-    title: "8/8 · Fiskalizacija 2.0",
-    text: "Generirajte e-račun (UBL 2.1) izravno povezan s predmetom — spremno za e-Račun sustav.",
   },
 ];
 
@@ -272,19 +253,6 @@ const FEATURE_CARDS: FeatureCard[] = [
       "Učitajte nacrt ugovora. AI traži 'crvene zastavice' (npr. nedostatak tabularne izjave) i predlaže sigurnije klauzule prema ZOO-u.",
   },
   {
-    id: "card-kronologija",
-    href: "/kronologija",
-    icon: <ScrollText className="h-6 w-6" />,
-    iconBg: "bg-violet-100 group-hover:bg-violet-200",
-    iconColor: "text-violet-600",
-    accentBorder: "hover:border-violet-400",
-    accentBg: "bg-violet-50 group-hover:bg-violet-100",
-    title: "Kronologija Spisa",
-    description: "Automatsko slaganje događaja iz gomile dokumenata u vremensku crtu.",
-    howItWorks:
-      "Ubacite sve mailove, račune i dopise odjednom. AI će izvući datume i složiti interaktivnu kronologiju za pripremu tužbe.",
-  },
-  {
     id: "card-zk",
     href: "/zk-procjena",
     icon: <Landmark className="h-6 w-6" />,
@@ -296,19 +264,6 @@ const FEATURE_CARDS: FeatureCard[] = [
     description: "AI analiza zemljišnoknjižnog izvatka — terete, hipoteke, plombe i pravni rizici.",
     howItWorks:
       "Učitajte PDF ZK izvatka. AI identificira vlasnike, terete (hipoteke, služnosti, fiducije), plombe i ocjenjuje rizik za kupnju ili gradnju.",
-  },
-  {
-    id: "card-sudska-praksa",
-    href: "/sudska-praksa",
-    icon: <Gavel className="h-6 w-6" />,
-    iconBg: "bg-amber-100 group-hover:bg-amber-200",
-    iconColor: "text-amber-600",
-    accentBorder: "hover:border-amber-400",
-    accentBg: "bg-amber-50 group-hover:bg-amber-100",
-    title: "Sudska Praksa",
-    description: "Pretraga i analiza relevantnih presuda za Vaš pravni slučaj.",
-    howItWorks:
-      "Opišite Vaš slučaj ili učitajte tužbu. AI traži relevantne presude Vrhovnog suda i analizira izglede vašeg predmeta.",
   },
   {
     id: "card-troskovnik",
@@ -335,21 +290,6 @@ const FEATURE_CARDS: FeatureCard[] = [
     description: "Upravljanje strankama, predmetima i troškovnicima na jednom mjestu.",
     howItWorks:
       "Kreirajte stranke, povežite predmete i troškovnike — pregledajte kompletni dosje svake stranke.",
-  },
-  {
-    id: "card-fiskalizacija",
-    href: "/fiskalizacija",
-    icon: <Receipt className="h-6 w-6" />,
-    iconBg: "bg-teal-100 group-hover:bg-teal-200",
-    iconColor: "text-teal-600",
-    accentBorder: "hover:border-teal-400",
-    accentBg: "bg-teal-50 group-hover:bg-teal-100",
-    title: "Fiskalizacija 2.0",
-    description: "Automatska izrada e-računa (UBL 2.1) iz analiziranih predmeta.",
-    howItWorks:
-      "Unesite podatke stranaka i iznos — PravoTek generira UBL 2.1 XML e-račun povezan s predmetom, spreman za slanje putem e-Račun sustava.",
-    disabled: true,
-    disabledLabel: "U razvoju",
   },
 ];
 
@@ -422,9 +362,9 @@ export default function Dashboard() {
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
-    // If files are dropped, route to chronology (the multi-doc tool)
+    // If files are dropped, route to ZK analysis (the doc analysis tool)
     if (e.dataTransfer.files.length > 0) {
-      window.location.href = "/kronologija";
+      window.location.href = "/zk-procjena";
     }
   }, []);
 
@@ -801,11 +741,8 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* ── RIGHT: Legal Feed + Stats ── */}
+          {/* ── RIGHT: Stats ── */}
           <div className="space-y-4">
-            {/* Legal Intelligence Feed */}
-            <LegalFeed />
-
             {/* Quick Stats */}
             {!loading && activity.length > 0 && (
               <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
@@ -813,7 +750,7 @@ export default function Dashboard() {
                   Brzi pregled
                 </h3>
                 <div className="grid grid-cols-2 gap-3">
-                  {(["valuation", "contract", "chronology", "legal"] as ActivityType[]).map((t) => {
+                  {(["valuation", "contract"] as ActivityType[]).map((t) => {
                     const count = activity.filter((a) => a.type === t).length;
                     if (count === 0) return null;
                     return (

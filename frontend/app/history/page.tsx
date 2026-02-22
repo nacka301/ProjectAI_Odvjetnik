@@ -14,9 +14,6 @@ import {
   AlertTriangle,
   Loader2,
   ShieldAlert,
-  ScrollText,
-  Gavel,
-  Receipt,
   Trash2,
 } from "lucide-react";
 import {
@@ -39,17 +36,14 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "all", label: "Sve" },
   { key: "valuation", label: "Procjene" },
   { key: "contract", label: "Ugovori" },
-  { key: "chronology", label: "Kronologije" },
-  { key: "legal", label: "Pravne analize" },
-  { key: "invoice", label: "e-Računi" },
 ];
 
 const ACTIVITY_ICONS: Record<ActivityType, React.ReactNode> = {
   valuation: <Building2 className="h-5 w-5 text-blue-500" />,
   contract: <ShieldAlert className="h-5 w-5 text-rose-500" />,
-  chronology: <ScrollText className="h-5 w-5 text-violet-500" />,
-  legal: <Gavel className="h-5 w-5 text-amber-500" />,
-  invoice: <Receipt className="h-5 w-5 text-teal-500" />,
+  chronology: <Building2 className="h-5 w-5 text-gray-400" />,
+  legal: <Building2 className="h-5 w-5 text-gray-400" />,
+  invoice: <Building2 className="h-5 w-5 text-gray-400" />,
 };
 
 const ACTIVITY_LABELS: Record<ActivityType, string> = {
@@ -59,6 +53,8 @@ const ACTIVITY_LABELS: Record<ActivityType, string> = {
   legal: "Pravna analiza",
   invoice: "e-Račun",
 };
+
+/* Note: chronology, legal, invoice labels kept for backward compat with existing DB rows */
 
 const BADGE_COLORS: Record<string, string> = {
   green: "bg-green-100 text-green-800",
