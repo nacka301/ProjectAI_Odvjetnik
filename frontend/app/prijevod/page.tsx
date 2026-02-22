@@ -129,7 +129,7 @@ const STAGE_ICONS: Record<string, React.ReactNode> = {
 
 const STAGE_MICROCOPY: Record<string, string[]> = {
   translating: [
-    "AI sudski tumač radi na vašem tekstu...",
+    "Modul za pravnu lingvistiku obrađuje vaš tekst...",
     "Primjenjujem strogu pravnu terminologiju...",
     "Zadržavam strukturu i formatiranje dokumenta...",
     "Provjeravam točnost prijevoda...",
@@ -506,7 +506,7 @@ export default function TranslationPage() {
         <div className="mt-6 rounded-xl bg-purple-50/50 border border-purple-100 p-4 text-xs text-gray-500 leading-relaxed">
           <strong className="text-gray-700">Kako radi?</strong>{" "}
           Zalijepite tekst pravnog dokumenta (presuda, ugovor, rješenje) i odaberite željeni način
-          prijevoda. AI sudski tumač prevodi uz strogu pravnu terminologiju, zadržavajući strukturu
+          prijevoda. Modul za pravnu lingvistiku prevodi uz strogu pravnu terminologiju, zadržavajući strukturu
           i formatiranje originala. Rezultat je spreman za sudsku upotrebu.
         </div>
       </div>

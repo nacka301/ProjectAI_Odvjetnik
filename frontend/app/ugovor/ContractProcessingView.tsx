@@ -150,7 +150,7 @@ export default function ContractProcessingView({
             Analiza ugovora u tijeku
           </h2>
           <p className="text-xs text-gray-500 mt-1">
-            AI pravni revizor provjerava vaš ugovor
+            Pravni revizor provjerava vaš ugovor
           </p>
         </div>
 

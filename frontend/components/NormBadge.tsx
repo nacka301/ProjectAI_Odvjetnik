@@ -310,7 +310,7 @@ export function TemporalDatePicker({ value, onChange, label }: TemporalDatePicke
           {label || "Temporal Law Mode — Datum pravnog događaja"}
         </label>
         <p className="text-[10px] text-blue-500 mt-0.5">
-          AI će koristiti verziju zakona važeću na ovaj datum
+          Sustav će primijeniti verziju zakona važeću na ovaj datum
         </p>
       </div>
       <input

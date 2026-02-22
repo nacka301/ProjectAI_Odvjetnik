@@ -295,9 +295,9 @@ const INITIAL_STAGES: StreamStage[] = [
   { id: "zk_parsing", label: "Parsiram ZK izvadak (A/B/C listovi)...", status: "pending" },
   { id: "reading", label: "Pripremam podatke za procjenu...", status: "pending" },
   { id: "searching", label: "Pretražujem Njuškalo i tržište nekretnina...", status: "pending" },
-  { id: "ai_features", label: "AI analizira značajke oglasa...", status: "pending" },
+  { id: "ai_features", label: "Analiziram značajke oglasa...", status: "pending" },
   { id: "engine", label: "Engine izračunava tržišnu vrijednost...", status: "pending" },
-  { id: "ai_opinion", label: "AI generira stručno mišljenje...", status: "pending" },
+  { id: "ai_opinion", label: "Generiram stručno mišljenje...", status: "pending" },
   { id: "saving", label: "Spremam rezultate...", status: "pending" },
 ];
 
@@ -316,7 +316,7 @@ const ZK_STAGE_MICROCOPY: Record<string, string[]> = {
   searching: ["Pretražujem Njuškalo...", "Pretražujem Index Oglasi...", "Tražim usporedive nekretnine..."],
   ai_features: ["Analiziram detalje oglasa...", "Procjenjujem stanje nekretnina..."],
   engine: ["Izračunavam medijanu cijena...", "Robust estimator u tijeku...", "Primjenjujem korekcije..."],
-  ai_opinion: ["AI formulira stručno mišljenje...", "Obrazlažem procjenu..."],
+  ai_opinion: ["Formuliram stručno mišljenje...", "Obrazlažem procjenu..."],
   saving: ["Spremam u bazu...", "Generiranje izvještaja..."],
 };
 
@@ -570,7 +570,7 @@ export default function ZkProcjenaPage() {
           onCancel={() => { cancelAnalysis(); setViewState("INPUT"); }}
           onReset={reset}
           title="ZK analiza i procjena u tijeku"
-          subtitle="AI parsira izvadak, provodi due diligence i procjenjuje vrijednost"
+          subtitle="Sustav parsira izvadak, provodi due diligence i procjenjuje vrijednost"
           headerIcon={<BookOpen className="h-7 w-7 text-white" />}
           stageIcons={ZK_STAGE_ICONS}
           stageMicrocopy={ZK_STAGE_MICROCOPY}

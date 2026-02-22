@@ -79,12 +79,12 @@ const TOUR_STEPS = [
   {
     target: "card-ugovor",
     title: "2/6 · Analiza Ugovora",
-    text: "Učitajte nacrt ugovora — AI pronalazi pravne zamke i predlaže sigurnije klauzule.",
+    text: "Učitajte nacrt ugovora — sustav pronalazi pravne zamke i predlaže sigurnije klauzule.",
   },
   {
     target: "card-zk",
     title: "3/6 · ZK Izvadak",
-    text: "Učitajte ZK izvadak — AI identificira terete, hipoteke, plombe i pravne rizike.",
+    text: "Učitajte ZK izvadak — sustav identificira terete, hipoteke, plombe i pravne rizike.",
   },
   {
     target: "card-troskovnik",
@@ -99,7 +99,7 @@ const TOUR_STEPS = [
   {
     target: "card-prijevod",
     title: "6/6 · Sudski Tumač",
-    text: "Zalijepite pravni tekst na ćirilici ili stranom jeziku — AI sudski tumač prevodi uz strogu terminologiju.",
+    text: "Zalijepite pravni tekst na ćirilici ili stranom jeziku — modul za pravnu lingvistiku prevodi uz strogu terminologiju.",
   },
 ];
 
@@ -243,7 +243,7 @@ const FEATURE_CARDS: FeatureCard[] = [
     title: "Tržišna Procjena",
     description: "Izračun realne vrijednosti nekretnine uz analizu mikrolokacije i rizika.",
     howItWorks:
-      "Unesite podatke ili zalijepite link oglasa. AI će analizirati tekst (npr. 'kaskadni teren') i primijeniti korektivne faktore na cijenu.",
+      "Unesite podatke ili zalijepite link oglasa. Sustav će analizirati tekst (npr. 'kaskadni teren') i primijeniti korektivne faktore na cijenu.",
   },
   {
     id: "card-ugovor",
@@ -256,7 +256,7 @@ const FEATURE_CARDS: FeatureCard[] = [
     title: "Analiza Ugovora",
     description: "Detekcija pravnih zamki i nedostataka u kupoprodajnim ugovorima.",
     howItWorks:
-      "Učitajte nacrt ugovora. AI traži 'crvene zastavice' (npr. nedostatak tabularne izjave) i predlaže sigurnije klauzule prema ZOO-u.",
+      "Učitajte nacrt ugovora. Sustav traži 'crvene zastavice' (npr. nedostatak tabularne izjave) i predlaže sigurnije klauzule prema ZOO-u.",
   },
   {
     id: "card-zk",
@@ -267,9 +267,9 @@ const FEATURE_CARDS: FeatureCard[] = [
     accentBorder: "hover:border-orange-400",
     accentBg: "bg-orange-50 group-hover:bg-orange-100",
     title: "ZK Izvadak",
-    description: "AI analiza zemljišnoknjižnog izvatka — terete, hipoteke, plombe i pravni rizici.",
+    description: "Analiza zemljišnoknjižnog izvatka — terete, hipoteke, plombe i pravni rizici.",
     howItWorks:
-      "Učitajte PDF ZK izvatka. AI identificira vlasnike, terete (hipoteke, služnosti, fiducije), plombe i ocjenjuje rizik za kupnju ili gradnju.",
+      "Učitajte PDF ZK izvatka. Sustav identificira vlasnike, terete (hipoteke, služnosti, fiducije), plombe i ocjenjuje rizik za kupnju ili gradnju.",
   },
   {
     id: "card-troskovnik",
@@ -308,7 +308,7 @@ const FEATURE_CARDS: FeatureCard[] = [
     title: "Sudski Tumač",
     description: "Pravni prijevod i transliteracija — ćirilica↔latinica, EN/DE↔HR.",
     howItWorks:
-      "Zalijepite tekst presude, ugovora ili rješenja. AI sudski tumač prevodi uz strogu pravnu terminologiju ili preslovi pismo.",
+      "Zalijepite tekst presude, ugovora ili rješenja. Modul za pravnu lingvistiku prevodi uz strogu pravnu terminologiju ili preslovi pismo.",
   },
 ];
 
@@ -436,7 +436,7 @@ export default function Dashboard() {
               className="text-xs text-slate-400 hover:text-white transition flex items-center gap-1 p-1.5 sm:p-0"
             >
               <ShieldAlert className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
-              <span className="hidden sm:inline">AI Audit</span>
+              <span className="hidden sm:inline">Revizija</span>
             </Link>
             <div className="h-4 w-px bg-slate-700 hidden sm:block" />
             <button
@@ -479,12 +479,12 @@ export default function Dashboard() {
               </div>
               <div>
                 <h2 className="text-xl sm:text-2xl font-bold tracking-tight mb-2">
-                  Dobrodošli u Vaš AI Pravni Ured
+                  Dobrodošli u Vaš Pravni Ured
                 </h2>
                 <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-2xl">
                   Ovo je Vaš centar za analizu spisa. Odaberite modul u nastavku ili jednostavno{" "}
                   <span className="text-blue-400 font-medium">povucite (Drag &amp; Drop)</span>{" "}
-                  bilo koji dokument da AI sam prepozna što treba učiniti.
+                  bilo koji dokument da sustav sam prepozna što treba učiniti.
                 </p>
                 <div className="flex items-center gap-3 mt-4">
                   <Link

@@ -120,7 +120,7 @@ export async function generateContractPdf(result: ContractAnalysisResult) {
   doc.setFontSize(10);
   doc.setFont(fontFamily, "normal");
   doc.text(`Datum: ${new Date().toLocaleDateString("hr-HR")}`, margin, 28);
-  doc.text("PravoTek — AI pravni revizor", margin, 34);
+  doc.text("PravoTek — pravni revizor", margin, 34);
 
   y = 48;
 
@@ -172,7 +172,7 @@ export async function generateContractPdf(result: ContractAnalysisResult) {
     head: [],
     body: [
       ["Crvene zastavice", String(result.red_flags.length)],
-      ["Logičke zamke (AI Reasoning)", String(result.logical_traps?.length ?? 0)],
+      ["Logičke zamke (dubinska analiza)", String(result.logical_traps?.length ?? 0)],
       ["Upozorenja", String(result.warnings.length)],
       ["Pozitivne strane", String(result.positives.length)],
       ["Prijedlozi izmjena", String(result.suggested_amendments.length)],
@@ -255,7 +255,7 @@ export async function generateContractPdf(result: ContractAnalysisResult) {
     doc.setFontSize(11);
     doc.setFont(fontFamily, "bold");
     doc.setTextColor(220, 38, 38);
-    doc.text(`Logičke zamke — AI dubinska analiza (${result.logical_traps.length})`, margin, y);
+    doc.text(`Logičke zamke — dubinska analiza (${result.logical_traps.length})`, margin, y);
     y += 5;
 
     for (const trap of result.logical_traps) {
@@ -428,7 +428,7 @@ export async function generateContractPdf(result: ContractAnalysisResult) {
     doc.setFontSize(7);
     doc.setTextColor(150, 150, 150);
     doc.setFont(fontFamily, "normal");
-    doc.text("PravoTek — AI analiza ugovora", margin, pageH - 9);
+    doc.text("PravoTek — analiza ugovora", margin, pageH - 9);
     doc.text(`Stranica ${i} / ${totalPages}`, pageW - margin, pageH - 9, { align: "right" });
     doc.text("Ovaj izvještaj ne zamjenjuje pravni savjet ovlaštenog odvjetnika.", margin, pageH - 5);
   }

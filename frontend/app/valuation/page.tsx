@@ -124,9 +124,9 @@ interface StreamStage {
 const INITIAL_STAGES: StreamStage[] = [
   { id: "reading", label: "Čitam i ekstrahiram podatke o nekretnini...", status: "pending" },
   { id: "searching", label: "Pretražujem Njuškalo i tržište nekretnina...", status: "pending" },
-  { id: "ai_features", label: "AI analizira značajke oglasa...", status: "pending" },
+  { id: "ai_features", label: "Analiziram značajke oglasa...", status: "pending" },
   { id: "engine", label: "Engine izračunava tržišnu vrijednost...", status: "pending" },
-  { id: "ai_opinion", label: "AI generira stručno mišljenje...", status: "pending" },
+  { id: "ai_opinion", label: "Generiram stručno mišljenje...", status: "pending" },
   { id: "saving", label: "Spremam rezultate...", status: "pending" },
 ];
 
@@ -143,7 +143,7 @@ const VALUATION_STAGE_MICROCOPY: Record<string, string[]> = {
   searching: ["Pretražujem Njuškalo...", "Pretražujem Index Oglasi...", "Tražim usporedive nekretnine..."],
   ai_features: ["Analiziram slike i opise oglasa...", "Procjenjujem stanje i kvalitetu..."],
   engine: ["Izračunavam medijanu cijena...", "Primjenjujem korekcije...", "Robust estimator u tijeku..."],
-  ai_opinion: ["AI generira stručno mišljenje...", "Formuliram obrazloženje procjene..."],
+  ai_opinion: ["Generiram stručno mišljenje...", "Formuliram obrazloženje procjene..."],
   saving: ["Spremam u bazu...", "Generiranje izvještaja..."],
 };
 
@@ -461,7 +461,7 @@ export default function ValuationPage() {
                 </div>
               </div>
               <p className="text-xs text-gray-400 mt-2">
-                Ako unesete lokaciju, sustav će je koristiti umjesto AI ekstrakcije iz dokumenta.
+                Ako unesete lokaciju, sustav će je koristiti umjesto automatske ekstrakcije iz dokumenta.
               </p>
             </div>
 
@@ -588,7 +588,7 @@ export default function ValuationPage() {
                   {
                     icon: <FileCheck className="h-5 w-5 text-blue-600" />,
                     label: "Čitanje PDF-a",
-                    desc: "AI ekstrahira lokaciju, kvadraturu i tip nekretnine",
+                    desc: "Sustav ekstrahira lokaciju, kvadraturu i tip nekretnine",
                   },
                   {
                     icon: <Search className="h-5 w-5 text-emerald-600" />,
@@ -597,8 +597,8 @@ export default function ValuationPage() {
                   },
                   {
                     icon: <Brain className="h-5 w-5 text-purple-600" />,
-                    label: "AI procjena",
-                    desc: "Sudski vještak AI analizira podatke i generira mišljenje",
+                    label: "Stručna procjena",
+                    desc: "Analitički modul obrađuje podatke i generira stručno mišljenje",
                   },
                 ].map((step, i) => (
                   <div key={i} className="flex items-start gap-3">

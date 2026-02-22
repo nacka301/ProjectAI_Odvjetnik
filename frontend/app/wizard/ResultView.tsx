@@ -425,7 +425,7 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
                         })()}
                       </span>
                       <span className="text-sm font-medium text-purple-900">
-                        {result.total_adjustment_percent > 0 ? "+" : ""}{result.total_adjustment_percent.toFixed(1)}% AI korekcije
+                        {result.total_adjustment_percent > 0 ? "+" : ""}{result.total_adjustment_percent.toFixed(1)}% korekcije
                       </span>
                     </div>
                     <span className="text-sm font-bold text-purple-800">
@@ -669,7 +669,7 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
           {result.selected_comparables?.length > 0 && (
             <div className="rounded-xl bg-white border border-gray-200 p-4 sm:p-6">
               <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                <Bot className="h-4 w-4" /> AI — odabrane usporedbe ({result.selected_comparables.length})
+                <Bot className="h-4 w-4" /> Odabrane usporedbe ({result.selected_comparables.length})
               </h3>
               <div className="space-y-3">
                 {result.selected_comparables.map((c, i) => (

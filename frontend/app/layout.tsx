@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "PravoTek — Pravna inteligencija za odvjetnike",
-  description: "PravoTek — AI platforma za odvjetnike: procjena nekretnina, analiza ugovora, ZK izvadci",
+  description: "PravoTek — platforma za pravnu analitiku: procjena nekretnina, analiza ugovora, ZK izvadci",
   viewport: "width=device-width, initial-scale=1, viewport-fit=cover",
 };
 

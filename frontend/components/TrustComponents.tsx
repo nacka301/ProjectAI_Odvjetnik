@@ -127,12 +127,12 @@ export function SecurityFooter() {
           <div className="flex flex-col sm:flex-row items-center justify-between gap-1">
             <span>PravoTek v2.0</span>
             <span className="text-center">
-              AI analiza ne predstavlja pravni savjet sukladno čl. 1. Zakona o odvjetništvu (NN 9/94, 18/11)
+              Analiza ne predstavlja pravni savjet sukladno čl. 1. Zakona o odvjetništvu (NN 9/94, 18/11)
             </span>
           </div>
           <p className="px-2 sm:px-0">
             Obrada osobnih podataka sukladno Uredbi (EU) 2016/679 (GDPR).
-            Svi AI pozivi koriste Zero-Data Retention politiku — vaši tekstovi se ne pohranjuju niti koriste za treniranje modela.
+            Svi pozivi prema analitičkim servisima koriste Zero-Data Retention politiku — vaši tekstovi se ne pohranjuju niti koriste za treniranje modela.
           </p>
         </div>
       </div>

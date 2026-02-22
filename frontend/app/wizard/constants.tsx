@@ -25,11 +25,11 @@ import type {
 export const INITIAL_STAGES: StreamStage[] = [
   { id: "reading", label: "Pripremam podatke za procjenu...", status: "pending" },
   { id: "searching", label: "Pretražujem Njuškalo i tržište nekretnina...", status: "pending" },
-  { id: "ai_features", label: "AI analizira značajke oglasa...", status: "pending" },
+  { id: "ai_features", label: "Analiziram značajke oglasa...", status: "pending" },
   { id: "sherlock", label: "Dubinska analiza tekstova oglasa...", status: "pending" },
   { id: "engine", label: "Engine izračunava tržišnu vrijednost...", status: "pending" },
-  { id: "agent", label: "AI agent analizira nekretninu...", status: "pending" },
-  { id: "ai_opinion", label: "AI generira stručno mišljenje...", status: "pending" },
+  { id: "agent", label: "Analitički modul procjenjuje nekretninu...", status: "pending" },
+  { id: "ai_opinion", label: "Generiram stručno mišljenje...", status: "pending" },
   { id: "saving", label: "Spremam rezultate...", status: "pending" },
 ];
 
@@ -99,7 +99,7 @@ export const STAGE_MICROCOPY: Record<string, string[]> = {
     "Učitavam parametre nekretnine...",
     "Provjeravam lokaciju i vrstu...",
     "Parsiram ključne značajke...",
-    "Pripremam podatke za AI model...",
+    "Pripremam podatke za analitički modul...",
   ],
   searching: [
     "Spajam se na izvore podataka...",

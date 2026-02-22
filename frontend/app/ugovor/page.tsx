@@ -167,7 +167,7 @@ const GENERATE_STAGE_ICONS: Record<string, React.ReactNode> = {
 
 const GENERATE_STAGE_MICROCOPY = [
   "Analiziram nalaze revizije...",
-  "AI pravni redaktor sastavlja poboljšani ugovor...",
+  "Pravni redaktor sastavlja poboljšani ugovor...",
   "Primjenjujem sve predložene izmjene...",
   "Dodajem nedostajuće zaštitne klauzule...",
   "Usklađujem proturječne članke...",
@@ -474,7 +474,7 @@ export default function ContractAnalysisPage() {
           onCancel={cancelAnalysis}
           onReset={resetAnalysis}
           title="Analiza ugovora u tijeku"
-          subtitle="AI pravni revizor provjerava vaš ugovor"
+          subtitle="Pravni revizor provjerava vaš ugovor"
           headerIcon={<Scale className="h-7 w-7 text-white" />}
           stageIcons={CONTRACT_STAGE_ICONS}
           stageMicrocopy={CONTRACT_STAGE_MICROCOPY}
@@ -495,7 +495,7 @@ export default function ContractAnalysisPage() {
           <div className="flex items-center gap-2">
             <Scale className="h-6 w-6 text-emerald-600" />
             <h1 className="text-xl font-bold text-gray-900">
-              AI Analizator Ugovora
+              Analizator Ugovora
             </h1>
           </div>
         </div>
@@ -507,7 +507,7 @@ export default function ContractAnalysisPage() {
           <div className="space-y-6">
             <div className="text-center mb-8">
               <p className="text-gray-500 text-lg">
-                Uploadajte ugovor ili zalijepite tekst — AI &quot;paranoični
+                Uploadajte ugovor ili zalijepite tekst — &quot;paranoični
                 odvjetnik&quot; analizira svaki članak
               </p>
             </div>
@@ -655,7 +655,7 @@ export default function ContractAnalysisPage() {
                     Generiraj poboljšani ugovor
                   </h3>
                   <p className="text-sm text-emerald-600 mt-1">
-                    AI pravni redaktor će na temelju analize izraditi korigiranu verziju ugovora
+                    Pravni redaktor će na temelju analize izraditi korigiranu verziju ugovora
                     sa svim ispravkama, nedostajućim klauzulama i usklađenim člancima.
                   </p>
                 </div>
@@ -920,7 +920,7 @@ export default function ContractAnalysisPage() {
                   <h2 className="font-bold text-red-900">
                     🪤 Logičke zamke — dubinska analiza ({result.logical_traps.length})
                   </h2>
-                  <span className="ml-auto text-[10px] bg-red-200 text-red-800 px-2 py-0.5 rounded-full font-semibold uppercase">AI Reasoning</span>
+                  <span className="ml-auto text-[10px] bg-red-200 text-red-800 px-2 py-0.5 rounded-full font-semibold uppercase">Dubinska analiza</span>
                 </div>
                 <div className="divide-y divide-red-100">
                   {result.logical_traps.map((trap, i) => (
