@@ -27,6 +27,7 @@ import {
   Calculator,
   Users,
   LogOut,
+  Languages,
 } from "lucide-react";
 import { getRecentActivity, type ActivityItem, type ActivityType } from "@/lib/supabase";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
@@ -72,28 +73,33 @@ const BADGE_COLORS: Record<string, string> = {
 const TOUR_STEPS = [
   {
     target: "card-procjena",
-    title: "1/5 · Tržišna Procjena",
+    title: "1/6 · Tržišna Procjena",
     text: "Ovdje izračunavate realnu vrijednost nekretnine. Unesite podatke ili zalijepite link oglasa.",
   },
   {
     target: "card-ugovor",
-    title: "2/5 · Analiza Ugovora",
+    title: "2/6 · Analiza Ugovora",
     text: "Učitajte nacrt ugovora — AI pronalazi pravne zamke i predlaže sigurnije klauzule.",
   },
   {
     target: "card-zk",
-    title: "3/5 · ZK Izvadak",
+    title: "3/6 · ZK Izvadak",
     text: "Učitajte ZK izvadak — AI identificira terete, hipoteke, plombe i pravne rizike.",
   },
   {
     target: "card-troskovnik",
-    title: "4/5 · Odvjetnički Troškovnik",
+    title: "4/6 · Odvjetnički Troškovnik",
     text: "Izračunajte nagradu i troškove prema službenoj tarifi — odaberite radnje, a bodovi se računaju automatski.",
   },
   {
     target: "card-stranke",
-    title: "5/5 · Stranke",
+    title: "5/6 · Stranke",
     text: "Upravljajte strankama, predmetima i troškovnicima — pregledajte kompletan dosje na jednom mjestu.",
+  },
+  {
+    target: "card-prijevod",
+    title: "6/6 · Sudski Tumač",
+    text: "Zalijepite pravni tekst na ćirilici ili stranom jeziku — AI sudski tumač prevodi uz strogu terminologiju.",
   },
 ];
 
@@ -290,6 +296,19 @@ const FEATURE_CARDS: FeatureCard[] = [
     description: "Upravljanje strankama, predmetima i troškovnicima na jednom mjestu.",
     howItWorks:
       "Kreirajte stranke, povežite predmete i troškovnike — pregledajte kompletni dosje svake stranke.",
+  },
+  {
+    id: "card-prijevod",
+    href: "/prijevod",
+    icon: <Languages className="h-6 w-6" />,
+    iconBg: "bg-purple-100 group-hover:bg-purple-200",
+    iconColor: "text-purple-600",
+    accentBorder: "hover:border-purple-400",
+    accentBg: "bg-purple-50 group-hover:bg-purple-100",
+    title: "Sudski Tumač",
+    description: "Pravni prijevod i transliteracija — ćirilica↔latinica, EN/DE↔HR.",
+    howItWorks:
+      "Zalijepite tekst presude, ugovora ili rješenja. AI sudski tumač prevodi uz strogu pravnu terminologiju ili preslovi pismo.",
   },
 ];
 

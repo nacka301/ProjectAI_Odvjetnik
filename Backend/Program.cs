@@ -153,6 +153,7 @@ builder.Services.AddScoped<ZkParsingService>();
 builder.Services.AddScoped<LegalIntelligenceService>();
 builder.Services.AddSingleton<NormValidityService>();
 builder.Services.AddScoped<InvoiceService>();
+builder.Services.AddScoped<TranslationService>();
 builder.Services.AddHttpClient<EmailService>();
 builder.Services.AddHttpClient<EmbeddingService>(client =>
 {
