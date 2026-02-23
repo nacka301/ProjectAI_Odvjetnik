@@ -20,6 +20,7 @@ import {
   QrCode,
   Info,
 } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
 import { API_BASE } from "@/lib/api";
 
@@ -503,13 +504,13 @@ export default function PostavkePage() {
                       className="bg-white p-4 rounded-2xl shadow-xl"
                       style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.3), 0 0 0 1px rgba(201,168,76,0.1)" }}
                     >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(setupData.otpauth_url)}&margin=0`}
-                        alt="2FA QR Code"
-                        width={220}
-                        height={220}
-                        className="block"
+                      <QRCodeSVG
+                        value={setupData.otpauth_url}
+                        size={220}
+                        level="M"
+                        includeMargin={false}
+                        bgColor="#FFFFFF"
+                        fgColor="#1B2A4A"
                       />
                     </div>
                     <p className="text-[11px] text-slate-500 text-center">
