@@ -752,6 +752,15 @@ CREATE TABLE IF NOT EXISTS law_firms (
 
 CREATE INDEX IF NOT EXISTS idx_law_firms_oib ON law_firms (oib) WHERE oib IS NOT NULL;
 
+-- ── Extend user_profiles with firm link + personal fields ──
+-- MUST come before RLS policies that reference user_profiles.law_firm_id
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS law_firm_id UUID REFERENCES law_firms(id) ON DELETE SET NULL;
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS full_name TEXT NOT NULL DEFAULT '';
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS phone_number TEXT;
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'admin';
+
+CREATE INDEX IF NOT EXISTS idx_user_profiles_law_firm ON user_profiles (law_firm_id) WHERE law_firm_id IS NOT NULL;
+
 ALTER TABLE law_firms ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "service_role_full_access" ON law_firms;
@@ -782,14 +791,6 @@ CREATE TRIGGER law_firms_updated_at
     BEFORE UPDATE ON law_firms
     FOR EACH ROW
     EXECUTE FUNCTION update_law_firms_updated_at();
-
--- ── Extend user_profiles with firm link + personal fields ──
-ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS law_firm_id UUID REFERENCES law_firms(id) ON DELETE SET NULL;
-ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS full_name TEXT NOT NULL DEFAULT '';
-ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS phone_number TEXT;
-ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'admin';
-
-CREATE INDEX IF NOT EXISTS idx_user_profiles_law_firm ON user_profiles (law_firm_id) WHERE law_firm_id IS NOT NULL;
 
 -- ── Subscriptions table ──
 CREATE TABLE IF NOT EXISTS subscriptions (

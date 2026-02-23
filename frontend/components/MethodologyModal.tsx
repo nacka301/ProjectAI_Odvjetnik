@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   X,
   Search,
@@ -114,36 +115,56 @@ export function MethodologyButton({ onClick }: { onClick: () => void }) {
 
 export function MethodologyModal({ onClose }: { onClose: () => void }) {
   const [expandedStep, setExpandedStep] = useState<number | null>(0);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
+
+  // Lock body scroll while modal is open
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = ""; };
+  }, []);
 
   const toggleStep = (idx: number) => {
     setExpandedStep(expandedStep === idx ? null : idx);
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl border border-gray-200 animate-in zoom-in-95 duration-200">
+  const modalContent = (
+    // ── Backdrop: covers ENTIRE viewport, breaks out of any parent ──
+    <div
+      className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center w-screen h-screen"
+      onClick={onClose}
+    >
+      {/* ── Modal Box: centered white card ── */}
+      <div
+        className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto relative z-[101] mx-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Close button — top-right corner */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 cursor-pointer z-[102] rounded-lg p-1.5 hover:bg-slate-100 transition-colors"
+          aria-label="Zatvori"
+        >
+          <X className="h-5 w-5" />
+        </button>
+
         {/* Header */}
-        <div className="sticky top-0 z-10 flex items-center justify-between rounded-t-2xl border-b border-gray-100 bg-white/95 backdrop-blur-sm px-6 py-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg shadow-blue-500/25">
-              <Layers className="h-5 w-5 text-white" />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-gray-900">Metodologija procjene</h2>
-              <p className="text-xs text-gray-500">Sukladno Zakonu o procjeni vrijednosti nekretnina</p>
-            </div>
+        <div className="flex items-center gap-3 border-b border-slate-100 px-6 py-5">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#1B2A4A] shadow-lg">
+            <Layers className="h-5 w-5 text-white" />
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          <div>
+            <h2 className="font-[family-name:var(--font-playfair)] text-lg font-bold text-[#1B2A4A]">
+              Kako radi procjena?
+            </h2>
+            <p className="text-xs text-slate-500">Sukladno Zakonu o procjeni vrijednosti nekretnina</p>
+          </div>
         </div>
 
         {/* Intro */}
-        <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50">
-          <p className="text-sm text-gray-700 leading-relaxed">
+        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
+          <p className="text-sm text-slate-700 leading-relaxed">
             Sustav koristi <strong>poredbenu (komparativnu) metodu</strong> procjene sukladno
             Zakonu o procjeni vrijednosti nekretnina (NN 78/15) i pripadajućem Pravilniku
             o metodama procjene (NN 105/15). Postupak se odvija u 5 koraka:
@@ -151,38 +172,38 @@ export function MethodologyModal({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Steps accordion */}
-        <div className="divide-y divide-gray-100">
+        <div className="divide-y divide-slate-100">
           {STEPS.map((step, idx) => (
             <div key={idx} className="group">
               <button
                 onClick={() => toggleStep(idx)}
-                className="flex w-full items-center gap-4 px-6 py-4 text-left hover:bg-gray-50 transition-colors"
+                className="flex w-full items-center gap-4 px-6 py-4 text-left hover:bg-slate-50 transition-colors"
               >
                 <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-colors ${
                   expandedStep === idx
-                    ? "bg-blue-600 text-white shadow-md shadow-blue-600/25"
-                    : "bg-gray-100 text-gray-500 group-hover:bg-blue-50 group-hover:text-blue-600"
+                    ? "bg-[#1B2A4A] text-white shadow-md"
+                    : "bg-slate-100 text-slate-500 group-hover:bg-slate-200 group-hover:text-[#1B2A4A]"
                 }`}>
                   {step.icon}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-sm font-semibold text-gray-900">{step.title}</h3>
-                  <p className="text-xs text-gray-500 mt-0.5">{step.subtitle}</p>
+                  <h3 className="text-sm font-semibold text-slate-900">{step.title}</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">{step.subtitle}</p>
                 </div>
                 {expandedStep === idx ? (
-                  <ChevronUp className="h-4 w-4 text-gray-400 shrink-0" />
+                  <ChevronUp className="h-4 w-4 text-slate-400 shrink-0" />
                 ) : (
-                  <ChevronDown className="h-4 w-4 text-gray-400 shrink-0" />
+                  <ChevronDown className="h-4 w-4 text-slate-400 shrink-0" />
                 )}
               </button>
 
               {expandedStep === idx && (
-                <div className="px-6 pb-4 animate-in slide-in-from-top-2 duration-200">
+                <div className="px-6 pb-4">
                   <div className="ml-14 space-y-2">
                     {step.details.map((detail, i) => (
                       <div key={i} className="flex items-start gap-2">
-                        <div className="mt-1.5 h-1.5 w-1.5 rounded-full bg-blue-400 shrink-0" />
-                        <p className="text-sm text-gray-700 leading-relaxed">{detail}</p>
+                        <div className="mt-1.5 h-1.5 w-1.5 rounded-full bg-[#1B2A4A]/40 shrink-0" />
+                        <p className="text-sm text-slate-700 leading-relaxed">{detail}</p>
                       </div>
                     ))}
                     {step.legal && (
@@ -199,10 +220,10 @@ export function MethodologyModal({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Footer disclaimer */}
-        <div className="rounded-b-2xl border-t border-gray-100 bg-gray-50 px-6 py-4">
+        <div className="border-t border-slate-100 bg-slate-50 px-6 py-4 rounded-b-xl">
           <div className="flex items-start gap-3">
-            <Shield className="h-4 w-4 text-gray-400 mt-0.5 shrink-0" />
-            <div className="text-[11px] text-gray-500 leading-relaxed space-y-1">
+            <Shield className="h-4 w-4 text-slate-400 mt-0.5 shrink-0" />
+            <div className="text-[11px] text-slate-500 leading-relaxed space-y-1">
               <p>
                 Procjena ne predstavlja pravni savjet niti ovlašteni procjembeni elaborat.
                 Služi kao <strong>informativni alat</strong> za odvjetnike, vještake i stručne suradnike
@@ -215,7 +236,21 @@ export function MethodologyModal({ onClose }: { onClose: () => void }) {
             </div>
           </div>
         </div>
+
+        {/* Zatvori button at bottom */}
+        <div className="border-t border-slate-100 px-6 py-3 flex justify-end">
+          <button
+            onClick={onClose}
+            className="rounded-lg bg-[#1B2A4A] px-5 py-2 text-sm font-medium text-white hover:bg-[#1B2A4A]/90 transition-colors"
+          >
+            Zatvori
+          </button>
+        </div>
       </div>
     </div>
   );
+
+  // Use portal to render at document.body — breaks out of ALL parent div traps
+  if (!mounted) return null;
+  return createPortal(modalContent, document.body);
 }
