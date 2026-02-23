@@ -16,6 +16,7 @@ import {
   BarChart3,
   Globe,
   X,
+  Loader2,
 } from "lucide-react";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
 
@@ -141,7 +142,7 @@ export default function CommandPalette() {
         }));
       }
     } catch {
-      // silent — DB search optional
+      // DB search failed — still show nav results
     }
 
     setResults([...clientResults, ...caseResults, ...navResults]);
@@ -220,6 +221,13 @@ export default function CommandPalette() {
 
           {/* Results */}
           <div ref={listRef} className="max-h-[50vh] overflow-y-auto">
+            {searching && (
+              <div className="flex items-center justify-center gap-2 px-4 py-8">
+                <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                <p className="text-sm text-slate-400">Tražim...</p>
+              </div>
+            )}
+
             {query && !searching && results.length === 0 && (
               <div className="px-4 py-10 text-center">
                 <p className="text-sm text-slate-400">Nema rezultata za &ldquo;{query}&rdquo;</p>

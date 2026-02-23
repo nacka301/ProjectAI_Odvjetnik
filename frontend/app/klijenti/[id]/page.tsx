@@ -2,15 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { ClientDetailSkeleton } from "@/components/Skeletons";
 import {
   ArrowLeft,
   Briefcase,
   Building2,
   Calculator,
-  ChevronRight,
-  Edit3,
   Euro,
   Loader2,
   Mail,
@@ -113,13 +111,14 @@ function formatDate(iso: string | null) {
 
 export default function ClientProfilePage() {
   const params = useParams();
-  const router = useRouter();
-  const clientId = params.id as string;
+  const clientId = typeof params.id === "string" ? params.id : Array.isArray(params.id) ? params.id[0] : "";
 
   const [profile, setProfile] = useState<ClientProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState("");
   const [activeTab, setActiveTab] = useState<"predmeti" | "troskovnici">("predmeti");
   const [userId, setUserId] = useState<string | null>(null);
+  const [deletingCase, setDeletingCase] = useState<string | null>(null);
 
   // Case form
   const [showCaseForm, setShowCaseForm] = useState(false);
@@ -140,12 +139,13 @@ export default function ClientProfilePage() {
     const supabase = createSupabaseBrowser();
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) setUserId(data.user.id);
-    });
+    }).catch(() => { /* auth unavailable */ });
   }, []);
 
   const fetchProfile = useCallback(async () => {
     if (!userId) return;
     setLoading(true);
+    setFetchError("");
     try {
       const res = await fetch(`${API_BASE}/api/client/${clientId}/profile`, {
         headers: { "x-user-id": userId },
@@ -153,9 +153,13 @@ export default function ClientProfilePage() {
       if (res.ok) {
         const data = await res.json();
         setProfile(data);
+      } else if (res.status === 404) {
+        setProfile(null);
+      } else {
+        setFetchError("Gre\u0161ka pri u\u010ditavanju profila stranke.");
       }
     } catch {
-      // ignore
+      setFetchError("Poslu\u017eitelj nije dostupan. Provjerite vezu.");
     } finally {
       setLoading(false);
     }
@@ -209,9 +213,12 @@ export default function ClientProfilePage() {
         });
         setShowCaseForm(false);
         fetchProfile();
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setFetchError(errData.error || "Gre\u0161ka pri kreiranju predmeta.");
       }
     } catch {
-      // ignore
+      setFetchError("Gre\u0161ka pri povezivanju s poslu\u017eiteljem.");
     } finally {
       setSavingCase(false);
     }
@@ -219,16 +226,22 @@ export default function ClientProfilePage() {
 
   // Delete case
   const handleDeleteCase = async (caseId: string) => {
-    if (!userId) return;
+    if (!userId || deletingCase) return;
     if (!confirm("Obrisati predmet?")) return;
+    setDeletingCase(caseId);
     try {
-      await fetch(`${API_BASE}/api/case/${caseId}`, {
+      const res = await fetch(`${API_BASE}/api/case/${caseId}`, {
         method: "DELETE",
         headers: { "x-user-id": userId },
       });
+      if (!res.ok) {
+        setFetchError("Gre\u0161ka pri brisanju predmeta.");
+      }
       fetchProfile();
     } catch {
-      // ignore
+      setFetchError("Gre\u0161ka pri povezivanju s poslu\u017eiteljem.");
+    } finally {
+      setDeletingCase(null);
     }
   };
 
@@ -239,7 +252,12 @@ export default function ClientProfilePage() {
   if (!profile) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-gray-50 text-slate-500">
-        <p>Stranka nije pronađena.</p>
+        <p>{fetchError || "Stranka nije prona\u0111ena."}</p>
+        {fetchError && (
+          <button onClick={fetchProfile} className="text-sm text-[#1B2A4A] hover:underline">
+            Poku\u0161aj ponovo
+          </button>
+        )}
         <Link
           href="/klijenti"
           className="text-sm text-[#1B2A4A] hover:underline"
@@ -268,7 +286,7 @@ export default function ClientProfilePage() {
             <div
               className={`flex h-8 w-8 items-center justify-center rounded-lg ${
                 client.tip === "pravna"
-                  ? "bg-[#1B2A4A]/10 text-[#1B2A4A]"
+                  ? "bg-blue-50 text-blue-700"
                   : "bg-[#1B2A4A]/10 text-[#1B2A4A]"
               }`}
             >
@@ -284,6 +302,14 @@ export default function ClientProfilePage() {
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+        {/* Error banner */}
+        {fetchError && (
+          <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
+            {fetchError}
+            <button onClick={() => setFetchError("")} className="ml-auto text-xs font-medium text-red-800 underline">Zatvori</button>
+          </div>
+        )}
+
         {/* Client info card */}
         <div className="mb-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

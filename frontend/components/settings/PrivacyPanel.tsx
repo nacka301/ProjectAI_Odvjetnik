@@ -23,6 +23,7 @@ export default function PrivacyPanel({ userId, userEmail }: PrivacyPanelProps) {
   const router = useRouter();
   const [exporting, setExporting] = useState(false);
   const [exported, setExported] = useState(false);
+  const [exportError, setExportError] = useState("");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [deleting, setDeleting] = useState(false);
@@ -32,6 +33,7 @@ export default function PrivacyPanel({ userId, userEmail }: PrivacyPanelProps) {
   const handleExport = async () => {
     setExporting(true);
     setExported(false);
+    setExportError("");
 
     try {
       const supabase = createSupabaseBrowser();
@@ -94,7 +96,7 @@ export default function PrivacyPanel({ userId, userEmail }: PrivacyPanelProps) {
 
       setExported(true);
     } catch {
-      // silent
+      setExportError("Gre\u0161ka pri izvozu podataka. Poku\u0161ajte ponovo.");
     } finally {
       setExporting(false);
     }
@@ -193,8 +195,11 @@ export default function PrivacyPanel({ userId, userEmail }: PrivacyPanelProps) {
               <CheckCircle2 className="h-3.5 w-3.5" />
               Preuzimanje započeto
             </span>
-          )}
-        </div>
+          )}          {exportError && (
+            <span className="inline-flex items-center gap-1 text-xs text-red-600">
+              {exportError}
+            </span>
+          )}        </div>
       </div>
 
       {/* ── Right to be forgotten ── */}

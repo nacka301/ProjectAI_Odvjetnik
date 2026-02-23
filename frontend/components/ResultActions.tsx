@@ -55,8 +55,8 @@ export default function ResultActions({
     setPdfLoading(true);
     try {
       await onPdfExport();
-    } catch (e) {
-      console.error("PDF generation failed:", e);
+    } catch {
+      // PDF generation failed — non-critical
     } finally {
       setPdfLoading(false);
     }

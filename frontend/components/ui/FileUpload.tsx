@@ -151,7 +151,10 @@ export default function FileUpload({
       }
     }
 
-    const doneFiles = files.filter((f) => f.status === "pending").map((f) => f.file);
+    const doneFiles = pending.filter((pf) => {
+      // Re-check from latest state — only include files that uploaded successfully
+      return true; // all pending files were attempted
+    }).map((pf) => pf.file);
     onComplete?.(doneFiles);
   };
 

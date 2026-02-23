@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { ClientListSkeleton } from "@/components/Skeletons";
 import {
   ArrowLeft,
@@ -10,6 +9,7 @@ import {
   ChevronRight,
   Loader2,
   Mail,
+  MapPin,
   Phone,
   Plus,
   Search,
@@ -17,8 +17,6 @@ import {
   User,
   Users,
   X,
-  Edit3,
-  MapPin,
 } from "lucide-react";
 import { API_BASE } from "@/lib/api";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
@@ -58,13 +56,14 @@ function timeAgo(iso: string) {
 // ── Component ──
 
 export default function KlijentiPage() {
-  const router = useRouter();
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [fetchError, setFetchError] = useState("");
   const [userId, setUserId] = useState<string | null>(null);
 
   // Form state
@@ -85,13 +84,14 @@ export default function KlijentiPage() {
     const supabase = createSupabaseBrowser();
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) setUserId(data.user.id);
-    });
+    }).catch(() => { /* auth unavailable */ });
   }, []);
 
   // Fetch clients
   const fetchClients = useCallback(async () => {
     if (!userId) return;
     setLoading(true);
+    setFetchError("");
     try {
       const res = await fetch(`${API_BASE}/api/client`, {
         headers: { "x-user-id": userId },
@@ -99,9 +99,11 @@ export default function KlijentiPage() {
       if (res.ok) {
         const data = await res.json();
         setClients(data);
+      } else {
+        setFetchError("Gre\u0161ka pri dohva\u0107anju stranaka.");
       }
     } catch {
-      // ignore
+      setFetchError("Poslu\u017eitelj nije dostupan. Provjerite vezu.");
     } finally {
       setLoading(false);
     }
@@ -156,8 +158,9 @@ export default function KlijentiPage() {
 
   // Delete client
   const handleDelete = async (id: string) => {
-    if (!userId) return;
+    if (!userId || deleting) return;
     if (!confirm("Jeste li sigurni da želite obrisati ovu stranku?")) return;
+    setDeleting(id);
     try {
       const res = await fetch(`${API_BASE}/api/client/${id}`, {
         method: "DELETE",
@@ -171,6 +174,8 @@ export default function KlijentiPage() {
       fetchClients();
     } catch {
       setError("Greška pri povezivanju s poslužiteljem.");
+    } finally {
+      setDeleting(null);
     }
   };
 
@@ -346,6 +351,14 @@ export default function KlijentiPage() {
           </form>
         )}
 
+        {/* Fetch error banner */}
+        {fetchError && (
+          <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
+            {fetchError}
+            <button onClick={fetchClients} className="ml-auto text-xs font-medium text-red-800 underline">Pokušaj ponovo</button>
+          </div>
+        )}
+
         {/* Stats */}
         <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -402,9 +415,14 @@ export default function KlijentiPage() {
                     e.stopPropagation();
                     handleDelete(client.id);
                   }}
-                  className="absolute right-3 top-3 rounded-lg p-1.5 text-slate-300 opacity-0 transition hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
+                  disabled={deleting === client.id}
+                  className="absolute right-3 top-3 rounded-lg p-1.5 text-slate-300 opacity-0 transition hover:bg-red-50 hover:text-red-500 group-hover:opacity-100 disabled:opacity-50"
                 >
-                  <Trash2 className="h-4 w-4" />
+                  {deleting === client.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
                 </button>
 
                 <Link href={`/klijenti/${client.id}`} className="block">
@@ -413,7 +431,7 @@ export default function KlijentiPage() {
                     <div
                       className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
                         client.tip === "pravna"
-                          ? "bg-[#1B2A4A]/10 text-[#1B2A4A]"
+                          ? "bg-blue-50 text-blue-700"
                           : "bg-[#1B2A4A]/10 text-[#1B2A4A]"
                       }`}
                     >

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Shield,
@@ -73,7 +73,7 @@ function apiHeaders(): Record<string, string> {
 
 export default function PostavkePage() {
   const router = useRouter();
-  const supabase = createSupabaseBrowser();
+  const supabase = useMemo(() => createSupabaseBrowser(), []);
 
   // ── Tab state ──
   const [activeTab, setActiveTab] = useState<SettingsTab>("sigurnost");
@@ -105,14 +105,19 @@ export default function PostavkePage() {
   // ── Load user ──
   useEffect(() => {
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          router.push("/auth/login");
+          return;
+        }
+        setUserId(user.id);
+        setUserEmail(user.email ?? null);
+      } catch {
         router.push("/auth/login");
-        return;
+      } finally {
+        setLoading(false);
       }
-      setUserId(user.id);
-      setUserEmail(user.email ?? null);
-      setLoading(false);
     })();
   }, [supabase, router]);
 

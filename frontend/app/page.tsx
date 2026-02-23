@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 
 import {
   Search as SearchIcon,
-  BookOpen,
   Clock,
   Building2,
   ChevronRight,
@@ -297,14 +296,18 @@ export default function Dashboard() {
 
   // Check if first visit (tour hasn't been seen)
   useEffect(() => {
-    const seen = localStorage.getItem("pravotek_tour_seen");
-    if (!seen) setShowTour(true);
+    try {
+      const seen = localStorage.getItem("pravotek_tour_seen");
+      if (!seen) setShowTour(true);
+    } catch { /* localStorage unavailable */ }
   }, []);
 
   // Check if banner was dismissed
   useEffect(() => {
-    const dismissed = localStorage.getItem("pravotek_banner_dismissed");
-    if (dismissed) setBannerDismissed(true);
+    try {
+      const dismissed = localStorage.getItem("pravotek_banner_dismissed");
+      if (dismissed) setBannerDismissed(true);
+    } catch { /* localStorage unavailable */ }
   }, []);
 
   useEffect(() => {
@@ -322,13 +325,13 @@ export default function Dashboard() {
 
   const dismissBanner = () => {
     setBannerDismissed(true);
-    localStorage.setItem("pravotek_banner_dismissed", "1");
+    try { localStorage.setItem("pravotek_banner_dismissed", "1"); } catch { /* storage unavailable */ }
   };
 
   const endTour = useCallback(() => {
     setShowTour(false);
     setTourStep(0);
-    localStorage.setItem("pravotek_tour_seen", "1");
+    try { localStorage.setItem("pravotek_tour_seen", "1"); } catch { /* storage unavailable */ }
   }, []);
 
   const nextTourStep = useCallback(() => {
@@ -366,9 +369,9 @@ export default function Dashboard() {
     setDragOver(false);
     // If files are dropped, route to ZK analysis (the doc analysis tool)
     if (e.dataTransfer.files.length > 0) {
-      window.location.href = "/zk-procjena";
+      router.push("/zk-procjena");
     }
-  }, []);
+  }, [router]);
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans">

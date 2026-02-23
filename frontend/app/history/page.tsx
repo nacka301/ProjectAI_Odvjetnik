@@ -144,8 +144,8 @@ export default function HistoryPage() {
         location: ev.location,
         areaM2: ev.size_m2 ?? 0,
       });
-    } catch (e) {
-      console.error("PDF export failed:", e);
+    } catch {
+      setError("PDF izvoz nije uspio. Pokušajte ponovo.");
     } finally {
       setPdfLoadingId(null);
     }

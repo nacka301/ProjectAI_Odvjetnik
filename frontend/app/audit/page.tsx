@@ -125,13 +125,16 @@ export default function AuditPage() {
         setLoading(false);
       }
     })();
+  }, []);
 
-    // Check API status
-    fetch(`${API_BASE}/api/audit/status`, { headers: userId ? { "x-user-id": userId } : {} })
+  // Check API status (needs userId)
+  useEffect(() => {
+    if (!userId) return;
+    fetch(`${API_BASE}/api/audit/status`, { headers: { "x-user-id": userId } })
       .then((r) => r.json())
       .then((data) => setApiStatus(data))
       .catch(() => setApiStatus({ enabled: false, message: "Backend nedostupan" }));
-  }, []);
+  }, [userId]);
 
   // Run batch audit
   const handleRunAudit = async () => {

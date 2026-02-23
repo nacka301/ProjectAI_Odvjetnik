@@ -76,11 +76,13 @@ const PAGE_SIZE = 15;
 export default function ActivityLog({ userId }: { userId: string }) {
   const [entries, setEntries] = useState<AuditLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState("");
   const [filter, setFilter] = useState<ActionCategory>("all");
   const [page, setPage] = useState(0);
 
   const fetchLogs = useCallback(async () => {
     setLoading(true);
+    setFetchError("");
     try {
       const supabase = createSupabaseBrowser();
       const { data, error } = await supabase
@@ -90,9 +92,13 @@ export default function ActivityLog({ userId }: { userId: string }) {
         .order("created_at", { ascending: false })
         .limit(200);
 
-      if (!error && data) setEntries(data as AuditLogEntry[]);
+      if (error) {
+        setFetchError("Gre\u0161ka pri u\u010ditavanju dnevnika.");
+      } else if (data) {
+        setEntries(data as AuditLogEntry[]);
+      }
     } catch {
-      // silent
+      setFetchError("Nije mogu\u0107e dohvatiti podatke. Provjerite vezu.");
     } finally {
       setLoading(false);
     }
@@ -107,7 +113,7 @@ export default function ActivityLog({ userId }: { userId: string }) {
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
-  const handleExportPdf = () => {
+  const handleExportCsv = () => {
     // Build CSV as simple export
     const header = "Vrijeme,Modul,Akcija,Pravna osnova,Pouzdanost,Model\n";
     const rows = filtered.map((e) =>
@@ -134,7 +140,7 @@ export default function ActivityLog({ userId }: { userId: string }) {
           <span className="text-xs text-slate-400">({filtered.length})</span>
         </div>
         <button
-          onClick={handleExportPdf}
+          onClick={handleExportCsv}
           disabled={filtered.length === 0}
           className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition"
         >
@@ -159,6 +165,14 @@ export default function ActivityLog({ userId }: { userId: string }) {
           </button>
         ))}
       </div>
+
+      {/* Error banner */}
+      {fetchError && (
+        <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
+          <Shield className="h-4 w-4 shrink-0" />
+          {fetchError}
+        </div>
+      )}
 
       {/* Table */}
       {loading ? (
