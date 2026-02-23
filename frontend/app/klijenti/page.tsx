@@ -155,15 +155,21 @@ export default function KlijentiPage() {
 
   // Delete client
   const handleDelete = async (id: string) => {
+    if (!userId) return;
     if (!confirm("Jeste li sigurni da želite obrisati ovu stranku?")) return;
     try {
-      await fetch(`${API_BASE}/api/client/${id}`, {
+      const res = await fetch(`${API_BASE}/api/client/${id}`, {
         method: "DELETE",
-        headers: { "x-user-id": userId || "" },
+        headers: { "x-user-id": userId },
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || "Greška pri brisanju.");
+        return;
+      }
       fetchClients();
     } catch {
-      // ignore
+      setError("Greška pri povezivanju s poslužiteljem.");
     }
   };
 

@@ -129,18 +129,6 @@ public class TemporalNormResult
 }
 
 /// <summary>
-/// Request payload for temporal norm lookup.
-/// </summary>
-public class TemporalLookupRequest
-{
-    /// <summary>Date of the legal event (e.g. contract signing date)</summary>
-    public DateOnly EventDate { get; set; }
-
-    /// <summary>Law abbreviation to look up (e.g. "ZOO")</summary>
-    public string Abbreviation { get; set; } = "";
-}
-
-/// <summary>
 /// Citation format request — for the /api/norms/cite endpoint.
 /// </summary>
 public class CitationRequest

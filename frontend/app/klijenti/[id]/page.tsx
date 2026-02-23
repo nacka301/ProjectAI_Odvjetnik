@@ -143,10 +143,11 @@ export default function ClientProfilePage() {
   }, []);
 
   const fetchProfile = useCallback(async () => {
+    if (!userId) return;
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE}/api/client/${clientId}/profile`, {
-        headers: { "x-user-id": userId || "" },
+        headers: { "x-user-id": userId },
       });
       if (res.ok) {
         const data = await res.json();
@@ -217,12 +218,17 @@ export default function ClientProfilePage() {
 
   // Delete case
   const handleDeleteCase = async (caseId: string) => {
+    if (!userId) return;
     if (!confirm("Obrisati predmet?")) return;
-    await fetch(`${API_BASE}/api/case/${caseId}`, {
-      method: "DELETE",
-      headers: { "x-user-id": userId || "" },
-    });
-    fetchProfile();
+    try {
+      await fetch(`${API_BASE}/api/case/${caseId}`, {
+        method: "DELETE",
+        headers: { "x-user-id": userId },
+      });
+      fetchProfile();
+    } catch {
+      // ignore
+    }
   };
 
   if (loading) {

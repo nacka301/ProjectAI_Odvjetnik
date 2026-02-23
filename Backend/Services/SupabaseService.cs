@@ -126,12 +126,46 @@ public class SupabaseService
     public Task<string?> SaveAuditLogAsync(AuditLogRecord record)
         => InsertAsync("audit_logs", record);
 
-    /// <summary>Save multiple audit log entries (one per AI reasoning step).</summary>
+    /// <summary>Save multiple audit log entries in a single batch POST to PostgREST.</summary>
     public async Task SaveAuditLogBatchAsync(IEnumerable<AuditLogRecord> records)
     {
-        foreach (var record in records)
+        if (!_isConfigured)
         {
-            await InsertAsync("audit_logs", record);
+            _logger.LogInformation("Supabase not configured — skipping batch save to audit_logs.");
+            return;
+        }
+
+        var list = records.ToList();
+        if (list.Count == 0) return;
+
+        try
+        {
+            var url = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/audit_logs";
+            var payload = JsonSerializer.Serialize(list, JsonOpts);
+
+            var request = new HttpRequestMessage(HttpMethod.Post, url)
+            {
+                Content = new StringContent(payload, Encoding.UTF8, "application/json")
+            };
+
+            request.Headers.Add("apikey", _serviceKey);
+            request.Headers.Add("Authorization", $"Bearer {_serviceKey}");
+
+            var response = await _httpClient.SendAsync(request);
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync();
+                _logger.LogError("Batch save to audit_logs failed ({Status}): {Body}",
+                    response.StatusCode, body);
+            }
+            else
+            {
+                _logger.LogInformation("Batch-saved {Count} audit log entries.", list.Count);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error batch-saving to audit_logs.");
         }
     }
 

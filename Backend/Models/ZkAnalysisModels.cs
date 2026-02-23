@@ -307,3 +307,11 @@ public class UnifiedZkValuationResult
     public bool ValuationAttempted { get; set; }
     public string? ValuationSkipReason { get; set; }  // e.g. "Površina zgrade nepoznata"
 }
+
+public class MortgageInfo
+{
+    public string Amount { get; set; } = string.Empty;
+    public string Currency { get; set; } = string.Empty;
+    public string Year { get; set; } = string.Empty;
+    public string Details { get; set; } = string.Empty;
+}

@@ -1,11 +1,18 @@
-import { createClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
+/**
+ * Auth-aware Supabase browser client.
+ * Uses @supabase/ssr's createBrowserClient — consistent with the HttpOnly cookie
+ * flow used by the rest of the app (middleware, server components, useUserId hook).
+ * This ensures RLS sees the correct auth.uid() on direct Supabase queries
+ * (history page, dashboard, audit page, delete operations).
+ */
 export const supabase =
   supabaseUrl && supabaseAnonKey
-    ? createClient(supabaseUrl, supabaseAnonKey)
+    ? createBrowserClient(supabaseUrl, supabaseAnonKey)
     : null;
 
 /**
@@ -277,12 +284,9 @@ export async function deleteChronology(id: string): Promise<boolean> {
   return true;
 }
 
-/** Delete a legal strategy (and its audit_logs) by ID. */
+/** Delete a legal strategy by ID. */
 export async function deleteLegalStrategy(id: string): Promise<boolean> {
   if (!supabase) return false;
-
-  // Delete related audit_logs first
-  await supabase.from("audit_logs").delete().eq("analysis_id", id);
 
   const { error } = await supabase.from("legal_strategies").delete().eq("id", id);
   if (error) {

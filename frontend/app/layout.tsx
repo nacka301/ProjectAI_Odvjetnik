@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import AutoLogoutProvider from "@/components/AutoLogoutProvider";
@@ -14,10 +14,15 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
+
 export const metadata: Metadata = {
   title: "PravoTek — Pravna inteligencija za odvjetnike",
   description: "PravoTek — platforma za pravnu analitiku: procjena nekretnina, analiza ugovora, ZK izvadci",
-  viewport: "width=device-width, initial-scale=1, viewport-fit=cover",
 };
 
 export default function RootLayout({

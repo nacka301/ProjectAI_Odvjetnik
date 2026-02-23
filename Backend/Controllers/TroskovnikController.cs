@@ -1,11 +1,13 @@
 using Backend.Models;
 using Backend.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Backend.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[EnableRateLimiting("general")]
 public class TroskovnikController : ControllerBase
 {
     private readonly TroskovnikService _service = new();

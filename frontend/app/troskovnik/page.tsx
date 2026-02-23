@@ -37,14 +37,14 @@ interface TarifnaStavka {
   id: string;
   kategorija: string;
   opis: string;
-  tarifniBroj: string;
-  fiksniBody: number | null;
-  tbr71Postotak: number | null;
-  tbr71Povecanje: number | null;
-  maxBodova: number | null;
-  minBodova: number | null;
+  tarifni_broj: string;
+  fiksni_body: number | null;
+  tbr71_postotak: number | null;
+  tbr71_povecanje: number | null;
+  max_bodova: number | null;
+  min_bodova: number | null;
   jedinica: string;
-  sortOrder: number;
+  sort_order: number;
 }
 
 interface SelectedItem {
@@ -54,26 +54,26 @@ interface SelectedItem {
 
 interface TroskovnikLineItem {
   rbr: number;
-  itemId: string;
+  item_id: string;
   opis: string;
-  tarifniBroj: string;
+  tarifni_broj: string;
   kolicina: number;
-  bodovaPoJedinici: number;
-  ukupnoBodova: number;
-  iznosEur: number;
+  bodova_po_jedinici: number;
+  ukupno_bodova: number;
+  iznos_eur: number;
 }
 
 interface TroskovnikResponse {
   stavke: TroskovnikLineItem[];
-  ukupnoBodova: number;
-  ukupnoEurBezPdv: number;
+  ukupno_bodova: number;
+  ukupno_eur_bez_pdv: number;
   pdv: number;
-  ukupnoEurSPdv: number;
-  vrijednostBoda: number;
+  ukupno_eur_s_pdv: number;
+  vrijednost_boda: number;
   klijent: { ime: string; oib?: string; adresa?: string; grad?: string } | null;
   odvjetnik: { ime: string; oib?: string; adresa?: string; grad?: string } | null;
-  opisPredmeta: string | null;
-  datumIzrade: string;
+  opis_predmeta: string | null;
+  datum_izrade: string;
 }
 
 // ── Tbr. 7.1 client-side point lookup (mirrors backend) ──
@@ -101,22 +101,22 @@ function tbr71Bodovi(vrijednost: number): number {
 function izracunajBodove(def: TarifnaStavka, baseBodovi: number): number {
   let bodovi: number;
 
-  if (def.fiksniBody !== null && def.fiksniBody !== undefined) {
-    bodovi = def.fiksniBody;
-  } else if (def.tbr71Postotak !== null && def.tbr71Postotak !== undefined) {
-    let raw = Math.ceil(baseBodovi * def.tbr71Postotak);
-    if (def.tbr71Povecanje !== null && def.tbr71Povecanje !== undefined) {
-      raw = Math.ceil(raw * (1 + def.tbr71Povecanje));
+  if (def.fiksni_body !== null && def.fiksni_body !== undefined) {
+    bodovi = def.fiksni_body;
+  } else if (def.tbr71_postotak !== null && def.tbr71_postotak !== undefined) {
+    let raw = Math.ceil(baseBodovi * def.tbr71_postotak);
+    if (def.tbr71_povecanje !== null && def.tbr71_povecanje !== undefined) {
+      raw = Math.ceil(raw * (1 + def.tbr71_povecanje));
     }
     bodovi = raw;
   } else {
     bodovi = baseBodovi;
   }
 
-  if (def.maxBodova !== null && def.maxBodova !== undefined && bodovi > def.maxBodova)
-    bodovi = def.maxBodova;
-  if (def.minBodova !== null && def.minBodova !== undefined && bodovi < def.minBodova)
-    bodovi = def.minBodova;
+  if (def.max_bodova !== null && def.max_bodova !== undefined && bodovi > def.max_bodova)
+    bodovi = def.max_bodova;
+  if (def.min_bodova !== null && def.min_bodova !== undefined && bodovi < def.min_bodova)
+    bodovi = def.min_bodova;
 
   return bodovi;
 }
@@ -231,7 +231,7 @@ export default function TroskovnikPage() {
       .map(([cat, items]) => [cat, items.filter(
         (i) =>
           i.opis.toLowerCase().includes(lower) ||
-          i.tarifniBroj.toLowerCase().includes(lower) ||
+          i.tarifni_broj.toLowerCase().includes(lower) ||
           i.id.toLowerCase().includes(lower) ||
           cat.toLowerCase().includes(lower)
       )] as [string, TarifnaStavka[]])
@@ -242,11 +242,11 @@ export default function TroskovnikPage() {
   const liveCalc = useMemo(() => {
     const lines: {
       opis: string;
-      tarifniBroj: string;
+      tarifni_broj: string;
       kolicina: number;
-      bodovaPoJedinici: number;
-      ukupnoBodova: number;
-      iznosEur: number;
+      bodova_po_jedinici: number;
+      ukupno_bodova: number;
+      iznos_eur: number;
       jedinica: string;
     }[] = [];
     const catalogMap = new Map(katalog.map((s) => [s.id, s]));
@@ -257,16 +257,16 @@ export default function TroskovnikPage() {
       const bodovi = izracunajBodove(def, baseBodovi);
       lines.push({
         opis: def.opis,
-        tarifniBroj: def.tarifniBroj,
+        tarifni_broj: def.tarifni_broj,
         kolicina: kol,
-        bodovaPoJedinici: bodovi,
-        ukupnoBodova: bodovi * kol,
-        iznosEur: bodovi * kol * BOD_VALUE,
+        bodova_po_jedinici: bodovi,
+        ukupno_bodova: bodovi * kol,
+        iznos_eur: bodovi * kol * BOD_VALUE,
         jedinica: def.jedinica,
       });
     });
 
-    const ukupnoBodova = lines.reduce((s, l) => s + l.ukupnoBodova, 0);
+    const ukupnoBodova = lines.reduce((s, l) => s + l.ukupno_bodova, 0);
     const ukupnoEur = ukupnoBodova * BOD_VALUE;
     const pdv = Math.round(ukupnoEur * PDV_RATE * 100) / 100;
 
@@ -325,9 +325,9 @@ export default function TroskovnikPage() {
 
     try {
       const body = {
-        vrijednostSpora: vrijednostNum,
+        vrijednost_spora: vrijednostNum,
         stavke: Array.from(selectedItems.entries()).map(([itemId, kolicina]) => ({
-          itemId,
+          item_id: itemId,
           kolicina,
         })),
         odvjetnik: odvjetnikIme
@@ -336,7 +336,7 @@ export default function TroskovnikPage() {
         klijent: klijentIme
           ? { ime: klijentIme, oib: klijentOib || undefined, adresa: klijentAdresa || undefined, grad: klijentGrad || undefined }
           : undefined,
-        opisPredmeta: opisPredmeta || undefined,
+        opis_predmeta: opisPredmeta || undefined,
       };
 
       const res = await fetch(`${API}/api/troskovnik/izracunaj`, {
@@ -373,12 +373,12 @@ export default function TroskovnikPage() {
     const rows = source
       .map((l, i) => {
         const rbr = "rbr" in l ? l.rbr : i + 1;
-        return `${rbr};"${l.tarifniBroj}";"${l.opis}";${l.kolicina};${l.bodovaPoJedinici};${l.ukupnoBodova};${l.iznosEur.toFixed(2)}`;
+        return `${rbr};"${l.tarifni_broj}";"${l.opis}";${l.kolicina};${l.bodova_po_jedinici};${l.ukupno_bodova};${l.iznos_eur.toFixed(2)}`;
       })
       .join("\n");
 
     const totals = result
-      ? `\n\n;;;;;Ukupno bodova;${result.ukupnoBodova}\n;;;;;Ukupno bez PDV;${result.ukupnoEurBezPdv.toFixed(2)}\n;;;;;PDV 25%;${result.pdv.toFixed(2)}\n;;;;;UKUPNO s PDV;${result.ukupnoEurSPdv.toFixed(2)}`
+      ? `\n\n;;;;;Ukupno bodova;${result.ukupno_bodova}\n;;;;;Ukupno bez PDV;${result.ukupno_eur_bez_pdv.toFixed(2)}\n;;;;;PDV 25%;${result.pdv.toFixed(2)}\n;;;;;UKUPNO s PDV;${result.ukupno_eur_s_pdv.toFixed(2)}`
       : `\n\n;;;;;Ukupno bodova;${liveCalc.ukupnoBodova}\n;;;;;Ukupno bez PDV;${liveCalc.ukupnoEur.toFixed(2)}\n;;;;;PDV 25%;${liveCalc.pdv.toFixed(2)}\n;;;;;UKUPNO s PDV;${liveCalc.ukupnoSPdv.toFixed(2)}`;
 
     const bom = "\uFEFF";
@@ -561,7 +561,7 @@ export default function TroskovnikPage() {
                             <div className="flex-1 min-w-0">
                               <p className="text-sm text-slate-800 leading-snug">{item.opis}</p>
                               <div className="flex items-center gap-3 mt-1">
-                                <span className="text-[10px] font-mono text-slate-400">{item.tarifniBroj}</span>
+                                <span className="text-[10px] font-mono text-slate-400">{item.tarifni_broj}</span>
                                 <span className="text-[10px] text-indigo-600 font-semibold">
                                   {fmtNum(bodovi)} bod. = {fmtEur(iznosPerUnit)}
                                 </span>
@@ -715,11 +715,11 @@ export default function TroskovnikPage() {
                               {line.opis}
                             </p>
                             <p className="text-[10px] text-slate-400 mt-0.5">
-                              {line.kolicina} × {fmtNum(line.bodovaPoJedinici)} bod.
+                              {line.kolicina} × {fmtNum(line.bodova_po_jedinici)} bod.
                             </p>
                           </div>
                           <span className="text-xs font-semibold text-slate-800 shrink-0">
-                            {fmtEur(line.iznosEur)}
+                            {fmtEur(line.iznos_eur)}
                           </span>
                         </div>
                       ))}
@@ -836,7 +836,7 @@ export default function TroskovnikPage() {
                 <div>
                   <h2 className="text-white font-bold text-lg">Troškovnik</h2>
                   <p className="text-indigo-200 text-xs">
-                    {new Date(result.datumIzrade).toLocaleDateString("hr-HR")} · Vrijednost spora: {fmtEur(vrijednostNum)} · Tarifa NN 2023
+                    {new Date(result.datum_izrade).toLocaleDateString("hr-HR")} · Vrijednost spora: {fmtEur(vrijednostNum)} · Tarifa NN 2023
                   </p>
                 </div>
               </div>
@@ -871,9 +871,9 @@ export default function TroskovnikPage() {
                 </div>
               )}
 
-              {result.opisPredmeta && (
+              {result.opis_predmeta && (
                 <p className="text-sm text-slate-600 mb-4">
-                  <span className="font-semibold">Predmet:</span> {result.opisPredmeta}
+                  <span className="font-semibold">Predmet:</span> {result.opis_predmeta}
                 </p>
               )}
 
@@ -896,19 +896,19 @@ export default function TroskovnikPage() {
                       <tr key={line.rbr} className="border-b border-slate-100 hover:bg-slate-50">
                         <td className="py-2 px-2 text-slate-400">{line.rbr}.</td>
                         <td className="py-2 px-2 text-slate-800">{line.opis}</td>
-                        <td className="py-2 px-2 text-slate-500 font-mono text-xs">{line.tarifniBroj}</td>
+                        <td className="py-2 px-2 text-slate-500 font-mono text-xs">{line.tarifni_broj}</td>
                         <td className="py-2 px-2 text-center text-slate-600">{line.kolicina}</td>
-                        <td className="py-2 px-2 text-right text-slate-600">{fmtNum(line.bodovaPoJedinici)}</td>
-                        <td className="py-2 px-2 text-right font-semibold text-slate-700">{fmtNum(line.ukupnoBodova)}</td>
-                        <td className="py-2 px-2 text-right font-semibold text-slate-800">{fmtEur(line.iznosEur)}</td>
+                        <td className="py-2 px-2 text-right text-slate-600">{fmtNum(line.bodova_po_jedinici)}</td>
+                        <td className="py-2 px-2 text-right font-semibold text-slate-700">{fmtNum(line.ukupno_bodova)}</td>
+                        <td className="py-2 px-2 text-right font-semibold text-slate-800">{fmtEur(line.iznos_eur)}</td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
                     <tr className="border-t-2 border-indigo-200">
                       <td colSpan={5} className="py-2 px-2 text-right text-xs text-slate-500 font-semibold">Ukupno bodova</td>
-                      <td className="py-2 px-2 text-right font-bold text-indigo-700">{fmtNum(result.ukupnoBodova)}</td>
-                      <td className="py-2 px-2 text-right font-bold text-indigo-700">{fmtEur(result.ukupnoEurBezPdv)}</td>
+                      <td className="py-2 px-2 text-right font-bold text-indigo-700">{fmtNum(result.ukupno_bodova)}</td>
+                      <td className="py-2 px-2 text-right font-bold text-indigo-700">{fmtEur(result.ukupno_eur_bez_pdv)}</td>
                     </tr>
                     <tr>
                       <td colSpan={5} className="py-1 px-2 text-right text-xs text-slate-500">PDV 25%</td>
@@ -918,7 +918,7 @@ export default function TroskovnikPage() {
                     <tr className="bg-indigo-50">
                       <td colSpan={5} className="py-3 px-2 text-right text-sm font-bold text-indigo-800">UKUPNO s PDV</td>
                       <td />
-                      <td className="py-3 px-2 text-right text-lg font-bold text-indigo-800">{fmtEur(result.ukupnoEurSPdv)}</td>
+                      <td className="py-3 px-2 text-right text-lg font-bold text-indigo-800">{fmtEur(result.ukupno_eur_s_pdv)}</td>
                     </tr>
                   </tfoot>
                 </table>

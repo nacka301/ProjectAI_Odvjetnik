@@ -20,11 +20,6 @@ body {
   overflow-x: hidden;
 }
 
-/* Safe area insets for notched phones (iPhone X+) */
-.safe-bottom {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-}
-
 /* Tap highlight for touch devices */
 @media (hover: none) {
   button, a, [role="button"] {
