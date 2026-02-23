@@ -80,10 +80,10 @@ interface ClientProfile {
 // ── Helpers ──
 
 const STATUS_COLORS: Record<string, string> = {
-  aktivan: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
-  zatvoren: "text-slate-400 bg-slate-500/10 border-slate-500/20",
-  mirovanje: "text-amber-400 bg-amber-500/10 border-amber-500/20",
-  arhiviran: "text-slate-500 bg-slate-600/10 border-slate-600/20",
+  aktivan: "text-emerald-700 bg-emerald-50 border-emerald-200",
+  zatvoren: "text-slate-600 bg-slate-50 border-slate-200",
+  mirovanje: "text-amber-700 bg-amber-50 border-amber-200",
+  arhiviran: "text-slate-500 bg-slate-50 border-slate-200",
 };
 
 const VRSTA_LABELS: Record<string, string> = {
@@ -233,19 +233,19 @@ export default function ClientProfilePage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950">
-        <Loader2 className="h-8 w-8 animate-spin text-violet-400" />
+      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+        <Loader2 className="h-8 w-8 animate-spin text-[#1B2A4A]" />
       </div>
     );
   }
 
   if (!profile) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-slate-400">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-gray-50 text-slate-500">
         <p>Stranka nije pronađena.</p>
         <Link
           href="/klijenti"
-          className="text-sm text-violet-400 hover:underline"
+          className="text-sm text-[#1B2A4A] hover:underline"
         >
           ← Natrag na stranke
         </Link>
@@ -256,13 +256,13 @@ export default function ClientProfilePage() {
   const { client, cases, troskovnici } = profile;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-slate-100">
+    <div className="min-h-screen bg-gray-50 text-slate-900">
       {/* Header */}
-      <header className="sticky top-0 z-30 border-b border-slate-800/60 bg-slate-950/80 backdrop-blur-xl">
+      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3 sm:px-6">
           <Link
             href="/klijenti"
-            className="flex items-center gap-2 text-sm text-slate-400 transition hover:text-white"
+            className="flex items-center gap-2 text-sm text-slate-500 transition hover:text-slate-900"
           >
             <ArrowLeft className="h-4 w-4" />
             <span className="hidden sm:inline">Stranke</span>
@@ -271,8 +271,8 @@ export default function ClientProfilePage() {
             <div
               className={`flex h-8 w-8 items-center justify-center rounded-lg ${
                 client.tip === "pravna"
-                  ? "bg-violet-500/20 text-violet-400"
-                  : "bg-blue-500/20 text-blue-400"
+                  ? "bg-[#1B2A4A]/10 text-[#1B2A4A]"
+                  : "bg-[#1B2A4A]/10 text-[#1B2A4A]"
               }`}
             >
               {client.tip === "pravna" ? (
@@ -281,19 +281,19 @@ export default function ClientProfilePage() {
                 <User className="h-4 w-4" />
               )}
             </div>
-            <h1 className="text-lg font-semibold">{client.ime_naziv}</h1>
+            <h1 className="font-[family-name:var(--font-playfair)] text-lg font-semibold text-[#1B2A4A]">{client.ime_naziv}</h1>
           </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
         {/* Client info card */}
-        <div className="mb-6 rounded-xl border border-slate-800/60 bg-slate-900/50 p-6 backdrop-blur">
+        <div className="mb-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {client.oib && (
               <div>
                 <div className="text-xs text-slate-500">OIB</div>
-                <div className="mt-0.5 text-sm font-medium text-white">
+                <div className="mt-0.5 text-sm font-medium text-slate-900">
                   {client.oib}
                 </div>
               </div>
@@ -301,8 +301,8 @@ export default function ClientProfilePage() {
             {(client.adresa || client.grad) && (
               <div>
                 <div className="text-xs text-slate-500">Adresa</div>
-                <div className="mt-0.5 flex items-center gap-1.5 text-sm text-white">
-                  <MapPin className="h-3.5 w-3.5 text-slate-600" />
+                <div className="mt-0.5 flex items-center gap-1.5 text-sm text-slate-900">
+                  <MapPin className="h-3.5 w-3.5 text-slate-400" />
                   {client.adresa && `${client.adresa}, `}
                   {client.grad}
                   {client.postanski_broj && ` ${client.postanski_broj}`}
@@ -312,8 +312,8 @@ export default function ClientProfilePage() {
             {client.email && (
               <div>
                 <div className="text-xs text-slate-500">E-mail</div>
-                <div className="mt-0.5 flex items-center gap-1.5 text-sm text-white">
-                  <Mail className="h-3.5 w-3.5 text-slate-600" />
+                <div className="mt-0.5 flex items-center gap-1.5 text-sm text-slate-900">
+                  <Mail className="h-3.5 w-3.5 text-slate-400" />
                   {client.email}
                 </div>
               </div>
@@ -321,22 +321,22 @@ export default function ClientProfilePage() {
             {client.telefon && (
               <div>
                 <div className="text-xs text-slate-500">Telefon</div>
-                <div className="mt-0.5 flex items-center gap-1.5 text-sm text-white">
-                  <Phone className="h-3.5 w-3.5 text-slate-600" />
+                <div className="mt-0.5 flex items-center gap-1.5 text-sm text-slate-900">
+                  <Phone className="h-3.5 w-3.5 text-slate-400" />
                   {client.telefon}
                 </div>
               </div>
             )}
           </div>
           {client.napomena && (
-            <div className="mt-4 border-t border-slate-800/40 pt-3">
+            <div className="mt-4 border-t border-slate-100 pt-3">
               <div className="text-xs text-slate-500">Napomena</div>
-              <div className="mt-0.5 text-sm text-slate-300">
+              <div className="mt-0.5 text-sm text-slate-600">
                 {client.napomena}
               </div>
             </div>
           )}
-          <div className="mt-4 flex items-center gap-4 border-t border-slate-800/40 pt-3 text-xs text-slate-600">
+          <div className="mt-4 flex items-center gap-4 border-t border-slate-100 pt-3 text-xs text-slate-400">
             <span>Tip: {client.tip === "pravna" ? "Pravna osoba" : "Fizička osoba"}</span>
             <span>Kreirano: {formatDate(client.created_at)}</span>
           </div>
@@ -344,27 +344,27 @@ export default function ClientProfilePage() {
 
         {/* Stats */}
         <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div className="rounded-xl border border-slate-800/60 bg-slate-900/50 p-4 backdrop-blur">
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="text-xs text-slate-500">Predmeti</div>
-            <div className="mt-1 text-2xl font-bold text-blue-400">
+            <div className="mt-1 text-2xl font-bold text-[#1B2A4A]">
               {cases.length}
             </div>
           </div>
-          <div className="rounded-xl border border-slate-800/60 bg-slate-900/50 p-4 backdrop-blur">
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="text-xs text-slate-500">Aktivni predmeti</div>
-            <div className="mt-1 text-2xl font-bold text-emerald-400">
+            <div className="mt-1 text-2xl font-bold text-[#1B2A4A]">
               {cases.filter((c) => c.status === "aktivan").length}
             </div>
           </div>
-          <div className="rounded-xl border border-slate-800/60 bg-slate-900/50 p-4 backdrop-blur">
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="text-xs text-slate-500">Troškovnici</div>
-            <div className="mt-1 text-2xl font-bold text-violet-400">
+            <div className="mt-1 text-2xl font-bold text-[#1B2A4A]">
               {troskovnici.length}
             </div>
           </div>
-          <div className="rounded-xl border border-slate-800/60 bg-slate-900/50 p-4 backdrop-blur">
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="text-xs text-slate-500">Ukupno naplaćeno</div>
-            <div className="mt-1 text-2xl font-bold text-amber-400">
+            <div className="mt-1 text-2xl font-bold text-[#1B2A4A]">
               {formatEur(
                 troskovnici.reduce((sum, t) => sum + t.ukupno_eur_s_pdv, 0)
               )}
@@ -373,13 +373,13 @@ export default function ClientProfilePage() {
         </div>
 
         {/* Tabs */}
-        <div className="mb-4 flex gap-1 rounded-lg border border-slate-800/60 bg-slate-900/50 p-1">
+        <div className="mb-4 flex gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
           <button
             onClick={() => setActiveTab("predmeti")}
             className={`flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition ${
               activeTab === "predmeti"
-                ? "bg-violet-600 text-white shadow"
-                : "text-slate-400 hover:text-white"
+                ? "bg-[#1B2A4A] text-white shadow"
+                : "text-slate-500 hover:text-slate-900"
             }`}
           >
             <Briefcase className="h-4 w-4" />
@@ -389,8 +389,8 @@ export default function ClientProfilePage() {
             onClick={() => setActiveTab("troskovnici")}
             className={`flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition ${
               activeTab === "troskovnici"
-                ? "bg-violet-600 text-white shadow"
-                : "text-slate-400 hover:text-white"
+                ? "bg-[#1B2A4A] text-white shadow"
+                : "text-slate-500 hover:text-slate-900"
             }`}
           >
             <Calculator className="h-4 w-4" />
@@ -404,7 +404,7 @@ export default function ClientProfilePage() {
             <div className="mb-4 flex justify-end">
               <button
                 onClick={() => setShowCaseForm(!showCaseForm)}
-                className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-blue-500/20 transition hover:bg-blue-500 active:scale-[0.98]"
+                className="flex items-center gap-2 rounded-lg bg-[#1B2A4A] px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-[#1B2A4A]/90 active:scale-[0.98]"
               >
                 {showCaseForm ? (
                   <X className="h-4 w-4" />
@@ -419,9 +419,9 @@ export default function ClientProfilePage() {
             {showCaseForm && (
               <form
                 onSubmit={handleCreateCase}
-                className="mb-4 rounded-xl border border-slate-800/60 bg-slate-900/50 p-6 backdrop-blur"
+                className="mb-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
               >
-                <h3 className="mb-4 text-sm font-semibold text-blue-300">
+                <h3 className="mb-4 text-sm font-semibold text-[#1B2A4A]">
                   Novi predmet
                 </h3>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -435,7 +435,7 @@ export default function ClientProfilePage() {
                       onChange={(e) =>
                         setCaseForm({ ...caseForm, naziv: e.target.value })
                       }
-                      className="w-full rounded-lg border border-slate-700/60 bg-slate-800/50 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/30"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-[#1B2A4A]/50 focus:outline-none focus:ring-1 focus:ring-[#1B2A4A]/30"
                       placeholder="Horvat vs. Kovač – nekretnina"
                     />
                   </div>
@@ -448,7 +448,7 @@ export default function ClientProfilePage() {
                       onChange={(e) =>
                         setCaseForm({ ...caseForm, broj_predmeta: e.target.value })
                       }
-                      className="w-full rounded-lg border border-slate-700/60 bg-slate-800/50 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/30"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-[#1B2A4A]/50 focus:outline-none focus:ring-1 focus:ring-[#1B2A4A]/30"
                       placeholder="P-123/2026"
                     />
                   </div>
@@ -461,7 +461,7 @@ export default function ClientProfilePage() {
                       onChange={(e) =>
                         setCaseForm({ ...caseForm, vrsta: e.target.value })
                       }
-                      className="w-full rounded-lg border border-slate-700/60 bg-slate-800/50 px-3 py-2 text-sm text-white focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/30"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-[#1B2A4A]/50 focus:outline-none focus:ring-1 focus:ring-[#1B2A4A]/30"
                     >
                       <option value="parnica">Parnica</option>
                       <option value="ovrha">Ovrha</option>
@@ -484,7 +484,7 @@ export default function ClientProfilePage() {
                           vrijednost_spora: e.target.value,
                         })
                       }
-                      className="w-full rounded-lg border border-slate-700/60 bg-slate-800/50 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/30"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-[#1B2A4A]/50 focus:outline-none focus:ring-1 focus:ring-[#1B2A4A]/30"
                       placeholder="50000"
                     />
                   </div>
@@ -497,7 +497,7 @@ export default function ClientProfilePage() {
                       onChange={(e) =>
                         setCaseForm({ ...caseForm, sud: e.target.value })
                       }
-                      className="w-full rounded-lg border border-slate-700/60 bg-slate-800/50 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/30"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-[#1B2A4A]/50 focus:outline-none focus:ring-1 focus:ring-[#1B2A4A]/30"
                       placeholder="Općinski sud u Zagrebu"
                     />
                   </div>
@@ -514,7 +514,7 @@ export default function ClientProfilePage() {
                           datum_pokretanja: e.target.value,
                         })
                       }
-                      className="w-full rounded-lg border border-slate-700/60 bg-slate-800/50 px-3 py-2 text-sm text-white focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/30"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-[#1B2A4A]/50 focus:outline-none focus:ring-1 focus:ring-[#1B2A4A]/30"
                     />
                   </div>
                   <div className="sm:col-span-2 lg:col-span-3">
@@ -527,7 +527,7 @@ export default function ClientProfilePage() {
                         setCaseForm({ ...caseForm, opis: e.target.value })
                       }
                       rows={2}
-                      className="w-full rounded-lg border border-slate-700/60 bg-slate-800/50 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/30"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-[#1B2A4A]/50 focus:outline-none focus:ring-1 focus:ring-[#1B2A4A]/30"
                       placeholder="Opis predmeta…"
                     />
                   </div>
@@ -536,7 +536,7 @@ export default function ClientProfilePage() {
                   <button
                     type="submit"
                     disabled={savingCase || !caseForm.naziv.trim()}
-                    className="flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white shadow-lg shadow-blue-500/20 transition hover:bg-blue-500 disabled:opacity-50 active:scale-[0.98]"
+                    className="flex items-center gap-2 rounded-lg bg-[#1B2A4A] px-6 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-[#1B2A4A]/90 disabled:opacity-50 active:scale-[0.98]"
                   >
                     {savingCase ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -552,7 +552,7 @@ export default function ClientProfilePage() {
             {/* Cases list */}
             {cases.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-slate-500">
-                <Briefcase className="mb-3 h-10 w-10 text-slate-700" />
+                <Briefcase className="mb-3 h-10 w-10 text-slate-300" />
                 <p className="text-sm">Nema predmeta za ovu stranku.</p>
               </div>
             ) : (
@@ -560,14 +560,14 @@ export default function ClientProfilePage() {
                 {cases.map((c) => (
                   <div
                     key={c.id}
-                    className="group flex items-center gap-4 rounded-xl border border-slate-800/60 bg-slate-900/50 p-4 backdrop-blur transition hover:border-blue-500/30 hover:bg-slate-800/40"
+                    className="group flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-[#1B2A4A]/40 hover:shadow-md"
                   >
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
-                      <Scale className="h-5 w-5 text-blue-400" />
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#1B2A4A]/10">
+                      <Scale className="h-5 w-5 text-[#1B2A4A]" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <h4 className="truncate text-sm font-semibold text-white">
+                        <h4 className="truncate text-sm font-semibold text-slate-900">
                           {c.naziv}
                         </h4>
                         <span
@@ -596,7 +596,7 @@ export default function ClientProfilePage() {
                     </div>
                     <button
                       onClick={() => handleDeleteCase(c.id)}
-                      className="rounded-lg p-2 text-slate-600 opacity-0 transition hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
+                      className="rounded-lg p-2 text-slate-300 opacity-0 transition hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -612,11 +612,11 @@ export default function ClientProfilePage() {
           <div>
             {troskovnici.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-slate-500">
-                <Calculator className="mb-3 h-10 w-10 text-slate-700" />
+                <Calculator className="mb-3 h-10 w-10 text-slate-300" />
                 <p className="text-sm">Nema troškovnika za ovu stranku.</p>
                 <Link
                   href="/troskovnik"
-                  className="mt-2 text-xs text-violet-400 hover:underline"
+                  className="mt-2 text-xs text-[#1B2A4A] hover:underline"
                 >
                   Izradi novi troškovnik →
                 </Link>
@@ -626,15 +626,15 @@ export default function ClientProfilePage() {
                 {troskovnici.map((t) => (
                   <div
                     key={t.id}
-                    className="rounded-xl border border-slate-800/60 bg-slate-900/50 p-4 backdrop-blur"
+                    className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-500/10">
-                          <Calculator className="h-5 w-5 text-violet-400" />
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#1B2A4A]/10">
+                          <Calculator className="h-5 w-5 text-[#1B2A4A]" />
                         </div>
                         <div>
-                          <h4 className="text-sm font-semibold text-white">
+                          <h4 className="text-sm font-semibold text-slate-900">
                             {t.opis_predmeta || "Troškovnik"}
                           </h4>
                           <p className="text-xs text-slate-500">
@@ -644,7 +644,7 @@ export default function ClientProfilePage() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="text-lg font-bold text-emerald-400">
+                        <div className="text-lg font-bold text-[#1B2A4A]">
                           {formatEur(t.ukupno_eur_s_pdv)}
                         </div>
                         <div className="text-xs text-slate-500">
