@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AuditListSkeleton } from "@/components/Skeletons";
 import {
   ShieldCheck,
   AlertTriangle,
@@ -308,12 +309,7 @@ export default function AuditPage() {
         )}
 
         {/* Loading */}
-        {loading && (
-          <div className="text-center py-20">
-            <Loader2 className="h-8 w-8 animate-spin text-indigo-500 mx-auto" />
-            <p className="text-sm text-gray-500 mt-3">Učitavam audit rezultate...</p>
-          </div>
-        )}
+        {loading && <AuditListSkeleton />}
 
         {/* Empty State */}
         {!loading && filtered.length === 0 && (

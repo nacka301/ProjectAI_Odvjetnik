@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { ClientDetailSkeleton } from "@/components/Skeletons";
 import {
   ArrowLeft,
   Briefcase,
@@ -232,11 +233,7 @@ export default function ClientProfilePage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <Loader2 className="h-8 w-8 animate-spin text-[#1B2A4A]" />
-      </div>
-    );
+    return <ClientDetailSkeleton />;
   }
 
   if (!profile) {

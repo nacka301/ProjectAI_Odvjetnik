@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Scale, Clock, ShieldAlert, Shield, LogOut } from "lucide-react";
+import { Scale, Clock, ShieldAlert, Shield, LogOut, Search } from "lucide-react";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
 import React from "react";
 
@@ -45,8 +45,19 @@ export default function AppHeader({ extraStart }: AppHeaderProps) {
           </div>
         </Link>
 
-        {/* ── Right side: optional extras + nav links + logout ── */}
+        {/* ── Right side: search trigger + optional extras + nav links + logout ── */}
         <div className="flex items-center gap-2 sm:gap-4">
+          {/* Search trigger */}
+          <button
+            onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true }))}
+            className="hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1 text-xs text-slate-400 hover:text-white hover:border-slate-500 transition"
+            title="Pretraži (Ctrl+K)"
+          >
+            <Search className="h-3.5 w-3.5" />
+            <span>Pretraži</span>
+            <kbd className="ml-1 rounded border border-slate-600 bg-slate-700/50 px-1 py-0.5 text-[9px] font-mono">⌘K</kbd>
+          </button>
+
           {extraStart}
 
           {navItems.map(({ href, label, icon: Icon }) => {

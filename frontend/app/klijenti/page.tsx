@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ClientListSkeleton } from "@/components/Skeletons";
 import {
   ArrowLeft,
   Building2,
@@ -375,9 +376,7 @@ export default function KlijentiPage() {
 
         {/* Client list */}
         {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="h-8 w-8 animate-spin text-[#1B2A4A]" />
-          </div>
+          <ClientListSkeleton />
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-slate-400">
             <Users className="mb-3 h-12 w-12 text-slate-300" />

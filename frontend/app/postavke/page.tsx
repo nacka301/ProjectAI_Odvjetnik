@@ -20,6 +20,8 @@ import {
   Building2,
   Users,
   CreditCard,
+  Clock,
+  Database,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
@@ -29,6 +31,8 @@ import LawFirmForm from "@/components/settings/LawFirmForm";
 import SubscriptionView from "@/components/settings/SubscriptionView";
 import BetaAccessStatus from "@/components/settings/BetaAccessStatus";
 import AppHeader from "@/components/AppHeader";
+import ActivityLog from "@/components/settings/ActivityLog";
+import PrivacyPanel from "@/components/settings/PrivacyPanel";
 
 // ── Types ──
 interface SetupResponse {
@@ -47,7 +51,7 @@ interface StatusResponse {
 }
 
 // ── Sidebar Tabs ──
-type SettingsTab = "profil" | "sigurnost" | "ured" | "tim" | "pretplata";
+type SettingsTab = "profil" | "sigurnost" | "ured" | "tim" | "pretplata" | "dnevnik" | "privatnost";
 
 const SIDEBAR_ITEMS: { id: SettingsTab; label: string; icon: React.ElementType }[] = [
   { id: "profil",    label: "Osobni profil",      icon: User },
@@ -55,6 +59,8 @@ const SIDEBAR_ITEMS: { id: SettingsTab; label: string; icon: React.ElementType }
   { id: "ured",      label: "Odvjetnički ured",    icon: Building2 },
   { id: "tim",       label: "Upravljanje timom",   icon: Users },
   { id: "pretplata", label: "Pretplata",            icon: CreditCard },
+  { id: "dnevnik",   label: "Dnevnik aktivnosti",  icon: Clock },
+  { id: "privatnost",label: "Privatnost i podaci", icon: Database },
 ];
 
 // ── Helpers ──
@@ -675,6 +681,16 @@ export default function PostavkePage() {
                   <BetaAccessStatus userId={userId} />
                   <SubscriptionView userId={userId} />
                 </div>
+              )}
+
+              {/* ═══ TAB: Dnevnik aktivnosti ═══ */}
+              {activeTab === "dnevnik" && userId && (
+                <ActivityLog userId={userId} />
+              )}
+
+              {/* ═══ TAB: Privatnost i podaci ═══ */}
+              {activeTab === "privatnost" && userId && (
+                <PrivacyPanel userId={userId} userEmail={userEmail ?? ""} />
               )}
             </div>
 

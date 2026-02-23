@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { HistoryListSkeleton } from "@/components/Skeletons";
 import {
   Clock,
   Building2,
@@ -224,12 +225,7 @@ export default function HistoryPage() {
         </div>
 
         {/* Loading */}
-        {loading && (
-          <div className="text-center py-20">
-            <Loader2 className="h-8 w-8 animate-spin text-indigo-500 mx-auto" />
-            <p className="text-sm text-gray-500 mt-3">Učitavam povijest...</p>
-          </div>
-        )}
+        {loading && <HistoryListSkeleton />}
 
         {/* Error */}
         {error && (
