@@ -293,7 +293,7 @@ export default function HistoryPage() {
                       </p>
                       {verdictInfo && (
                         <span className={`inline-flex items-center gap-1 mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${verdictInfo.color}`}>
-                          {verdictInfo.icon} Perplexity: {verdictInfo.label}
+                          {verdictInfo.icon} Neovisna provjera: {verdictInfo.label}
                           {audit && audit.overall_confidence > 0 && (
                             <span className="opacity-70">({audit.overall_confidence}%)</span>
                           )}
@@ -381,7 +381,7 @@ export default function HistoryPage() {
                         </div>
                       )}
 
-                      {/* Perplexity AI Audit Result */}
+                      {/* Independent Audit Result */}
                       {audit && verdictInfo && (
                         <div className={`rounded-lg border p-3 ${
                           audit.verdict === "CONFIRMED" ? "bg-green-50 border-green-200" :
@@ -391,7 +391,7 @@ export default function HistoryPage() {
                           <div className="flex items-center gap-2 mb-1">
                             <span className="text-sm">{verdictInfo.icon}</span>
                             <p className="text-xs font-bold">
-                              Perplexity provjera: {verdictInfo.label}
+                              Neovisna provjera: {verdictInfo.label}
                             </p>
                             {audit.overall_confidence > 0 && (
                               <span className="text-[10px] font-medium opacity-70">

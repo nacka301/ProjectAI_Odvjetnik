@@ -8,7 +8,7 @@ import {
   ExternalLink,
   ClipboardCopy,
   Cpu,
-  Bot,
+  ListChecks,
   TrendingUp,
   BarChart3,
   Target,
@@ -35,6 +35,7 @@ import type { ValuationResult, ResultTab } from "./types";
 import { formatPrice } from "./constants";
 import { MiniStat, SimilarityBadge, PriceDistributionChart } from "./FormInputs";
 import { generateValuationPdf } from "@/lib/generatePdf";
+import { MethodologyButton, MethodologyModal } from "@/components/MethodologyModal";
 
 interface ResultViewProps {
   result: ValuationResult;
@@ -48,6 +49,7 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
   const [resultTab, setResultTab] = useState<ResultTab>("overview");
   const [copied, setCopied] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [showMethodology, setShowMethodology] = useState(false);
 
   const copyToClipboard = async (text: string) => {
     try { await navigator.clipboard.writeText(text); } catch {
@@ -517,7 +519,7 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
               }
             }
 
-            // 2. AI value drivers (deduplicated — skip if already covered by adjustments)
+            // 2. Algorithmic value drivers (deduplicated — skip if already covered by adjustments)
             if (result.value_drivers?.length) {
               const existingNames = new Set(factors.map(f => f.name.toLowerCase()));
               for (const d of result.value_drivers) {
@@ -648,7 +650,7 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
                         backgroundColor: (c.similarity_score <= 1 ? c.similarity_score : c.similarity_score / 100) >= 0.7 ? "#22c55e" : (c.similarity_score <= 1 ? c.similarity_score : c.similarity_score / 100) >= 0.4 ? "#eab308" : "#ef4444"
                       }} />
                     </div>
-                    {/* V48: Similarity reason — AI explanation of why this comp is similar/different */}
+                    {/* V48: Similarity reason — algorithmic explanation of why this comp is similar/different */}
                     {c.similarity_reason && (
                       <div className="mt-1.5 text-[11px] text-gray-500 italic">💡 {c.similarity_reason}</div>
                     )}
@@ -665,11 +667,11 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
             </div>
           )}
 
-          {/* AI-selected comparables */}
+          {/* Algorithmically-selected comparables */}
           {result.selected_comparables?.length > 0 && (
             <div className="rounded-xl bg-white border border-gray-200 p-4 sm:p-6">
               <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                <Bot className="h-4 w-4" /> Odabrane usporedbe ({result.selected_comparables.length})
+                <ListChecks className="h-4 w-4" /> Odabrane usporedbe ({result.selected_comparables.length})
               </h3>
               <div className="space-y-3">
                 {result.selected_comparables.map((c, i) => (
@@ -727,7 +729,11 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
         )} className="rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-blue-700 transition flex items-center gap-2">
           <ClipboardCopy className="h-4 w-4" /> Kopiraj izvještaj
         </button>
+        <MethodologyButton onClick={() => setShowMethodology(true)} />
       </div>
+
+      {/* Methodology Modal */}
+      {showMethodology && <MethodologyModal onClose={() => setShowMethodology(false)} />}
 
     </div>
   );

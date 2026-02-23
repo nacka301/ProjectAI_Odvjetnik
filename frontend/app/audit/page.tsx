@@ -222,7 +222,7 @@ export default function AuditPage() {
             Revizija — Verifikacija Procjena
           </h1>
           <p className="mt-2 text-gray-500 max-w-xl mx-auto">
-            Drugi revizijski sloj (Perplexity) automatski provjerava svaku procjenu nekretnine
+            Drugi revizijski sloj automatski provjerava svaku procjenu nekretnine
             prema tržišnim podacima i označava je li pouzdana ili zahtijeva ručni pregled.
           </p>
         </div>
@@ -234,7 +234,7 @@ export default function AuditPage() {
             <div>
               <p className="text-sm font-medium text-amber-800">{apiStatus.message}</p>
               <p className="text-xs text-amber-600 mt-0.5">
-                Postavite <code className="bg-amber-100 px-1 rounded">PERPLEXITY_API_KEY</code> za aktivaciju audit sloja.
+                Postavite API ključ za aktivaciju automatskog revizijskog sloja.
               </p>
             </div>
           </div>
@@ -494,7 +494,7 @@ export default function AuditPage() {
                       {typeof raw?.market_context === "string" && raw.market_context && (
                         <div className="rounded-lg bg-white border border-gray-200 p-3">
                           <p className="text-xs text-gray-500 mb-1 flex items-center gap-1">
-                            <Globe className="h-3.5 w-3.5" /> Tržišni kontekst (Perplexity)
+                            <Globe className="h-3.5 w-3.5" /> Tržišni kontekst
                           </p>
                           <p className="text-xs text-gray-700 leading-relaxed">
                             {raw.market_context}

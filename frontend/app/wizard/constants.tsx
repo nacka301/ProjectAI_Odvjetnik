@@ -4,7 +4,7 @@ import {
   Brain,
   FileSearch,
   Cpu,
-  Bot,
+  ListChecks,
   Save,
   Eye,
   Sparkles,
@@ -149,7 +149,7 @@ export const STAGE_ICONS: Record<string, ReactNode> = {
   sherlock: <Eye className="h-5 w-5" />,
   engine: <Cpu className="h-5 w-5" />,
   agent: <Sparkles className="h-5 w-5" />,
-  ai_opinion: <Bot className="h-5 w-5" />,
+  ai_opinion: <ListChecks className="h-5 w-5" />,
   saving: <Save className="h-5 w-5" />,
 };
 

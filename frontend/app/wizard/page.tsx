@@ -14,6 +14,7 @@ import {
   Scale,
 } from "lucide-react";
 import LocationSelector from "@/components/LocationSelector";
+import { MethodologyButton, MethodologyModal } from "@/components/MethodologyModal";
 
 import type {
   PropertyType,
@@ -122,6 +123,7 @@ export default function WizardPage() {
 
   // View state machine: INPUT → PROCESSING → RESULT
   const [viewState, setViewState] = useState<ViewState>("INPUT");
+  const [showMethodology, setShowMethodology] = useState(false);
 
   // ── Build JSON payload ──
 
@@ -314,6 +316,9 @@ export default function WizardPage() {
               <p className="mt-2 text-gray-500">
                 Unesite podatke korak po korak — sustav automatski procjenjuje tržišnu vrijednost
               </p>
+              <div className="mt-3 flex justify-center">
+                <MethodologyButton onClick={() => setShowMethodology(true)} />
+              </div>
             </div>
 
             <div className="flex items-center justify-center gap-2 mb-8">
@@ -644,6 +649,8 @@ export default function WizardPage() {
       </div>
     </div>
     )}
+    {/* Methodology Modal */}
+    {showMethodology && <MethodologyModal onClose={() => setShowMethodology(false)} />}
     </>
   );
 }
