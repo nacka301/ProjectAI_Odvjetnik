@@ -221,10 +221,6 @@ interface FeatureCard {
   id: string;
   href: string;
   icon: React.ReactNode;
-  iconBg: string;
-  iconColor: string;
-  accentBorder: string;
-  accentBg: string;
   title: string;
   description: string;
   howItWorks: string;
@@ -236,78 +232,54 @@ const FEATURE_CARDS: FeatureCard[] = [
   {
     id: "card-procjena",
     href: "/wizard",
-    icon: <SearchIcon className="h-6 w-6" />,
-    iconBg: "bg-blue-100 group-hover:bg-blue-200",
-    iconColor: "text-blue-600",
-    accentBorder: "hover:border-blue-400",
-    accentBg: "bg-blue-50 group-hover:bg-blue-100",
+    icon: <SearchIcon className="h-5 w-5" />,
     title: "Tržišna Procjena",
-    description: "Izračun realne vrijednosti nekretnine uz analizu mikrolokacije i rizika.",
+    description: "Izračun realne tržišne vrijednosti nekretnine temeljen na usporedivim transakcijama, mikrolokaciji i faktorima rizika.",
     howItWorks:
       "Unesite podatke ili zalijepite link oglasa. Sustav će analizirati tekst (npr. 'kaskadni teren') i primijeniti korektivne faktore na cijenu.",
   },
   {
     id: "card-ugovor",
     href: "/ugovor",
-    icon: <ShieldAlert className="h-6 w-6" />,
-    iconBg: "bg-emerald-100 group-hover:bg-emerald-200",
-    iconColor: "text-emerald-600",
-    accentBorder: "hover:border-emerald-400",
-    accentBg: "bg-emerald-50 group-hover:bg-emerald-100",
+    icon: <ShieldAlert className="h-5 w-5" />,
     title: "Analiza Ugovora",
-    description: "Detekcija pravnih zamki i nedostataka u kupoprodajnim ugovorima.",
+    description: "Automatska detekcija pravnih zamki, nedostajućih klauzula i rizičnih odredbi u kupoprodajnim i zakupnim ugovorima.",
     howItWorks:
       "Učitajte nacrt ugovora. Sustav traži 'crvene zastavice' (npr. nedostatak tabularne izjave) i predlaže sigurnije klauzule prema ZOO-u.",
   },
   {
     id: "card-zk",
     href: "/zk-procjena",
-    icon: <Landmark className="h-6 w-6" />,
-    iconBg: "bg-orange-100 group-hover:bg-orange-200",
-    iconColor: "text-orange-600",
-    accentBorder: "hover:border-orange-400",
-    accentBg: "bg-orange-50 group-hover:bg-orange-100",
+    icon: <Landmark className="h-5 w-5" />,
     title: "ZK Izvadak",
-    description: "Analiza zemljišnoknjižnog izvatka — terete, hipoteke, plombe i pravni rizici.",
+    description: "Dubinska analiza zemljišnoknjižnog stanja — identificira vlasnike, terete, hipoteke, plombe i pravne rizike za transakciju.",
     howItWorks:
       "Učitajte PDF ZK izvatka. Sustav identificira vlasnike, terete (hipoteke, služnosti, fiducije), plombe i ocjenjuje rizik za kupnju ili gradnju.",
   },
   {
     id: "card-troskovnik",
     href: "/troskovnik",
-    icon: <Calculator className="h-6 w-6" />,
-    iconBg: "bg-indigo-100 group-hover:bg-indigo-200",
-    iconColor: "text-indigo-600",
-    accentBorder: "hover:border-indigo-400",
-    accentBg: "bg-indigo-50 group-hover:bg-indigo-100",
+    icon: <Calculator className="h-5 w-5" />,
     title: "Odvjetnički Troškovnik",
-    description: "Izračun nagrade i troškova prema Tarifi o nagradama za rad odvjetnika (NN 2023).",
+    description: "Izračun nagrade i troškova prema službenoj Tarifi o nagradama za rad odvjetnika s automatskim bodovanjem radnji.",
     howItWorks:
       "Unesite vrijednost predmeta spora, odaberite obavljene radnje — sustav automatski računa bodove i iznos u EUR prema službenoj tarifi (1 bod = 2,00 €).",
   },
   {
     id: "card-stranke",
     href: "/klijenti",
-    icon: <Users className="h-6 w-6" />,
-    iconBg: "bg-rose-100 group-hover:bg-rose-200",
-    iconColor: "text-rose-600",
-    accentBorder: "hover:border-rose-400",
-    accentBg: "bg-rose-50 group-hover:bg-rose-100",
+    icon: <Users className="h-5 w-5" />,
     title: "Stranke",
-    description: "Upravljanje strankama, predmetima i troškovnicima na jednom mjestu.",
+    description: "Centralizirano upravljanje strankama, predmetima i troškovnicima — kompletni dosje svake stranke na jednom mjestu.",
     howItWorks:
       "Kreirajte stranke, povežite predmete i troškovnike — pregledajte kompletni dosje svake stranke.",
   },
   {
     id: "card-prijevod",
     href: "/prijevod",
-    icon: <Languages className="h-6 w-6" />,
-    iconBg: "bg-purple-100 group-hover:bg-purple-200",
-    iconColor: "text-purple-600",
-    accentBorder: "hover:border-purple-400",
-    accentBg: "bg-purple-50 group-hover:bg-purple-100",
+    icon: <Languages className="h-5 w-5" />,
     title: "Sudski Tumač",
-    description: "Pravni prijevod i transliteracija — ćirilica↔latinica, EN/DE↔HR.",
+    description: "Pravni prijevod i transliteracija uz strogu terminologiju — ćirilica↔latinica, engleski i njemački↔hrvatski.",
     howItWorks:
       "Zalijepite tekst presude, ugovora ili rješenja. Modul za pravnu lingvistiku prevodi uz strogu pravnu terminologiju ili preslovi pismo.",
   },
@@ -527,13 +499,15 @@ export default function Dashboard() {
           </section>
         )}
 
-        {/* ═══════════ 2. FEATURE GRID — 2×2 Educational Cards ═══════════ */}
+        {/* ═══════════ 2. FEATURE GRID — Enterprise Module Cards ═══════════ */}
         <section>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">
-              Moduli
-            </h2>
-            <span className="text-[11px] text-slate-400">Odaberite modul za početak rada</span>
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h2 className="font-[family-name:var(--font-playfair)] text-lg font-semibold text-slate-900 tracking-tight">
+                Moduli
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">Odaberite modul za početak rada</p>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -541,60 +515,54 @@ export default function Dashboard() {
               const inner = (
                 <div
                   id={card.id}
-                  className={`group relative bg-white rounded-xl border border-slate-200 p-6 transition overflow-hidden ${
+                  className={`group relative bg-white rounded-lg border border-slate-200 shadow-sm p-6 transition-all duration-200 ${
                     card.disabled
                       ? "opacity-60 cursor-not-allowed"
-                      : `${card.accentBorder} hover:shadow-lg`
+                      : "hover:border-[#1B2A4A]/40 hover:shadow-md hover:-translate-y-0.5"
                   } ${
                     tourTargetId === card.id
-                      ? "relative z-[110] ring-2 ring-blue-500 ring-offset-2 shadow-xl"
+                      ? "z-[110] ring-2 ring-[#1B2A4A] ring-offset-2 shadow-lg"
                       : ""
                   }`}
                 >
-                  {/* Accent corner blob */}
-                  <div className={`absolute top-0 right-0 w-24 h-24 ${card.accentBg} rounded-bl-[48px] -mr-3 -mt-3 transition`} />
-
                   {/* Disabled badge */}
                   {card.disabled && card.disabledLabel && (
-                    <div className="absolute top-3 right-3 z-10 flex items-center gap-1 bg-slate-200 text-slate-600 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full">
+                    <div className="absolute top-3 right-3 z-10 flex items-center gap-1 bg-slate-100 text-slate-500 text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-md">
                       <Construction className="h-3 w-3" />
                       {card.disabledLabel}
                     </div>
                   )}
 
-                  <div className="relative">
-                    {/* Top row: icon + info button */}
-                    <div className="flex items-start justify-between mb-4">
-                      <div className={`w-12 h-12 rounded-xl ${card.iconBg} flex items-center justify-center transition`}>
-                        <span className={card.iconColor}>{card.icon}</span>
-                      </div>
-                      {/* How it works hover card */}
-                      {!card.disabled && <HoverInfoCard text={card.howItWorks} />}
+                  {/* Top row: icon + info button */}
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="w-10 h-10 rounded-lg bg-slate-100 group-hover:bg-slate-200/80 flex items-center justify-center transition-colors duration-200">
+                      <span className="text-[#1B2A4A]">{card.icon}</span>
                     </div>
-
-                    {/* Title */}
-                    <h3 className="font-bold text-slate-900 text-base mb-1.5">
-                      {card.title}
-                    </h3>
-
-                    {/* Description */}
-                    <p className="text-sm text-slate-500 leading-relaxed mb-4">
-                      {card.description}
-                    </p>
-
-                    {/* CTA hint */}
-                    {card.disabled ? (
-                      <div className="flex items-center gap-1.5 text-xs font-medium text-slate-400">
-                        <Construction className="h-3.5 w-3.5" />
-                        Uskoro dostupno
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1.5 text-xs font-medium text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">
-                        Otvori modul
-                        <ArrowRight className="h-3.5 w-3.5" />
-                      </div>
-                    )}
+                    {!card.disabled && <HoverInfoCard text={card.howItWorks} />}
                   </div>
+
+                  {/* Title — Playfair serif */}
+                  <h3 className="font-[family-name:var(--font-playfair)] font-semibold text-[#1B2A4A] text-base mb-2 tracking-tight">
+                    {card.title}
+                  </h3>
+
+                  {/* Description */}
+                  <p className="text-sm text-slate-500 leading-relaxed mb-4">
+                    {card.description}
+                  </p>
+
+                  {/* CTA hint */}
+                  {card.disabled ? (
+                    <div className="flex items-center gap-1.5 text-xs font-medium text-slate-400">
+                      <Construction className="h-3.5 w-3.5" />
+                      Uskoro dostupno
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5 text-xs font-medium text-[#1B2A4A] opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                      Otvori modul
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </div>
+                  )}
                 </div>
               );
 
