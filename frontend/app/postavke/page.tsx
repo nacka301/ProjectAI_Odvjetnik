@@ -30,6 +30,7 @@ import { API_BASE } from "@/lib/api";
 import PersonalProfileForm from "@/components/settings/PersonalProfileForm";
 import LawFirmForm from "@/components/settings/LawFirmForm";
 import SubscriptionView from "@/components/settings/SubscriptionView";
+import BetaAccessStatus from "@/components/settings/BetaAccessStatus";
 
 // ── Types ──
 interface SetupResponse {
@@ -692,7 +693,10 @@ export default function PostavkePage() {
 
               {/* ═══ TAB: Pretplata ═══ */}
               {activeTab === "pretplata" && userId && (
-                <SubscriptionView userId={userId} />
+                <div className="space-y-0 divide-y divide-slate-200">
+                  <BetaAccessStatus userId={userId} />
+                  <SubscriptionView userId={userId} />
+                </div>
               )}
             </div>
 

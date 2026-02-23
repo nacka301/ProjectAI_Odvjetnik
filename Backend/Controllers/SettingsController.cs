@@ -14,17 +14,21 @@ namespace Backend.Controllers;
 ///   PUT  /api/settings/firm            → Update/create law firm
 ///   GET  /api/settings/subscription    → Fetch subscription status
 ///   POST /api/settings/register-firm   → Register firm during signup
+///   GET  /api/settings/credits?userId= → Fetch beta credit usage
+///   POST /api/settings/consume-credit  → Consume 1 credit (used by AI controllers)
 /// </summary>
 [ApiController]
 [Route("api/settings")]
 public class SettingsController : ControllerBase
 {
     private readonly SettingsService _service;
+    private readonly CreditService _creditService;
     private readonly ILogger<SettingsController> _logger;
 
-    public SettingsController(SettingsService service, ILogger<SettingsController> logger)
+    public SettingsController(SettingsService service, CreditService creditService, ILogger<SettingsController> logger)
     {
         _service = service;
+        _creditService = creditService;
         _logger = logger;
     }
 
@@ -190,6 +194,58 @@ public class SettingsController : ControllerBase
         {
             _logger.LogError(ex, "Error registering firm for user {UserId}", request.UserId);
             return StatusCode(500, new { error = "Greška pri registraciji ureda." });
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────
+    //  GET /api/settings/credits?userId=...
+    //  Returns all module credit usage rows for the user's firm.
+    // ─────────────────────────────────────────────────────────
+    [HttpGet("credits")]
+    public async Task<IActionResult> GetCredits([FromQuery] string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+            return BadRequest(new { error = "userId je obavezan." });
+
+        try
+        {
+            var usage = await _creditService.GetFirmUsageAsync(userId);
+            return Ok(usage);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching credits");
+            return StatusCode(500, new { error = "Greška pri dohvaćanju kredita." });
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────
+    //  POST /api/settings/consume-credit
+    //  Body: { "user_id": "...", "module_name": "..." }
+    //  Consumes 1 credit. Returns 403 if limit reached.
+    // ─────────────────────────────────────────────────────────
+    [HttpPost("consume-credit")]
+    public async Task<IActionResult> ConsumeCredit([FromBody] CreditConsumeRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request?.UserId))
+            return BadRequest(new { error = "userId je obavezan." });
+
+        if (string.IsNullOrWhiteSpace(request.ModuleName))
+            return BadRequest(new { error = "moduleName je obavezan." });
+
+        try
+        {
+            var result = await _creditService.ConsumeCreditAsync(request.UserId, request.ModuleName);
+
+            if (!result.Allowed)
+                return StatusCode(403, new { error = result.Message });
+
+            return Ok(new { allowed = true, used = result.Used, max = result.Max });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error consuming credit");
+            return StatusCode(500, new { error = "Greška pri potrošnji kredita." });
         }
     }
 }

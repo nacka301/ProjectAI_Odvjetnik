@@ -171,6 +171,7 @@ builder.Services.AddHttpClient<MarketResearchService>(client =>
 builder.Services.AddHttpClient<SupabaseService>();
 builder.Services.AddHttpClient<TwoFactorService>();
 builder.Services.AddHttpClient<SettingsService>();
+builder.Services.AddHttpClient<CreditService>();
 builder.Services.AddHttpClient<ClientCaseService>();
 builder.Services.AddHttpClient<PerplexityAuditService>(client =>
 {

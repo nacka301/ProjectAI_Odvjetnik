@@ -836,3 +836,56 @@ CREATE TRIGGER subscriptions_updated_at
     BEFORE UPDATE ON subscriptions
     FOR EACH ROW
     EXECUTE FUNCTION update_subscriptions_updated_at();
+
+-- ========================================
+-- V47: Beta Credit Tracking — firm_usage
+-- Tracks per-module API credit usage per law firm.
+-- Early access / beta: each firm gets max_credits per module.
+-- ========================================
+
+CREATE TABLE IF NOT EXISTS firm_usage (
+    id              UUID            DEFAULT uuid_generate_v4() PRIMARY KEY,
+    created_at      TIMESTAMPTZ     DEFAULT now() NOT NULL,
+    updated_at      TIMESTAMPTZ     DEFAULT now() NOT NULL,
+    law_firm_id     UUID            NOT NULL REFERENCES law_firms(id) ON DELETE CASCADE,
+    module_name     VARCHAR(100)    NOT NULL,           -- e.g. 'contract_analysis', 'market_eval', 'zk_analysis', 'chronology', 'translation', 'invoice'
+    used_credits    INTEGER         NOT NULL DEFAULT 0,
+    max_credits     INTEGER         NOT NULL DEFAULT 50,
+    reset_date      TIMESTAMPTZ                           -- Next reset date (null = no auto-reset)
+);
+
+-- One row per (firm, module) combination
+CREATE UNIQUE INDEX IF NOT EXISTS idx_firm_usage_firm_module
+    ON firm_usage (law_firm_id, module_name);
+
+CREATE INDEX IF NOT EXISTS idx_firm_usage_law_firm
+    ON firm_usage (law_firm_id);
+
+ALTER TABLE firm_usage ENABLE ROW LEVEL SECURITY;
+
+-- Service role full access (backend uses this)
+DROP POLICY IF EXISTS "service_role_full_access" ON firm_usage;
+CREATE POLICY "service_role_full_access" ON firm_usage
+    FOR ALL USING (auth.role() = 'service_role');
+
+-- Users can only read their own firm's usage
+DROP POLICY IF EXISTS "users_read_own_firm_usage" ON firm_usage;
+CREATE POLICY "users_read_own_firm_usage" ON firm_usage
+    FOR SELECT USING (
+        law_firm_id IN (SELECT law_firm_id FROM user_profiles WHERE user_id = auth.uid())
+    );
+
+-- Auto-update updated_at trigger
+CREATE OR REPLACE FUNCTION update_firm_usage_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS firm_usage_updated_at ON firm_usage;
+CREATE TRIGGER firm_usage_updated_at
+    BEFORE UPDATE ON firm_usage
+    FOR EACH ROW
+    EXECUTE FUNCTION update_firm_usage_updated_at();

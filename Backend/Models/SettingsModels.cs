@@ -63,3 +63,36 @@ public class RegisterFirmRequest
     public string FirmName { get; set; } = "";
     public string? FirmOib { get; set; }
 }
+
+// ── Beta Credit Usage ──
+
+public class FirmUsageResponse
+{
+    public string Id { get; set; } = "";
+    public string LawFirmId { get; set; } = "";
+    public string ModuleName { get; set; } = "";
+    public int UsedCredits { get; set; }
+    public int MaxCredits { get; set; }
+    public string? ResetDate { get; set; }
+}
+
+/// <summary>Result of a credit consumption check.</summary>
+public class CreditCheckResult
+{
+    public bool Allowed { get; set; }
+    public string? Message { get; set; }
+    public int? Used { get; set; }
+    public int? Max { get; set; }
+
+    public static CreditCheckResult Allow(int? used = null, int? max = null)
+        => new() { Allowed = true, Used = used, Max = max };
+
+    public static CreditCheckResult Deny(string message)
+        => new() { Allowed = false, Message = message };
+}
+
+public class CreditConsumeRequest
+{
+    public string UserId { get; set; } = "";
+    public string ModuleName { get; set; } = "";
+}
