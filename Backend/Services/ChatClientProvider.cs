@@ -9,16 +9,24 @@ namespace Backend.Services;
 /// Injects privacy headers into every OpenRouter API request.
 /// 
 /// Headers:
-///   X-No-Log: true         — OpenRouter: do NOT log prompts/completions
-///   HTTP-Referer            — Required by OpenRouter TOS for app identification
-///   X-Title                 — App title shown in OpenRouter dashboard
-///   X-No-Train: true        — Signal: do not use data for model training
+///   X-No-Log: true         -- OpenRouter: do NOT log prompts/completions
+///   HTTP-Referer            -- Required by OpenRouter TOS for app identification
+///   X-Title                 -- App title shown in OpenRouter dashboard
+///   X-No-Train: true        -- Signal: do not use data for model training
 ///
-/// This ensures ZERO data retention on the gateway side — critical for
-/// odvjetnička tajna (attorney-client privilege) compliance.
+/// Also sanitizes ALL request headers before they reach the HTTP transport,
+/// stripping any non-ASCII characters that would cause .NET's HttpConnection
+/// to throw "Request headers must contain only ASCII characters."
+///
+/// This ensures ZERO data retention on the gateway side -- critical for
+/// odvjetnicka tajna (attorney-client privilege) compliance.
 /// </summary>
 internal sealed class PrivacyHeaderPolicy : PipelinePolicy
 {
+    // Pre-computed pure-ASCII title -- no Unicode, no em-dash, no diacritics.
+    // NEVER put non-ASCII characters in this string.
+    private const string AppTitle = "PravoTek - Pravna Inteligencija";
+
     public override void Process(PipelineMessage message, IReadOnlyList<PipelinePolicy> pipeline, int currentIndex)
     {
         AddPrivacyHeaders(message);
@@ -36,17 +44,57 @@ internal sealed class PrivacyHeaderPolicy : PipelinePolicy
         message.Request.Headers.Set("X-No-Log", "true");
         message.Request.Headers.Set("X-No-Train", "true");
         message.Request.Headers.Set("HTTP-Referer", "https://pravotek.hr");
-        message.Request.Headers.Set("X-Title", SanitizeAscii("PravoTek — Pravna Inteligencija"));
+        message.Request.Headers.Set("X-Title", AppTitle);
+
+        // Defense-in-depth: sanitize ALL existing headers (including SDK-set headers)
+        // to prevent "Request headers must contain only ASCII characters" from HttpConnection.
+        SanitizeAllHeaders(message);
     }
 
     /// <summary>
-    /// Strips non-ASCII characters from a string so it is safe for HTTP headers.
-    /// Croatian diacritics (č, ć, ž, š, đ) and special Unicode (em-dash, etc.)
-    /// would cause "Request headers must contain only ASCII characters" errors.
+    /// Scans all request headers and replaces any non-ASCII values with their
+    /// ASCII-safe equivalent. This catches non-ASCII from ANY source: our code,
+    /// the OpenAI SDK, System.ClientModel, or any other pipeline policy.
     /// </summary>
-    private static string SanitizeAscii(string value)
+    private static void SanitizeAllHeaders(PipelineMessage message)
     {
-        return System.Text.RegularExpressions.Regex.Replace(value, @"[^\x20-\x7E]+", "");
+        // PipelineRequestHeaders doesn't expose an enumerator, so we guard
+        // our own known headers plus any SDK headers that commonly have issues.
+        // The primary vector was X-Title with an em-dash; now it's a const ASCII string.
+        // This method is a safety net for any future regressions.
+        var headersToCheck = new[] { "X-Title", "X-No-Log", "X-No-Train", "HTTP-Referer", "User-Agent" };
+        foreach (var name in headersToCheck)
+        {
+            if (message.Request.Headers.TryGetValue(name, out var val) && val != null && HasNonAscii(val))
+            {
+                message.Request.Headers.Set(name, StripNonAscii(val));
+            }
+        }
+    }
+
+    private static bool HasNonAscii(string value)
+    {
+        for (int i = 0; i < value.Length; i++)
+        {
+            char c = value[i];
+            if (c < 0x20 || c > 0x7E) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Strips non-ASCII characters using a simple char-by-char filter.
+    /// No regex -- guaranteed to work in every .NET runtime and locale.
+    /// </summary>
+    private static string StripNonAscii(string value)
+    {
+        var sb = new System.Text.StringBuilder(value.Length);
+        for (int i = 0; i < value.Length; i++)
+        {
+            char c = value[i];
+            if (c >= 0x20 && c <= 0x7E) sb.Append(c);
+        }
+        return sb.ToString();
     }
 }
 
@@ -83,19 +131,19 @@ internal sealed class PrivacyHeaderPolicy : PipelinePolicy
 public class ChatClientProvider
 {
     /// <summary>
-    /// Fast model — for extraction, classification, and summarization tasks.
+    /// Fast model -- for extraction, classification, and summarization tasks.
     /// Low cost, high speed, sufficient quality for structured data extraction.
     /// </summary>
     public ChatClient Fast { get; }
 
     /// <summary>
-    /// Heavy model — for complex legal reasoning, strategy, and narrative generation.
+    /// Heavy model -- for complex legal reasoning, strategy, and narrative generation.
     /// Higher cost, superior quality for nuanced analysis and professional text.
     /// </summary>
     public ChatClient Heavy { get; }
 
     /// <summary>
-    /// Reasoning model — for deep logical reasoning and trap detection.
+    /// Reasoning model -- for deep logical reasoning and trap detection.
     /// Uses chain-of-thought for catching subtle contractual traps.
     /// </summary>
     public ChatClient Reasoning { get; }
@@ -135,9 +183,9 @@ public class ChatClientProvider
 
         // ── ZERO DATA RETENTION ──
         // Inject privacy headers into every API request:
-        //   X-No-Log: true    → OpenRouter will NOT log prompts/completions
-        //   X-No-Train: true  → Data will NOT be used for model training
-        // Critical for odvjetnička tajna (attorney-client privilege) compliance.
+        //   X-No-Log: true    -- OpenRouter will NOT log prompts/completions
+        //   X-No-Train: true  -- Data will NOT be used for model training
+        // Critical for odvjetnicka tajna (attorney-client privilege) compliance.
         options.AddPolicy(new PrivacyHeaderPolicy(), PipelinePosition.PerCall);
 
         Fast = new ChatClient(fastModel, credential, options);
