@@ -11,9 +11,17 @@ export type ViewType = "Unknown" | "Street" | "Courtyard" | "Park" | "City" | "S
 export type ViewState = "INPUT" | "PROCESSING" | "RESULT";
 export type ResultTab = "overview" | "comparables";
 
+// V40: Elaborat-style types
+export type HeatingType = "Unknown" | "CentralHeating" | "Gas" | "Wood" | "Electric" | "HeatPump" | "FloorHeating" | "None";
+export type EnergyClass = "Unknown" | "APlus" | "A" | "B" | "C" | "D" | "E" | "F" | "G";
+export type SewageType = "Unknown" | "Public" | "SepticTank" | "None";
+export type LandCategory = "Unknown" | "Ktg1" | "Ktg2" | "Ktg3" | "Ktg4_1" | "Ktg4_2" | "Ktg5" | "Ktg6";
+export type LocationType = "Unknown" | "CityCenter" | "UrbanResidential" | "Suburban" | "SmallTown" | "Rural";
+
 export interface LocationInfo {
   city: string;
   district: string;
+  location_type: LocationType;
 }
 
 export interface ApartmentData {
@@ -24,6 +32,11 @@ export interface ApartmentData {
   condition: PropertyCondition;
   year_built?: number;
   distance_to_sea_m?: number;
+  // V40: Elaborat-style fields
+  heating_type: HeatingType;
+  energy_class: EnergyClass;
+  year_renovated?: number;
+  // Orientation & view
   orientation: Orientation;
   view_type: ViewType;
   has_elevator: boolean;
@@ -39,6 +52,15 @@ export interface HouseData {
   condition: PropertyCondition;
   year_built?: number;
   distance_to_sea_m?: number;
+  // V40: Elaborat-style fields
+  heating_type: HeatingType;
+  energy_class: EnergyClass;
+  year_renovated?: number;
+  has_facade: boolean;
+  has_building_permit: boolean;
+  has_usage_permit: boolean;
+  sewage_type: SewageType;
+  // Orientation & view
   orientation: Orientation;
   view_type: ViewType;
   has_garage: boolean;
@@ -51,6 +73,9 @@ export interface LandData {
   land_area_m2: number;
   land_use: LandUse;
   distance_to_sea_m?: number;
+  // V40: Elaborat-style fields
+  land_category: LandCategory;
+  // Feature flags
   has_access_road: boolean;
   has_infrastructure: boolean;
   first_row_to_sea: boolean;

@@ -41,6 +41,79 @@ public enum LandUse
     Mixed           // Mješovito
 }
 
+// ══════════════════════════════════════════════════════════
+//  V40: Elaborat-style enums — Heating, Energy, Sewage, Land Category
+//  Based on: Procjembeni elaborat (Pravilnik NN 105/2015)
+// ══════════════════════════════════════════════════════════
+
+/// <summary>Tip grijanja — from elaborat "Grijanje" field.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum HeatingType
+{
+    Unknown,          // Nepoznato
+    CentralHeating,   // Centralno grijanje
+    Gas,              // Plin
+    Wood,             // Drva / čvrsto gorivo
+    Electric,         // Električno
+    HeatPump,         // Dizalica topline
+    FloorHeating,     // Podno grijanje
+    None              // Bez grijanja
+}
+
+/// <summary>Energetski razred (A+ do G) per Croatian energy certification.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum EnergyClass
+{
+    Unknown,
+    APlus,   // A+
+    A,
+    B,
+    C,
+    D,
+    E,
+    F,
+    G
+}
+
+/// <summary>Tip kanalizacije — elaborat distinguishes javna vs. septička jama.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum SewageType
+{
+    Unknown,     // Nepoznato
+    Public,      // Javna kanalizacija
+    SepticTank,  // Septička jama
+    None         // Bez kanalizacije
+}
+
+/// <summary>Kategorija zemljišta per elaborat KTG categories.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum LandCategory
+{
+    Unknown,
+    Ktg1,    // 1. KTG — najpovoljnija
+    Ktg2,    // 2. KTG
+    Ktg3,    // 3. KTG
+    Ktg4_1,  // 4.1. KTG — oranice, vrtovi
+    Ktg4_2,  // 4.2. KTG — livade, pašnjaci
+    Ktg5,    // 5. KTG — šume
+    Ktg6     // 6. KTG — neplodno
+}
+
+/// <summary>
+/// Tip lokacije — from elaborat "Tip lokacije" field (A–E).
+/// Directly affects Ft (faktor tržišta) market adjustment.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum LocationType
+{
+    Unknown,         // Nepoznato
+    CityCenter,      // A — Centar grada / Poslovni centar
+    UrbanResidential, // B — Urbano stanovanje / Šire središte
+    Suburban,        // C — Predgrađe / Prigradsko naselje
+    SmallTown,       // D — Manji grad / Općinsko središte
+    Rural            // E — Ruralno / Selo
+}
+
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum Orientation
 {
@@ -116,6 +189,9 @@ public class LocationInfo
     public string City { get; set; } = string.Empty;
     public string District { get; set; } = string.Empty;  // Kvart / naselje
     public string? Zip { get; set; }
+
+    /// <summary>V40: Tip lokacije (A–E) per elaborat — affects Ft market factor.</summary>
+    public LocationType LocationType { get; set; } = LocationType.Unknown;
 }
 
 // ══════════════════════════════════════════════════════════
@@ -156,6 +232,11 @@ public class ApartmentInput : PropertyInputBase
     public int? YearBuilt { get; set; }          // Godina izgradnje
     public int? DistanceToSeaM { get; set; }     // Udaljenost od mora u metrima
 
+    // ── V40: Elaborat-style fields ──
+    public HeatingType HeatingType { get; set; } = HeatingType.Unknown;
+    public EnergyClass EnergyClass { get; set; } = EnergyClass.Unknown;
+    public int? YearRenovated { get; set; }      // Godina renovacije/rekonstrukcije
+
     // ── Orientation & view ──
     public Orientation Orientation { get; set; } = Orientation.Unknown;
     public ViewType ViewType { get; set; } = ViewType.Unknown;
@@ -183,6 +264,15 @@ public class HouseInput : PropertyInputBase
     public int? YearBuilt { get; set; }          // Godina izgradnje
     public int? DistanceToSeaM { get; set; }     // Udaljenost od mora u metrima
 
+    // ── V40: Elaborat-style fields ──
+    public HeatingType HeatingType { get; set; } = HeatingType.Unknown;
+    public EnergyClass EnergyClass { get; set; } = EnergyClass.Unknown;
+    public int? YearRenovated { get; set; }      // Godina renovacije/rekonstrukcije
+    public bool HasFacade { get; set; } = true;  // Fasada izvedena — elaborat: "fasada nije izvedena" = -12%
+    public bool HasBuildingPermit { get; set; } = true;  // Građevinska dozvola
+    public bool HasUsagePermit { get; set; } = true;     // Uporabna dozvola
+    public SewageType SewageType { get; set; } = SewageType.Unknown;  // Tip kanalizacije
+
     // ── Orientation & view ──
     public Orientation Orientation { get; set; } = Orientation.Unknown;
     public ViewType ViewType { get; set; } = ViewType.Unknown;
@@ -206,6 +296,9 @@ public class LandInput : PropertyInputBase
 
     // ── Optional detail ──
     public int? DistanceToSeaM { get; set; }     // Udaljenost od mora u metrima
+
+    // ── V40: Elaborat-style fields ──
+    public LandCategory LandCategory { get; set; } = LandCategory.Unknown;  // KTG kategorija
 
     // ── Feature flags ──
     public bool HasAccessRoad { get; set; }

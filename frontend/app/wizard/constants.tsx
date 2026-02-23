@@ -15,6 +15,11 @@ import type {
   LandUse,
   Orientation,
   ViewType,
+  HeatingType,
+  EnergyClass,
+  SewageType,
+  LandCategory,
+  LocationType,
   StreamStage,
 } from "./types";
 
@@ -77,6 +82,60 @@ export const VIEW_TYPE_LABELS: Record<ViewType, string> = {
   City: "Grad",
   Sea: "More",
   Panoramic: "Panoramski",
+};
+
+// ═══════════════════════════════════════════
+//  V40: ELABORAT-STYLE LABEL MAPS
+// ═══════════════════════════════════════════
+
+export const HEATING_TYPE_LABELS: Record<HeatingType, string> = {
+  Unknown: "Nepoznato",
+  CentralHeating: "Centralno grijanje",
+  Gas: "Plin",
+  Wood: "Drva / čvrsto gorivo",
+  Electric: "Električno",
+  HeatPump: "Dizalica topline",
+  FloorHeating: "Podno grijanje",
+  None: "Bez grijanja",
+};
+
+export const ENERGY_CLASS_LABELS: Record<EnergyClass, string> = {
+  Unknown: "Nepoznato",
+  APlus: "A+",
+  A: "A",
+  B: "B",
+  C: "C",
+  D: "D",
+  E: "E",
+  F: "F",
+  G: "G",
+};
+
+export const SEWAGE_TYPE_LABELS: Record<SewageType, string> = {
+  Unknown: "Nepoznato",
+  Public: "Javna kanalizacija",
+  SepticTank: "Septička jama",
+  None: "Bez kanalizacije",
+};
+
+export const LAND_CATEGORY_LABELS: Record<LandCategory, string> = {
+  Unknown: "Nepoznato",
+  Ktg1: "1. KTG — najpovoljnija",
+  Ktg2: "2. KTG",
+  Ktg3: "3. KTG",
+  Ktg4_1: "4.1. KTG — oranice, vrtovi",
+  Ktg4_2: "4.2. KTG — livade, pašnjaci",
+  Ktg5: "5. KTG — šume",
+  Ktg6: "6. KTG — neplodno",
+};
+
+export const LOCATION_TYPE_LABELS: Record<LocationType, string> = {
+  Unknown: "Nepoznato",
+  CityCenter: "A — Centar grada",
+  UrbanResidential: "B — Urbano stanovanje",
+  Suburban: "C — Predgrađe",
+  SmallTown: "D — Manji grad / Općina",
+  Rural: "E — Ruralno / Selo",
 };
 
 // ═══════════════════════════════════════════

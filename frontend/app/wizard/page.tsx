@@ -23,6 +23,11 @@ import type {
   Orientation,
   ViewType,
   ViewState,
+  HeatingType,
+  EnergyClass,
+  SewageType,
+  LandCategory,
+  LocationType,
   ApartmentData,
   HouseData,
   LandData,
@@ -39,6 +44,11 @@ import {
   LAND_USE_LABELS,
   ORIENTATION_LABELS,
   VIEW_TYPE_LABELS,
+  HEATING_TYPE_LABELS,
+  ENERGY_CLASS_LABELS,
+  SEWAGE_TYPE_LABELS,
+  LAND_CATEGORY_LABELS,
+  LOCATION_TYPE_LABELS,
   floorNumericValue,
 } from "./constants";
 
@@ -74,21 +84,24 @@ export default function WizardPage() {
   const [propertyType, setPropertyType] = useState<PropertyType | null>(null);
 
   // Location
-  const [location, setLocation] = useState<{ city: string; district: string }>({ city: "", district: "" });
+  const [location, setLocation] = useState<{ city: string; district: string; location_type: LocationType }>({ city: "", district: "", location_type: "Unknown" });
 
   // Type-specific data
   const [apt, setApt] = useState<ApartmentData>({
     area_m2: 0, room_count: 2, floor: "Ground", total_floors: 4, condition: "Good",
+    heating_type: "Unknown", energy_class: "Unknown",
     orientation: "Unknown", view_type: "Unknown",
     has_elevator: false, has_parking: false, has_balcony: false, sea_view: false,
   });
   const [house, setHouse] = useState<HouseData>({
     living_area_m2: 0, land_area_m2: 0, floors: "OneStory", condition: "Good",
+    heating_type: "Unknown", energy_class: "Unknown", has_facade: true,
+    has_building_permit: true, has_usage_permit: true, sewage_type: "Unknown",
     orientation: "Unknown", view_type: "Unknown",
     has_garage: false, has_pool: false, first_row_to_sea: false, has_auxiliary_object: false,
   });
   const [land, setLand] = useState<LandData>({
-    land_area_m2: 0, land_use: "Construction",
+    land_area_m2: 0, land_use: "Construction", land_category: "Unknown",
     has_access_road: false, has_infrastructure: false, first_row_to_sea: false, is_legalized: true,
   });
 
@@ -360,6 +373,26 @@ export default function WizardPage() {
                   onDistrictChange={(district) => setLocation((prev) => ({ ...prev, district }))}
                 />
 
+                <div className="rounded-xl bg-white border border-gray-200 p-6">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-3">📍 Tip lokacije</h3>
+                  <p className="text-xs text-gray-400 mb-3">Prema elaboratu — utječe na faktor tržišta (Ft)</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {(Object.entries(LOCATION_TYPE_LABELS).filter(([k]) => k !== "Unknown") as [LocationType, string][]).map(([key, label]) => (
+                      <button
+                        key={key}
+                        onClick={() => setLocation((prev) => ({ ...prev, location_type: key }))}
+                        className={`rounded-lg border-2 px-3 py-2 text-xs font-medium transition ${
+                          location.location_type === key
+                            ? "border-blue-500 bg-blue-50 text-blue-700"
+                            : "border-gray-200 text-gray-500 hover:border-gray-300"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="flex justify-end">
                   <button onClick={() => setStep(2)}
                     disabled={!location.city.trim()}
@@ -397,12 +430,22 @@ export default function WizardPage() {
                     onChange={(v) => setApt({ ...apt, total_floors: v })} min={1} max={50} step={1} />
                   <NumberInput label="Godina izgradnje" value={apt.year_built || 0}
                     onChange={(v) => setApt({ ...apt, year_built: v || undefined })} min={1900} max={2030} step={1} />
+                  <NumberInput label="Godina renovacije" value={apt.year_renovated || 0}
+                    onChange={(v) => setApt({ ...apt, year_renovated: v || undefined })} min={1900} max={2030} step={1} />
                   <NumberInput label="Udaljenost od mora (m)" value={apt.distance_to_sea_m || 0}
                     onChange={(v) => setApt({ ...apt, distance_to_sea_m: v || undefined })} min={0} max={100000} step={10} />
                 </div>
                 <SelectInput label="Stanje *" value={apt.condition}
                   options={Object.entries(CONDITION_LABELS).map(([k, v]) => ({ value: k, label: v }))}
                   onChange={(v) => setApt({ ...apt, condition: v as PropertyCondition })} />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <SelectInput label="Grijanje" value={apt.heating_type}
+                    options={Object.entries(HEATING_TYPE_LABELS).map(([k, v]) => ({ value: k, label: v }))}
+                    onChange={(v) => setApt({ ...apt, heating_type: v as HeatingType })} />
+                  <SelectInput label="Energetski razred" value={apt.energy_class}
+                    options={Object.entries(ENERGY_CLASS_LABELS).map(([k, v]) => ({ value: k, label: v }))}
+                    onChange={(v) => setApt({ ...apt, energy_class: v as EnergyClass })} />
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <SelectInput label="Orijentacija" value={apt.orientation}
                     options={Object.entries(ORIENTATION_LABELS).map(([k, v]) => ({ value: k, label: v }))}
@@ -436,6 +479,8 @@ export default function WizardPage() {
                     onChange={(v) => setHouse({ ...house, land_area_m2: v })} min={1} max={100000} />
                   <NumberInput label="Godina izgradnje" value={house.year_built || 0}
                     onChange={(v) => setHouse({ ...house, year_built: v || undefined })} min={1900} max={2030} step={1} />
+                  <NumberInput label="Godina renovacije" value={house.year_renovated || 0}
+                    onChange={(v) => setHouse({ ...house, year_renovated: v || undefined })} min={1900} max={2030} step={1} />
                   <NumberInput label="Udaljenost od mora (m)" value={house.distance_to_sea_m || 0}
                     onChange={(v) => setHouse({ ...house, distance_to_sea_m: v || undefined })} min={0} max={100000} step={10} />
                 </div>
@@ -445,20 +490,47 @@ export default function WizardPage() {
                 <SelectInput label="Stanje *" value={house.condition}
                   options={Object.entries(CONDITION_LABELS).map(([k, v]) => ({ value: k, label: v }))}
                   onChange={(v) => setHouse({ ...house, condition: v as PropertyCondition })} />
+
+                {/* V40: Elaborat-style fields */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <SelectInput label="Grijanje" value={house.heating_type}
+                    options={Object.entries(HEATING_TYPE_LABELS).map(([k, v]) => ({ value: k, label: v }))}
+                    onChange={(v) => setHouse({ ...house, heating_type: v as HeatingType })} />
+                  <SelectInput label="Energetski razred" value={house.energy_class}
+                    options={Object.entries(ENERGY_CLASS_LABELS).map(([k, v]) => ({ value: k, label: v }))}
+                    onChange={(v) => setHouse({ ...house, energy_class: v as EnergyClass })} />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <SelectInput label="Kanalizacija" value={house.sewage_type}
+                    options={Object.entries(SEWAGE_TYPE_LABELS).map(([k, v]) => ({ value: k, label: v }))}
+                    onChange={(v) => setHouse({ ...house, sewage_type: v as SewageType })} />
                   <SelectInput label="Orijentacija" value={house.orientation}
                     options={Object.entries(ORIENTATION_LABELS).map(([k, v]) => ({ value: k, label: v }))}
                     onChange={(v) => setHouse({ ...house, orientation: v as Orientation })} />
-                  <SelectInput label="Pogled" value={house.view_type}
-                    options={Object.entries(VIEW_TYPE_LABELS).map(([k, v]) => ({ value: k, label: v }))}
-                    onChange={(v) => setHouse({ ...house, view_type: v as ViewType })} />
                 </div>
+                <SelectInput label="Pogled" value={house.view_type}
+                  options={Object.entries(VIEW_TYPE_LABELS).map(([k, v]) => ({ value: k, label: v }))}
+                  onChange={(v) => setHouse({ ...house, view_type: v as ViewType })} />
+
                 <div className="grid grid-cols-2 gap-3">
                   <Toggle label="Garaža" checked={house.has_garage} onChange={(v) => setHouse({ ...house, has_garage: v })} />
                   <Toggle label="Bazen" checked={house.has_pool} onChange={(v) => setHouse({ ...house, has_pool: v })} />
                   <Toggle label="1. red do mora" checked={house.first_row_to_sea} onChange={(v) => setHouse({ ...house, first_row_to_sea: v })} />
                   <Toggle label="Pomoćni objekt" checked={house.has_auxiliary_object} onChange={(v) => setHouse({ ...house, has_auxiliary_object: v })} />
+                  <Toggle label="Fasada izvedena" checked={house.has_facade} onChange={(v) => setHouse({ ...house, has_facade: v })} />
+                  <Toggle label="Građevinska dozvola" checked={house.has_building_permit} onChange={(v) => setHouse({ ...house, has_building_permit: v })} />
+                  <Toggle label="Uporabna dozvola" checked={house.has_usage_permit} onChange={(v) => setHouse({ ...house, has_usage_permit: v })} />
                 </div>
+                {(!house.has_building_permit || !house.has_usage_permit) && (
+                  <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-3 text-sm text-yellow-800">
+                    ⚠️ Nedostatak dozvola značajno utječe na tržišnu vrijednost nekretnine.
+                  </div>
+                )}
+                {!house.has_facade && (
+                  <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-3 text-sm text-yellow-800">
+                    ⚠️ Neizvedena fasada umanjuje vrijednost (cca -5% do -12% prema elaboratu).
+                  </div>
+                )}
               </div>
             )}
 
@@ -472,9 +544,14 @@ export default function WizardPage() {
                   <NumberInput label="Udaljenost od mora (m)" value={land.distance_to_sea_m || 0}
                     onChange={(v) => setLand({ ...land, distance_to_sea_m: v || undefined })} min={0} max={100000} step={10} />
                 </div>
-                <SelectInput label="Namjena *" value={land.land_use}
-                  options={Object.entries(LAND_USE_LABELS).map(([k, v]) => ({ value: k, label: v }))}
-                  onChange={(v) => setLand({ ...land, land_use: v as LandUse })} />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <SelectInput label="Namjena *" value={land.land_use}
+                    options={Object.entries(LAND_USE_LABELS).map(([k, v]) => ({ value: k, label: v }))}
+                    onChange={(v) => setLand({ ...land, land_use: v as LandUse })} />
+                  <SelectInput label="Kategorija zemljišta (KTG)" value={land.land_category}
+                    options={Object.entries(LAND_CATEGORY_LABELS).map(([k, v]) => ({ value: k, label: v }))}
+                    onChange={(v) => setLand({ ...land, land_category: v as LandCategory })} />
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                   <Toggle label="Pristupni put" checked={land.has_access_road} onChange={(v) => setLand({ ...land, has_access_road: v })} />
                   <Toggle label="Infrastruktura (voda/struja)" checked={land.has_infrastructure} onChange={(v) => setLand({ ...land, has_infrastructure: v })} />
