@@ -11,9 +11,9 @@ import {
   Scale,
   AlertCircle,
   Lock,
+  Shield,
 } from "lucide-react";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
-import { LoginTrustText } from "@/components/TrustComponents";
 import {
   isEmailValid,
   isLockedOut,
@@ -135,19 +135,31 @@ function LoginContent() {
     <>
       {/* Logo */}
       <div className="flex items-center justify-center gap-3 mb-8">
-        <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-600/25">
-          <Scale className="h-5 w-5 text-white" />
+        <div
+          className="w-11 h-11 rounded-xl flex items-center justify-center shadow-lg"
+          style={{ background: "var(--auth-navy)", boxShadow: "0 4px 20px rgba(201,168,76,0.15)" }}
+        >
+          <Scale className="h-5 w-5" style={{ color: "var(--auth-gold)" }} />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-white tracking-tight">PravoTek</h1>
-          <p className="text-[10px] text-slate-400 uppercase tracking-widest">Pravna Inteligencija</p>
+          <h1 className="font-serif text-xl font-bold text-white tracking-tight">PravoTek</h1>
+          <p className="text-[10px] uppercase tracking-[0.2em]" style={{ color: "var(--auth-gold)" }}>
+            Pravna Inteligencija
+          </p>
         </div>
       </div>
 
       {/* Card */}
-      <div className="bg-white rounded-2xl shadow-2xl shadow-black/20 border border-slate-200 overflow-hidden">
+      <div
+        className="rounded-2xl shadow-2xl overflow-hidden"
+        style={{
+          background: "var(--auth-card-bg)",
+          border: "1px solid var(--auth-card-border)",
+          boxShadow: "0 25px 50px -12px rgba(0,0,0,0.4), 0 0 0 1px rgba(201,168,76,0.1)",
+        }}
+      >
         <div className="px-6 pt-6 pb-2 sm:px-8 sm:pt-8">
-          <h2 className="text-lg font-bold text-slate-900 mb-1">Dobrodošli natrag</h2>
+          <h2 className="font-serif text-lg font-semibold text-slate-900 mb-1">Dobrodošli natrag</h2>
           <p className="text-sm text-slate-500">Prijavite se na svoj račun</p>
         </div>
 
@@ -176,7 +188,7 @@ function LoginContent() {
           <button
             onClick={handleGoogle}
             disabled={isDisabled}
-            className="w-full flex items-center justify-center gap-3 bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium text-slate-700 py-2.5 rounded-xl transition shadow-sm"
+            className="w-full flex items-center justify-center gap-3 bg-white border border-slate-200 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium text-slate-700 py-2.5 rounded-xl transition shadow-sm"
           >
             {googleLoading ? <Loader2 className="h-5 w-5 animate-spin text-slate-400" /> : <GoogleLogo />}
             Prijava putem Googlea
@@ -203,8 +215,9 @@ function LoginContent() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={isDisabled}
-                placeholder="ime@primjer.hr"
-                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition disabled:bg-slate-50 disabled:text-slate-400"
+                placeholder="ime@odvjetnik.hr"
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 outline-none transition disabled:bg-slate-50 disabled:text-slate-400"
+                style={{ "--tw-ring-color": "var(--auth-gold)" } as React.CSSProperties}
               />
             </div>
 
@@ -216,7 +229,8 @@ function LoginContent() {
                 </label>
                 <Link
                   href="/auth/forgot-password"
-                  className="text-xs text-blue-600 hover:text-blue-700 font-medium transition"
+                  className="text-xs font-medium transition"
+                  style={{ color: "var(--auth-gold)" }}
                 >
                   Zaboravili lozinku?
                 </Link>
@@ -230,7 +244,8 @@ function LoginContent() {
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={isDisabled}
                   placeholder="••••••••"
-                  className="w-full px-3.5 py-2.5 pr-10 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition disabled:bg-slate-50 disabled:text-slate-400"
+                  className="w-full px-3.5 py-2.5 pr-10 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 outline-none transition disabled:bg-slate-50 disabled:text-slate-400"
+                  style={{ "--tw-ring-color": "var(--auth-gold)" } as React.CSSProperties}
                 />
                 <button
                   type="button"
@@ -247,7 +262,11 @@ function LoginContent() {
             <button
               type="submit"
               disabled={isDisabled}
-              className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white text-sm font-semibold py-2.5 rounded-xl transition shadow-sm shadow-blue-600/25"
+              className="w-full flex items-center justify-center gap-2 text-white text-sm font-semibold py-2.5 rounded-xl transition shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
+              style={{
+                background: "var(--auth-navy)",
+                boxShadow: "0 4px 14px rgba(27,42,74,0.4)",
+              }}
             >
               {loading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -257,19 +276,36 @@ function LoginContent() {
               {loading ? "Prijavljivanje..." : "Prijavi se"}
             </button>
           </form>
+
+          {/* 2FA recommendation */}
+          <div className="flex items-center gap-2 pt-1">
+            <Shield className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--auth-gold)" }} />
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              Preporučujemo aktiviranje dvofaktorske autentifikacije (2FA) u postavkama računa za dodatnu sigurnost.
+            </p>
+          </div>
         </div>
       </div>
 
       {/* Register link */}
       <p className="text-center text-sm text-slate-400 mt-6">
         Nemate račun?{" "}
-        <Link href="/auth/register" className="text-blue-400 hover:text-blue-300 font-semibold transition">
-          Registrirajte se
+        <Link
+          href="/auth/register"
+          className="font-semibold transition"
+          style={{ color: "var(--auth-gold)" }}
+        >
+          Zatražite pristup
         </Link>
       </p>
 
       {/* Trust text */}
-      <LoginTrustText />
+      <div className="flex items-center justify-center gap-2 mt-4 text-xs text-slate-500">
+        <Lock className="h-3.5 w-3.5 text-slate-500" />
+        <span>
+          Kriptirani prijenos podataka (TLS 1.3). Obrada sukladna GDPR-u i odvjetničkoj tajni.
+        </span>
+      </div>
     </>
   );
 }

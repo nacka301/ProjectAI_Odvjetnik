@@ -3,6 +3,16 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* ── Auth Theme: Professional Legal Palette ── */
+  --auth-navy: #1B2A4A;
+  --auth-navy-light: #243656;
+  --auth-navy-dark: #0F1A2E;
+  --auth-gold: #C9A84C;
+  --auth-gold-light: #D4B366;
+  --auth-gold-muted: rgba(201, 168, 76, 0.15);
+  --auth-card-bg: #FAFBFC;
+  --auth-card-border: rgba(201, 168, 76, 0.2);
 }
 
 @theme inline {
@@ -10,6 +20,7 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-serif: var(--font-playfair);
 }
 
 body {

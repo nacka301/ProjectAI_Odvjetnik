@@ -78,26 +78,39 @@ export default function ResetPasswordPage() {
     return (
       <>
         <div className="flex items-center justify-center gap-3 mb-8">
-          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-600/25">
-            <Scale className="h-5 w-5 text-white" />
+          <div
+            className="w-11 h-11 rounded-xl flex items-center justify-center shadow-lg"
+            style={{ background: "var(--auth-navy)", boxShadow: "0 4px 20px rgba(201,168,76,0.15)" }}
+          >
+            <Scale className="h-5 w-5" style={{ color: "var(--auth-gold)" }} />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-white tracking-tight">PravoTek</h1>
-            <p className="text-[10px] text-slate-400 uppercase tracking-widest">Pravna Inteligencija</p>
+            <h1 className="font-serif text-xl font-bold text-white tracking-tight">PravoTek</h1>
+            <p className="text-[10px] uppercase tracking-[0.2em]" style={{ color: "var(--auth-gold)" }}>
+              Pravna Inteligencija
+            </p>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-2xl shadow-black/20 border border-slate-200 p-6 sm:p-8 text-center">
+        <div
+          className="rounded-2xl shadow-2xl p-6 sm:p-8 text-center"
+          style={{
+            background: "var(--auth-card-bg)",
+            border: "1px solid var(--auth-card-border)",
+            boxShadow: "0 25px 50px -12px rgba(0,0,0,0.4), 0 0 0 1px rgba(201,168,76,0.1)",
+          }}
+        >
           <div className="w-14 h-14 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <CheckCircle className="h-7 w-7 text-emerald-600" />
           </div>
-          <h2 className="text-lg font-bold text-slate-900 mb-2">Lozinka promijenjena</h2>
+          <h2 className="font-serif text-lg font-semibold text-slate-900 mb-2">Lozinka promijenjena</h2>
           <p className="text-sm text-slate-500 mb-4">
             Vaša lozinka je uspješno ažurirana. Preusmjeravamo Vas na prijavu...
           </p>
           <Link
             href="/auth/login"
-            className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-6 py-2.5 rounded-xl transition shadow-sm"
+            className="inline-flex items-center gap-2 text-white text-sm font-semibold px-6 py-2.5 rounded-xl transition shadow-lg"
+            style={{ background: "var(--auth-navy)", boxShadow: "0 4px 14px rgba(27,42,74,0.4)" }}
           >
             Prijavi se
           </Link>
@@ -111,19 +124,31 @@ export default function ResetPasswordPage() {
     <>
       {/* Logo */}
       <div className="flex items-center justify-center gap-3 mb-8">
-        <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-600/25">
-          <Scale className="h-5 w-5 text-white" />
+        <div
+          className="w-11 h-11 rounded-xl flex items-center justify-center shadow-lg"
+          style={{ background: "var(--auth-navy)", boxShadow: "0 4px 20px rgba(201,168,76,0.15)" }}
+        >
+          <Scale className="h-5 w-5" style={{ color: "var(--auth-gold)" }} />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-white tracking-tight">PravoTek</h1>
-          <p className="text-[10px] text-slate-400 uppercase tracking-widest">Pravna Inteligencija</p>
+          <h1 className="font-serif text-xl font-bold text-white tracking-tight">PravoTek</h1>
+          <p className="text-[10px] uppercase tracking-[0.2em]" style={{ color: "var(--auth-gold)" }}>
+            Pravna Inteligencija
+          </p>
         </div>
       </div>
 
       {/* Card */}
-      <div className="bg-white rounded-2xl shadow-2xl shadow-black/20 border border-slate-200 overflow-hidden">
+      <div
+        className="rounded-2xl shadow-2xl overflow-hidden"
+        style={{
+          background: "var(--auth-card-bg)",
+          border: "1px solid var(--auth-card-border)",
+          boxShadow: "0 25px 50px -12px rgba(0,0,0,0.4), 0 0 0 1px rgba(201,168,76,0.1)",
+        }}
+      >
         <div className="px-6 pt-6 pb-2 sm:px-8 sm:pt-8">
-          <h2 className="text-lg font-bold text-slate-900 mb-1">Nova lozinka</h2>
+          <h2 className="font-serif text-lg font-semibold text-slate-900 mb-1">Nova lozinka</h2>
           <p className="text-sm text-slate-500">Unesite novu lozinku za Vaš račun.</p>
         </div>
 
@@ -151,7 +176,8 @@ export default function ResetPasswordPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={loading}
                   placeholder="••••••••"
-                  className="w-full px-3.5 py-2.5 pr-10 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition disabled:bg-slate-50 disabled:text-slate-400"
+                  className="w-full px-3.5 py-2.5 pr-10 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 outline-none transition disabled:bg-slate-50 disabled:text-slate-400"
+                  style={{ "--tw-ring-color": "var(--auth-gold)" } as React.CSSProperties}
                 />
                 <button
                   type="button"
@@ -196,11 +222,12 @@ export default function ResetPasswordPage() {
                   onChange={(e) => setConfirm(e.target.value)}
                   disabled={loading}
                   placeholder="••••••••"
-                  className={`w-full px-3.5 py-2.5 pr-10 border rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition disabled:bg-slate-50 disabled:text-slate-400 ${
+                  className={`w-full px-3.5 py-2.5 pr-10 border rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 outline-none transition disabled:bg-slate-50 disabled:text-slate-400 ${
                     confirm.length > 0 && !pwMatch
                       ? "border-red-300 focus:ring-red-400 focus:border-red-400"
                       : "border-slate-200"
                   }`}
+                  style={{ "--tw-ring-color": confirm.length > 0 && !pwMatch ? undefined : "var(--auth-gold)" } as React.CSSProperties}
                 />
                 <button
                   type="button"
@@ -220,7 +247,11 @@ export default function ResetPasswordPage() {
             <button
               type="submit"
               disabled={loading || !pwValid || !pwMatch}
-              className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white text-sm font-semibold py-2.5 rounded-xl transition shadow-sm shadow-blue-600/25"
+              className="w-full flex items-center justify-center gap-2 text-white text-sm font-semibold py-2.5 rounded-xl transition shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
+              style={{
+                background: "var(--auth-navy)",
+                boxShadow: "0 4px 14px rgba(27,42,74,0.4)",
+              }}
             >
               {loading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />

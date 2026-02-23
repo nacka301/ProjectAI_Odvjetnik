@@ -54,20 +54,35 @@ export default function ForgotPasswordPage() {
     return (
       <>
         <div className="flex items-center justify-center gap-3 mb-8">
-          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-600/25">
-            <Scale className="h-5 w-5 text-white" />
+          <div
+            className="w-11 h-11 rounded-xl flex items-center justify-center shadow-lg"
+            style={{ background: "var(--auth-navy)", boxShadow: "0 4px 20px rgba(201,168,76,0.15)" }}
+          >
+            <Scale className="h-5 w-5" style={{ color: "var(--auth-gold)" }} />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-white tracking-tight">PravoTek</h1>
-            <p className="text-[10px] text-slate-400 uppercase tracking-widest">Pravna Inteligencija</p>
+            <h1 className="font-serif text-xl font-bold text-white tracking-tight">PravoTek</h1>
+            <p className="text-[10px] uppercase tracking-[0.2em]" style={{ color: "var(--auth-gold)" }}>
+              Pravna Inteligencija
+            </p>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-2xl shadow-black/20 border border-slate-200 p-6 sm:p-8 text-center">
-          <div className="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Mail className="h-7 w-7 text-blue-600" />
+        <div
+          className="rounded-2xl shadow-2xl p-6 sm:p-8 text-center"
+          style={{
+            background: "var(--auth-card-bg)",
+            border: "1px solid var(--auth-card-border)",
+            boxShadow: "0 25px 50px -12px rgba(0,0,0,0.4), 0 0 0 1px rgba(201,168,76,0.1)",
+          }}
+        >
+          <div
+            className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4"
+            style={{ background: "var(--auth-gold-muted)" }}
+          >
+            <Mail className="h-7 w-7" style={{ color: "var(--auth-gold)" }} />
           </div>
-          <h2 className="text-lg font-bold text-slate-900 mb-2">Provjerite email</h2>
+          <h2 className="font-serif text-lg font-semibold text-slate-900 mb-2">Provjerite email</h2>
           <p className="text-sm text-slate-500 mb-4 leading-relaxed">
             Ako postoji račun za{" "}
             <span className="font-semibold text-slate-700">{email}</span>,
@@ -78,7 +93,8 @@ export default function ForgotPasswordPage() {
           </p>
           <Link
             href="/auth/login"
-            className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-6 py-2.5 rounded-xl transition shadow-sm"
+            className="inline-flex items-center gap-2 text-white text-sm font-semibold px-6 py-2.5 rounded-xl transition shadow-lg"
+            style={{ background: "var(--auth-navy)", boxShadow: "0 4px 14px rgba(27,42,74,0.4)" }}
           >
             <ArrowLeft className="h-4 w-4" />
             Natrag na prijavu
@@ -93,21 +109,33 @@ export default function ForgotPasswordPage() {
     <>
       {/* Logo */}
       <div className="flex items-center justify-center gap-3 mb-8">
-        <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-600/25">
-          <Scale className="h-5 w-5 text-white" />
+        <div
+          className="w-11 h-11 rounded-xl flex items-center justify-center shadow-lg"
+          style={{ background: "var(--auth-navy)", boxShadow: "0 4px 20px rgba(201,168,76,0.15)" }}
+        >
+          <Scale className="h-5 w-5" style={{ color: "var(--auth-gold)" }} />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-white tracking-tight">PravoTek</h1>
-          <p className="text-[10px] text-slate-400 uppercase tracking-widest">Pravna Inteligencija</p>
+          <h1 className="font-serif text-xl font-bold text-white tracking-tight">PravoTek</h1>
+          <p className="text-[10px] uppercase tracking-[0.2em]" style={{ color: "var(--auth-gold)" }}>
+            Pravna Inteligencija
+          </p>
         </div>
       </div>
 
       {/* Card */}
-      <div className="bg-white rounded-2xl shadow-2xl shadow-black/20 border border-slate-200 overflow-hidden">
+      <div
+        className="rounded-2xl shadow-2xl overflow-hidden"
+        style={{
+          background: "var(--auth-card-bg)",
+          border: "1px solid var(--auth-card-border)",
+          boxShadow: "0 25px 50px -12px rgba(0,0,0,0.4), 0 0 0 1px rgba(201,168,76,0.1)",
+        }}
+      >
         <div className="px-6 pt-6 pb-2 sm:px-8 sm:pt-8">
-          <h2 className="text-lg font-bold text-slate-900 mb-1">Zaboravljena lozinka</h2>
+          <h2 className="font-serif text-lg font-semibold text-slate-900 mb-1">Oporavak lozinke</h2>
           <p className="text-sm text-slate-500 leading-relaxed">
-            Unesite email adresu i poslat ćemo Vam link za promjenu lozinke.
+            Unesite email adresu i poslat ćemo Vam siguran link za promjenu lozinke. Vaš račun ostaje zaštićen.
           </p>
         </div>
 
@@ -132,15 +160,20 @@ export default function ForgotPasswordPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={loading}
-                placeholder="ime@primjer.hr"
-                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition disabled:bg-slate-50 disabled:text-slate-400"
+                placeholder="ime@odvjetnik.hr"
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 outline-none transition disabled:bg-slate-50 disabled:text-slate-400"
+                style={{ "--tw-ring-color": "var(--auth-gold)" } as React.CSSProperties}
               />
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white text-sm font-semibold py-2.5 rounded-xl transition shadow-sm shadow-blue-600/25"
+              className="w-full flex items-center justify-center gap-2 text-white text-sm font-semibold py-2.5 rounded-xl transition shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
+              style={{
+                background: "var(--auth-navy)",
+                boxShadow: "0 4px 14px rgba(27,42,74,0.4)",
+              }}
             >
               {loading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -154,8 +187,12 @@ export default function ForgotPasswordPage() {
       </div>
 
       {/* Back to login */}
-      <p className="text-center text-sm text-slate-400 mt-6">
-        <Link href="/auth/login" className="text-blue-400 hover:text-blue-300 font-semibold transition inline-flex items-center gap-1">
+      <p className="text-center text-sm mt-6">
+        <Link
+          href="/auth/login"
+          className="font-semibold transition inline-flex items-center gap-1"
+          style={{ color: "var(--auth-gold)" }}
+        >
           <ArrowLeft className="h-3.5 w-3.5" />
           Natrag na prijavu
         </Link>
