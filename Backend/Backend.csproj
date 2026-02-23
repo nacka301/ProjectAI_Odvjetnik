@@ -13,6 +13,7 @@
   <ItemGroup>
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="11.11.0" />
     <PackageReference Include="Microsoft.Playwright" Version="1.49.0" />
+    <PackageReference Include="Otp.NET" Version="1.4.0" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
     <PackageReference Include="OpenAI" Version="2.8.0" />
     <PackageReference Include="UglyToad.PdfPig" Version="1.7.0-custom-5" />

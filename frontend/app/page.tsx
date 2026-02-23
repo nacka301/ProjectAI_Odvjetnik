@@ -13,6 +13,7 @@ import {
   ChevronRight,
   Loader2,
   ShieldAlert,
+  Shield,
   ArrowRight,
   X,
   Info,
@@ -437,6 +438,13 @@ export default function Dashboard() {
             >
               <ShieldAlert className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
               <span className="hidden sm:inline">Revizija</span>
+            </Link>
+            <Link
+              href="/postavke"
+              className="text-xs text-slate-400 hover:text-white transition flex items-center gap-1 p-1.5 sm:p-0"
+            >
+              <Shield className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
+              <span className="hidden sm:inline">Postavke</span>
             </Link>
             <div className="h-4 w-px bg-slate-700 hidden sm:block" />
             <button

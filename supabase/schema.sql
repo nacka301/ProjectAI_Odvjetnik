@@ -690,3 +690,45 @@ DROP POLICY IF EXISTS "users_own_troskovnici" ON troskovnici;
 CREATE POLICY "users_own_troskovnici" ON troskovnici
     FOR ALL USING (auth.uid() = user_id)
     WITH CHECK (auth.uid() = user_id);
+
+-- ========================================
+-- V45: User Profiles — TOTP Two-Factor Authentication
+-- Stores encrypted TOTP secrets & recovery codes per user.
+-- Secrets encrypted with AES-256-GCM before storage.
+-- ========================================
+
+CREATE TABLE IF NOT EXISTS user_profiles (
+    user_id                     UUID            PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    created_at                  TIMESTAMPTZ     DEFAULT now() NOT NULL,
+    updated_at                  TIMESTAMPTZ     DEFAULT now() NOT NULL,
+    totp_secret_encrypted       TEXT,            -- AES-256-GCM encrypted base32 TOTP secret
+    totp_enabled                BOOLEAN         DEFAULT false NOT NULL,
+    recovery_codes_encrypted    TEXT,            -- AES-256-GCM encrypted JSON array of recovery codes
+    totp_enabled_at             TIMESTAMPTZ     -- When 2FA was last enabled
+);
+
+-- RLS: Backend uses service_role (bypasses RLS), users can only read their own
+ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "service_role_full_access" ON user_profiles;
+CREATE POLICY "service_role_full_access" ON user_profiles
+    FOR ALL USING (auth.role() = 'service_role');
+
+DROP POLICY IF EXISTS "users_read_own_profile" ON user_profiles;
+CREATE POLICY "users_read_own_profile" ON user_profiles
+    FOR SELECT USING (auth.uid() = user_id);
+
+-- Trigger to auto-update updated_at
+CREATE OR REPLACE FUNCTION update_user_profiles_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS user_profiles_updated_at ON user_profiles;
+CREATE TRIGGER user_profiles_updated_at
+    BEFORE UPDATE ON user_profiles
+    FOR EACH ROW
+    EXECUTE FUNCTION update_user_profiles_updated_at();
