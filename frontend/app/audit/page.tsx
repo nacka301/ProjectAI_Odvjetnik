@@ -1,9 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import {
-  ArrowLeft,
   ShieldCheck,
   AlertTriangle,
   XCircle,
@@ -30,6 +28,7 @@ import {
 } from "@/lib/supabase";
 import { API_BASE } from "@/lib/api";
 import { useUserId } from "@/lib/useUserId";
+import AppHeader from "@/components/AppHeader";
 
 // ── Verdict colors/icons ──
 
@@ -205,15 +204,10 @@ export default function AuditPage() {
     activeFilter === "all" ? audits : audits.filter((a) => a.verdict === activeFilter);
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4 font-sans">
+    <div className="min-h-screen bg-gray-50 font-sans">
+      <AppHeader />
+      <div className="py-12 px-4">
       <div className="mx-auto max-w-5xl">
-        {/* Back link */}
-        <Link
-          href="/"
-          className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mb-6"
-        >
-          <ArrowLeft className="h-4 w-4" /> Natrag
-        </Link>
 
         {/* Header */}
         <div className="text-center mb-8">
@@ -558,6 +552,7 @@ export default function AuditPage() {
             Prikazano {filtered.length} od {audits.length} audit rezultata
           </p>
         )}
+      </div>
       </div>
     </div>
   );

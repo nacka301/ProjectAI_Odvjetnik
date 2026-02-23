@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
-  ArrowLeft,
   Clock,
   Building2,
   Search,
@@ -28,6 +27,7 @@ import {
 } from "@/lib/supabase";
 import { generateValuationPdf } from "@/lib/generatePdf";
 import type { ValuationResult } from "@/app/wizard/types";
+import AppHeader from "@/components/AppHeader";
 
 // ── Tab definitions ──
 type TabKey = "all" | ActivityType;
@@ -178,11 +178,10 @@ export default function HistoryPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4 font-sans">
+    <div className="min-h-screen bg-gray-50 font-sans">
+      <AppHeader />
+      <div className="py-12 px-4">
       <div className="mx-auto max-w-4xl">
-        <Link href="/" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mb-6">
-          <ArrowLeft className="h-4 w-4" /> Natrag
-        </Link>
 
         <div className="text-center mb-8">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center justify-center gap-2 sm:gap-3">
@@ -470,6 +469,7 @@ export default function HistoryPage() {
             Prikazano {filtered.length} od {activity.length} predmeta
           </p>
         )}
+      </div>
       </div>
     </div>
   );

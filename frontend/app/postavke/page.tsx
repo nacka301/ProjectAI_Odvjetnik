@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import {
   Shield,
   ShieldCheck,
@@ -11,11 +10,9 @@ import {
   Copy,
   Check,
   AlertTriangle,
-  ArrowLeft,
   Key,
   Smartphone,
   Lock,
-  Scale,
   CheckCircle2,
   QrCode,
   Info,
@@ -31,6 +28,7 @@ import PersonalProfileForm from "@/components/settings/PersonalProfileForm";
 import LawFirmForm from "@/components/settings/LawFirmForm";
 import SubscriptionView from "@/components/settings/SubscriptionView";
 import BetaAccessStatus from "@/components/settings/BetaAccessStatus";
+import AppHeader from "@/components/AppHeader";
 
 // ── Types ──
 interface SetupResponse {
@@ -266,27 +264,7 @@ export default function PostavkePage() {
   return (
     <div className="min-h-screen bg-slate-50">
       {/* ════════════════════ HEADER ════════════════════ */}
-      <header className="sticky top-0 z-50 bg-white border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link
-              href="/"
-              className="flex items-center gap-2 text-slate-400 hover:text-slate-700 transition group"
-            >
-              <ArrowLeft className="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" />
-              <span className="text-sm hidden sm:inline">Početna</span>
-            </Link>
-            <div className="h-5 w-px bg-slate-200" />
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "#1B2A4A" }}>
-                <Scale className="h-4 w-4 text-white" />
-              </div>
-              <h1 className="font-serif text-lg font-bold text-slate-900 tracking-tight">Postavke</h1>
-            </div>
-          </div>
-          <p className="text-xs text-slate-400 truncate max-w-[220px]">{userEmail}</p>
-        </div>
-      </header>
+      <AppHeader />
 
       {/* ════════════════════ BODY: SIDEBAR + CONTENT ════════════════════ */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-10">

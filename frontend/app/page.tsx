@@ -6,14 +6,12 @@ import { useRouter } from "next/navigation";
 
 import {
   Search as SearchIcon,
-  Scale,
   BookOpen,
   Clock,
   Building2,
   ChevronRight,
   Loader2,
   ShieldAlert,
-  Shield,
   ArrowRight,
   X,
   Info,
@@ -27,11 +25,10 @@ import {
   Construction,
   Calculator,
   Users,
-  LogOut,
   Languages,
 } from "lucide-react";
 import { getRecentActivity, type ActivityItem, type ActivityType } from "@/lib/supabase";
-import { createSupabaseBrowser } from "@/lib/supabase/client";
+import AppHeader from "@/components/AppHeader";
 
 // ── Helpers ──
 
@@ -388,66 +385,18 @@ export default function Dashboard() {
       )}
 
       {/* ═══════════ Top Navigation ═══════════ */}
-      <header className="bg-slate-900 text-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <Scale className="h-5 w-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold tracking-tight">PravoTek</h1>
-              <p className="text-[10px] text-slate-400 uppercase tracking-widest">
-                Pravna Inteligencija
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 sm:gap-4">
-            <button
-              onClick={() => { setShowTour(true); setTourStep(0); }}
-              className="text-xs text-slate-500 hover:text-white transition flex items-center gap-1 p-1.5 sm:p-0"
-              title="Pokreni vodič"
-            >
-              <CircleHelp className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
-              <span className="hidden sm:inline">Vodič</span>
-            </button>
-            <Link
-              href="/history"
-              className="text-xs text-slate-400 hover:text-white transition flex items-center gap-1 p-1.5 sm:p-0"
-            >
-              <Clock className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
-              <span className="hidden sm:inline">Puna povijest</span>
-            </Link>
-            <Link
-              href="/audit"
-              className="text-xs text-slate-400 hover:text-white transition flex items-center gap-1 p-1.5 sm:p-0"
-            >
-              <ShieldAlert className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
-              <span className="hidden sm:inline">Revizija</span>
-            </Link>
-            <Link
-              href="/postavke"
-              className="text-xs text-slate-400 hover:text-white transition flex items-center gap-1 p-1.5 sm:p-0"
-            >
-              <Shield className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
-              <span className="hidden sm:inline">Postavke</span>
-            </Link>
-            <div className="h-4 w-px bg-slate-700 hidden sm:block" />
-            <button
-              onClick={async () => {
-                const supabase = createSupabaseBrowser();
-                await supabase.auth.signOut();
-                router.push("/auth/login");
-                router.refresh();
-              }}
-              className="text-xs text-slate-500 hover:text-red-400 transition flex items-center gap-1 p-1.5 sm:p-0"
-              title="Odjavi se"
-            >
-              <LogOut className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
-              <span className="hidden sm:inline">Odjava</span>
-            </button>
-          </div>
-        </div>
-      </header>
+      <AppHeader
+        extraStart={
+          <button
+            onClick={() => { setShowTour(true); setTourStep(0); }}
+            className="text-xs text-slate-500 hover:text-white transition flex items-center gap-1 p-1.5 sm:p-0"
+            title="Pokreni vodič"
+          >
+            <CircleHelp className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
+            <span className="hidden sm:inline">Vodič</span>
+          </button>
+        }
+      />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
 
