@@ -28,6 +28,12 @@ public sealed class TroskovnikRequest
 
     /// <summary>Opis predmeta / napomena.</summary>
     public string? OpisPredmeta { get; set; }
+
+    /// <summary>ID postojeće stranke (opcija — za povezivanje s klijentom).</summary>
+    public string? ClientId { get; set; }
+
+    /// <summary>ID predmeta (opcija — za povezivanje s predmetom).</summary>
+    public string? CaseId { get; set; }
 }
 
 public sealed class TroskovnikItemRequest

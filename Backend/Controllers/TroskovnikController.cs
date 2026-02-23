@@ -75,6 +75,8 @@ public class TroskovnikController : ControllerBase
         var record = new TroskovnikRecord
         {
             UserId = userId,
+            ClientId = request.ClientId,
+            CaseId = request.CaseId,
             OpisPredmeta = request.OpisPredmeta,
             VrijednostSpora = request.VrijednostSpora,
             UkupnoBodova = result.UkupnoBodova,

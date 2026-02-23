@@ -615,7 +615,7 @@ export default function ClientProfilePage() {
                 <Calculator className="mb-3 h-10 w-10 text-slate-300" />
                 <p className="text-sm">Nema troškovnika za ovu stranku.</p>
                 <Link
-                  href="/troskovnik"
+                  href={`/troskovnik?clientId=${client.id}`}
                   className="mt-2 text-xs text-[#1B2A4A] hover:underline"
                 >
                   Izradi novi troškovnik →

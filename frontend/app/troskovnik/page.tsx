@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Calculator,
@@ -15,10 +16,12 @@ import {
   Minus,
   Plus,
   Printer,
+  Save,
   Scale,
   Search,
   Trash2,
   User,
+  Users,
   Building2,
   AlertCircle,
   CheckCircle,
@@ -159,7 +162,18 @@ function getCatColor(cat: string) {
 // ═══════════════════════════════════════════════════════════════
 
 export default function TroskovnikPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-gray-50"><Loader2 className="h-8 w-8 animate-spin text-indigo-500" /></div>}>
+      <TroskovnikContent />
+    </Suspense>
+  );
+}
+
+function TroskovnikContent() {
   const userId = useUserId();
+  const searchParams = useSearchParams();
+  const preselectedClientId = searchParams.get("clientId");
+
   // ── Catalog state ──
   const [katalog, setKatalog] = useState<TarifnaStavka[]>([]);
   const [loadingKatalog, setLoadingKatalog] = useState(true);
@@ -182,6 +196,16 @@ export default function TroskovnikPage() {
   const [klijentGrad, setKlijentGrad] = useState("");
   const [opisPredmeta, setOpisPredmeta] = useState("");
   const [showParties, setShowParties] = useState(false);
+
+  // ── Client picker state ──
+  type ClientOption = { id: string; ime_naziv: string; oib?: string; adresa?: string; grad?: string; tip: string };
+  const [clients, setClients] = useState<ClientOption[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState<string>("");
+  const [loadingClients, setLoadingClients] = useState(false);
+
+  // ── Save state ──
+  const [saving, setSaving] = useState(false);
+  const [savedId, setSavedId] = useState<string | null>(null);
 
   // ── Result state ──
   const [result, setResult] = useState<TroskovnikResponse | null>(null);
@@ -207,6 +231,44 @@ export default function TroskovnikPage() {
       }
     })();
   }, []);
+
+  // ── Load user's clients for picker ──
+  useEffect(() => {
+    if (!userId) return;
+    setLoadingClients(true);
+    fetch(`${API}/api/client`, { headers: { "x-user-id": userId } })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: ClientOption[]) => {
+        setClients(data);
+        // Auto-select if arrived via ?clientId=...
+        if (preselectedClientId) {
+          const match = data.find((c) => c.id === preselectedClientId);
+          if (match) {
+            setSelectedClientId(match.id);
+            setKlijentIme(match.ime_naziv);
+            setKlijentOib(match.oib ?? "");
+            setKlijentAdresa(match.adresa ?? "");
+            setKlijentGrad(match.grad ?? "");
+            setShowParties(true);
+          }
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingClients(false));
+  }, [userId, preselectedClientId]);
+
+  // ── Client selection handler ──
+  const handleClientSelect = (clientId: string) => {
+    setSelectedClientId(clientId);
+    if (!clientId) return;
+    const c = clients.find((cl) => cl.id === clientId);
+    if (c) {
+      setKlijentIme(c.ime_naziv);
+      setKlijentOib(c.oib ?? "");
+      setKlijentAdresa(c.adresa ?? "");
+      setKlijentGrad(c.grad ?? "");
+    }
+  };
 
   // ── Derived values ──
   const vrijednostNum = parseFloat(vrijednostSpora.replace(/\./g, "").replace(",", ".")) || 0;
@@ -356,6 +418,58 @@ export default function TroskovnikPage() {
       setCalcError(err instanceof Error ? err.message : "Nepoznata greška");
     } finally {
       setCalculating(false);
+    }
+  };
+
+  // ── Save to database ──
+  const handleSave = async () => {
+    if (selectedItems.size === 0) {
+      setCalcError("Morate odabrati barem jednu stavku.");
+      return;
+    }
+    if (!userId) {
+      setCalcError("Morate biti prijavljeni za spremanje.");
+      return;
+    }
+    setCalcError(null);
+    setSaving(true);
+    setSavedId(null);
+
+    try {
+      const body = {
+        vrijednost_spora: vrijednostNum,
+        stavke: Array.from(selectedItems.entries()).map(([itemId, kolicina]) => ({
+          item_id: itemId,
+          kolicina,
+        })),
+        odvjetnik: odvjetnikIme
+          ? { ime: odvjetnikIme, oib: odvjetnikOib || undefined, adresa: odvjetnikAdresa || undefined, grad: odvjetnikGrad || undefined }
+          : undefined,
+        klijent: klijentIme
+          ? { ime: klijentIme, oib: klijentOib || undefined, adresa: klijentAdresa || undefined, grad: klijentGrad || undefined }
+          : undefined,
+        opis_predmeta: opisPredmeta || undefined,
+        client_id: selectedClientId || undefined,
+      };
+
+      const res = await fetch(`${API}/api/troskovnik/spremi`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-user-id": userId },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Greška ${res.status}`);
+      }
+
+      const data = await res.json();
+      setResult(data.troskovnik);
+      setSavedId(data.savedId ?? null);
+    } catch (err) {
+      setCalcError(err instanceof Error ? err.message : "Nepoznata greška");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -646,6 +760,36 @@ export default function TroskovnikPage() {
                     />
                   </div>
 
+                  {/* Client picker */}
+                  {clients.length > 0 && (
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">
+                        <div className="flex items-center gap-1.5">
+                          <Users className="h-3.5 w-3.5 text-slate-400" />
+                          Poveži sa strankom
+                        </div>
+                      </label>
+                      <select
+                        value={selectedClientId}
+                        onChange={(e) => handleClientSelect(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                      >
+                        <option value="">— bez stranke —</option>
+                        {clients.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.ime_naziv}{c.oib ? ` (OIB: ${c.oib})` : ""} — {c.tip === "pravna" ? "Pravna" : "Fizička"}
+                          </option>
+                        ))}
+                      </select>
+                      {selectedClientId && (
+                        <p className="mt-1 text-[10px] text-emerald-600 flex items-center gap-1">
+                          <CheckCircle className="h-3 w-3" />
+                          Troškovnik će biti povezan s ovom strankom
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Odvjetnik */}
                     <div className="space-y-2">
@@ -767,6 +911,31 @@ export default function TroskovnikPage() {
                       )}
                       {calculating ? "Izračunavam..." : "Generiraj troškovnik"}
                     </button>
+                    {userId && (
+                      <button
+                        onClick={handleSave}
+                        disabled={saving}
+                        className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white text-sm font-semibold py-2.5 rounded-lg transition"
+                      >
+                        {saving ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Save className="h-4 w-4" />
+                        )}
+                        {saving ? "Spremam..." : "Spremi troškovnik"}
+                      </button>
+                    )}
+                    {savedId && (
+                      <div className="flex items-center gap-1.5 text-xs text-emerald-600 justify-center">
+                        <CheckCircle className="h-3.5 w-3.5" />
+                        <span>Troškovnik spremljen!</span>
+                        {selectedClientId && (
+                          <Link href={`/klijenti/${selectedClientId}`} className="underline hover:text-emerald-800">
+                            Pogledaj stranku →
+                          </Link>
+                        )}
+                      </div>
+                    )}
                     <div className="flex gap-2">
                       <button
                         onClick={handleExportCsv}
