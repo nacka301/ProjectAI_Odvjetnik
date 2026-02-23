@@ -373,6 +373,19 @@ export default function Dashboard() {
   // Highlight active tour card
   const tourTargetId = showTour ? TOUR_STEPS[tourStep]?.target : null;
 
+  // Auto-scroll to the active tour target element
+  useEffect(() => {
+    if (!tourTargetId) return;
+    // Small delay so the DOM has painted the highlight ring before we measure
+    const timer = setTimeout(() => {
+      const el = document.getElementById(tourTargetId);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [tourTargetId]);
+
   // Drag & drop handlers (visual only — routing to the right module)
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
