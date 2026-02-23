@@ -27,9 +27,8 @@ public class InvoiceController : ControllerBase
         _logger = logger;
     }
 
-    // SECURITY: Extract user_id from x-user-id header (set by frontend auth)
-    private string? GetUserId() =>
-        Request.Headers.TryGetValue("x-user-id", out var val) ? val.FirstOrDefault() : null;
+    // SECURITY: Verified user_id extracted from Supabase JWT by SupabaseJwtMiddleware
+    private string? GetUserId() => HttpContext.Items["AuthUserId"] as string;
 
     /// <summary>
     /// POST /api/invoice/generate — Generate a UBL 2.1 e-invoice.

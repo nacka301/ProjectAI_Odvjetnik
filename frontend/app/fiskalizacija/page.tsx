@@ -65,7 +65,7 @@ interface InvoiceResult {
 }
 
 import { API_BASE } from "@/lib/api";
-import { useUserId } from "@/lib/useUserId";
+import { useAuth } from "@/lib/useAuth";
 const API = API_BASE;
 
 const MODULE_LABELS: Record<string, string> = {
@@ -99,7 +99,7 @@ function validateOib(oib: string): boolean {
 // ── Main Page ──
 
 export default function FiskalizacijaPage() {
-  const userId = useUserId();
+  const { userId, authHeaders } = useAuth();
   // Form state
   const [module, setModule] = useState("legal");
   const [analysisId, setAnalysisId] = useState("");
@@ -182,7 +182,7 @@ export default function FiskalizacijaPage() {
 
       const res = await fetch(`${API}/api/invoice/generate`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...(userId ? { "x-user-id": userId } : {}) },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify(body),
       });
 

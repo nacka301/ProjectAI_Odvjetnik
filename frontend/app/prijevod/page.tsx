@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import SharedProcessingView, { type ProcessingStage } from "@/components/SharedProcessingView";
 import { API_BASE } from "@/lib/api";
-import { useUserId } from "@/lib/useUserId";
+import { useAuth } from "@/lib/useAuth";
 import { PrivacyBanner } from "@/components/TrustComponents";
 
 // ═══════════════════════════════════════════════════════════
@@ -141,7 +141,7 @@ const STAGE_MICROCOPY: Record<string, string[]> = {
 // ═══════════════════════════════════════════════════════════
 
 export default function TranslationPage() {
-  const userId = useUserId();
+  const { userId, authHeaders } = useAuth();
 
   // ── State ──
   const [textInput, setTextInput] = useState("");
@@ -174,7 +174,7 @@ export default function TranslationPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(userId ? { "x-user-id": userId } : {}),
+          ...authHeaders,
         },
         body: JSON.stringify({ text: textInput, mode: selectedMode }),
         signal: controller.signal,

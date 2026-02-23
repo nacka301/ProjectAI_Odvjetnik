@@ -41,7 +41,7 @@ import { uploadPdfToStorage } from "@/lib/supabase";
 import LocationSelector from "@/components/LocationSelector";
 import SharedProcessingView, { type ProcessingStage } from "@/components/SharedProcessingView";
 import ResultActions from "@/components/ResultActions";
-import { useUserId } from "@/lib/useUserId";
+import { useAuth } from "@/lib/useAuth";
 import { PrivacyBanner } from "@/components/TrustComponents";
 
 import { API_BASE } from "@/lib/api";
@@ -323,7 +323,7 @@ const ZK_STAGE_MICROCOPY: Record<string, string[]> = {
 // --- Component ---
 
 export default function ZkProcjenaPage() {
-  const userId = useUserId();
+  const { userId, authHeaders } = useAuth();
   const [mode, setMode] = useState<"pdf" | "text">("pdf");
   const [file, setFile] = useState<File | null>(null);
   const [textInput, setTextInput] = useState("");
@@ -419,7 +419,7 @@ export default function ZkProcjenaPage() {
       if (neighborhood.trim()) body.append("neighborhood", neighborhood.trim());
       if (email.trim()) body.append("email", email.trim());
 
-      const response = await fetch(url, { method: "POST", body: body, signal: controller.signal, headers: userId ? { "x-user-id": userId } : {} });
+      const response = await fetch(url, { method: "POST", body: body, signal: controller.signal, headers: authHeaders });
 
       if (!response.ok || !response.body) {
         throw new Error(`HTTP ${response.status}`);

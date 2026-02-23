@@ -28,7 +28,7 @@ import {
   type EvaluationRow,
 } from "@/lib/supabase";
 import { API_BASE } from "@/lib/api";
-import { useUserId } from "@/lib/useUserId";
+import { useAuth } from "@/lib/useAuth";
 import AppHeader from "@/components/AppHeader";
 
 // ── Verdict colors/icons ──
@@ -90,7 +90,7 @@ function formatDate(iso: string): string {
 }
 
 export default function AuditPage() {
-  const userId = useUserId();
+  const { userId, authHeaders } = useAuth();
   const [audits, setAudits] = useState<AuditRow[]>([]);
   const [evaluations, setEvaluations] = useState<Map<string, EvaluationRow>>(new Map());
   const [stats, setStats] = useState({ total: 0, confirmed: 0, suspicious: 0, rejected: 0 });
@@ -130,7 +130,7 @@ export default function AuditPage() {
   // Check API status (needs userId)
   useEffect(() => {
     if (!userId) return;
-    fetch(`${API_BASE}/api/audit/status`, { headers: { "x-user-id": userId } })
+    fetch(`${API_BASE}/api/audit/status`, { headers: authHeaders })
       .then((r) => r.json())
       .then((data) => setApiStatus(data))
       .catch(() => setApiStatus({ enabled: false, message: "Backend nedostupan" }));
@@ -143,7 +143,7 @@ export default function AuditPage() {
     try {
       const resp = await fetch(`${API_BASE}/api/audit/batch`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...(userId ? { "x-user-id": userId } : {}) },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({ evaluation_ids: [] }), // Empty = audit all unaudited
       });
 
@@ -180,7 +180,7 @@ export default function AuditPage() {
     try {
       const resp = await fetch(`${API_BASE}/api/audit/single`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...(userId ? { "x-user-id": userId } : {}) },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({ evaluation_id: evaluationId }),
       });
 

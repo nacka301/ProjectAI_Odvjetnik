@@ -28,7 +28,7 @@ import {
   Info,
 } from "lucide-react";
 import { API_BASE } from "@/lib/api";
-import { useUserId } from "@/lib/useUserId";
+import { useAuth } from "@/lib/useAuth";
 
 const API = API_BASE;
 const BOD_VALUE = 2.0;
@@ -170,7 +170,7 @@ export default function TroskovnikPage() {
 }
 
 function TroskovnikContent() {
-  const userId = useUserId();
+  const { userId, authHeaders } = useAuth();
   const searchParams = useSearchParams();
   const preselectedClientId = searchParams.get("clientId");
 
@@ -219,7 +219,7 @@ function TroskovnikContent() {
     (async () => {
       try {
         const res = await fetch(`${API}/api/troskovnik/katalog`, {
-          headers: userId ? { "x-user-id": userId } : {},
+          headers: authHeaders,
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data: TarifnaStavka[] = await res.json();
@@ -236,7 +236,7 @@ function TroskovnikContent() {
   useEffect(() => {
     if (!userId) return;
     setLoadingClients(true);
-    fetch(`${API}/api/client`, { headers: { "x-user-id": userId } })
+    fetch(`${API}/api/client`, { headers: authHeaders })
       .then((r) => (r.ok ? r.json() : []))
       .then((data: ClientOption[]) => {
         setClients(data);
@@ -403,7 +403,7 @@ function TroskovnikContent() {
 
       const res = await fetch(`${API}/api/troskovnik/izracunaj`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...(userId ? { "x-user-id": userId } : {}) },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify(body),
       });
 
@@ -454,7 +454,7 @@ function TroskovnikContent() {
 
       const res = await fetch(`${API}/api/troskovnik/spremi`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-user-id": userId },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify(body),
       });
 

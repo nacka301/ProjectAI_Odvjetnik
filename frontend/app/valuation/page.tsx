@@ -24,7 +24,7 @@ import {
 import { uploadPdfToStorage } from "@/lib/supabase";
 import SharedProcessingView, { type ProcessingStage } from "@/components/SharedProcessingView";
 import ResultActions from "@/components/ResultActions";
-import { useUserId } from "@/lib/useUserId";
+import { useAuth } from "@/lib/useAuth";
 
 import { API_BASE } from "@/lib/api";
 
@@ -152,7 +152,7 @@ const VALUATION_STAGE_MICROCOPY: Record<string, string[]> = {
 type InputMode = "pdf" | "text";
 
 export default function ValuationPage() {
-  const userId = useUserId();
+  const { userId, authHeaders } = useAuth();
   const [inputMode, setInputMode] = useState<InputMode>("pdf");
   const [file, setFile] = useState<File | null>(null);
   const [propertyText, setPropertyText] = useState("");
@@ -227,8 +227,7 @@ export default function ValuationPage() {
     try {
       let url: string;
       let body: BodyInit;
-      const headers: Record<string, string> = {};
-      if (userId) headers["x-user-id"] = userId;
+      const headers: Record<string, string> = { ...authHeaders };
 
       if (inputMode === "pdf" && file) {
         url = `${API_BASE}/api/evaluate/stream`;

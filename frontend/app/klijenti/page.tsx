@@ -19,7 +19,7 @@ import {
   X,
 } from "lucide-react";
 import { API_BASE } from "@/lib/api";
-import { createSupabaseBrowser } from "@/lib/supabase/client";
+import { useAuth } from "@/lib/useAuth";
 
 // ── Types ──
 
@@ -64,7 +64,7 @@ export default function KlijentiPage() {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [fetchError, setFetchError] = useState("");
-  const [userId, setUserId] = useState<string | null>(null);
+  const { userId, authHeaders } = useAuth();
 
   // Form state
   const [form, setForm] = useState({
@@ -79,14 +79,6 @@ export default function KlijentiPage() {
     napomena: "",
   });
 
-  // Get user ID on mount
-  useEffect(() => {
-    const supabase = createSupabaseBrowser();
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) setUserId(data.user.id);
-    }).catch(() => { /* auth unavailable */ });
-  }, []);
-
   // Fetch clients
   const fetchClients = useCallback(async () => {
     if (!userId) return;
@@ -94,7 +86,7 @@ export default function KlijentiPage() {
     setFetchError("");
     try {
       const res = await fetch(`${API_BASE}/api/client`, {
-        headers: { "x-user-id": userId },
+        headers: authHeaders,
       });
       if (res.ok) {
         const data = await res.json();
@@ -125,7 +117,7 @@ export default function KlijentiPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-user-id": userId,
+          ...authHeaders,
         },
         body: JSON.stringify(form),
       });
@@ -164,7 +156,7 @@ export default function KlijentiPage() {
     try {
       const res = await fetch(`${API_BASE}/api/client/${id}`, {
         method: "DELETE",
-        headers: { "x-user-id": userId },
+        headers: authHeaders,
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));

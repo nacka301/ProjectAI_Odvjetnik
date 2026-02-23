@@ -27,6 +27,7 @@ public class ZkUnifiedController : ControllerBase
     private readonly SupabaseService _supabaseService;
     private readonly EmailService _emailService;
     private readonly ChatClientProvider _clients;
+    private readonly CreditService _creditService;
     private readonly ILogger<ZkUnifiedController> _logger;
 
     public ZkUnifiedController(
@@ -38,6 +39,7 @@ public class ZkUnifiedController : ControllerBase
         SupabaseService supabaseService,
         EmailService emailService,
         ChatClientProvider clients,
+        CreditService creditService,
         ILogger<ZkUnifiedController> logger)
     {
         _zkParsingService = zkParsingService;
@@ -48,12 +50,12 @@ public class ZkUnifiedController : ControllerBase
         _supabaseService = supabaseService;
         _emailService = emailService;
         _clients = clients;
+        _creditService = creditService;
         _logger = logger;
     }
 
-    // SECURITY: Extract user_id from x-user-id header (set by frontend auth)
-    private string? GetUserId() =>
-        Request.Headers.TryGetValue("x-user-id", out var val) ? val.FirstOrDefault() : null;
+    // SECURITY: Verified user_id extracted from Supabase JWT by SupabaseJwtMiddleware
+    private string? GetUserId() => HttpContext.Items["AuthUserId"] as string;
 
     private Task SendSSE(string type, object? payload)
         => SseHelpers.SendSSE(Response, type, payload);
@@ -86,6 +88,16 @@ public class ZkUnifiedController : ControllerBase
         [FromForm] string? email = null,
         [FromForm] bool skipValuation = false)
     {
+        // Credit enforcement — check before SSE headers
+        var creditCheck = await _creditService.ConsumeCreditAsync(GetUserId() ?? "", "zk_analysis");
+        if (!creditCheck.Allowed)
+        {
+            Response.StatusCode = 403;
+            Response.ContentType = "application/json";
+            await Response.WriteAsync(System.Text.Json.JsonSerializer.Serialize(new { error = creditCheck.Message }));
+            return;
+        }
+
         SetupSSEHeaders();
         var ct = HttpContext.RequestAborted;
 
@@ -157,6 +169,16 @@ public class ZkUnifiedController : ControllerBase
         [FromForm] string? email = null,
         [FromForm] bool skipValuation = false)
     {
+        // Credit enforcement — check before SSE headers
+        var creditCheck = await _creditService.ConsumeCreditAsync(GetUserId() ?? "", "zk_analysis");
+        if (!creditCheck.Allowed)
+        {
+            Response.StatusCode = 403;
+            Response.ContentType = "application/json";
+            await Response.WriteAsync(System.Text.Json.JsonSerializer.Serialize(new { error = creditCheck.Message }));
+            return;
+        }
+
         SetupSSEHeaders();
         var ct = HttpContext.RequestAborted;
 

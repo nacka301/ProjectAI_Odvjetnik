@@ -24,6 +24,7 @@ public class EvaluateController : ControllerBase
     private readonly TextAnalysisService _textAnalysisService;
     private readonly ValuationAgentService _valuationAgentService;
     private readonly ChatClientProvider _clients;
+    private readonly CreditService _creditService;
     private readonly ILogger<EvaluateController> _logger;
 
     public EvaluateController(
@@ -36,6 +37,7 @@ public class EvaluateController : ControllerBase
         TextAnalysisService textAnalysisService,
         ValuationAgentService valuationAgentService,
         ChatClientProvider clients,
+        CreditService creditService,
         ILogger<EvaluateController> logger)
     {
         _valuationService = valuationService;
@@ -47,20 +49,12 @@ public class EvaluateController : ControllerBase
         _textAnalysisService = textAnalysisService;
         _valuationAgentService = valuationAgentService;
         _clients = clients;
+        _creditService = creditService;
         _logger = logger;
     }
 
-    // ══════════════════════════════════════════════════════════
-    //  SECURITY: Extract user_id from x-user-id header (set by frontend auth)
-    // ══════════════════════════════════════════════════════════
-    private string? GetUserId()
-    {
-        if (!Request.Headers.TryGetValue("x-user-id", out var val)) return null;
-        var raw = val.FirstOrDefault();
-        // Validate UUID format to prevent header injection
-        if (string.IsNullOrWhiteSpace(raw) || raw.Length > 40) return null;
-        return Guid.TryParse(raw, out _) ? raw : null;
-    }
+    // SECURITY: Verified user_id extracted from Supabase JWT by SupabaseJwtMiddleware
+    private string? GetUserId() => HttpContext.Items["AuthUserId"] as string;
 
     // ══════════════════════════════════════════════════════════
     //  LOCATION OVERRIDE — use frontend-supplied city/neighborhood
@@ -118,6 +112,16 @@ public class EvaluateController : ControllerBase
         [FromForm] string? neighborhood = null,
         [FromForm] string? email = null)
     {
+        // Credit enforcement — check before SSE headers
+        var creditCheck = await _creditService.ConsumeCreditAsync(GetUserId() ?? "", "valuation");
+        if (!creditCheck.Allowed)
+        {
+            Response.StatusCode = 403;
+            Response.ContentType = "application/json";
+            await Response.WriteAsync(System.Text.Json.JsonSerializer.Serialize(new { error = creditCheck.Message }));
+            return;
+        }
+
         SetupSSEHeaders();
         var ct = HttpContext.RequestAborted;
 

@@ -23,6 +23,7 @@ public class LegalController : ControllerBase
     private readonly PdfService _pdfService;
     private readonly SupabaseService _supabaseService;
     private readonly ChatClientProvider _clients;
+    private readonly CreditService _creditService;
     private readonly ILogger<LegalController> _logger;
 
     public LegalController(
@@ -30,18 +31,19 @@ public class LegalController : ControllerBase
         PdfService pdfService,
         SupabaseService supabaseService,
         ChatClientProvider clients,
+        CreditService creditService,
         ILogger<LegalController> logger)
     {
         _legalService = legalService;
         _pdfService = pdfService;
         _supabaseService = supabaseService;
         _clients = clients;
+        _creditService = creditService;
         _logger = logger;
     }
 
-    // SECURITY: Extract user_id from x-user-id header (set by frontend auth)
-    private string? GetUserId() =>
-        Request.Headers.TryGetValue("x-user-id", out var val) ? val.FirstOrDefault() : null;
+    // SECURITY: Verified user_id extracted from Supabase JWT by SupabaseJwtMiddleware
+    private string? GetUserId() => HttpContext.Items["AuthUserId"] as string;
 
     // ═══════════════════════════════════════════════════════════
     //  1. LEGAL FEED — Dashboard widget
@@ -75,6 +77,11 @@ public class LegalController : ControllerBase
     [EnableRateLimiting("valuation")]
     public async Task<ActionResult<LegalStrategyResult>> AnalyzeStrategy([FromBody] LegalStrategyRequest request)
     {
+        // Credit enforcement
+        var creditCheck = await _creditService.ConsumeCreditAsync(GetUserId() ?? "", "legal_strategy");
+        if (!creditCheck.Allowed)
+            return StatusCode(403, new { error = creditCheck.Message });
+
         if (request == null)
             return BadRequest(new { error = "Molimo pošaljite podatke o predmetu." });
 

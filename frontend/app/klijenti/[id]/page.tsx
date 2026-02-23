@@ -21,7 +21,7 @@ import {
   X,
 } from "lucide-react";
 import { API_BASE } from "@/lib/api";
-import { createSupabaseBrowser } from "@/lib/supabase/client";
+import { useAuth } from "@/lib/useAuth";
 
 // ── Types ──
 
@@ -117,7 +117,7 @@ export default function ClientProfilePage() {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState("");
   const [activeTab, setActiveTab] = useState<"predmeti" | "troskovnici">("predmeti");
-  const [userId, setUserId] = useState<string | null>(null);
+  const { userId, authHeaders } = useAuth();
   const [deletingCase, setDeletingCase] = useState<string | null>(null);
 
   // Case form
@@ -135,20 +135,13 @@ export default function ClientProfilePage() {
     datum_pokretanja: "",
   });
 
-  useEffect(() => {
-    const supabase = createSupabaseBrowser();
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) setUserId(data.user.id);
-    }).catch(() => { /* auth unavailable */ });
-  }, []);
-
   const fetchProfile = useCallback(async () => {
     if (!userId) return;
     setLoading(true);
     setFetchError("");
     try {
       const res = await fetch(`${API_BASE}/api/client/${clientId}/profile`, {
-        headers: { "x-user-id": userId },
+        headers: authHeaders,
       });
       if (res.ok) {
         const data = await res.json();
@@ -194,7 +187,7 @@ export default function ClientProfilePage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-user-id": userId,
+          ...authHeaders,
         },
         body: JSON.stringify(body),
       });
@@ -232,7 +225,7 @@ export default function ClientProfilePage() {
     try {
       const res = await fetch(`${API_BASE}/api/case/${caseId}`, {
         method: "DELETE",
-        headers: { "x-user-id": userId },
+        headers: authHeaders,
       });
       if (!res.ok) {
         setFetchError("Gre\u0161ka pri brisanju predmeta.");

@@ -19,6 +19,7 @@ public class ChronologyController : ControllerBase
     private readonly PdfService _pdfService;
     private readonly SupabaseService _supabaseService;
     private readonly ChatClientProvider _clients;
+    private readonly CreditService _creditService;
     private readonly ILogger<ChronologyController> _logger;
 
     public ChronologyController(
@@ -26,18 +27,19 @@ public class ChronologyController : ControllerBase
         PdfService pdfService,
         SupabaseService supabaseService,
         ChatClientProvider clients,
+        CreditService creditService,
         ILogger<ChronologyController> logger)
     {
         _chronologyService = chronologyService;
         _pdfService = pdfService;
         _supabaseService = supabaseService;
         _clients = clients;
+        _creditService = creditService;
         _logger = logger;
     }
 
-    // SECURITY: Extract user_id from x-user-id header (set by frontend auth)
-    private string? GetUserId() =>
-        Request.Headers.TryGetValue("x-user-id", out var val) ? val.FirstOrDefault() : null;
+    // SECURITY: Verified user_id extracted from Supabase JWT by SupabaseJwtMiddleware
+    private string? GetUserId() => HttpContext.Items["AuthUserId"] as string;
 
     private Task SendSSE(string type, object? payload)
         => SseHelpers.SendSSE(Response, type, payload);
@@ -53,6 +55,16 @@ public class ChronologyController : ControllerBase
     [EnableRateLimiting("valuation")]
     public async Task GenerateChronologyStream(List<IFormFile> files)
     {
+        // Credit enforcement — check before SSE headers
+        var creditCheck = await _creditService.ConsumeCreditAsync(GetUserId() ?? "", "chronology");
+        if (!creditCheck.Allowed)
+        {
+            Response.StatusCode = 403;
+            Response.ContentType = "application/json";
+            await Response.WriteAsync(System.Text.Json.JsonSerializer.Serialize(new { error = creditCheck.Message }));
+            return;
+        }
+
         SseHelpers.SetupSSEHeaders(Response);
         var ct = HttpContext.RequestAborted;
 

@@ -22,8 +22,8 @@ public class ClientController : ControllerBase
         _service = service;
     }
 
-    private string? GetUserId() =>
-        Request.Headers.TryGetValue("x-user-id", out var val) ? val.FirstOrDefault() : null;
+    // SECURITY: Verified user_id extracted from Supabase JWT by SupabaseJwtMiddleware
+    private string? GetUserId() => HttpContext.Items["AuthUserId"] as string;
 
     /// <summary>GET /api/client — list all clients for the current user.</summary>
     [HttpGet]

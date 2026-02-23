@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
+using Backend.Middleware;
 using Backend.Models;
 using Backend.Services;
 using Backend.Validators;
@@ -193,6 +194,11 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("Frontend");
+
+// ── Supabase JWT Authentication Middleware ──
+// Verifies Bearer token, extracts user_id from JWT "sub" claim.
+// In dev (no SUPABASE_JWT_SECRET): falls back to x-user-id header.
+app.UseMiddleware<SupabaseJwtMiddleware>();
 
 // ── API Key Authentication Middleware (optional, activate via API_KEY env var) ──
 var apiKey = Environment.GetEnvironmentVariable("API_KEY");

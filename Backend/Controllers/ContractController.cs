@@ -20,6 +20,7 @@ public class ContractController : ControllerBase
     private readonly PdfService _pdfService;
     private readonly SupabaseService _supabaseService;
     private readonly ChatClientProvider _clients;
+    private readonly CreditService _creditService;
     private readonly ILogger<ContractController> _logger;
 
     public ContractController(
@@ -27,18 +28,19 @@ public class ContractController : ControllerBase
         PdfService pdfService,
         SupabaseService supabaseService,
         ChatClientProvider clients,
+        CreditService creditService,
         ILogger<ContractController> logger)
     {
         _contractService = contractService;
         _pdfService = pdfService;
         _supabaseService = supabaseService;
         _clients = clients;
+        _creditService = creditService;
         _logger = logger;
     }
 
-    // SECURITY: Extract user_id from x-user-id header (set by frontend auth)
-    private string? GetUserId() =>
-        Request.Headers.TryGetValue("x-user-id", out var val) ? val.FirstOrDefault() : null;
+    // SECURITY: Verified user_id extracted from Supabase JWT by SupabaseJwtMiddleware
+    private string? GetUserId() => HttpContext.Items["AuthUserId"] as string;
 
     /// <summary>
     /// POST /api/contract/analyze-pdf — Upload a PDF contract for analysis.
@@ -48,6 +50,11 @@ public class ContractController : ControllerBase
     [RequestSizeLimit(10 * 1024 * 1024)] // 10 MB max
     public async Task<ActionResult<ContractAnalysisResult>> AnalyzePdf(IFormFile file)
     {
+        // Credit enforcement
+        var creditCheck = await _creditService.ConsumeCreditAsync(GetUserId() ?? "", "contract_analysis");
+        if (!creditCheck.Allowed)
+            return StatusCode(403, new { error = creditCheck.Message });
+
         if (file == null || file.Length == 0)
             return BadRequest(new { error = "Molimo uploadajte PDF datoteku." });
 

@@ -18,23 +18,25 @@ public class TranslationController : ControllerBase
     private readonly TranslationService _translationService;
     private readonly SupabaseService _supabaseService;
     private readonly ChatClientProvider _clients;
+    private readonly CreditService _creditService;
     private readonly ILogger<TranslationController> _logger;
 
     public TranslationController(
         TranslationService translationService,
         SupabaseService supabaseService,
         ChatClientProvider clients,
+        CreditService creditService,
         ILogger<TranslationController> logger)
     {
         _translationService = translationService;
         _supabaseService = supabaseService;
         _clients = clients;
+        _creditService = creditService;
         _logger = logger;
     }
 
-    // SECURITY: Extract user_id from x-user-id header (set by frontend auth)
-    private string? GetUserId() =>
-        Request.Headers.TryGetValue("x-user-id", out var val) ? val.FirstOrDefault() : null;
+    // SECURITY: Verified user_id extracted from Supabase JWT by SupabaseJwtMiddleware
+    private string? GetUserId() => HttpContext.Items["AuthUserId"] as string;
 
     private Task SendProgress(string stage, string status, string label, string? detail = null)
         => SseHelpers.SendProgress(Response, stage, status, label, detail);
@@ -47,6 +49,16 @@ public class TranslationController : ControllerBase
     [EnableRateLimiting("general")]
     public async Task TranslateStream([FromBody] TranslationRequest request)
     {
+        // Credit enforcement — check before SSE headers
+        var creditCheck = await _creditService.ConsumeCreditAsync(GetUserId() ?? "", "translation");
+        if (!creditCheck.Allowed)
+        {
+            Response.StatusCode = 403;
+            Response.ContentType = "application/json";
+            await Response.WriteAsync(System.Text.Json.JsonSerializer.Serialize(new { error = creditCheck.Message }));
+            return;
+        }
+
         SseHelpers.SetupSSEHeaders(Response);
 
         // ── Validation ──
