@@ -171,7 +171,7 @@ export default function WizardPage() {
   // ── Step 3 → Run valuation (SSE) ──
 
   const runValuation = async () => {
-    if (!draftResult) return;
+    if (!draftResult || isStreaming) return; // Guard: prevent double-submit
 
     setError(null);
     setResult(null);
@@ -243,7 +243,13 @@ export default function WizardPage() {
       if (buffer.trim()) processEvent(buffer.trim());
 
       setIsStreaming(false);
-      if (state.streamedResult) setViewState("RESULT");
+      if (state.streamedResult) {
+        setViewState("RESULT");
+      } else if (!error) {
+        setError("Procjena nije uspjela. Server nije vratio rezultat. Pokušajte ponovno.");
+        setViewState("INPUT");
+        setStep(3);
+      }
     } catch (e: unknown) {
       setIsStreaming(false);
       if (e instanceof DOMException && e.name === "AbortError") {

@@ -214,4 +214,5 @@ export const floorNumericValue = (f: string): number => {
   return ({ Subbasement: -2, SemiBasement: -1, Ground: 0, Attic: 100, Penthouse: 101 } as Record<string, number>)[f] ?? 0;
 };
 
-export const formatPrice = (n: number) => n.toLocaleString("hr-HR");
+export const formatPrice = (n: number | null | undefined) =>
+  n != null && Number.isFinite(n) ? n.toLocaleString("hr-HR") : "—";

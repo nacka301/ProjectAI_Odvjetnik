@@ -53,8 +53,14 @@ public class EvaluateController : ControllerBase
     // ══════════════════════════════════════════════════════════
     //  SECURITY: Extract user_id from x-user-id header (set by frontend auth)
     // ══════════════════════════════════════════════════════════
-    private string? GetUserId() =>
-        Request.Headers.TryGetValue("x-user-id", out var val) ? val.FirstOrDefault() : null;
+    private string? GetUserId()
+    {
+        if (!Request.Headers.TryGetValue("x-user-id", out var val)) return null;
+        var raw = val.FirstOrDefault();
+        // Validate UUID format to prevent header injection
+        if (string.IsNullOrWhiteSpace(raw) || raw.Length > 40) return null;
+        return Guid.TryParse(raw, out _) ? raw : null;
+    }
 
     // ══════════════════════════════════════════════════════════
     //  LOCATION OVERRIDE — use frontend-supplied city/neighborhood
@@ -529,12 +535,14 @@ public class EvaluateController : ControllerBase
                 double oldTotal = engineResult.TotalAdjustmentPercent;
                 engineResult.TotalAdjustmentPercent = Math.Round(newTotalAdj, 1);
 
-                // Recalculate price: start from AfterDiscountPerM2 (post-realization-gap)
-                // and apply the updated total adjustment
+                // Recalculate price: start from AfterDiscountPerM2 (post-realization-gap),
+                // apply MarketFactors.Combined (Fp+Ft), then the updated total adjustment.
+                // This mirrors the engine's math chain: Base × Gap × MarketFactors × (1+adj%).
                 double basePrice = engineResult.AfterDiscountPerM2 > 0
                     ? engineResult.AfterDiscountPerM2
                     : engineResult.MarketAverageAsking;
-                double newPricePerM2 = basePrice * (1 + newTotalAdj / 100.0);
+                double marketFactorMultiplier = engineResult.MarketFactors?.Combined ?? 1.0;
+                double newPricePerM2 = basePrice * marketFactorMultiplier * (1 + newTotalAdj / 100.0);
                 engineResult.CalculatedPricePerM2 = Math.Round(newPricePerM2, 0);
                 engineResult.EstimatedValueEur = (int)Math.Round(newPricePerM2 * property.SizeM2);
 
@@ -734,10 +742,11 @@ public class EvaluateController : ControllerBase
                     ModelTemperature = 0.10
                 });
             }
-            catch { /* non-critical */ }
+            catch (Exception auditEx) { _logger.LogWarning(auditEx, "Failed to save audit log for valuation"); }
         }
-        catch
+        catch (Exception saveEx)
         {
+            _logger.LogWarning(saveEx, "Failed to save evaluation to Supabase");
             await SendProgress("saving", "skipped", "Spremanje preskočeno", "Supabase nedostupan");
         }
 

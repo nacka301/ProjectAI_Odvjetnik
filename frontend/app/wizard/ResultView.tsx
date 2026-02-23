@@ -49,6 +49,7 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
   const [resultTab, setResultTab] = useState<ResultTab>("overview");
   const [copied, setCopied] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfError, setPdfError] = useState(false);
   const [showMethodology, setShowMethodology] = useState(false);
 
   const copyToClipboard = async (text: string) => {
@@ -72,7 +73,8 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
         areaM2,
       });
     } catch {
-      // PDF generation failed — non-critical
+      setPdfError(true);
+      setTimeout(() => setPdfError(false), 4000);
     } finally {
       setPdfLoading(false);
     }
@@ -719,7 +721,7 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
         </button>
         <button onClick={handlePdfExport} disabled={pdfLoading}
           className="rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50 transition flex items-center gap-2">
-          <FileDown className="h-4 w-4" /> {pdfLoading ? "Generiram PDF..." : "Preuzmi PDF"}
+          <FileDown className="h-4 w-4" /> {pdfLoading ? "Generiram PDF..." : pdfError ? "PDF greška!" : "Preuzmi PDF"}
         </button>
         <button onClick={() => copyToClipboard(
           `Procjena: ${formatPrice(result.estimated_value_eur)} €\n` +
