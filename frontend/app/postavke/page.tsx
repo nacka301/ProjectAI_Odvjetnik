@@ -165,6 +165,7 @@ export default function PostavkePage() {
       setRecoveryCodes(data.recovery_codes ?? []);
       setTwoFAEnabled(true);
       setSuccess("Dvofaktorska autentifikacija je uspješno aktivirana!");
+      setSetupData(null);
       setStep("recovery");
     } catch {
       setError("Greška pri provjeri koda. Pokušajte ponovo.");
@@ -672,11 +673,10 @@ export default function PostavkePage() {
                 {/* Done button */}
                 <button
                   onClick={() => { setStep("idle"); setRecoveryCodes([]); setVerifyToken(""); setSetupData(null); }}
-                  className="flex items-center gap-2 text-sm font-bold py-3 px-8 rounded-xl transition-all duration-200"
+                  className="flex items-center gap-2 text-sm font-bold py-3 px-8 rounded-xl transition-colors duration-150 hover:brightness-110"
                   style={{
-                    background: "linear-gradient(135deg, var(--auth-gold) 0%, #B8963F 100%)",
-                    color: "var(--auth-navy-dark)",
-                    boxShadow: "0 4px 20px rgba(201, 168, 76, 0.3)",
+                    background: "#B8963F",
+                    color: "#0F1A2E",
                   }}
                 >
                   <Check className="h-4 w-4" />
