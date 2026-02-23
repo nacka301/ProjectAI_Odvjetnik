@@ -14,8 +14,7 @@ import {
   ArrowRight,
   X,
   Info,
-  Upload,
-  FileText,
+
   Sparkles,
   CircleHelp,
   Eye,
@@ -290,7 +289,6 @@ export default function Dashboard() {
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [bannerDismissed, setBannerDismissed] = useState(false);
-  const [dragOver, setDragOver] = useState(false);
   const [showTour, setShowTour] = useState(false);
   const [tourStep, setTourStep] = useState(0);
 
@@ -358,20 +356,6 @@ export default function Dashboard() {
     return () => clearTimeout(timer);
   }, [tourTargetId]);
 
-  // Drag & drop handlers (visual only — routing to the right module)
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(true);
-  }, []);
-  const handleDragLeave = useCallback(() => setDragOver(false), []);
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
-    // If files are dropped, route to ZK analysis (the doc analysis tool)
-    if (e.dataTransfer.files.length > 0) {
-      router.push("/zk-procjena");
-    }
-  }, [router]);
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
@@ -531,36 +515,6 @@ export default function Dashboard() {
           </div>
         </section>
 
-        {/* ═══════════ 3. QUICK DROP ZONE ═══════════ */}
-        <section>
-          <div
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            className={`relative rounded-xl border-2 border-dashed transition-all duration-200 px-6 py-10 text-center ${
-              dragOver
-                ? "border-blue-400 bg-blue-50/50 shadow-inner"
-                : "border-slate-300 bg-white hover:border-slate-400 hover:bg-slate-50/50"
-            }`}
-          >
-            <div className="flex flex-col items-center gap-3">
-              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition ${
-                dragOver ? "bg-blue-100" : "bg-slate-100"
-              }`}>
-                <Upload className={`h-6 w-6 transition ${dragOver ? "text-blue-600" : "text-slate-400"}`} />
-              </div>
-              <div>
-                <p className={`text-sm font-medium transition ${dragOver ? "text-blue-700" : "text-slate-600"}`}>
-                  Povucite bilo koji dokument ovdje za brzu analizu...
-                </p>
-                <p className="text-xs text-slate-400 mt-1 flex items-center justify-center gap-1.5">
-                  <FileText className="h-3 w-3" />
-                  Podržano: PDF, Word, JPG (OCR uključen)
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
 
         {/* ═══════════ 4. MAIN CONTENT: Case Feed + Legal Feed ═══════════ */}
         <section className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6">
