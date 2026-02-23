@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import AutoLogoutProvider from "@/components/AutoLogoutProvider";
-import { SecurityFooter } from "@/components/TrustComponents";
+import { ConditionalSecurityFooter } from "@/components/ConditionalFooter";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -49,7 +49,7 @@ export default function RootLayout({
       >
         <AutoLogoutProvider>
           <main className="flex-1">{children}</main>
-          <SecurityFooter />
+          <ConditionalSecurityFooter />
         </AutoLogoutProvider>
       </body>
     </html>

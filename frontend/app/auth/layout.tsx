@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <div
-      className="min-h-screen flex flex-col items-center justify-center px-4 py-10 sm:py-16"
+      className="h-screen flex flex-col items-center justify-center px-4 py-10 sm:py-16 overflow-y-auto"
       style={{ background: "linear-gradient(160deg, #0F1A2E 0%, #1B2A4A 40%, #162240 100%)" }}
     >
       {/* Subtle gold-tinted decorative elements */}
