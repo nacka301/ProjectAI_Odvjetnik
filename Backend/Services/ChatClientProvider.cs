@@ -36,7 +36,17 @@ internal sealed class PrivacyHeaderPolicy : PipelinePolicy
         message.Request.Headers.Set("X-No-Log", "true");
         message.Request.Headers.Set("X-No-Train", "true");
         message.Request.Headers.Set("HTTP-Referer", "https://pravotek.hr");
-        message.Request.Headers.Set("X-Title", "PravoTek — Pravna Inteligencija");
+        message.Request.Headers.Set("X-Title", SanitizeAscii("PravoTek — Pravna Inteligencija"));
+    }
+
+    /// <summary>
+    /// Strips non-ASCII characters from a string so it is safe for HTTP headers.
+    /// Croatian diacritics (č, ć, ž, š, đ) and special Unicode (em-dash, etc.)
+    /// would cause "Request headers must contain only ASCII characters" errors.
+    /// </summary>
+    private static string SanitizeAscii(string value)
+    {
+        return System.Text.RegularExpressions.Regex.Replace(value, @"[^\x20-\x7E]+", "");
     }
 }
 
