@@ -732,3 +732,107 @@ CREATE TRIGGER user_profiles_updated_at
     BEFORE UPDATE ON user_profiles
     FOR EACH ROW
     EXECUTE FUNCTION update_user_profiles_updated_at();
+
+-- ========================================
+-- V46: Enterprise Settings — Law Firms, Profile Enhancement, Subscriptions
+-- Multi-tenant structure for law firm management.
+-- Each user belongs to a law_firm. Each firm has one subscription.
+-- ========================================
+
+-- ── Law Firms table ──
+CREATE TABLE IF NOT EXISTS law_firms (
+    id              UUID            DEFAULT uuid_generate_v4() PRIMARY KEY,
+    created_at      TIMESTAMPTZ     DEFAULT now() NOT NULL,
+    updated_at      TIMESTAMPTZ     DEFAULT now() NOT NULL,
+    name            TEXT            NOT NULL DEFAULT '',       -- "Odvjetnički ured Horvat"
+    oib             TEXT,                                      -- 11-digit VAT number
+    address         TEXT,                                      -- Full address
+    iban            TEXT                                       -- Bank account
+);
+
+CREATE INDEX IF NOT EXISTS idx_law_firms_oib ON law_firms (oib) WHERE oib IS NOT NULL;
+
+ALTER TABLE law_firms ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "service_role_full_access" ON law_firms;
+CREATE POLICY "service_role_full_access" ON law_firms
+    FOR ALL USING (auth.role() = 'service_role');
+
+-- Users can read/update only the firm they belong to
+DROP POLICY IF EXISTS "users_own_firm" ON law_firms;
+CREATE POLICY "users_own_firm" ON law_firms
+    FOR ALL USING (
+        id IN (SELECT law_firm_id FROM user_profiles WHERE user_id = auth.uid())
+    )
+    WITH CHECK (
+        id IN (SELECT law_firm_id FROM user_profiles WHERE user_id = auth.uid())
+    );
+
+-- Auto-update updated_at trigger
+CREATE OR REPLACE FUNCTION update_law_firms_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS law_firms_updated_at ON law_firms;
+CREATE TRIGGER law_firms_updated_at
+    BEFORE UPDATE ON law_firms
+    FOR EACH ROW
+    EXECUTE FUNCTION update_law_firms_updated_at();
+
+-- ── Extend user_profiles with firm link + personal fields ──
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS law_firm_id UUID REFERENCES law_firms(id) ON DELETE SET NULL;
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS full_name TEXT NOT NULL DEFAULT '';
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS phone_number TEXT;
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'admin';
+
+CREATE INDEX IF NOT EXISTS idx_user_profiles_law_firm ON user_profiles (law_firm_id) WHERE law_firm_id IS NOT NULL;
+
+-- ── Subscriptions table ──
+CREATE TABLE IF NOT EXISTS subscriptions (
+    id              UUID            DEFAULT uuid_generate_v4() PRIMARY KEY,
+    created_at      TIMESTAMPTZ     DEFAULT now() NOT NULL,
+    updated_at      TIMESTAMPTZ     DEFAULT now() NOT NULL,
+    law_firm_id     UUID            NOT NULL REFERENCES law_firms(id) ON DELETE CASCADE,
+    plan_name       TEXT            NOT NULL DEFAULT 'Pro',       -- 'Starter', 'Pro', 'Enterprise'
+    status          TEXT            NOT NULL DEFAULT 'active',    -- 'active', 'trial', 'canceled', 'expired'
+    valid_until     TIMESTAMPTZ     NOT NULL DEFAULT (now() + interval '1 year')
+);
+
+CREATE INDEX IF NOT EXISTS idx_subscriptions_law_firm ON subscriptions (law_firm_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions (status);
+
+-- One active subscription per firm
+CREATE UNIQUE INDEX IF NOT EXISTS idx_subscriptions_active_firm
+    ON subscriptions (law_firm_id) WHERE status IN ('active', 'trial');
+
+ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "service_role_full_access" ON subscriptions;
+CREATE POLICY "service_role_full_access" ON subscriptions
+    FOR ALL USING (auth.role() = 'service_role');
+
+-- Users can read their own firm's subscription
+DROP POLICY IF EXISTS "users_own_subscription" ON subscriptions;
+CREATE POLICY "users_own_subscription" ON subscriptions
+    FOR SELECT USING (
+        law_firm_id IN (SELECT law_firm_id FROM user_profiles WHERE user_id = auth.uid())
+    );
+
+-- Auto-update updated_at trigger
+CREATE OR REPLACE FUNCTION update_subscriptions_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS subscriptions_updated_at ON subscriptions;
+CREATE TRIGGER subscriptions_updated_at
+    BEFORE UPDATE ON subscriptions
+    FOR EACH ROW
+    EXECUTE FUNCTION update_subscriptions_updated_at();

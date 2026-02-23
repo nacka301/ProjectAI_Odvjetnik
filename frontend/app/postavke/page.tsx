@@ -27,6 +27,9 @@ import {
 import { QRCodeSVG } from "qrcode.react";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
 import { API_BASE } from "@/lib/api";
+import PersonalProfileForm from "@/components/settings/PersonalProfileForm";
+import LawFirmForm from "@/components/settings/LawFirmForm";
+import SubscriptionView from "@/components/settings/SubscriptionView";
 
 // ── Types ──
 interface SetupResponse {
@@ -675,16 +678,22 @@ export default function PostavkePage() {
               )}
 
               {/* ═══ TAB: Osobni profil ═══ */}
-              {activeTab === "profil" && renderPlaceholder("Osobni profil", "Uređivanje osobnih podataka, promjena lozinke i postavke obavijesti.")}
+              {activeTab === "profil" && userId && (
+                <PersonalProfileForm userId={userId} userEmail={userEmail} />
+              )}
 
               {/* ═══ TAB: Odvjetnički ured ═══ */}
-              {activeTab === "ured" && renderPlaceholder("Odvjetnički ured", "Podaci o uredu, OIB, adresa sjedišta i kontakt informacije.")}
+              {activeTab === "ured" && userId && (
+                <LawFirmForm userId={userId} />
+              )}
 
               {/* ═══ TAB: Upravljanje timom ═══ */}
               {activeTab === "tim" && renderPlaceholder("Upravljanje timom", "Pozovite kolege, dodijelite uloge i upravljajte pristupom.")}
 
               {/* ═══ TAB: Pretplata ═══ */}
-              {activeTab === "pretplata" && renderPlaceholder("Pretplata i naplata", "Upravljanje planom, fakture i povijest plaćanja.")}
+              {activeTab === "pretplata" && userId && (
+                <SubscriptionView userId={userId} />
+              )}
             </div>
 
             {/* Footer compliance */}

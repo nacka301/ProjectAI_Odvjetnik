@@ -13,8 +13,10 @@ import {
   X,
   Send,
   Shield,
+  Building2,
 } from "lucide-react";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
+import { API_BASE } from "@/lib/api";
 import {
   isEmailValid,
   isPasswordValid,
@@ -42,6 +44,10 @@ export default function RegisterPage() {
   const [showPw, setShowPw] = useState(false);
   const [agreed, setAgreed] = useState(false);
 
+  // ── Firm fields ──
+  const [firmName, setFirmName] = useState("");
+  const [firmOib, setFirmOib] = useState("");
+
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,6 +65,14 @@ export default function RegisterPage() {
       setError("Unesite ime i prezime.");
       return;
     }
+    if (!firmName.trim()) {
+      setError("Unesite naziv odvjetničkog ureda.");
+      return;
+    }
+    if (firmOib.trim() && (firmOib.trim().length !== 11 || !/^\d{11}$/.test(firmOib.trim()))) {
+      setError("OIB mora imati točno 11 znamenki.");
+      return;
+    }
     if (!isEmailValid(email)) {
       setError("Unesite ispravnu email adresu.");
       return;
@@ -74,7 +88,7 @@ export default function RegisterPage() {
 
     setLoading(true);
     try {
-      const { error: authError } = await supabase.auth.signUp({
+      const { data, error: authError } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -90,6 +104,26 @@ export default function RegisterPage() {
           setError(authError.message);
         }
         return;
+      }
+
+      // Register law firm + profile in backend (fire-and-forget, no block on signup)
+      if (data?.user?.id) {
+        const apiHeaders: Record<string, string> = { "Content-Type": "application/json" };
+        const apiKey = process.env.NEXT_PUBLIC_API_KEY;
+        if (apiKey) apiHeaders["X-API-Key"] = apiKey;
+
+        fetch(`${API_BASE}/api/settings/register-firm`, {
+          method: "POST",
+          headers: apiHeaders,
+          body: JSON.stringify({
+            user_id: data.user.id,
+            full_name: name.trim(),
+            firm_name: firmName.trim(),
+            firm_oib: firmOib.trim() || null,
+          }),
+        }).catch(() => {
+          // Non-blocking — firm can be set up later in Settings
+        });
       }
 
       setSuccess(true);
@@ -256,6 +290,50 @@ export default function RegisterPage() {
                 className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 outline-none transition disabled:bg-slate-50 disabled:text-slate-400"
                 style={{ "--tw-ring-color": "var(--auth-gold)" } as React.CSSProperties}
               />
+            </div>
+
+            {/* Law Firm Section */}
+            <div className="rounded-xl p-4 space-y-3" style={{ background: "var(--auth-gold-muted)" }}>
+              <div className="flex items-center gap-2 mb-1">
+                <Building2 className="h-3.5 w-3.5" style={{ color: "var(--auth-gold)" }} />
+                <span className="text-xs font-semibold text-slate-600">Odvjetnički ured</span>
+              </div>
+
+              {/* Firm Name */}
+              <div>
+                <label htmlFor="firmName" className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Naziv ureda <span className="text-red-400">*</span>
+                </label>
+                <input
+                  id="firmName"
+                  type="text"
+                  value={firmName}
+                  onChange={(e) => setFirmName(e.target.value)}
+                  disabled={isDisabled}
+                  placeholder="Odvjetnički ured Horvat"
+                  className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 outline-none transition disabled:bg-slate-50 disabled:text-slate-400 bg-white"
+                  style={{ "--tw-ring-color": "var(--auth-gold)" } as React.CSSProperties}
+                />
+              </div>
+
+              {/* Firm OIB */}
+              <div>
+                <label htmlFor="firmOib" className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  OIB ureda <span className="text-slate-400 font-normal">(opcionalno)</span>
+                </label>
+                <input
+                  id="firmOib"
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={11}
+                  value={firmOib}
+                  onChange={(e) => setFirmOib(e.target.value.replace(/\D/g, "").slice(0, 11))}
+                  disabled={isDisabled}
+                  placeholder="12345678901"
+                  className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 outline-none transition disabled:bg-slate-50 disabled:text-slate-400 bg-white"
+                  style={{ "--tw-ring-color": "var(--auth-gold)" } as React.CSSProperties}
+                />
+              </div>
             </div>
 
             {/* Email */}
