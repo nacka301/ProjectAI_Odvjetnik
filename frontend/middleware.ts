@@ -40,7 +40,14 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(homeUrl);
   }
 
-  return supabaseResponse;
+  // ── Inject cache-busting headers on every HTML response ──
+  // Prevents browsers from serving stale pages after a deploy.
+  // _next/static/* is content-hashed and stays long-cached by default.
+  const response = supabaseResponse;
+  response.headers.set("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0");
+  response.headers.set("Pragma", "no-cache");
+  response.headers.set("Expires", "0");
+  return response;
 }
 
 export const config = {

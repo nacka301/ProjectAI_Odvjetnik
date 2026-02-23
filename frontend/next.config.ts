@@ -2,12 +2,36 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   // ═══════════════════════════════════════════════════════════
-  //  SECURITY HEADERS — Enterprise (Banking) Grade
-  //  Protects against XSS, clickjacking, MIME sniffing,
+  //  SECURITY & CACHE-CONTROL HEADERS
+  //
+  //  Security: Protects against XSS, clickjacking, MIME sniffing,
   //  information leakage, and enforces HTTPS.
+  //
+  //  Cache-busting: Prevents browsers from serving stale HTML
+  //  after a new deploy. Static assets (_next/static/*) are
+  //  content-hashed by Next.js and remain long-cached.
   // ═══════════════════════════════════════════════════════════
   async headers() {
     return [
+      // ── HTML pages: NEVER cache ──
+      {
+        source: "/((?!_next/static|_next/image|favicon\\.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff2?)$).*)",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "no-cache, no-store, must-revalidate, max-age=0",
+          },
+          {
+            key: "Pragma",
+            value: "no-cache",
+          },
+          {
+            key: "Expires",
+            value: "0",
+          },
+        ],
+      },
+      // ── All routes: Security headers ──
       {
         source: "/(.*)",
         headers: [

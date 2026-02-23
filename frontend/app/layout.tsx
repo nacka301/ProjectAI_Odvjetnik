@@ -23,6 +23,12 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: "PravoTek — Pravna inteligencija za odvjetnike",
   description: "PravoTek — platforma za pravnu analitiku: procjena nekretnina, analiza ugovora, ZK izvadci",
+  // Anti-cache meta tags for legacy browsers & in-app webviews (WhatsApp, Viber)
+  other: {
+    "Cache-Control": "no-cache, no-store, must-revalidate",
+    Pragma: "no-cache",
+    Expires: "0",
+  },
 };
 
 export default function RootLayout({
