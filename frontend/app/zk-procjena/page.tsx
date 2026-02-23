@@ -1111,7 +1111,7 @@ export default function ZkProcjenaPage() {
                   }`} />
                   <div className="flex-1">
                     <h3 className="text-lg font-bold text-gray-800">
-                      🛡️ Matrica rizika tereta
+                      Matrica rizika tereta
                     </h3>
                     <p className="text-xs text-gray-500">OCR 2.0 — napredna analiza svih tereta i ograničenja</p>
                   </div>

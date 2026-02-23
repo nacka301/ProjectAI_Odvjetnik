@@ -20,11 +20,11 @@ export function PrivacyBanner() {
     <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 px-4 py-3 mb-4">
       <Shield className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
       <div className="text-sm leading-relaxed">
-        <span className="font-semibold text-emerald-800">Vaši dokumenti su 100% privatni.</span>{" "}
+        <span className="font-semibold text-emerald-800">Vaši dokumenti su zaštićeni.</span>{" "}
         <span className="text-emerald-700">
           Podaci se kriptiraju tijekom prijenosa (TLS 1.3) i <strong>ne koriste se za treniranje
-          umjetne inteligencije</strong>. Nijedan čovjek niti sustav ne pohranjuje trajno vaše tekstove.
-          Obradu štiti odvjetnička tajna sukladno čl. 13. Zakona o odvjetništvu.
+          modela strojnog učenja</strong>. Tekstovi se ne pohranjuju trajno na vanjskim servisima.
+          Obrada je sukladna odvjetničkoj tajni (čl. 13. Zakona o odvjetništvu) i Uredbi (EU) 2016/679 (GDPR).
         </span>
       </div>
     </div>
@@ -39,14 +39,14 @@ export function LoginTrustText() {
     <div className="flex items-center justify-center gap-2 mt-4 text-xs text-slate-400">
       <Lock className="h-3.5 w-3.5 text-slate-400" />
       <span>
-        Enkripcija vojne razine. Vaši podaci su zaštićeni odvjetničkom tajnom i sukladni s GDPR-om.
+        Kriptirani prijenos podataka (TLS 1.3). Obrada sukladna GDPR-u i odvjetničkoj tajni.
       </span>
     </div>
   );
 }
 
 // ── 3. FOOTER TRUST BADGES — Bottom of every page ──
-// Professional SVG-style badges: AES-256, GDPR, Zero-Knowledge
+// Professional SVG-style badges: AES-256, GDPR, Zero-Data Retention
 
 export function TrustBadges() {
   return (
@@ -91,7 +91,7 @@ export function TrustBadges() {
       {/* Divider */}
       <div className="h-3 w-px bg-slate-200" />
 
-      {/* Zero-Knowledge */}
+      {/* Zero-Data Retention */}
       <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
         <svg
           className="h-4 w-4 text-slate-400"
@@ -106,7 +106,7 @@ export function TrustBadges() {
           <path d="M12 6v6l4 2" />
           <line x1="4" y1="4" x2="20" y2="20" />
         </svg>
-        <span>Zero-Knowledge</span>
+        <span>Zero-Data Retention</span>
       </div>
     </div>
   );
