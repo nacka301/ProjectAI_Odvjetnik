@@ -157,7 +157,7 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
           {/* Stats Grid */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             <MiniStat icon={<Search className="h-4 w-4 text-blue-500" />} label="Pronađeno" value={result.total_listings_found ?? 0} />
-            <MiniStat icon={<Check className="h-4 w-4 text-green-500" />} label="Korištenih" value={result.usable_price_points ?? 0} />
+            <MiniStat icon={<Check className="h-4 w-4 text-green-500" />} label="Korištenih" value={result.comparison_table?.length ?? result.usable_price_points ?? 0} />
             <MiniStat icon={<Hash className="h-4 w-4 text-red-500" />} label="Outlieri" value={result.outliers_removed ?? 0} />
             <MiniStat icon={<Percent className="h-4 w-4 text-orange-500" />} label="Diskont traž→real" value={`${result.realization_discount_percent?.toFixed(1) ?? "15"}%`} />
             <MiniStat icon={<Target className="h-4 w-4 text-purple-500" />} label="€/m² arit. sred." value={result.elaborat_stats?.arithmetic_mean_per_m2 ? formatPrice(Math.round(result.elaborat_stats.arithmetic_mean_per_m2)) : (result.market_average_asking ? formatPrice(Math.round(result.market_average_asking)) : "—")} />
@@ -438,18 +438,25 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
                   </div>
                 )}
 
-                {/* Final: Total */}
-                <div className="flex items-center justify-between p-3 rounded-lg bg-blue-100 border-2 border-blue-300 mt-1">
-                  <div className="flex items-center gap-2">
-                    <ArrowRight className="h-5 w-5 text-blue-700" />
-                    <span className="text-sm font-bold text-blue-900">
-                      × {Math.max(areaM2, 1)} m² = Konačna vrijednost
-                    </span>
-                  </div>
-                  <span className="text-lg font-extrabold text-blue-900">
-                    {formatPrice(result.estimated_value_eur)} €
-                  </span>
-                </div>
+                {/* Final: Total — show effective €/m² so multiplication is visually correct */}
+                {(() => {
+                  const effectivePerM2 = result.calculated_price_per_m2 && result.calculated_price_per_m2 > 0
+                    ? result.calculated_price_per_m2
+                    : result.estimated_value_eur / Math.max(areaM2, 1);
+                  return (
+                    <div className="flex items-center justify-between p-3 rounded-lg bg-blue-100 border-2 border-blue-300 mt-1">
+                      <div className="flex items-center gap-2">
+                        <ArrowRight className="h-5 w-5 text-blue-700" />
+                        <span className="text-sm font-bold text-blue-900">
+                          {formatPrice(Math.round(effectivePerM2))} €/m² × {Math.max(areaM2, 1)} m²
+                        </span>
+                      </div>
+                      <span className="text-lg font-extrabold text-blue-900">
+                        {formatPrice(result.estimated_value_eur)} €
+                      </span>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           )}

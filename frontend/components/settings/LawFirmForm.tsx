@@ -27,7 +27,10 @@ export default function LawFirmForm({ userId }: Props) {
 
   // ── Fetch firm ──
   useEffect(() => {
-    if (!userId) return;
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
     (async () => {
       try {
         const res = await fetch(
@@ -36,13 +39,21 @@ export default function LawFirmForm({ userId }: Props) {
         );
         if (res.ok) {
           const data = await res.json();
-          setName(data.name || "");
-          setOib(data.oib || "");
-          setAddress(data.address || "");
-          setIban(data.iban || "");
+          if (data && typeof data === "object") {
+            setName(data.name || "");
+            setOib(data.oib || "");
+            setAddress(data.address || "");
+            setIban(data.iban || "");
+          }
+          // null / empty → fields stay blank = "create" mode
+        } else if (res.status !== 404) {
+          console.error("Firm fetch failed:", res.status);
+          setError("Greška pri dohvaćanju podataka o uredu.");
         }
-      } catch {
-        // silent
+        // 404 = firm not set up yet → show empty form
+      } catch (err) {
+        console.error("Firm fetch error:", err);
+        setError("Greška pri učitavanju podataka o uredu.");
       } finally {
         setLoading(false);
       }

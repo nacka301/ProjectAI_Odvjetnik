@@ -78,6 +78,16 @@ interface AutoValuationResult {
   math_confidence_score?: number;
   math_confidence_level?: string;
   math_confidence_explanation?: string;
+  // V39: Elaborat-style output
+  elaborat_stats?: {
+    arithmetic_mean_per_m2: number;
+    std_dev_per_m2: number;
+    relative_std_dev_percent: number;
+    deviations_percent: number[];
+    two_sigma_test_passed: boolean;
+    two_sigma_excluded: number;
+    explanation: string;
+  };
 }
 
 interface UsedComparableV4 {
@@ -716,13 +726,16 @@ export default function ValuationPage() {
                     <p className="text-lg font-bold text-gray-900">
                       {(result.std_dev_per_m2 ?? 0).toLocaleString("hr-HR")} €/m²
                     </p>
-                    <p className={`text-xs font-medium ${
-                      (result.coefficient_of_variation ?? 0) < 15 ? "text-green-600"
-                      : (result.coefficient_of_variation ?? 0) < 30 ? "text-yellow-600"
-                      : "text-red-600"
-                    }`}>
-                      CV: {result.coefficient_of_variation ?? 0}%
-                    </p>
+                    {(() => {
+                      const cv = result.elaborat_stats?.relative_std_dev_percent ?? result.coefficient_of_variation ?? 0;
+                      return (
+                        <p className={`text-xs font-medium ${
+                          cv < 15 ? "text-green-600" : cv < 30 ? "text-yellow-600" : "text-red-600"
+                        }`}>
+                          CV: {typeof cv === 'number' ? cv.toFixed(1) : cv}%
+                        </p>
+                      );
+                    })()}
                   </div>
                 </div>
                 {/* Realization Gap Reasoning */}

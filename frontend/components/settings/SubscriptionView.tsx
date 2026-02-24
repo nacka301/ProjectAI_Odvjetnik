@@ -46,7 +46,10 @@ export default function SubscriptionView({ userId }: Props) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!userId) return;
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
     (async () => {
       try {
         const res = await fetch(
@@ -56,8 +59,8 @@ export default function SubscriptionView({ userId }: Props) {
         if (res.ok) {
           setSub(await res.json());
         }
-      } catch {
-        // silent
+      } catch (err) {
+        console.error("Subscription fetch error:", err);
       } finally {
         setLoading(false);
       }

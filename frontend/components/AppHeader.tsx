@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Scale, Clock, ShieldAlert, Shield, LogOut, Search } from "lucide-react";
+import { Scale, Clock, ShieldAlert, Shield, LogOut, Search, Zap } from "lucide-react";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
+import { useUserId } from "@/lib/useUserId";
+import { useCredits } from "@/lib/useCredits";
 import React from "react";
 
 interface NavItem {
@@ -26,6 +28,8 @@ interface AppHeaderProps {
 export default function AppHeader({ extraStart }: AppHeaderProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const userId = useUserId();
+  const credits = useCredits(userId);
 
   return (
     <header className="bg-slate-900 text-white">
@@ -80,6 +84,31 @@ export default function AppHeader({ extraStart }: AppHeaderProps) {
               </Link>
             );
           })}
+
+          <div className="h-4 w-px bg-slate-700 hidden sm:block" />
+
+          {/* Credit badge */}
+          {!credits.loading && credits.total > 0 && (
+            <Link
+              href="/postavke"
+              className="hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1 text-xs transition hover:border-slate-500"
+              title={`${credits.remaining} / ${credits.total} kredita preostalo`}
+            >
+              <Zap className="h-3 w-3 text-amber-400" />
+              <span className="tabular-nums text-white font-medium">{credits.remaining}</span>
+              <span className="text-slate-500">/ {credits.total}</span>
+            </Link>
+          )}
+          {!credits.loading && credits.total === 0 && !credits.error && userId && (
+            <Link
+              href="/postavke"
+              className="hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1 text-xs text-slate-400 transition hover:border-slate-500 hover:text-white"
+              title="Krediti"
+            >
+              <Zap className="h-3 w-3" />
+              <span>0 kredita</span>
+            </Link>
+          )}
 
           <div className="h-4 w-px bg-slate-700 hidden sm:block" />
 

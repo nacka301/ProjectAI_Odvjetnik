@@ -26,7 +26,10 @@ export default function PersonalProfileForm({ userId, userEmail }: Props) {
 
   // ── Fetch profile ──
   useEffect(() => {
-    if (!userId) return;
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
     (async () => {
       try {
         const res = await fetch(
@@ -37,9 +40,13 @@ export default function PersonalProfileForm({ userId, userEmail }: Props) {
           const data = await res.json();
           setFullName(data.full_name || "");
           setPhone(data.phone_number || "");
+        } else if (res.status !== 404) {
+          console.error("Profile fetch failed:", res.status);
+          setError("Greška pri dohvaćanju profila.");
         }
-      } catch {
-        // silent — will show empty form
+      } catch (err) {
+        console.error("Profile fetch error:", err);
+        setError("Greška pri učitavanju profila.");
       } finally {
         setLoading(false);
       }

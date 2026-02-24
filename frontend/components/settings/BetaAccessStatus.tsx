@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Zap, AlertTriangle, Mail } from "lucide-react";
+import { Loader2, Zap, AlertTriangle, Mail, RefreshCw } from "lucide-react";
 import { API_BASE } from "@/lib/api";
 
 function apiHeaders(): Record<string, string> {
@@ -38,34 +38,56 @@ function getModuleLabel(name: string): string {
   return MODULE_LABELS[name] || name.replace(/_/g, " ");
 }
 
+/** Safe number accessor — returns 0 for null/undefined/NaN */
+function safeNum(val: unknown): number {
+  if (val == null) return 0;
+  const n = Number(val);
+  return Number.isFinite(n) ? n : 0;
+}
+
 export default function BetaAccessStatus({ userId }: Props) {
   const [usage, setUsage] = useState<UsageRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchCredits = async () => {
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
+    setError(null);
+    setLoading(true);
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/settings/credits?userId=${encodeURIComponent(userId)}`,
+        { headers: apiHeaders() }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        console.log("Token Data Received:", data);
+        setUsage(Array.isArray(data) ? data : []);
+      } else {
+        console.error("Credits fetch failed:", res.status, res.statusText);
+        setError(`Greška pri dohvaćanju kredita (${res.status}).`);
+      }
+    } catch (err) {
+      console.error("Credits fetch error:", err);
+      setError("Greška pri učitavanju kredita. Provjerite mrežnu vezu.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    if (!userId) return;
-    (async () => {
-      try {
-        const res = await fetch(
-          `${API_BASE}/api/settings/credits?userId=${encodeURIComponent(userId)}`,
-          { headers: apiHeaders() }
-        );
-        if (res.ok) {
-          const data = await res.json();
-          setUsage(Array.isArray(data) ? data : []);
-        }
-      } catch {
-        // silent
-      } finally {
-        setLoading(false);
-      }
-    })();
+    fetchCredits();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
         <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+        <span className="ml-2 text-sm text-slate-400">Učitavanje kredita...</span>
       </div>
     );
   }
@@ -80,7 +102,7 @@ export default function BetaAccessStatus({ userId }: Props) {
         >
           <Zap className="h-5 w-5 text-white" />
         </div>
-        <div>
+        <div className="flex-1">
           <h2 className="font-[family-name:var(--font-playfair)] text-lg font-semibold text-slate-900">
             Status i Krediti
           </h2>
@@ -88,10 +110,34 @@ export default function BetaAccessStatus({ userId }: Props) {
             Pregled potrošnje i limita Beta programa
           </p>
         </div>
+        {/* Refresh button */}
+        <button
+          onClick={fetchCredits}
+          className="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+          title="Osvježi podatke"
+        >
+          <RefreshCw className="h-4 w-4" />
+        </button>
       </div>
 
       {/* Content */}
       <div className="px-6 sm:px-8 py-6 space-y-6">
+        {/* ── Error state ── */}
+        {error && (
+          <div className="rounded-lg p-4 bg-red-50 border border-red-200">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-red-500 shrink-0" />
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+            <button
+              onClick={fetchCredits}
+              className="mt-2 text-xs font-medium text-red-600 hover:text-red-800 underline"
+            >
+              Pokušaj ponovo
+            </button>
+          </div>
+        )}
+
         {/* ── Early Access Badge ── */}
         <div className="rounded-lg p-5 border" style={{ borderColor: "#C9A84C33", background: "#FEFCF6" }}>
           <div className="flex items-center gap-3">
@@ -116,6 +162,30 @@ export default function BetaAccessStatus({ userId }: Props) {
           </div>
         </div>
 
+        {/* ── Total Credit Summary ── */}
+        {usage.length > 0 && (
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 text-center">
+              <div className="text-lg font-bold text-slate-900 tabular-nums">
+                {usage.reduce((sum, r) => sum + safeNum(r.max_credits), 0)}
+              </div>
+              <div className="text-[10px] text-slate-400 uppercase tracking-wider mt-0.5">Ukupno</div>
+            </div>
+            <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 text-center">
+              <div className="text-lg font-bold tabular-nums" style={{ color: "#1B2A4A" }}>
+                {usage.reduce((sum, r) => sum + safeNum(r.used_credits), 0)}
+              </div>
+              <div className="text-[10px] text-slate-400 uppercase tracking-wider mt-0.5">Potrošeno</div>
+            </div>
+            <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-center">
+              <div className="text-lg font-bold text-emerald-700 tabular-nums">
+                {usage.reduce((sum, r) => sum + Math.max(0, safeNum(r.max_credits) - safeNum(r.used_credits)), 0)}
+              </div>
+              <div className="text-[10px] text-emerald-600 uppercase tracking-wider mt-0.5">Preostalo</div>
+            </div>
+          </div>
+        )}
+
         {/* ── Usage Progress Bars ── */}
         {usage.length > 0 ? (
           <div className="space-y-4">
@@ -127,20 +197,23 @@ export default function BetaAccessStatus({ userId }: Props) {
             </h3>
 
             {usage.map((row) => {
-              const pct = row.max_credits > 0
-                ? Math.min(100, Math.round((row.used_credits / row.max_credits) * 100))
+              const used = safeNum(row.used_credits);
+              const max = safeNum(row.max_credits);
+              const pct = max > 0
+                ? Math.min(100, Math.round((used / max) * 100))
                 : 0;
               const isWarning = pct >= 90;
-              const isExhausted = row.used_credits >= row.max_credits;
+              const isExhausted = used >= max && max > 0;
+              const remaining = Math.max(0, max - used);
 
               return (
                 <div
-                  key={row.id}
+                  key={row.id || row.module_name}
                   className="rounded-lg border border-slate-200 bg-white p-4 space-y-2"
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium text-slate-800">
-                      {getModuleLabel(row.module_name)}
+                      {getModuleLabel(row.module_name || "nepoznato")}
                     </span>
                     <span
                       className={`text-xs font-semibold tabular-nums ${
@@ -151,7 +224,7 @@ export default function BetaAccessStatus({ userId }: Props) {
                             : "text-slate-500"
                       }`}
                     >
-                      {row.used_credits} / {row.max_credits} kredita
+                      {used} / {max} kredita
                     </span>
                   </div>
 
@@ -184,14 +257,14 @@ export default function BetaAccessStatus({ userId }: Props) {
                   {isWarning && !isExhausted && (
                     <div className="flex items-center gap-1.5 text-xs text-amber-600 font-medium">
                       <AlertTriangle className="h-3 w-3" />
-                      Pri kraju limita — preostalo {row.max_credits - row.used_credits} kredita.
+                      Pri kraju limita — preostalo {remaining} kredita.
                     </div>
                   )}
                 </div>
               );
             })}
           </div>
-        ) : (
+        ) : !error ? (
           <div className="rounded-lg border border-slate-200 bg-white p-8 text-center">
             <Zap className="h-8 w-8 text-slate-300 mx-auto mb-3" />
             <p className="text-sm text-slate-500 font-medium">
@@ -201,7 +274,7 @@ export default function BetaAccessStatus({ userId }: Props) {
               Krediti za module se automatski kreiraju pri prvom korištenju.
             </p>
           </div>
-        )}
+        ) : null}
 
         {/* ── Divider ── */}
         <div className="h-px bg-slate-100" />
