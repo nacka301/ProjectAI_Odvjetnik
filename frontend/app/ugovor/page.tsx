@@ -33,6 +33,8 @@ import ResultActions from "@/components/ResultActions";
 import { INITIAL_CONTRACT_STAGES, CONTRACT_STAGE_ICONS, CONTRACT_STAGE_MICROCOPY, type ContractStage } from "./contractConstants";
 import { generateContractPdf } from "@/lib/generateModulePdfs";
 import { useAuth } from "@/lib/useAuth";
+import { useCredits, getModuleQuota } from "@/lib/useCredits";
+import { CreditQuotaBadge, CreditExhaustedWarning } from "@/components/CreditQuotaBadge";
 import { PrivacyBanner } from "@/components/TrustComponents";
 
 // ── Types matching backend ContractAnalysisResult (V49) ──
@@ -179,6 +181,8 @@ const API = API_BASE;
 
 export default function ContractAnalysisPage() {
   const { userId, authHeaders } = useAuth();
+  const { rows: creditRows, loading: creditsLoading } = useCredits(userId);
+  const contractQuota = getModuleQuota(creditRows, "contract_analysis");
   const [mode, setMode] = useState<"pdf" | "text">("pdf");
   const [textInput, setTextInput] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
@@ -595,14 +599,16 @@ export default function ContractAnalysisPage() {
             />
 
             {/* Analyze Button */}
+            <CreditQuotaBadge quota={contractQuota} loading={creditsLoading} className="mb-2" />
             <button
               onClick={handleAnalyze}
-              disabled={isStreaming}
+              disabled={isStreaming || contractQuota.exhausted}
               className="w-full py-4 rounded-xl bg-emerald-600 text-white font-semibold text-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center justify-center gap-2"
             >
               <Shield className="h-5 w-5" />
               Analiziraj ugovor
             </button>
+            <CreditExhaustedWarning quota={contractQuota} />
           </div>
         )}
 
@@ -661,7 +667,7 @@ export default function ContractAnalysisPage() {
                 </div>
                 <button
                   onClick={handleGenerateContract}
-                  disabled={isGenerating || !originalTextRef.current}
+                  disabled={isGenerating || !originalTextRef.current || contractQuota.exhausted}
                   className="px-6 py-3 rounded-xl bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2 whitespace-nowrap shadow-sm"
                 >
                   {isGenerating ? (

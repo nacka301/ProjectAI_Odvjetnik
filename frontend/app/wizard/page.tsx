@@ -73,6 +73,8 @@ const ResultView = dynamic(() => import("./ResultView"), {
 
 import { API_BASE } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
+import { useCredits, getModuleQuota } from "@/lib/useCredits";
+import { CreditQuotaBadge, CreditExhaustedWarning } from "@/components/CreditQuotaBadge";
 
 // ═══════════════════════════════════════════
 //  MAIN COMPONENT
@@ -80,6 +82,8 @@ import { useAuth } from "@/lib/useAuth";
 
 export default function WizardPage() {
   const { userId, authHeaders } = useAuth();
+  const { rows: creditRows, loading: creditsLoading } = useCredits(userId);
+  const valuationQuota = getModuleQuota(creditRows, "valuation");
   // Wizard state
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [propertyType, setPropertyType] = useState<PropertyType | null>(null);
@@ -633,11 +637,14 @@ export default function WizardPage() {
               )}
             </div>
 
-            <div className="flex justify-end">
+            <div className="flex flex-col items-end gap-2">
+              <CreditQuotaBadge quota={valuationQuota} loading={creditsLoading} />
               <button onClick={runValuation}
-                className="rounded-lg bg-green-600 px-8 py-3 text-sm font-bold text-white hover:bg-green-700 transition flex items-center gap-2">
+                disabled={valuationQuota.exhausted}
+                className={`rounded-lg px-8 py-3 text-sm font-bold text-white transition flex items-center gap-2 ${valuationQuota.exhausted ? "bg-gray-300 cursor-not-allowed" : "bg-green-600 hover:bg-green-700"}`}>
                 <Scale className="h-5 w-5" /> Pokreni procjenu
               </button>
+              <CreditExhaustedWarning quota={valuationQuota} />
             </div>
           </div>
         )}

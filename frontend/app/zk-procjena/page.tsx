@@ -42,6 +42,8 @@ import LocationSelector from "@/components/LocationSelector";
 import SharedProcessingView, { type ProcessingStage } from "@/components/SharedProcessingView";
 import ResultActions from "@/components/ResultActions";
 import { useAuth } from "@/lib/useAuth";
+import { useCredits, getModuleQuota } from "@/lib/useCredits";
+import { CreditQuotaBadge, CreditExhaustedWarning } from "@/components/CreditQuotaBadge";
 import { PrivacyBanner } from "@/components/TrustComponents";
 
 import { API_BASE } from "@/lib/api";
@@ -334,6 +336,8 @@ const ZK_STAGE_MICROCOPY: Record<string, string[]> = {
 
 export default function ZkProcjenaPage() {
   const { userId, authHeaders } = useAuth();
+  const { rows: creditRows, loading: creditsLoading } = useCredits(userId);
+  const zkQuota = getModuleQuota(creditRows, "zk_analysis");
   const [mode, setMode] = useState<"pdf" | "text">("pdf");
   const [file, setFile] = useState<File | null>(null);
   const [textInput, setTextInput] = useState("");
@@ -727,26 +731,36 @@ export default function ZkProcjenaPage() {
                     ({(file.size / 1024).toFixed(0)} KB)
                   </span>
                 </div>
-                <button
-                  onClick={runUnified}
-                  className="w-full sm:w-auto rounded-lg bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition flex items-center justify-center gap-2"
-                >
-                  <BookOpen className="h-4 w-4" />
-                  Analiziraj i procijeni
-                </button>
+                <div className="flex flex-col items-end gap-2">
+                  <CreditQuotaBadge quota={zkQuota} loading={creditsLoading} />
+                  <button
+                    onClick={runUnified}
+                    disabled={zkQuota.exhausted}
+                    className={`w-full sm:w-auto rounded-lg px-6 py-2.5 text-sm font-semibold text-white transition flex items-center justify-center gap-2 ${zkQuota.exhausted ? "bg-gray-300 cursor-not-allowed" : "bg-indigo-600 hover:bg-indigo-700"}`}
+                  >
+                    <BookOpen className="h-4 w-4" />
+                    Analiziraj i procijeni
+                  </button>
+                  <CreditExhaustedWarning quota={zkQuota} />
+                </div>
               </div>
             )}
 
             {/* Text mode — analyze button */}
             {mode === "text" && textInput.trim().length >= 50 && (
               <div className="flex justify-end">
+              <div className="flex flex-col items-end gap-2">
+                <CreditQuotaBadge quota={zkQuota} loading={creditsLoading} />
                 <button
                   onClick={runUnified}
-                  className="rounded-lg bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition flex items-center gap-2"
+                  disabled={zkQuota.exhausted}
+                  className={`rounded-lg px-6 py-2.5 text-sm font-semibold text-white transition flex items-center gap-2 ${zkQuota.exhausted ? "bg-gray-300 cursor-not-allowed" : "bg-indigo-600 hover:bg-indigo-700"}`}
                 >
                   <BookOpen className="h-4 w-4" />
                   Analiziraj i procijeni
                 </button>
+                <CreditExhaustedWarning quota={zkQuota} />
+              </div>
               </div>
             )}
           </div>

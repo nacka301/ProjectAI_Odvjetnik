@@ -93,3 +93,27 @@ export function useCredits(userId: string | null): CreditSummary {
 
   return { total, used, remaining, rows, loading, error };
 }
+
+// ═══════════════════════════════════════════
+//  Per-module quota helper
+// ═══════════════════════════════════════════
+
+export interface ModuleQuota {
+  used: number;
+  max: number;
+  remaining: number;
+  exhausted: boolean;
+}
+
+/**
+ * Extract quota for a single module from the credit rows.
+ * Returns { used, max, remaining, exhausted }.
+ * If no row exists for the module, returns max=50 (backend default), used=0.
+ */
+export function getModuleQuota(rows: CreditRow[], moduleName: string): ModuleQuota {
+  const row = rows.find((r) => r.module_name === moduleName);
+  const used = safeNum(row?.used_credits);
+  const max = row ? safeNum(row.max_credits) : 50;
+  const remaining = Math.max(0, max - used);
+  return { used, max, remaining, exhausted: remaining <= 0 };
+}

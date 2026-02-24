@@ -29,6 +29,8 @@ import {
 } from "lucide-react";
 import { API_BASE } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
+import { useCredits, getModuleQuota } from "@/lib/useCredits";
+import { CreditQuotaBadge, CreditExhaustedWarning } from "@/components/CreditQuotaBadge";
 
 const API = API_BASE;
 const BOD_VALUE = 2.0;
@@ -171,6 +173,8 @@ export default function TroskovnikPage() {
 
 function TroskovnikContent() {
   const { userId, authHeaders } = useAuth();
+  const { rows: creditRows, loading: creditsLoading } = useCredits(userId);
+  const troskovnikQuota = getModuleQuota(creditRows, "troskovnik");
   const searchParams = useSearchParams();
   const preselectedClientId = searchParams.get("clientId");
 
@@ -899,9 +903,10 @@ function TroskovnikContent() {
                 {/* Action buttons */}
                 {selectedItems.size > 0 && (
                   <div className="px-4 pb-4 space-y-2">
+                    <CreditQuotaBadge quota={troskovnikQuota} loading={creditsLoading} className="mb-1" />
                     <button
                       onClick={handleCalculate}
-                      disabled={calculating}
+                      disabled={calculating || troskovnikQuota.exhausted}
                       className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white text-sm font-semibold py-2.5 rounded-lg transition"
                     >
                       {calculating ? (

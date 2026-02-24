@@ -15,6 +15,8 @@ import {
 import SharedProcessingView, { type ProcessingStage } from "@/components/SharedProcessingView";
 import { API_BASE } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
+import { useCredits, getModuleQuota } from "@/lib/useCredits";
+import { CreditQuotaBadge, CreditExhaustedWarning } from "@/components/CreditQuotaBadge";
 import { PrivacyBanner } from "@/components/TrustComponents";
 
 // ═══════════════════════════════════════════════════════════
@@ -142,6 +144,8 @@ const STAGE_MICROCOPY: Record<string, string[]> = {
 
 export default function TranslationPage() {
   const { userId, authHeaders } = useAuth();
+  const { rows: creditRows, loading: creditsLoading } = useCredits(userId);
+  const translationQuota = getModuleQuota(creditRows, "translation");
 
   // ── State ──
   const [textInput, setTextInput] = useState("");
@@ -490,15 +494,17 @@ export default function TranslationPage() {
           )}
 
           {/* Submit */}
-          <div className="border-t border-gray-100 px-6 py-4">
+          <div className="border-t border-gray-100 px-6 py-4 space-y-2">
+            <CreditQuotaBadge quota={translationQuota} loading={creditsLoading} />
             <button
               onClick={handleTranslate}
-              disabled={!isValid || isStreaming}
+              disabled={!isValid || isStreaming || translationQuota.exhausted}
               className="flex w-full items-center justify-center gap-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-3.5 text-sm font-semibold text-white shadow-md hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               <Sparkles className="h-5 w-5" />
               Prevedi
             </button>
+            <CreditExhaustedWarning quota={translationQuota} />
           </div>
         </div>
 

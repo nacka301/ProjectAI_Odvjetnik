@@ -29,6 +29,8 @@ import {
 } from "@/lib/supabase";
 import { API_BASE } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
+import { useCredits, getModuleQuota } from "@/lib/useCredits";
+import { CreditQuotaBadge, CreditExhaustedWarning } from "@/components/CreditQuotaBadge";
 import AppHeader from "@/components/AppHeader";
 
 // ── Verdict colors/icons ──
@@ -91,6 +93,8 @@ function formatDate(iso: string): string {
 
 export default function AuditPage() {
   const { userId, authHeaders } = useAuth();
+  const { rows: creditRows, loading: creditsLoading } = useCredits(userId);
+  const auditQuota = getModuleQuota(creditRows, "audit");
   const [audits, setAudits] = useState<AuditRow[]>([]);
   const [evaluations, setEvaluations] = useState<Map<string, EvaluationRow>>(new Map());
   const [stats, setStats] = useState({ total: 0, confirmed: 0, suspicious: 0, rejected: 0 });
@@ -284,10 +288,12 @@ export default function AuditPage() {
           </div>
 
           {/* Run Audit Button */}
-          <button
-            onClick={handleRunAudit}
-            disabled={auditRunning || (apiStatus !== null && !apiStatus.enabled)}
-            className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50 transition"
+          <div className="flex flex-col items-end gap-1">
+            <CreditQuotaBadge quota={auditQuota} loading={creditsLoading} />
+            <button
+              onClick={handleRunAudit}
+              disabled={auditRunning || (apiStatus !== null && !apiStatus.enabled) || auditQuota.exhausted}
+              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50 transition"
           >
             {auditRunning ? (
               <>
@@ -301,6 +307,8 @@ export default function AuditPage() {
               </>
             )}
           </button>
+            <CreditExhaustedWarning quota={auditQuota} />
+          </div>
         </div>
 
         {/* Error */}

@@ -25,6 +25,8 @@ import { uploadPdfToStorage } from "@/lib/supabase";
 import SharedProcessingView, { type ProcessingStage } from "@/components/SharedProcessingView";
 import ResultActions from "@/components/ResultActions";
 import { useAuth } from "@/lib/useAuth";
+import { useCredits, getModuleQuota } from "@/lib/useCredits";
+import { CreditQuotaBadge, CreditExhaustedWarning } from "@/components/CreditQuotaBadge";
 
 import { API_BASE } from "@/lib/api";
 
@@ -163,6 +165,8 @@ type InputMode = "pdf" | "text";
 
 export default function ValuationPage() {
   const { userId, authHeaders } = useAuth();
+  const { rows: creditRows, loading: creditsLoading } = useCredits(userId);
+  const valuationQuota = getModuleQuota(creditRows, "valuation");
   const [inputMode, setInputMode] = useState<InputMode>("pdf");
   const [file, setFile] = useState<File | null>(null);
   const [propertyText, setPropertyText] = useState("");
@@ -538,13 +542,17 @@ export default function ValuationPage() {
                         ({(file.size / 1024).toFixed(0)} KB)
                       </span>
                     </div>
+                  <div className="flex flex-col items-end gap-2">
+                    <CreditQuotaBadge quota={valuationQuota} loading={creditsLoading} />
                     <button
                       onClick={runAutoGenerate}
-                      className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition flex items-center gap-2"
+                      disabled={valuationQuota.exhausted}
+                      className={`rounded-lg px-6 py-2.5 text-sm font-semibold text-white transition flex items-center gap-2 ${valuationQuota.exhausted ? "bg-gray-300 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"}`}
                     >
                       <Scale className="h-4 w-4" />
                       Pokreni procjenu
                     </button>
+                  </div>
                   </div>
                 )}
               </>
@@ -570,12 +578,13 @@ export default function ValuationPage() {
                   </p>
                 </div>
 
-                <div className="flex justify-end">
+                <div className="flex flex-col items-end gap-2">
+                  <CreditQuotaBadge quota={valuationQuota} loading={creditsLoading} />
                   <button
                     onClick={runAutoGenerate}
-                    disabled={!canStart}
+                    disabled={!canStart || valuationQuota.exhausted}
                     className={`rounded-lg px-6 py-2.5 text-sm font-semibold text-white transition flex items-center gap-2 ${
-                      canStart
+                      canStart && !valuationQuota.exhausted
                         ? "bg-blue-600 hover:bg-blue-700"
                         : "bg-gray-300 cursor-not-allowed"
                     }`}
@@ -583,6 +592,7 @@ export default function ValuationPage() {
                     <Scale className="h-4 w-4" />
                     Pokreni procjenu
                   </button>
+                  <CreditExhaustedWarning quota={valuationQuota} />
                 </div>
               </div>
             )}
