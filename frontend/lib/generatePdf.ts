@@ -1,11 +1,27 @@
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import ReactPDF, { Document, Page, View, Text, StyleSheet, Font } from "@react-pdf/renderer";
+import { createElement } from "react";
 import type { ValuationResult } from "@/app/wizard/types";
 
-// ═══════════════════════════════════════════
-//  PDF EXPORT — Professional valuation report
-//  for lawyers / odvjetnici
-// ═══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
+//  PDF EXPORT — @react-pdf/renderer
+//  Professional valuation report with full Croatian
+//  diacritics support (č, ć, š, ž, đ)
+// ═══════════════════════════════════════════════════
+
+// ── Font Registration (Roboto — full Latin Extended) ──
+Font.register({
+  family: "Roboto",
+  fonts: [
+    { src: "https://fonts.gstatic.com/s/roboto/v47/KFOMCnqEu92Fr1ME7kSn66aGLdTylUAMQXC89YmC2DPNWubEbGmT.ttf", fontWeight: 400 },
+    { src: "https://fonts.gstatic.com/s/roboto/v47/KFOMCnqEu92Fr1ME7kSn66aGLdTylUAMQXC89YmC2DPNWuaabWmT.ttf", fontWeight: 700 },
+    { src: "https://fonts.gstatic.com/s/roboto/v47/KFOMCnqEu92Fr1ME7kSn66aGLdTylUAMQXC89YmC2DPNWuYKbGmT.ttf", fontWeight: 400, fontStyle: "italic" },
+  ],
+});
+
+// Disable hyphenation (can break Croatian words)
+Font.registerHyphenationCallback((word: string) => [word]);
+
+// ── Shared Helpers ──
 
 interface PdfParams {
   result: ValuationResult;
@@ -14,272 +30,404 @@ interface PdfParams {
   areaM2: number;
 }
 
-const fmt = (n: number) => n.toLocaleString("hr-HR");
+const fmt = (n: number) =>
+  n.toLocaleString("hr-HR", { maximumFractionDigits: 0 });
 
-export async function generateValuationPdf({ result, propertyType, location, areaM2 }: PdfParams) {
-  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  const pageW = doc.internal.pageSize.getWidth();
-  const margin = 18;
-  const contentW = pageW - margin * 2;
-  let y = margin;
+const typeLabel: Record<string, string> = {
+  Apartment: "Stan",
+  House: "Kuća",
+  Land: "Zemljište",
+};
 
-  const addPageIfNeeded = (needed: number) => {
-    if (y + needed > doc.internal.pageSize.getHeight() - margin) {
-      doc.addPage();
-      y = margin;
-    }
-  };
+// ── Styles ──
+const S = StyleSheet.create({
+  page: {
+    fontFamily: "Roboto",
+    fontSize: 9,
+    color: "#1e1e1e",
+    paddingTop: 30,
+    paddingBottom: 60,
+    paddingHorizontal: 36,
+  },
 
-  // ── Header ──
-  doc.setFillColor(30, 64, 175); // blue-800
-  doc.rect(0, 0, pageW, 38, "F");
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(20);
-  doc.setFont("helvetica", "bold");
-  doc.text("Izvještaj o procjeni tržišne vrijednosti", margin, 18);
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
-  doc.text(`Datum: ${new Date().toLocaleDateString("hr-HR")}`, margin, 28);
-  doc.text("PravoTek — Automatizirana tržišna procjena", margin, 34);
+  // Header
+  header: {
+    backgroundColor: "#1e40af",
+    marginHorizontal: -36,
+    marginTop: -30,
+    paddingVertical: 18,
+    paddingHorizontal: 36,
+    marginBottom: 16,
+  },
+  headerTitle: {
+    color: "#ffffff",
+    fontSize: 17,
+    fontWeight: 700,
+    marginBottom: 4,
+  },
+  headerSub: {
+    color: "#bfdbfe",
+    fontSize: 9,
+  },
 
-  y = 48;
+  // Section Titles
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: "#1e3a5f",
+    marginTop: 14,
+    marginBottom: 6,
+    paddingBottom: 2,
+    borderBottomWidth: 1,
+    borderBottomColor: "#cbd5e1",
+  },
 
-  // ── Property Info Box ──
-  doc.setDrawColor(200, 200, 200);
-  doc.setFillColor(248, 250, 252); // gray-50
-  doc.roundedRect(margin, y, contentW, 30, 2, 2, "FD");
-  doc.setTextColor(50, 50, 50);
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "bold");
+  // Property Info Box
+  infoBox: {
+    flexDirection: "row",
+    backgroundColor: "#f8fafc",
+    border: "1pt solid #e2e8f0",
+    borderRadius: 3,
+    padding: 10,
+    marginBottom: 10,
+  },
+  infoCol: {
+    flex: 1,
+  },
+  infoLabel: {
+    fontSize: 7.5,
+    fontWeight: 700,
+    color: "#64748b",
+    textTransform: "uppercase",
+    marginBottom: 2,
+  },
+  infoValue: {
+    fontSize: 10,
+    color: "#1e293b",
+  },
 
-  const col1x = margin + 4;
-  const col2x = margin + contentW / 3;
-  const col3x = margin + (contentW * 2) / 3;
+  // Hero Value
+  heroBox: {
+    backgroundColor: "#1e40af",
+    borderRadius: 4,
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  heroLabel: {
+    color: "#ffffff",
+    fontSize: 11,
+    fontWeight: 700,
+  },
+  heroValue: {
+    color: "#ffffff",
+    fontSize: 20,
+    fontWeight: 700,
+  },
+  heroSub: {
+    color: "#93c5fd",
+    fontSize: 8,
+    marginTop: 2,
+  },
 
-  doc.text("Tip nekretnine:", col1x, y + 8);
-  doc.text("Lokacija:", col2x, y + 8);
-  doc.text("Površina:", col3x, y + 8);
+  // Tables
+  tableHead: {
+    flexDirection: "row",
+    backgroundColor: "#1e40af",
+    borderTopLeftRadius: 2,
+    borderTopRightRadius: 2,
+    paddingVertical: 5,
+    paddingHorizontal: 4,
+  },
+  tableHeadCell: {
+    color: "#ffffff",
+    fontSize: 7.5,
+    fontWeight: 700,
+  },
+  tableRow: {
+    flexDirection: "row",
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#e2e8f0",
+  },
+  tableRowAlt: {
+    flexDirection: "row",
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+    backgroundColor: "#f8fafc",
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#e2e8f0",
+  },
+  tableCell: {
+    fontSize: 8,
+    color: "#334155",
+  },
+  tableCellBold: {
+    fontSize: 8,
+    fontWeight: 700,
+    color: "#1e293b",
+  },
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  const typeLabel: Record<string, string> = { Apartment: "Stan", House: "Kuća", Land: "Zemljište" };
-  doc.text(typeLabel[propertyType] || propertyType, col1x, y + 15);
-  doc.text(location, col2x, y + 15);
-  doc.text(`${fmt(areaM2)} m²`, col3x, y + 15);
+  // Text blocks
+  paragraph: {
+    fontSize: 9,
+    lineHeight: 1.5,
+    color: "#334155",
+    marginBottom: 4,
+  },
 
-  if (result.target_property_summary) {
-    doc.setFontSize(8);
-    doc.setTextColor(100, 100, 100);
-    const summaryLines = doc.splitTextToSize(result.target_property_summary, contentW - 8);
-    doc.text(summaryLines.slice(0, 2), col1x, y + 23);
-  }
+  // Confidence badge
+  badge: {
+    alignSelf: "flex-start",
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    marginBottom: 6,
+  },
+  badgeText: {
+    fontSize: 8,
+    fontWeight: 700,
+    color: "#ffffff",
+  },
 
-  y += 36;
+  // Footer
+  footer: {
+    position: "absolute",
+    bottom: 20,
+    left: 36,
+    right: 36,
+  },
+  footerLine: {
+    borderTopWidth: 0.5,
+    borderTopColor: "#cbd5e1",
+    paddingTop: 4,
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  footerText: {
+    fontSize: 6.5,
+    color: "#94a3b8",
+  },
+  footerDisclaimer: {
+    fontSize: 6,
+    color: "#94a3b8",
+    marginTop: 2,
+  },
+});
 
-  // ── Hero Value ──
-  doc.setFillColor(30, 64, 175);
-  doc.roundedRect(margin, y, contentW, 22, 2, 2, "F");
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(12);
-  doc.setFont("helvetica", "bold");
-  doc.text("PROCIJENJENA TRŽIŠNA VRIJEDNOST", margin + 4, y + 9);
-  doc.setFontSize(18);
-  doc.text(`${fmt(result.estimated_value_eur)} EUR`, pageW - margin - 4, y + 15, { align: "right" });
+// ── Helper: createElement shorthand ──
+const h = createElement;
 
-  y += 28;
+// ── Document Component (uses createElement — not JSX in .ts files) ──
 
-  // ── Key Metrics ──
-  doc.setTextColor(50, 50, 50);
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "bold");
-  doc.text("Ključne metrike", margin, y);
-  y += 6;
+function ValuationPdfDocument({ result, propertyType, location, areaM2 }: PdfParams) {
+  const today = new Date().toLocaleDateString("hr-HR");
 
+  // Key metrics
   const metrics: [string, string][] = [
     ["Cijena po m²", result.calculated_price_per_m2 ? `${fmt(Math.round(result.calculated_price_per_m2))} EUR/m²` : "N/A"],
     ["Pronađeno oglasa", String(result.total_listings_found ?? "N/A")],
-    ["Korištenih usporedbi", String(result.usable_price_points ?? "N/A")],
+    ["Korištenih usporedbi", String(result.comparison_table?.length ?? result.usable_price_points ?? "N/A")],
     ["Uklonjeno outliera", String(result.outliers_removed ?? 0)],
     ["Diskont tražene cijene", `${result.realization_discount_percent?.toFixed(1) ?? "15"}%`],
     ["Pouzdanost", result.math_confidence_score !== undefined ? `${result.math_confidence_score}/100 (${result.math_confidence_level ?? ""})` : "N/A"],
   ];
-
   if (result.market_average_asking) {
     metrics.push(["Prosjek traženih cijena/m²", `${fmt(Math.round(result.market_average_asking))} EUR/m²`]);
   }
 
-  autoTable(doc, {
-    startY: y,
-    head: [],
-    body: metrics,
-    theme: "plain",
-    styles: { fontSize: 9, cellPadding: 2.5 },
-    columnStyles: {
-      0: { fontStyle: "bold", cellWidth: 55, textColor: [80, 80, 80] },
-      1: { textColor: [30, 30, 30] },
-    },
-    margin: { left: margin, right: margin },
-  });
+  const badgeColor = (result.math_confidence_score ?? 0) >= 70 ? "#16a34a"
+    : (result.math_confidence_score ?? 0) >= 40 ? "#ca8a04" : "#dc2626";
 
-  y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6;
+  // Table helpers (inline — small functions are fine here)
+  const thRow = (cells: string[], widths: string[]) =>
+    h(View, { style: S.tableHead },
+      ...cells.map((c, i) =>
+        h(Text, { key: String(i), style: { ...S.tableHeadCell, width: widths[i], textAlign: i >= 2 ? ("right" as const) : ("left" as const) } }, c)
+      )
+    );
 
-  // ── Price Range ──
-  if (result.price_range) {
-    addPageIfNeeded(35);
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(50, 50, 50);
-    doc.text("Raspon procjene", margin, y);
-    y += 5;
+  const tdRow = (cells: string[], widths: string[], isAlt: boolean, boldCols?: number[]) =>
+    h(View, { style: isAlt ? S.tableRowAlt : S.tableRow, wrap: false },
+      ...cells.map((c, i) =>
+        h(Text, {
+          key: String(i),
+          style: {
+            ...(boldCols?.includes(i) ? S.tableCellBold : S.tableCell),
+            width: widths[i],
+            textAlign: i >= 2 ? ("right" as const) : ("left" as const),
+          },
+        }, c)
+      )
+    );
 
-    autoTable(doc, {
-      startY: y,
-      head: [["Scenarij", "EUR/m²", "Ukupno EUR"]],
-      body: [
-        ["Konzervativno", `${fmt(Math.round(result.price_range.conservative_price_per_m2))}`, `${fmt(result.price_range.conservative_total)}`],
-        ["Realno", `${fmt(Math.round(result.price_range.realistic_price_per_m2))}`, `${fmt(result.price_range.realistic_total)}`],
-        ["Optimistično", `${fmt(Math.round(result.price_range.optimistic_price_per_m2))}`, `${fmt(result.price_range.optimistic_total)}`],
-      ],
-      theme: "grid",
-      headStyles: { fillColor: [30, 64, 175], fontSize: 9 },
-      styles: { fontSize: 9, cellPadding: 3 },
-      margin: { left: margin, right: margin },
-    });
+  return h(Document, { title: "Procjena tržišne vrijednosti", author: "PravoTek" },
+    h(Page, { size: "A4", style: S.page, wrap: true },
 
-    y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6;
-  }
+      // Footer (fixed on every page)
+      h(View, { style: S.footer, fixed: true },
+        h(View, { style: S.footerLine },
+          h(Text, { style: S.footerText }, "PravoTek — Automatizirana tržišna procjena nekretnina"),
+          h(Text, { style: S.footerText, render: ({ pageNumber, totalPages }: { pageNumber: number; totalPages: number }) => `Stranica ${pageNumber} / ${totalPages}` }),
+        ),
+        h(Text, { style: S.footerDisclaimer }, "Ovaj izvještaj je generiran automatski i ne predstavlja službenu procjenu ovlaštenog sudskog vještaka."),
+      ),
 
-  // ── Comparison Table ──
-  if (result.comparison_table && result.comparison_table.length > 0) {
-    addPageIfNeeded(40);
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(50, 50, 50);
-    doc.text("Tablica usporednih nekretnina", margin, y);
-    y += 5;
+      // Header
+      h(View, { style: S.header },
+        h(Text, { style: S.headerTitle }, "Izvještaj o procjeni tržišne vrijednosti"),
+        h(Text, { style: S.headerSub }, `Datum: ${today}  •  PravoTek — Automatizirana tržišna procjena`),
+      ),
 
-    autoTable(doc, {
-      startY: y,
-      head: [["#", "Oglas", "m²", "Cijena", "EUR/m²", "Korekcija", "Prilagođeno", "Sličnost"]],
-      body: result.comparison_table.map((row) => [
-        String(row.index),
-        row.title.slice(0, 30) + (row.title.length > 30 ? "…" : ""),
-        row.area_m2 > 0 ? fmt(row.area_m2) : "—",
-        row.total_price > 0 ? fmt(Math.round(row.total_price)) : "—",
-        fmt(Math.round(row.raw_price_per_m2)),
-        `${row.correction_percent > 0 ? "+" : ""}${row.correction_percent.toFixed(1)}%`,
-        fmt(Math.round(row.adjusted_price_per_m2)),
-        `${row.similarity_score}%`,
-      ]),
-      theme: "striped",
-      headStyles: { fillColor: [30, 64, 175], fontSize: 7.5 },
-      styles: { fontSize: 7.5, cellPadding: 2 },
-      columnStyles: {
-        0: { cellWidth: 8 },
-        1: { cellWidth: 40 },
-        7: { cellWidth: 16 },
-      },
-      margin: { left: margin, right: margin },
-    });
+      // Property info
+      h(View, { style: S.infoBox },
+        h(View, { style: S.infoCol },
+          h(Text, { style: S.infoLabel }, "TIP NEKRETNINE"),
+          h(Text, { style: S.infoValue }, typeLabel[propertyType] || propertyType),
+        ),
+        h(View, { style: S.infoCol },
+          h(Text, { style: S.infoLabel }, "LOKACIJA"),
+          h(Text, { style: S.infoValue }, location),
+        ),
+        h(View, { style: S.infoCol },
+          h(Text, { style: S.infoLabel }, "POVRŠINA"),
+          h(Text, { style: S.infoValue }, `${fmt(areaM2)} m²`),
+        ),
+      ),
 
-    y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6;
-  }
+      // Target property summary
+      ...(result.target_property_summary ? [
+        h(Text, { key: "summary", style: { ...S.paragraph, fontSize: 8, color: "#64748b", marginBottom: 8 } }, result.target_property_summary),
+      ] : []),
 
-  // ── Adjustments ──
-  if (result.adjustments && result.adjustments.length > 0) {
-    addPageIfNeeded(30);
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(50, 50, 50);
-    doc.text("Primijenjene korekcije", margin, y);
-    y += 5;
+      // Hero Value
+      h(View, { style: S.heroBox },
+        h(View, null,
+          h(Text, { style: S.heroLabel }, "PROCIJENJENA TRŽIŠNA VRIJEDNOST"),
+          ...(result.calculated_price_per_m2 ? [
+            h(Text, { key: "ppm2", style: S.heroSub }, `${fmt(Math.round(result.calculated_price_per_m2))} EUR/m²`),
+          ] : []),
+        ),
+        h(Text, { style: S.heroValue }, `${fmt(result.estimated_value_eur)} EUR`),
+      ),
 
-    autoTable(doc, {
-      startY: y,
-      head: [["Faktor", "Opis", "Postotak"]],
-      body: result.adjustments.map((a) => [
-        a.factor,
-        a.description,
-        `${a.percent > 0 ? "+" : ""}${a.percent.toFixed(1)}%`,
-      ]),
-      theme: "striped",
-      headStyles: { fillColor: [30, 64, 175], fontSize: 8 },
-      styles: { fontSize: 8, cellPadding: 2.5 },
-      margin: { left: margin, right: margin },
-    });
+      // Confidence badge
+      ...(result.math_confidence_score !== undefined ? [
+        h(View, { key: "badge", style: { ...S.badge, backgroundColor: badgeColor } },
+          h(Text, { style: S.badgeText }, `Pouzdanost: ${result.math_confidence_score}/100 — ${result.math_confidence_level ?? ""}`),
+        ),
+      ] : []),
 
-    y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6;
-  }
+      // Key Metrics Table
+      h(Text, { style: S.sectionTitle }, "Ključne metrike"),
+      ...metrics.map(([label, value], i) =>
+        tdRow([label, value], ["50%", "50%"], i % 2 === 1, [0])
+      ),
 
-  // ── Confidence Explanation ──
-  if (result.math_confidence_explanation) {
-    addPageIfNeeded(30);
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(50, 50, 50);
-    doc.text(`Pouzdanost procjene: ${result.math_confidence_score ?? "N/A"}/100`, margin, y);
-    y += 5;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    const confLines = doc.splitTextToSize(result.math_confidence_explanation, contentW);
-    addPageIfNeeded(confLines.length * 4 + 4);
-    doc.text(confLines, margin, y);
-    y += confLines.length * 4 + 4;
-  }
+      // Price Range
+      ...(result.price_range ? [
+        h(Text, { key: "pr-title", style: S.sectionTitle }, "Raspon procjene"),
+        thRow(["Scenarij", "EUR/m²", "Ukupno EUR"], ["40%", "30%", "30%"]),
+        ...[
+          ["Konzervativno", fmt(Math.round(result.price_range.conservative_price_per_m2)), fmt(result.price_range.conservative_total)],
+          ["Realno", fmt(Math.round(result.price_range.realistic_price_per_m2)), fmt(result.price_range.realistic_total)],
+          ["Optimistično", fmt(Math.round(result.price_range.optimistic_price_per_m2)), fmt(result.price_range.optimistic_total)],
+        ].map((row, i) => tdRow(row, ["40%", "30%", "30%"], i % 2 === 1, [0])),
+      ] : []),
 
-  // ── Benchmark ──
-  if (result.benchmark_summary) {
-    addPageIfNeeded(20);
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(50, 50, 50);
-    doc.text("Benchmark regije", margin, y);
-    y += 5;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    const benchLines = doc.splitTextToSize(result.benchmark_summary, contentW);
-    addPageIfNeeded(benchLines.length * 4 + 4);
-    doc.text(benchLines, margin, y);
-    y += benchLines.length * 4 + 4;
-  }
+      // Comparison Table
+      ...(result.comparison_table && result.comparison_table.length > 0 ? [
+        h(Text, { key: "ct-title", style: S.sectionTitle }, "Tablica usporednih nekretnina"),
+        thRow(["#", "Oglas", "m²", "EUR/m²", "Korekcija", "Prilagođeno", "Sličnost"], ["5%", "30%", "10%", "13%", "12%", "15%", "15%"]),
+        ...result.comparison_table.map((row, i) =>
+          tdRow(
+            [
+              String(row.index),
+              row.title.length > 35 ? row.title.slice(0, 35) + "…" : row.title,
+              row.area_m2 > 0 ? fmt(row.area_m2) : "—",
+              fmt(Math.round(row.raw_price_per_m2)),
+              `${row.correction_percent > 0 ? "+" : ""}${row.correction_percent.toFixed(1)}%`,
+              fmt(Math.round(row.adjusted_price_per_m2)),
+              `${row.similarity_score}%`,
+            ],
+            ["5%", "30%", "10%", "13%", "12%", "15%", "15%"],
+            i % 2 === 1,
+          )
+        ),
+      ] : []),
 
-  // ── Valuation Reasoning ──
-  if (result.valuation_reasoning) {
-    addPageIfNeeded(25);
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(50, 50, 50);
-    doc.text("Stručno mišljenje", margin, y);
-    y += 5;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.setTextColor(30, 30, 30);
-    const reasonLines = doc.splitTextToSize(result.valuation_reasoning, contentW);
-    // paginate long reasoning
-    for (const line of reasonLines) {
-      addPageIfNeeded(5);
-      doc.text(line, margin, y);
-      y += 4;
-    }
-    y += 4;
-  }
+      // Adjustments
+      ...(result.adjustments && result.adjustments.length > 0 ? [
+        h(Text, { key: "adj-title", style: S.sectionTitle }, "Primijenjene korekcije"),
+        thRow(["Faktor", "Opis", "Postotak"], ["25%", "55%", "20%"]),
+        ...result.adjustments.map((a, i) =>
+          tdRow(
+            [a.factor, a.description, `${a.percent > 0 ? "+" : ""}${a.percent.toFixed(1)}%`],
+            ["25%", "55%", "20%"],
+            i % 2 === 1,
+            [0],
+          )
+        ),
+      ] : []),
 
-  // ── Footer on every page ──
-  const totalPages = doc.internal.pages.length - 1; // pages array is 1-indexed
-  for (let i = 1; i <= totalPages; i++) {
-    doc.setPage(i);
-    const pageH = doc.internal.pageSize.getHeight();
-    doc.setDrawColor(200, 200, 200);
-    doc.line(margin, pageH - 14, pageW - margin, pageH - 14);
-    doc.setFontSize(7);
-    doc.setTextColor(150, 150, 150);
-    doc.setFont("helvetica", "normal");
-    doc.text("PravoTek — Automatizirana tržišna procjena nekretnina", margin, pageH - 9);
-    doc.text(`Stranica ${i} / ${totalPages}`, pageW - margin, pageH - 9, { align: "right" });
-    doc.text("Ovaj izvještaj je generiran automatski i ne predstavlja službenu procjenu ovlaštenog sudskog vještaka.", margin, pageH - 5);
-  }
+      // Elaborat Stats (2σ Test)
+      ...(result.elaborat_stats ? [
+        h(Text, { key: "elab-title", style: S.sectionTitle }, "Statistička validacija (2σ test)"),
+        h(View, { key: "elab-grid", style: { flexDirection: "row", gap: 8, marginBottom: 6 } },
+          ...[
+            ["Aritm. sredina", `${fmt(Math.round(result.elaborat_stats.arithmetic_mean_per_m2))} EUR/m²`],
+            ["Std. devijacija", `${result.elaborat_stats.std_dev_per_m2.toFixed(0)} EUR/m²`],
+            ["Koef. varijacije", `${result.elaborat_stats.relative_std_dev_percent.toFixed(1)}%`],
+            ["Isključeno (2σ)", String(result.elaborat_stats.two_sigma_excluded)],
+          ].map(([label, val], i) =>
+            h(View, { key: `es-${i}`, style: { flex: 1, backgroundColor: "#f0fdf4", borderRadius: 3, padding: 6, alignItems: "center" as const } },
+              h(Text, { style: { fontSize: 10, fontWeight: 700, color: "#1e293b" } }, val),
+              h(Text, { style: { fontSize: 6.5, color: "#64748b", marginTop: 1, textTransform: "uppercase" as const } }, label),
+            )
+          )
+        ),
+        ...(result.elaborat_stats.explanation ? [
+          h(Text, { key: "elab-exp", style: { ...S.paragraph, fontSize: 8 } }, result.elaborat_stats.explanation),
+        ] : []),
+      ] : []),
 
-  // ── Save ──
-  const filename = `Procjena_${propertyType}_${location.replace(/[^a-zA-Z0-9ČčĆćŠšŽžĐđ]/g, "_")}_${new Date().toISOString().slice(0, 10)}.pdf`;
-  doc.save(filename);
+      // Confidence Explanation
+      ...(result.math_confidence_explanation ? [
+        h(Text, { key: "conf-title", style: S.sectionTitle }, `Pouzdanost procjene: ${result.math_confidence_score ?? "N/A"}/100`),
+        h(Text, { key: "conf-text", style: S.paragraph }, result.math_confidence_explanation),
+      ] : []),
+
+      // Benchmark
+      ...(result.benchmark_summary ? [
+        h(Text, { key: "bench-title", style: S.sectionTitle }, "Benchmark regije"),
+        h(Text, { key: "bench-text", style: S.paragraph }, result.benchmark_summary),
+      ] : []),
+
+      // Stručno mišljenje (Valuation Reasoning)
+      ...(result.valuation_reasoning ? [
+        h(Text, { key: "reason-title", style: S.sectionTitle }, "Stručno mišljenje"),
+        h(Text, { key: "reason-text", style: { ...S.paragraph, lineHeight: 1.6 } }, result.valuation_reasoning),
+      ] : []),
+    ),
+  );
+}
+
+// ── Public API — same signature as before ──
+
+export async function generateValuationPdf(params: PdfParams): Promise<void> {
+  const doc = h(ValuationPdfDocument, params);
+  const blob = await ReactPDF.pdf(doc).toBlob();
+
+  // Trigger browser download
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `Procjena_${params.propertyType}_${params.location.replace(/[^a-zA-Z0-9ČčĆćŠšŽžĐđ]/g, "_")}_${new Date().toISOString().slice(0, 10)}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
