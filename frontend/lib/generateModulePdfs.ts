@@ -1,11 +1,14 @@
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
-import { loadPdfFonts, getPdfFont } from "./pdfFontLoader";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { createElement } from "react";
 
-// ═══════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 //  PDF EXPORT — Contract Analysis Report
-//  V59: Professional export with Croatian character support
-// ═══════════════════════════════════════════
+//  @react-pdf/renderer — lazy-loaded to prevent
+//  Next.js from bundling pdfkit Node.js deps at build.
+//  Full Croatian diacritics via Roboto (č, ć, š, ž, đ).
+// ═══════════════════════════════════════════════════
+
+// ── Types ──
 
 interface ContractIssue {
   title: string;
@@ -80,360 +83,258 @@ interface ContractAnalysisResult {
   disclaimer: string;
 }
 
-const fmt = (n: number) => n.toLocaleString("hr-HR");
+// ── Lazy-loaded module & styles ──
+
+let R: any = null;
+let S: any = null;
+
+async function ensurePdfEngine() {
+  if (R) return;
+  R = await import("@react-pdf/renderer");
+
+  R.Font.register({
+    family: "Roboto",
+    fonts: [
+      { src: "https://fonts.gstatic.com/s/roboto/v47/KFOMCnqEu92Fr1ME7kSn66aGLdTylUAMQXC89YmC2DPNWubEbGmT.ttf", fontWeight: 400 },
+      { src: "https://fonts.gstatic.com/s/roboto/v47/KFOMCnqEu92Fr1ME7kSn66aGLdTylUAMQXC89YmC2DPNWuaabWmT.ttf", fontWeight: 700 },
+      { src: "https://fonts.gstatic.com/s/roboto/v47/KFOMCnqEu92Fr1ME7kSn66aGLdTylUAMQXC89YmC2DPNWuYKbGmT.ttf", fontWeight: 400, fontStyle: "italic" },
+    ],
+  });
+  R.Font.registerHyphenationCallback((word: string) => [word]);
+
+  S = R.StyleSheet.create({
+    page: { fontFamily: "Roboto", fontSize: 9, color: "#1e1e1e", paddingTop: 30, paddingBottom: 60, paddingHorizontal: 36 },
+    header: { backgroundColor: "#059669", marginHorizontal: -36, marginTop: -30, paddingVertical: 18, paddingHorizontal: 36, marginBottom: 16 },
+    headerTitle: { color: "#ffffff", fontSize: 17, fontWeight: 700, marginBottom: 4 },
+    headerSub: { color: "#d1fae5", fontSize: 9 },
+    sectionTitle: { fontSize: 11, fontWeight: 700, color: "#1e3a5f", marginTop: 14, marginBottom: 6, paddingBottom: 2, borderBottomWidth: 1, borderBottomColor: "#cbd5e1" },
+    infoBox: { flexDirection: "row", backgroundColor: "#f8fafc", border: "1pt solid #e2e8f0", borderRadius: 3, padding: 10, marginBottom: 10 },
+    infoCol: { flex: 1 },
+    infoLabel: { fontSize: 7.5, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 2 },
+    infoValue: { fontSize: 10, color: "#1e293b" },
+    tableHead: { flexDirection: "row", backgroundColor: "#059669", borderTopLeftRadius: 2, borderTopRightRadius: 2, paddingVertical: 5, paddingHorizontal: 4 },
+    tableHeadCell: { color: "#ffffff", fontSize: 7.5, fontWeight: 700 },
+    tableRow: { flexDirection: "row", paddingVertical: 4, paddingHorizontal: 4, borderBottomWidth: 0.5, borderBottomColor: "#e2e8f0" },
+    tableRowAlt: { flexDirection: "row", paddingVertical: 4, paddingHorizontal: 4, backgroundColor: "#f8fafc", borderBottomWidth: 0.5, borderBottomColor: "#e2e8f0" },
+    tableCell: { fontSize: 8, color: "#334155" },
+    tableCellBold: { fontSize: 8, fontWeight: 700, color: "#1e293b" },
+    paragraph: { fontSize: 9, lineHeight: 1.5, color: "#334155", marginBottom: 4 },
+    bullet: { fontSize: 9, lineHeight: 1.4, color: "#334155", marginBottom: 2, paddingLeft: 8 },
+    riskHigh: { color: "#dc2626" },
+    riskMed: { color: "#d97706" },
+    riskLow: { color: "#16a34a" },
+    blue: { color: "#2563eb" },
+    muted: { color: "#94a3b8", fontSize: 7 },
+    footer: { position: "absolute", bottom: 20, left: 36, right: 36 },
+    footerLine: { borderTopWidth: 0.5, borderTopColor: "#cbd5e1", paddingTop: 4, flexDirection: "row", justifyContent: "space-between" },
+    footerText: { fontSize: 6.5, color: "#94a3b8" },
+    footerDisclaimer: { fontSize: 6, color: "#94a3b8", marginTop: 2 },
+  });
+}
+
+// ── Helpers ──
+
+const h = createElement;
+
+const riskStyle = (risk: string) => {
+  switch (risk?.toLowerCase()) {
+    case "visok": case "kritično": return S.riskHigh;
+    case "srednji": return S.riskMed;
+    case "nizak": return S.riskLow;
+    default: return { color: "#64748b" };
+  }
+};
+
+function thRow(cells: string[], widths: string[]) {
+  return h(R.View, { style: S.tableHead },
+    ...cells.map((c, i) =>
+      h(R.Text, { key: String(i), style: { ...S.tableHeadCell, width: widths[i] } }, c)
+    )
+  );
+}
+
+function tdRow(cells: string[], widths: string[], isAlt: boolean, boldCols?: number[]) {
+  return h(R.View, { style: isAlt ? S.tableRowAlt : S.tableRow, wrap: false },
+    ...cells.map((c, i) =>
+      h(R.Text, {
+        key: String(i),
+        style: {
+          ...(boldCols?.includes(i) ? S.tableCellBold : S.tableCell),
+          width: widths[i],
+        },
+      }, c)
+    )
+  );
+}
+
+// ── Document Component ──
+
+function ContractPdfDocument({ result }: { result: ContractAnalysisResult }) {
+  const today = new Date().toLocaleDateString("hr-HR");
+
+  // Stats rows
+  const stats: [string, string][] = [
+    ["Crvene zastavice", String(result.red_flags.length)],
+    ["Logičke zamke (dubinska analiza)", String(result.logical_traps?.length ?? 0)],
+    ["Upozorenja", String(result.warnings.length)],
+    ["Pozitivne strane", String(result.positives.length)],
+    ["Prijedlozi izmjena", String(result.suggested_amendments.length)],
+  ];
+
+  return h(R.Document, { title: "Analiza ugovora", author: "PravoTek" },
+    h(R.Page, { size: "A4", style: S.page, wrap: true },
+
+      // ── Footer (fixed on every page) ──
+      h(R.View, { style: S.footer, fixed: true },
+        h(R.View, { style: S.footerLine },
+          h(R.Text, { style: S.footerText }, "PravoTek — analiza ugovora"),
+          h(R.Text, { style: S.footerText, render: ({ pageNumber, totalPages }: { pageNumber: number; totalPages: number }) => `Stranica ${pageNumber} / ${totalPages}` }),
+        ),
+        h(R.Text, { style: S.footerDisclaimer }, "Ovaj izvještaj ne zamjenjuje pravni savjet ovlaštenog odvjetnika."),
+      ),
+
+      // ── Header ──
+      h(R.View, { style: S.header },
+        h(R.Text, { style: S.headerTitle }, "Izvještaj o analizi ugovora"),
+        h(R.Text, { style: S.headerSub }, `Datum: ${today}  •  PravoTek — pravni revizor`),
+      ),
+
+      // ── Document Info ──
+      h(R.View, { style: S.infoBox },
+        h(R.View, { style: S.infoCol },
+          h(R.Text, { style: S.infoLabel }, "VRSTA DOKUMENTA"),
+          h(R.Text, { style: S.infoValue }, result.document_type),
+        ),
+        h(R.View, { style: S.infoCol },
+          h(R.Text, { style: S.infoLabel }, "UKUPNI RIZIK"),
+          h(R.Text, { style: { ...S.infoValue, fontWeight: 700, ...riskStyle(result.overall_risk) } }, `${result.overall_risk} (${result.risk_score}/100)`),
+        ),
+      ),
+
+      // ── Summary ──
+      ...(result.summary ? [
+        h(R.Text, { key: "sum", style: S.paragraph }, result.summary),
+      ] : []),
+
+      // ── Stats Table ──
+      h(R.Text, { style: S.sectionTitle }, "Statistika analize"),
+      ...stats.map(([label, value], i) =>
+        tdRow([label, value], ["70%", "30%"], i % 2 === 1, [0])
+      ),
+
+      // ── Checklist ──
+      ...(result.checklist && result.checklist.length > 0 ? [
+        h(R.Text, { key: "cl-title", style: S.sectionTitle }, "Revizijska kontrolna lista"),
+        thRow(["Kategorija", "Provjera", "Status", "Rizik", "Nalaz"], ["15%", "20%", "13%", "10%", "42%"]),
+        ...result.checklist.map((item, i) =>
+          tdRow(
+            [
+              item.category,
+              item.check + (item.article_ref ? ` (${item.article_ref})` : ""),
+              item.status.replace("_", " "),
+              item.risk,
+              item.finding.length > 80 ? item.finding.slice(0, 80) + "…" : item.finding,
+            ],
+            ["15%", "20%", "13%", "10%", "42%"],
+            i % 2 === 1,
+          )
+        ),
+      ] : []),
+
+      // ── Red Flags ──
+      ...(result.red_flags.length > 0 ? [
+        h(R.Text, { key: "rf-title", style: { ...S.sectionTitle, color: "#dc2626" } }, `Crvene zastavice (${result.red_flags.length})`),
+        ...result.red_flags.flatMap((flag, i) => [
+          h(R.View, { key: `rf-${i}`, wrap: false },
+            h(R.Text, { style: { fontSize: 9, fontWeight: 700, color: "#dc2626", marginBottom: 1 } }, `• ${flag.title}`),
+            h(R.Text, { style: { ...S.paragraph, paddingLeft: 8 } }, flag.description),
+            ...(flag.legal_basis ? [
+              h(R.Text, { key: `rf-lb-${i}`, style: { fontSize: 8, color: "#64748b", paddingLeft: 8, marginBottom: 4 } }, `Pravna osnova: ${flag.legal_basis}`),
+            ] : []),
+          ),
+        ]),
+      ] : []),
+
+      // ── Logical Traps ──
+      ...(result.logical_traps && result.logical_traps.length > 0 ? [
+        h(R.Text, { key: "lt-title", style: { ...S.sectionTitle, color: "#dc2626" } }, `Logičke zamke — dubinska analiza (${result.logical_traps.length})`),
+        ...result.logical_traps.flatMap((trap, i) => [
+          h(R.View, { key: `lt-${i}`, wrap: false },
+            h(R.Text, { style: { fontSize: 9, fontWeight: 700, ...riskStyle(trap.severity), marginBottom: 1 } }, `[${trap.severity}] ${trap.title}`),
+            h(R.Text, { style: { ...S.paragraph, paddingLeft: 8 } }, trap.explanation),
+            ...(trap.legal_basis ? [
+              h(R.Text, { key: `lt-lb-${i}`, style: { fontSize: 8, color: "#2563eb", paddingLeft: 8, marginBottom: 4 } }, `Pravna osnova: ${trap.legal_basis}`),
+            ] : []),
+          ),
+        ]),
+      ] : []),
+
+      // ── Warnings ──
+      ...(result.warnings.length > 0 ? [
+        h(R.Text, { key: "w-title", style: { ...S.sectionTitle, color: "#d97706" } }, `Upozorenja (${result.warnings.length})`),
+        ...result.warnings.flatMap((warn, i) => [
+          h(R.View, { key: `w-${i}`, wrap: false },
+            h(R.Text, { style: { fontSize: 9, fontWeight: 700, color: "#d97706", marginBottom: 1 } }, `• ${warn.title}`),
+            h(R.Text, { style: { ...S.paragraph, paddingLeft: 8 } }, warn.description),
+          ),
+        ]),
+      ] : []),
+
+      // ── Suggested Amendments ──
+      ...(result.suggested_amendments.length > 0 ? [
+        h(R.Text, { key: "sa-title", style: { ...S.sectionTitle, color: "#2563eb" } }, `Prijedlozi izmjena (${result.suggested_amendments.length})`),
+        ...result.suggested_amendments.flatMap((sa, i) => [
+          h(R.View, { key: `sa-${i}`, wrap: false, style: { marginBottom: 6 } },
+            h(R.Text, { style: { fontSize: 9, fontWeight: 700, color: "#2563eb", marginBottom: 2 } }, sa.article_reference),
+            ...(sa.current_text ? [
+              h(R.Text, { key: `sa-cur-${i}`, style: { fontSize: 8, color: "#dc2626", paddingLeft: 8, marginBottom: 1 } }, `Trenutno: ${sa.current_text}`),
+            ] : []),
+            h(R.Text, { style: { fontSize: 8, color: "#16a34a", paddingLeft: 8, marginBottom: 1 } }, `Predloženo: ${sa.proposed_text}`),
+            h(R.Text, { style: { fontSize: 8, color: "#64748b", paddingLeft: 8 } }, sa.rationale),
+          ),
+        ]),
+      ] : []),
+
+      // ── Risk Score Breakdown ──
+      ...(result.risk_score_breakdown && result.risk_score_breakdown.length > 0 ? [
+        h(R.Text, { key: "rsb-title", style: S.sectionTitle }, `Struktura ocjene rizika (${result.risk_score}/100)`),
+        ...result.risk_score_breakdown.map((line, i) =>
+          h(R.Text, { key: `rsb-${i}`, style: { fontSize: 8, color: line.startsWith("-") ? "#16a34a" : "#dc2626", paddingLeft: 8, marginBottom: 1 } }, line)
+        ),
+        h(R.Text, { key: "rsb-total", style: { fontSize: 9, fontWeight: 700, color: "#1e293b", paddingLeft: 8, marginTop: 2 } }, `= ${result.risk_score}/100 → ${result.overall_risk}`),
+      ] : []),
+
+      // ── Positives ──
+      ...(result.positives.length > 0 ? [
+        h(R.Text, { key: "pos-title", style: { ...S.sectionTitle, color: "#16a34a" } }, `Pozitivne strane (${result.positives.length})`),
+        ...result.positives.map((p, i) =>
+          h(R.Text, { key: `pos-${i}`, style: S.bullet }, `✓ ${p}`)
+        ),
+      ] : []),
+
+      // ── Disclaimer ──
+      ...(result.disclaimer ? [
+        h(R.View, { key: "disc", style: { marginTop: 14 } },
+          h(R.Text, { style: { fontSize: 7, color: "#94a3b8", fontStyle: "italic", lineHeight: 1.4 } }, result.disclaimer),
+        ),
+      ] : []),
+    ),
+  );
+}
+
+// ── Public API ──
 
 export async function generateContractPdf(result: ContractAnalysisResult) {
-  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  
-  // Load Croatian-compatible fonts
-  await loadPdfFonts(doc);
-  const fontFamily = getPdfFont();
-  
-  const pageW = doc.internal.pageSize.getWidth();
-  const margin = 18;
-  const contentW = pageW - margin * 2;
-  let y = margin;
+  await ensurePdfEngine();
+  const doc = h(ContractPdfDocument, { result });
+  const blob = await R.default.pdf(doc).toBlob();
 
-  const addPageIfNeeded = (needed: number) => {
-    if (y + needed > doc.internal.pageSize.getHeight() - margin) {
-      doc.addPage();
-      y = margin;
-    }
-  };
-
-  const riskColor = (risk: string): [number, number, number] => {
-    switch (risk?.toLowerCase()) {
-      case "visok": case "kritično": return [220, 38, 38];
-      case "srednji": return [217, 119, 6];
-      case "nizak": return [22, 163, 74];
-      default: return [100, 100, 100];
-    }
-  };
-
-  // ── Header ──
-  doc.setFillColor(5, 150, 105); // emerald-600
-  doc.rect(0, 0, pageW, 38, "F");
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(20);
-  doc.setFont(fontFamily, "bold");
-  doc.text("Izvještaj o analizi ugovora", margin, 18);
-  doc.setFontSize(10);
-  doc.setFont(fontFamily, "normal");
-  doc.text(`Datum: ${new Date().toLocaleDateString("hr-HR")}`, margin, 28);
-  doc.text("PravoTek — pravni revizor", margin, 34);
-
-  y = 48;
-
-  // ── Document Info Box ──
-  doc.setDrawColor(200, 200, 200);
-  doc.setFillColor(248, 250, 252);
-  doc.roundedRect(margin, y, contentW, 24, 2, 2, "FD");
-  doc.setTextColor(50, 50, 50);
-  doc.setFontSize(9);
-  doc.setFont(fontFamily, "bold");
-
-  const col1x = margin + 4;
-  const col2x = margin + contentW / 2;
-
-  doc.text("Vrsta dokumenta:", col1x, y + 8);
-  doc.text("Ukupni rizik:", col2x, y + 8);
-
-  doc.setFont(fontFamily, "normal");
-  doc.setFontSize(10);
-  doc.text(result.document_type, col1x, y + 15);
-
-  const [rr, rg, rb] = riskColor(result.overall_risk);
-  doc.setTextColor(rr, rg, rb);
-  doc.setFont(fontFamily, "bold");
-  doc.text(`${result.overall_risk} (${result.risk_score}/100)`, col2x, y + 15);
-
-  y += 30;
-
-  // ── Summary ──
-  if (result.summary) {
-    doc.setTextColor(50, 50, 50);
-    doc.setFontSize(9);
-    doc.setFont(fontFamily, "normal");
-    const sumLines = doc.splitTextToSize(result.summary, contentW);
-    doc.text(sumLines.slice(0, 3), margin, y);
-    y += sumLines.slice(0, 3).length * 4 + 4;
-  }
-
-  // ── Stats ──
-  addPageIfNeeded(20);
-  doc.setFontSize(11);
-  doc.setFont(fontFamily, "bold");
-  doc.setTextColor(50, 50, 50);
-  doc.text("Statistika analize", margin, y);
-  y += 5;
-
-  autoTable(doc, {
-    startY: y,
-    head: [],
-    body: [
-      ["Crvene zastavice", String(result.red_flags.length)],
-      ["Logičke zamke (dubinska analiza)", String(result.logical_traps?.length ?? 0)],
-      ["Upozorenja", String(result.warnings.length)],
-      ["Pozitivne strane", String(result.positives.length)],
-      ["Prijedlozi izmjena", String(result.suggested_amendments.length)],
-    ],
-    theme: "plain",
-    styles: { fontSize: 9, cellPadding: 2.5, font: fontFamily },
-    columnStyles: {
-      0: { fontStyle: "bold", cellWidth: 55, textColor: [80, 80, 80] },
-      1: { textColor: [30, 30, 30] },
-    },
-    margin: { left: margin, right: margin },
-  });
-  y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6;
-
-  // ── Checklist ──
-  if (result.checklist && result.checklist.length > 0) {
-    addPageIfNeeded(30);
-    doc.setFontSize(11);
-    doc.setFont(fontFamily, "bold");
-    doc.setTextColor(50, 50, 50);
-    doc.text("Revizijska kontrolna lista", margin, y);
-    y += 5;
-
-    autoTable(doc, {
-      startY: y,
-      head: [["Kategorija", "Provjera", "Status", "Rizik", "Nalaz"]],
-      body: result.checklist.map((item) => [
-        item.category,
-        item.check + (item.article_ref ? ` (${item.article_ref})` : ""),
-        item.status.replace("_", " "),
-        item.risk,
-        item.finding.slice(0, 80) + (item.finding.length > 80 ? "..." : ""),
-      ]),
-      theme: "striped",
-      headStyles: { fillColor: [5, 150, 105], fontSize: 7.5, font: fontFamily },
-      styles: { fontSize: 7, cellPadding: 2, font: fontFamily },
-      columnStyles: { 0: { cellWidth: 25 }, 1: { cellWidth: 30 }, 2: { cellWidth: 20 }, 3: { cellWidth: 15 } },
-      margin: { left: margin, right: margin },
-    });
-    y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 6;
-  }
-
-  // ── Red Flags ──
-  if (result.red_flags.length > 0) {
-    addPageIfNeeded(30);
-    doc.setFontSize(11);
-    doc.setFont(fontFamily, "bold");
-    doc.setTextColor(220, 38, 38);
-    doc.text(`Crvene zastavice (${result.red_flags.length})`, margin, y);
-    y += 5;
-
-    for (const flag of result.red_flags) {
-      addPageIfNeeded(20);
-      doc.setFont(fontFamily, "bold");
-      doc.setFontSize(9);
-      doc.setTextColor(220, 38, 38);
-      doc.text(`• ${flag.title}`, margin, y);
-      y += 4;
-      doc.setFont(fontFamily, "normal");
-      doc.setTextColor(50, 50, 50);
-      const descLines = doc.splitTextToSize(flag.description, contentW - 4);
-      for (const line of descLines.slice(0, 4)) {
-        addPageIfNeeded(5);
-        doc.text(line, margin + 4, y);
-        y += 4;
-      }
-      if (flag.legal_basis) {
-        doc.setFontSize(8);
-        doc.setTextColor(100, 100, 100);
-        doc.text(`Pravna osnova: ${flag.legal_basis}`, margin + 4, y);
-        y += 4;
-      }
-      y += 2;
-    }
-  }
-
-  // ── Logical Traps ──
-  if (result.logical_traps && result.logical_traps.length > 0) {
-    addPageIfNeeded(30);
-    doc.setFontSize(11);
-    doc.setFont(fontFamily, "bold");
-    doc.setTextColor(220, 38, 38);
-    doc.text(`Logičke zamke — dubinska analiza (${result.logical_traps.length})`, margin, y);
-    y += 5;
-
-    for (const trap of result.logical_traps) {
-      addPageIfNeeded(25);
-      doc.setFont(fontFamily, "bold");
-      doc.setFontSize(9);
-      const [sr, sg, sb] = riskColor(trap.severity);
-      doc.setTextColor(sr, sg, sb);
-      doc.text(`[${trap.severity}] ${trap.title}`, margin, y);
-      y += 4;
-      doc.setFont(fontFamily, "normal");
-      doc.setTextColor(50, 50, 50);
-      const explLines = doc.splitTextToSize(trap.explanation, contentW - 4);
-      for (const line of explLines.slice(0, 5)) {
-        addPageIfNeeded(5);
-        doc.text(line, margin + 4, y);
-        y += 4;
-      }
-      if (trap.legal_basis) {
-        doc.setFontSize(8);
-        doc.setTextColor(37, 99, 235);
-        doc.text(`Pravna osnova: ${trap.legal_basis}`, margin + 4, y);
-        y += 4;
-      }
-      y += 2;
-    }
-  }
-
-  // ── Warnings ──
-  if (result.warnings.length > 0) {
-    addPageIfNeeded(25);
-    doc.setFontSize(11);
-    doc.setFont(fontFamily, "bold");
-    doc.setTextColor(217, 119, 6);
-    doc.text(`Upozorenja (${result.warnings.length})`, margin, y);
-    y += 5;
-
-    for (const warn of result.warnings) {
-      addPageIfNeeded(15);
-      doc.setFont(fontFamily, "bold");
-      doc.setFontSize(9);
-      doc.setTextColor(217, 119, 6);
-      doc.text(`• ${warn.title}`, margin, y);
-      y += 4;
-      doc.setFont(fontFamily, "normal");
-      doc.setTextColor(50, 50, 50);
-      const descLines = doc.splitTextToSize(warn.description, contentW - 4);
-      for (const line of descLines.slice(0, 3)) {
-        addPageIfNeeded(5);
-        doc.text(line, margin + 4, y);
-        y += 4;
-      }
-      y += 2;
-    }
-  }
-
-  // ── Suggested Amendments ──
-  if (result.suggested_amendments.length > 0) {
-    addPageIfNeeded(30);
-    doc.setFontSize(11);
-    doc.setFont(fontFamily, "bold");
-    doc.setTextColor(37, 99, 235);
-    doc.text(`Prijedlozi izmjena (${result.suggested_amendments.length})`, margin, y);
-    y += 5;
-
-    for (const sa of result.suggested_amendments) {
-      addPageIfNeeded(25);
-      doc.setFont(fontFamily, "bold");
-      doc.setFontSize(9);
-      doc.setTextColor(37, 99, 235);
-      doc.text(sa.article_reference, margin, y);
-      y += 4;
-      doc.setFont(fontFamily, "normal");
-      doc.setTextColor(50, 50, 50);
-      doc.setFontSize(8);
-      if (sa.current_text) {
-        const curLines = doc.splitTextToSize(`Trenutno: ${sa.current_text}`, contentW - 4);
-        doc.setTextColor(220, 38, 38);
-        for (const line of curLines.slice(0, 2)) {
-          addPageIfNeeded(5);
-          doc.text(line, margin + 4, y);
-          y += 3.5;
-        }
-      }
-      const propLines = doc.splitTextToSize(`Predloženo: ${sa.proposed_text}`, contentW - 4);
-      doc.setTextColor(22, 163, 74);
-      for (const line of propLines.slice(0, 2)) {
-        addPageIfNeeded(5);
-        doc.text(line, margin + 4, y);
-        y += 3.5;
-      }
-      doc.setTextColor(100, 100, 100);
-      const ratLines = doc.splitTextToSize(sa.rationale, contentW - 4);
-      for (const line of ratLines.slice(0, 2)) {
-        addPageIfNeeded(5);
-        doc.text(line, margin + 4, y);
-        y += 3.5;
-      }
-      y += 3;
-    }
-  }
-
-  // ── Risk Score Breakdown ──
-  if (result.risk_score_breakdown && result.risk_score_breakdown.length > 0) {
-    addPageIfNeeded(25);
-    doc.setFontSize(11);
-    doc.setFont(fontFamily, "bold");
-    doc.setTextColor(50, 50, 50);
-    doc.text(`Struktura ocjene rizika (${result.risk_score}/100)`, margin, y);
-    y += 5;
-
-    for (const line of result.risk_score_breakdown) {
-      addPageIfNeeded(5);
-      doc.setFont(fontFamily, "normal");
-      doc.setFontSize(8);
-      if (line.startsWith("-")) {
-        doc.setTextColor(22, 163, 74);
-      } else {
-        doc.setTextColor(220, 38, 38);
-      }
-      doc.text(line, margin + 4, y);
-      y += 3.5;
-    }
-    doc.setTextColor(50, 50, 50);
-    doc.setFont(fontFamily, "bold");
-    doc.text(`= ${result.risk_score}/100 → ${result.overall_risk}`, margin + 4, y);
-    y += 6;
-  }
-
-  // ── Positives ──
-  if (result.positives.length > 0) {
-    addPageIfNeeded(20);
-    doc.setFontSize(11);
-    doc.setFont(fontFamily, "bold");
-    doc.setTextColor(22, 163, 74);
-    doc.text(`Pozitivne strane (${result.positives.length})`, margin, y);
-    y += 5;
-    doc.setFont(fontFamily, "normal");
-    doc.setFontSize(9);
-    doc.setTextColor(50, 50, 50);
-    for (const p of result.positives) {
-      addPageIfNeeded(5);
-      doc.text(`✓ ${p}`, margin + 4, y);
-      y += 4;
-    }
-    y += 2;
-  }
-
-  // ── Disclaimer ──
-  if (result.disclaimer) {
-    addPageIfNeeded(20);
-    doc.setFontSize(7);
-    doc.setTextColor(150, 150, 150);
-    doc.setFont(fontFamily, "italic");
-    const disclaimerLines = doc.splitTextToSize(result.disclaimer, contentW);
-    for (const line of disclaimerLines) {
-      addPageIfNeeded(4);
-      doc.text(line, margin, y);
-      y += 3;
-    }
-  }
-
-  // ── Footer on every page ──
-  const totalPages = doc.internal.pages.length - 1;
-  for (let i = 1; i <= totalPages; i++) {
-    doc.setPage(i);
-    const pageH = doc.internal.pageSize.getHeight();
-    doc.setDrawColor(200, 200, 200);
-    doc.line(margin, pageH - 14, pageW - margin, pageH - 14);
-    doc.setFontSize(7);
-    doc.setTextColor(150, 150, 150);
-    doc.setFont(fontFamily, "normal");
-    doc.text("PravoTek — analiza ugovora", margin, pageH - 9);
-    doc.text(`Stranica ${i} / ${totalPages}`, pageW - margin, pageH - 9, { align: "right" });
-    doc.text("Ovaj izvještaj ne zamjenjuje pravni savjet ovlaštenog odvjetnika.", margin, pageH - 5);
-  }
-
-  // ── Save ──
-  const filename = `Analiza_ugovora_${result.document_type.replace(/[^a-zA-Z0-9ČčĆćŠšŽžĐđ]/g, "_")}_${new Date().toISOString().slice(0, 10)}.pdf`;
-  doc.save(filename);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `Analiza_ugovora_${result.document_type.replace(/[^a-zA-Z0-9ČčĆćŠšŽžĐđ]/g, "_")}_${new Date().toISOString().slice(0, 10)}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
