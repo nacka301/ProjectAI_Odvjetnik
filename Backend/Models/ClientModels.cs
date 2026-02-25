@@ -93,6 +93,13 @@ public sealed class TroskovnikRecord
     public string? KlijentOib { get; set; }
     public string? OdvjetnikIme { get; set; }
     public string? OdvjetnikOib { get; set; }
+    public string? OdvjetnikAdresa { get; set; }
+    public string? OdvjetnikIban { get; set; }
+    public string? ProtustrankaIme { get; set; }
+    public string? ProtustrankaOib { get; set; }
+    public string? ProtustrankaAdresa { get; set; }
+    public string? ProtustrankaPolozaj { get; set; }
+    public bool HasVat { get; set; }
     public object? RawJsonOutput { get; set; }
 }
 
@@ -113,6 +120,13 @@ public sealed class TroskovnikReadRecord
     public string? KlijentOib { get; set; }
     public string? OdvjetnikIme { get; set; }
     public string? OdvjetnikOib { get; set; }
+    public string? OdvjetnikAdresa { get; set; }
+    public string? OdvjetnikIban { get; set; }
+    public string? ProtustrankaIme { get; set; }
+    public string? ProtustrankaOib { get; set; }
+    public string? ProtustrankaAdresa { get; set; }
+    public string? ProtustrankaPolozaj { get; set; }
+    public bool HasVat { get; set; }
     public object? RawJsonOutput { get; set; }
 }
 

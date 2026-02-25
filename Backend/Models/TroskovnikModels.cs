@@ -26,6 +26,21 @@ public sealed class TroskovnikRequest
     /// <summary>Podaci o odvjetniku (za ispis).</summary>
     public TroskovnikParty? Odvjetnik { get; set; }
 
+    /// <summary>Adresa odvjetnika.</summary>
+    public string? OdvjetnikAdresa { get; set; }
+
+    /// <summary>IBAN odvjetnika.</summary>
+    public string? OdvjetnikIban { get; set; }
+
+    /// <summary>Podaci o protustranci.</summary>
+    public TroskovnikParty? Protustranka { get; set; }
+
+    /// <summary>Položaj protustranke (tuženik, predlagatelj, ...).</summary>
+    public string? ProtustrankaPolozaj { get; set; }
+
+    /// <summary>Obračunaj PDV (true = obračunaj, false = bez PDV-a).</summary>
+    public bool HasVat { get; set; } = true;
+
     /// <summary>Opis predmeta / napomena.</summary>
     public string? OpisPredmeta { get; set; }
 

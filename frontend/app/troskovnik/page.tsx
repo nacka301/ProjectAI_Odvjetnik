@@ -200,6 +200,14 @@ function TroskovnikContent() {
   const [klijentGrad, setKlijentGrad] = useState("");
   const [opisPredmeta, setOpisPredmeta] = useState("");
   const [showParties, setShowParties] = useState(false);
+  // New fields for PDV toggle and party data
+  const [hasVat, setHasVat] = useState(true);
+  const [odvjetnikIban, setOdvjetnikIban] = useState("");
+  const [protustrankaIme, setProtustrankaIme] = useState("");
+  const [protustrankaOib, setProtustrankaOib] = useState("");
+  const [protustrankaAdresa, setProtustrankaAdresa] = useState("");
+  const [protustrankaGrad, setProtustrankaGrad] = useState("");
+  const [protustrankaPolozaj, setProtustrankaPolozaj] = useState("");
 
   // ── Client picker state ──
   type ClientOption = { id: string; ime_naziv: string; oib?: string; adresa?: string; grad?: string; tip: string };
@@ -399,9 +407,15 @@ function TroskovnikContent() {
         odvjetnik: odvjetnikIme
           ? { ime: odvjetnikIme, oib: odvjetnikOib || undefined, adresa: odvjetnikAdresa || undefined, grad: odvjetnikGrad || undefined }
           : undefined,
+        odvjetnik_iban: odvjetnikIban || undefined,
         klijent: klijentIme
           ? { ime: klijentIme, oib: klijentOib || undefined, adresa: klijentAdresa || undefined, grad: klijentGrad || undefined }
           : undefined,
+        protustranka: protustrankaIme
+          ? { ime: protustrankaIme, oib: protustrankaOib || undefined, adresa: protustrankaAdresa || undefined, grad: protustrankaGrad || undefined }
+          : undefined,
+        protustranka_polozaj: protustrankaPolozaj || undefined,
+        has_vat: hasVat,
         opis_predmeta: opisPredmeta || undefined,
       };
 
@@ -449,9 +463,15 @@ function TroskovnikContent() {
         odvjetnik: odvjetnikIme
           ? { ime: odvjetnikIme, oib: odvjetnikOib || undefined, adresa: odvjetnikAdresa || undefined, grad: odvjetnikGrad || undefined }
           : undefined,
+        odvjetnik_iban: odvjetnikIban || undefined,
         klijent: klijentIme
           ? { ime: klijentIme, oib: klijentOib || undefined, adresa: klijentAdresa || undefined, grad: klijentGrad || undefined }
           : undefined,
+        protustranka: protustrankaIme
+          ? { ime: protustrankaIme, oib: protustrankaOib || undefined, adresa: protustrankaAdresa || undefined, grad: protustrankaGrad || undefined }
+          : undefined,
+        protustranka_polozaj: protustrankaPolozaj || undefined,
+        has_vat: hasVat,
         opis_predmeta: opisPredmeta || undefined,
         client_id: selectedClientId || undefined,
       };
@@ -495,9 +515,11 @@ function TroskovnikContent() {
       })
       .join("\n");
 
+    // Dynamic PDV label
+    const pdvLabel = result ? (result.pdv > 0 ? `PDV 25%` : `PDV 0%`) : (liveCalc.pdv > 0 ? `PDV 25%` : `PDV 0%`);
     const totals = result
-      ? `\n\n;;;;;Ukupno bodova;${result.ukupno_bodova}\n;;;;;Ukupno bez PDV;${result.ukupno_eur_bez_pdv.toFixed(2)}\n;;;;;PDV 25%;${result.pdv.toFixed(2)}\n;;;;;UKUPNO s PDV;${result.ukupno_eur_s_pdv.toFixed(2)}`
-      : `\n\n;;;;;Ukupno bodova;${liveCalc.ukupnoBodova}\n;;;;;Ukupno bez PDV;${liveCalc.ukupnoEur.toFixed(2)}\n;;;;;PDV 25%;${liveCalc.pdv.toFixed(2)}\n;;;;;UKUPNO s PDV;${liveCalc.ukupnoSPdv.toFixed(2)}`;
+      ? `\n\n;;;;;Ukupno bodova;${result.ukupno_bodova}\n;;;;;Ukupno bez PDV;${result.ukupno_eur_bez_pdv.toFixed(2)}\n;;;;;${pdvLabel};${result.pdv.toFixed(2)}\n;;;;;UKUPNO s PDV;${result.ukupno_eur_s_pdv.toFixed(2)}`
+      : `\n\n;;;;;Ukupno bodova;${liveCalc.ukupnoBodova}\n;;;;;Ukupno bez PDV;${liveCalc.ukupnoEur.toFixed(2)}\n;;;;;${pdvLabel};${liveCalc.pdv.toFixed(2)}\n;;;;;UKUPNO s PDV;${liveCalc.ukupnoSPdv.toFixed(2)}`;
 
     const bom = "\uFEFF";
     const blob = new Blob([bom + header + rows + totals], { type: "text/csv;charset=utf-8" });
@@ -1018,8 +1040,8 @@ function TroskovnikContent() {
 
             <div className="p-6">
               {/* Party info */}
-              {(result.odvjetnik?.ime || result.klijent?.ime) && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              {(result.odvjetnik?.ime || result.klijent?.ime || result.protustranka?.ime) && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                   {result.odvjetnik?.ime && (
                     <div className="bg-slate-50 rounded-xl p-4">
                       <div className="flex items-center gap-2 mb-2">
@@ -1029,6 +1051,7 @@ function TroskovnikContent() {
                       <p className="text-sm font-medium text-slate-900">{result.odvjetnik.ime}</p>
                       {result.odvjetnik.oib && <p className="text-xs text-slate-500">OIB: {result.odvjetnik.oib}</p>}
                       {result.odvjetnik.adresa && <p className="text-xs text-slate-500">{result.odvjetnik.adresa}{result.odvjetnik.grad ? `, ${result.odvjetnik.grad}` : ""}</p>}
+                      {result.odvjetnik.iban && <p className="text-xs text-slate-500">IBAN: {result.odvjetnik.iban}</p>}
                     </div>
                   )}
                   {result.klijent?.ime && (
@@ -1040,6 +1063,18 @@ function TroskovnikContent() {
                       <p className="text-sm font-medium text-slate-900">{result.klijent.ime}</p>
                       {result.klijent.oib && <p className="text-xs text-slate-500">OIB: {result.klijent.oib}</p>}
                       {result.klijent.adresa && <p className="text-xs text-slate-500">{result.klijent.adresa}{result.klijent.grad ? `, ${result.klijent.grad}` : ""}</p>}
+                    </div>
+                  )}
+                  {result.protustranka?.ime && (
+                    <div className="bg-slate-50 rounded-xl p-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <User className="h-4 w-4 text-slate-500" />
+                        <span className="text-xs font-semibold text-slate-800 uppercase tracking-wider">Protustranka</span>
+                      </div>
+                      <p className="text-sm font-medium text-slate-900">{result.protustranka.ime}</p>
+                      {result.protustranka.oib && <p className="text-xs text-slate-500">OIB: {result.protustranka.oib}</p>}
+                      {result.protustranka.adresa && <p className="text-xs text-slate-500">{result.protustranka.adresa}{result.protustranka.grad ? `, ${result.protustranka.grad}` : ""}</p>}
+                      {result.protustranka_polozaj && <p className="text-xs text-slate-500">Položaj: {result.protustranka_polozaj}</p>}
                     </div>
                   )}
                 </div>

@@ -70,6 +70,7 @@ public class TroskovnikController : ControllerBase
         if (request.Stavke is null || request.Stavke.Count == 0)
             return BadRequest(new { error = "Morate odabrati barem jednu stavku." });
 
+
         var result = _service.Izracunaj(request);
 
         var record = new TroskovnikRecord
@@ -87,6 +88,13 @@ public class TroskovnikController : ControllerBase
             KlijentOib = result.Klijent?.Oib,
             OdvjetnikIme = result.Odvjetnik?.Ime,
             OdvjetnikOib = result.Odvjetnik?.Oib,
+            OdvjetnikAdresa = request.OdvjetnikAdresa,
+            OdvjetnikIban = request.OdvjetnikIban,
+            ProtustrankaIme = request.Protustranka?.Ime,
+            ProtustrankaOib = request.Protustranka?.Oib,
+            ProtustrankaAdresa = request.Protustranka?.Adresa,
+            ProtustrankaPolozaj = request.ProtustrankaPolozaj,
+            HasVat = request.HasVat,
             RawJsonOutput = result
         };
 

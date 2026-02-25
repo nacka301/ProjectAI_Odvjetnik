@@ -232,7 +232,9 @@ public sealed class TroskovnikService
 
         var ukupnoBodova = lines.Sum(l => l.UkupnoBodova);
         var ukupnoEur = ukupnoBodova * TarifaConstants.BodValue;
-        var pdv = Math.Round(ukupnoEur * TarifaConstants.PdvRate, 2);
+        decimal pdv = 0;
+        if (request.HasVat)
+            pdv = Math.Round(ukupnoEur * TarifaConstants.PdvRate, 2);
 
         return new TroskovnikResponse
         {
