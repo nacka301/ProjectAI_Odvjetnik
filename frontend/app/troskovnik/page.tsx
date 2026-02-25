@@ -436,7 +436,6 @@ function TroskovnikContent() {
         // Keep legacy `has_vat` for backward compatibility, mirror new flag
         has_vat: isPdvUkljucen,
         is_pdv_ukljucen: isPdvUkljucen,
-        opis_predmeta: opisPredmeta || undefined,
       };
 
       const res = await fetch(`${API}/api/troskovnik/izracunaj`, {
@@ -499,7 +498,6 @@ function TroskovnikContent() {
         // Keep legacy `has_vat` for backward compatibility, mirror new flag
         has_vat: isPdvUkljucen,
         is_pdv_ukljucen: isPdvUkljucen,
-        opis_predmeta: opisPredmeta || undefined,
         client_id: selectedClientId || undefined,
       };
 
@@ -803,14 +801,28 @@ function TroskovnikContent() {
                 <div className="px-4 pb-4 space-y-4">
                   {/* Predmet */}
                   <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">Opis predmeta</label>
-                    <input
-                      type="text"
-                      value={opisPredmeta}
-                      onChange={(e) => setOpisPredmeta(e.target.value)}
-                      placeholder="npr. Parnični predmet P-123/24"
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-                    />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-600 mb-1">Sud</label>
+                        <input
+                          type="text"
+                          value={predmetSud}
+                          onChange={(e) => setPredmetSud(e.target.value)}
+                          placeholder="npr. Općinski sud u Zagrebu"
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-600 mb-1">Poslovni broj</label>
+                        <input
+                          type="text"
+                          value={predmetPoslovniBroj}
+                          onChange={(e) => setPredmetPoslovniBroj(e.target.value)}
+                          placeholder="npr. P-123/24"
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                        />
+                      </div>
+                    </div>
                   </div>
 
                   {/* Client picker */}
@@ -854,6 +866,7 @@ function TroskovnikContent() {
                       <input type="text" value={odvjetnikOib} onChange={(e) => setOdvjetnikOib(e.target.value)} placeholder="OIB" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
                       <input type="text" value={odvjetnikAdresa} onChange={(e) => setOdvjetnikAdresa(e.target.value)} placeholder="Adresa" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
                       <input type="text" value={odvjetnikGrad} onChange={(e) => setOdvjetnikGrad(e.target.value)} placeholder="Grad" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                      <input type="text" value={odvjetnikIban} onChange={(e) => setOdvjetnikIban(e.target.value)} placeholder="IBAN (Broj računa)" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
                     </div>
                   
                     {/* Protustranka */}
@@ -884,7 +897,7 @@ function TroskovnikContent() {
                     <div className="space-y-2">
                       <div className="flex items-center gap-1.5 mb-1">
                         <User className="h-3.5 w-3.5 text-slate-400" />
-                        <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Klijent</span>
+                        <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">ZASTUPANA STRANKA</span>
                       </div>
                       <input type="text" value={klijentIme} onChange={(e) => setKlijentIme(e.target.value)} placeholder="Ime / Naziv" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
                       <input type="text" value={klijentOib} onChange={(e) => setKlijentOib(e.target.value)} placeholder="OIB" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
@@ -1235,9 +1248,9 @@ function TroskovnikContent() {
                 </div>
               )}
 
-              {result.opis_predmeta && (
+              {(result.sud || (result as any).broj_predmeta) && (
                 <p className="text-sm text-slate-600 mb-4">
-                  <span className="font-semibold">Predmet:</span> {result.opis_predmeta}
+                  <span className="font-semibold">Predmet:</span> {result.sud ?? ""}{(result as any).broj_predmeta ? ` · ${ (result as any).broj_predmeta}` : ""}
                 </p>
               )}
 
