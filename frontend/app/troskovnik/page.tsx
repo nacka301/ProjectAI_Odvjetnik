@@ -344,10 +344,11 @@ function TroskovnikContent() {
 
     const ukupnoBodova = lines.reduce((s, l) => s + l.ukupno_bodova, 0);
     const ukupnoEur = ukupnoBodova * BOD_VALUE;
-    const pdv = Math.round(ukupnoEur * PDV_RATE * 100) / 100;
+    const rawPdv = Math.round(ukupnoEur * PDV_RATE * 100) / 100;
+    const pdv = hasVat ? rawPdv : 0;
 
     return { lines, ukupnoBodova, ukupnoEur, pdv, ukupnoSPdv: ukupnoEur + pdv };
-  }, [selectedItems, katalog, baseBodovi]);
+  }, [selectedItems, katalog, baseBodovi, hasVat]);
 
   // ── Handlers ──
   const toggleCategory = useCallback((cat: string) => {
@@ -909,8 +910,20 @@ function TroskovnikContent() {
                         <span>Ukupno bez PDV</span>
                         <span className="font-semibold">{fmtEur(liveCalc.ukupnoEur)}</span>
                       </div>
+                      <div className="flex items-center justify-between text-xs text-slate-500">
+                        <label className="inline-flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={hasVat}
+                            onChange={(e) => setHasVat(e.target.checked)}
+                            className="h-4 w-4 rounded border-slate-200 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <span className="text-xs">Obračunaj PDV</span>
+                        </label>
+                        <span className="font-semibold">{(result && (result as any).has_vat !== undefined) ? ((result as any).has_vat ? 'PDV 25%' : 'PDV 0%') : (hasVat ? 'PDV 25%' : 'PDV 0%')}</span>
+                      </div>
                       <div className="flex justify-between text-xs text-slate-500">
-                        <span>PDV 25%</span>
+                        <span></span>
                         <span className="font-semibold">{fmtEur(liveCalc.pdv)}</span>
                       </div>
                       <div className="flex justify-between text-sm font-bold text-indigo-700 pt-1">
