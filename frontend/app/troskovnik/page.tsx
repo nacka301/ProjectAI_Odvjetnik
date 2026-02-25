@@ -76,7 +76,9 @@ interface TroskovnikResponse {
   ukupno_eur_s_pdv: number;
   vrijednost_boda: number;
   klijent: { ime: string; oib?: string; adresa?: string; grad?: string } | null;
-  odvjetnik: { ime: string; oib?: string; adresa?: string; grad?: string } | null;
+  odvjetnik: { ime: string; oib?: string; adresa?: string; grad?: string; iban?: string } | null;
+  protustranka?: { ime: string; oib?: string; adresa?: string; grad?: string } | null;
+  protustranka_polozaj?: string | null;
   opis_predmeta: string | null;
   datum_izrade: string;
 }
