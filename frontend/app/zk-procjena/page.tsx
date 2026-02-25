@@ -38,6 +38,7 @@ import {
   BarChart3,
 } from "lucide-react";
 import { uploadPdfToStorage } from "@/lib/supabase";
+import { formatNumber } from "@/lib/format";
 import LocationSelector from "@/components/LocationSelector";
 import SharedProcessingView, { type ProcessingStage } from "@/components/SharedProcessingView";
 import ResultActions from "@/components/ResultActions";
@@ -727,8 +728,8 @@ export default function ZkProcjenaPage() {
                   <span className="text-sm font-medium text-gray-700 truncate">
                     {file.name}
                   </span>
-                  <span className="text-xs text-gray-400 shrink-0">
-                    ({(file.size / 1024).toFixed(0)} KB)
+                    <span className="text-xs text-gray-400 shrink-0">
+                    ({formatNumber(file.size / 1024, 0)} KB)
                   </span>
                 </div>
                 <div className="flex flex-col items-end gap-2">
@@ -1058,7 +1059,7 @@ export default function ZkProcjenaPage() {
                       {zkAnalysis.katastar_uskladjenost.area_difference_m2.toLocaleString("hr-HR")} m²
                       <span className="text-gray-600 ml-2">
                         ({zkAnalysis.katastar_uskladjenost.area_difference_percent > 0 ? "+" : ""}
-                        {zkAnalysis.katastar_uskladjenost.area_difference_percent.toFixed(1)}%)
+                        {formatNumber(zkAnalysis.katastar_uskladjenost.area_difference_percent, 1)}%)
                       </span>
                     </p>
                   </div>
@@ -1624,7 +1625,7 @@ export default function ZkProcjenaPage() {
                             <p className={`text-xs font-medium ${
                               cv < 15 ? "text-green-600" : cv < 30 ? "text-yellow-600" : "text-red-600"
                             }`}>
-                              CV: {typeof cv === 'number' ? cv.toFixed(1) : cv}%
+                              CV: {typeof cv === 'number' ? formatNumber(cv, 1) : cv}%
                             </p>
                           );
                         })()}
@@ -1749,7 +1750,7 @@ export default function ZkProcjenaPage() {
                                     }`} style={{ width: `${Math.max(c.similarity_score * 100, 5)}%` }} />
                                   </div>
                                   <span className={`text-xs w-8 text-right ${c.is_outlier ? "text-gray-400" : "text-gray-500"}`}>
-                                    {(c.similarity_score * 100).toFixed(0)}%
+                                    {formatNumber(c.similarity_score * 100, 0)}%
                                   </span>
                                 </div>
                               </td>

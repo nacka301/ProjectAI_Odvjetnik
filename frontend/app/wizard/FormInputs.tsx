@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { formatNumber } from "@/lib/format";
 
 // ═══════════════════════════════════════════
 //  REUSABLE FORM INPUT COMPONENTS
@@ -84,7 +85,7 @@ export function SimilarityBadge({ score }: { score: number }) {
   const label = pct >= 70 ? "Visoka" : pct >= 40 ? "Srednja" : "Niska";
   return (
     <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${color}`}>
-      {label} {pct.toFixed(0)}%
+      {label} {formatNumber(pct, 0)}%
     </span>
   );
 }

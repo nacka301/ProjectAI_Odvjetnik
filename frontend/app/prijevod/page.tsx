@@ -13,6 +13,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import SharedProcessingView, { type ProcessingStage } from "@/components/SharedProcessingView";
+import { formatNumber } from "@/lib/format";
 import { API_BASE } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
 import { useCredits, getModuleQuota } from "@/lib/useCredits";
@@ -337,7 +338,7 @@ export default function TranslationPage() {
             <div className="rounded-xl bg-white p-4 shadow-sm border border-gray-100">
               <div className="text-xs text-gray-500 mb-1">Vrijeme</div>
               <div className="text-sm font-semibold text-gray-800">
-                {(result.processing_time_ms / 1000).toFixed(1)}s
+                {formatNumber(result.processing_time_ms / 1000, 1)}s
               </div>
             </div>
           </div>

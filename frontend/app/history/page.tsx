@@ -27,6 +27,7 @@ import {
   type EvaluationRow,
 } from "@/lib/supabase";
 import { generateValuationPdf } from "@/lib/generatePdf";
+import { formatNumber } from "@/lib/format";
 import type { ValuationResult } from "@/app/wizard/types";
 import AppHeader from "@/components/AppHeader";
 
@@ -351,7 +352,7 @@ export default function HistoryPage() {
                         {raw?.realization_discount_percent !== undefined && (
                           <div className="rounded-lg bg-white border border-gray-200 p-3">
                             <p className="text-xs text-gray-500">Diskont</p>
-                            <p className="text-sm font-bold text-gray-900">{raw.realization_discount_percent.toFixed(1)}%</p>
+                            <p className="text-sm font-bold text-gray-900">{formatNumber(raw.realization_discount_percent, 1)}%</p>
                           </div>
                         )}
                       </div>

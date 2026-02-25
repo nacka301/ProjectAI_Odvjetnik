@@ -36,6 +36,7 @@ import { useAuth } from "@/lib/useAuth";
 import { useCredits, getModuleQuota } from "@/lib/useCredits";
 import { CreditQuotaBadge, CreditExhaustedWarning } from "@/components/CreditQuotaBadge";
 import { PrivacyBanner } from "@/components/TrustComponents";
+import { formatNumber } from "@/lib/format";
 
 // ── Types matching backend ContractAnalysisResult (V49) ──
 
@@ -1263,7 +1264,7 @@ export default function ContractAnalysisPage() {
                 <div className="px-4 sm:px-6 py-2 bg-indigo-50 border-t border-indigo-200 text-xs text-indigo-600 flex flex-wrap items-center gap-2 sm:gap-4">
                   <span>Lažnih uzbuna uklonjeno: {result.critic_review.false_positives_removed}</span>
                   <span>Korekcije ozbiljnosti: {result.critic_review.severity_downgrades}</span>
-                  <span>Vrijeme: {result.critic_review.critic_time_seconds.toFixed(1)}s</span>
+                  <span>Vrijeme: {formatNumber(result.critic_review.critic_time_seconds, 1)}s</span>
                 </div>
               </div>
             )}

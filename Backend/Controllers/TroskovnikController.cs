@@ -30,7 +30,7 @@ public class TroskovnikController : ControllerBase
 
     /// <summary>POST /api/troskovnik/izracunaj — izračunava troškovnik.</summary>
     [HttpPost("izracunaj")]
-    public IActionResult Izracunaj([FromBody] TroskovnikRequest request)
+    public async Task<IActionResult> Izracunaj([FromBody] TroskovnikRequest request)
     {
         if (request.VrijednostSpora < 0)
             return BadRequest(new { error = "Vrijednost spora ne može biti negativna." });
@@ -39,6 +39,18 @@ public class TroskovnikController : ControllerBase
             return BadRequest(new { error = "Morate odabrati barem jednu stavku." });
 
         var result = _service.Izracunaj(request);
+
+        // If a case id was provided, attempt to enrich the response with case metadata (sud, broj predmeta)
+        if (!string.IsNullOrEmpty(request.CaseId))
+        {
+            var cas = await _clientCaseService.GetCaseByIdAsync(request.CaseId);
+            if (cas != null)
+            {
+                result.Sud = cas.Sud;
+                result.BrojPredmeta = cas.BrojPredmeta;
+            }
+        }
+
         return Ok(result);
     }
 
@@ -84,16 +96,38 @@ public class TroskovnikController : ControllerBase
             UkupnoEurBezPdv = result.UkupnoEurBezPdv,
             Pdv = result.Pdv,
             UkupnoEurSPdv = result.UkupnoEurSPdv,
-            KlijentIme = result.Klijent?.Ime,
-            KlijentOib = result.Klijent?.Oib,
-            OdvjetnikIme = result.Odvjetnik?.Ime,
-            OdvjetnikOib = result.Odvjetnik?.Oib,
-            OdvjetnikAdresa = request.OdvjetnikAdresa,
-            OdvjetnikIban = request.OdvjetnikIban,
-            ProtustrankaIme = request.Protustranka?.Ime,
-            ProtustrankaOib = request.Protustranka?.Oib,
-            ProtustrankaAdresa = request.Protustranka?.Adresa,
-            ProtustrankaPolozaj = request.ProtustrankaPolozaj,
+            // Nested objects
+            Odvjetnik = request.Odvjetnik is null ? null : new OdvjetnikInfo
+            {
+                Naziv = request.Odvjetnik?.Naziv,
+                Oib = request.Odvjetnik?.Oib,
+                Adresa = request.Odvjetnik?.Adresa,
+                Iban = request.Odvjetnik?.Iban
+            },
+            Predmet = new PredmetInfo
+            {
+                Sud = request.Predmet?.Sud ?? request.OpisPredmeta,
+                PoslovniBroj = request.Predmet?.PoslovniBroj ?? request.CaseId
+            },
+            Stranke = new StrankeInfo
+            {
+                ZastupanaStranka = new StrankaInfo
+                {
+                    Polozaj = "zastupana",
+                    Naziv = result.Klijent?.Ime,
+                    Oib = result.Klijent?.Oib,
+                    Adresa = null
+                },
+                Protustranka = request.Stranke?.Protustranka is null ? null : new StrankaInfo
+                {
+                    Polozaj = request.Stranke?.Protustranka?.Polozaj ?? request.ProtustrankaPolozaj,
+                    Naziv = request.Stranke?.Protustranka?.Naziv,
+                    Oib = request.Stranke?.Protustranka?.Oib,
+                    Adresa = request.Stranke?.Protustranka?.Adresa
+                }
+            },
+            // Save both flags for compatibility: prefer explicit IsPdvUkljucen if provided
+            IsPdvUkljucen = request.IsPdvUkljucen ?? request.HasVat,
             HasVat = request.HasVat,
             RawJsonOutput = result
         };

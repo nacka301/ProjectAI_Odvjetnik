@@ -31,6 +31,7 @@ import { API_BASE } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
 import { useCredits, getModuleQuota } from "@/lib/useCredits";
 import { CreditQuotaBadge, CreditExhaustedWarning } from "@/components/CreditQuotaBadge";
+import { formatEur, formatNumber } from "@/lib/format";
 
 const API = API_BASE;
 const BOD_VALUE = 2.0;
@@ -79,8 +80,12 @@ interface TroskovnikResponse {
   odvjetnik: { ime: string; oib?: string; adresa?: string; grad?: string; iban?: string } | null;
   protustranka?: { ime: string; oib?: string; adresa?: string; grad?: string } | null;
   protustranka_polozaj?: string | null;
+  is_pdv_ukljucen?: boolean;
+  has_vat?: boolean;
   opis_predmeta: string | null;
   datum_izrade: string;
+  sud?: string | null;
+  broj_predmeta?: string | null;
 }
 
 // ── Tbr. 7.1 client-side point lookup (mirrors backend) ──
@@ -201,15 +206,20 @@ function TroskovnikContent() {
   const [klijentAdresa, setKlijentAdresa] = useState("");
   const [klijentGrad, setKlijentGrad] = useState("");
   const [opisPredmeta, setOpisPredmeta] = useState("");
+  const [predmetSud, setPredmetSud] = useState("");
+  const [predmetPoslovniBroj, setPredmetPoslovniBroj] = useState("");
   const [showParties, setShowParties] = useState(false);
   // New fields for PDV toggle and party data
   const [hasVat, setHasVat] = useState(true);
+  // Explicit flag: whether the entity is in the VAT system (preferred by backend)
+  const [isPdvUkljucen, setIsPdvUkljucen] = useState(false);
   const [odvjetnikIban, setOdvjetnikIban] = useState("");
   const [protustrankaIme, setProtustrankaIme] = useState("");
   const [protustrankaOib, setProtustrankaOib] = useState("");
   const [protustrankaAdresa, setProtustrankaAdresa] = useState("");
   const [protustrankaGrad, setProtustrankaGrad] = useState("");
   const [protustrankaPolozaj, setProtustrankaPolozaj] = useState("");
+  const [zastupanaPolozaj, setZastupanaPolozaj] = useState("");
 
   // ── Client picker state ──
   type ClientOption = { id: string; ime_naziv: string; oib?: string; adresa?: string; grad?: string; tip: string };
@@ -407,10 +417,16 @@ function TroskovnikContent() {
           item_id: itemId,
           kolicina,
         })),
+        // nested new schema
         odvjetnik: odvjetnikIme
-          ? { ime: odvjetnikIme, oib: odvjetnikOib || undefined, adresa: odvjetnikAdresa || undefined, grad: odvjetnikGrad || undefined }
+          ? { naziv: odvjetnikIme, oib: odvjetnikOib || undefined, adresa: odvjetnikAdresa || undefined, iban: odvjetnikIban || undefined }
           : undefined,
-        odvjetnik_iban: odvjetnikIban || undefined,
+        predmet: { sud: predmetSud || undefined, poslovni_broj: predmetPoslovniBroj || undefined },
+        stranke: {
+          zastupana_stranka: klijentIme ? { polozaj: zastupanaPolozaj || undefined, naziv: klijentIme, oib: klijentOib || undefined, adresa: klijentAdresa || undefined } : undefined,
+          protustranka: protustrankaIme ? { polozaj: protustrankaPolozaj || undefined, naziv: protustrankaIme, oib: protustrankaOib || undefined, adresa: protustrankaAdresa || undefined } : undefined
+        },
+        // legacy fields kept for compatibility
         klijent: klijentIme
           ? { ime: klijentIme, oib: klijentOib || undefined, adresa: klijentAdresa || undefined, grad: klijentGrad || undefined }
           : undefined,
@@ -419,6 +435,7 @@ function TroskovnikContent() {
           : undefined,
         protustranka_polozaj: protustrankaPolozaj || undefined,
         has_vat: hasVat,
+        is_pdv_ukljucen: isPdvUkljucen,
         opis_predmeta: opisPredmeta || undefined,
       };
 
@@ -464,9 +481,14 @@ function TroskovnikContent() {
           kolicina,
         })),
         odvjetnik: odvjetnikIme
-          ? { ime: odvjetnikIme, oib: odvjetnikOib || undefined, adresa: odvjetnikAdresa || undefined, grad: odvjetnikGrad || undefined }
+          ? { naziv: odvjetnikIme, oib: odvjetnikOib || undefined, adresa: odvjetnikAdresa || undefined, iban: odvjetnikIban || undefined }
           : undefined,
-        odvjetnik_iban: odvjetnikIban || undefined,
+        predmet: { sud: predmetSud || undefined, poslovni_broj: predmetPoslovniBroj || undefined },
+        stranke: {
+          zastupana_stranka: klijentIme ? { polozaj: zastupanaPolozaj || undefined, naziv: klijentIme, oib: klijentOib || undefined, adresa: klijentAdresa || undefined } : undefined,
+          protustranka: protustrankaIme ? { polozaj: protustrankaPolozaj || undefined, naziv: protustrankaIme, oib: protustrankaOib || undefined, adresa: protustrankaAdresa || undefined } : undefined
+        },
+        // legacy
         klijent: klijentIme
           ? { ime: klijentIme, oib: klijentOib || undefined, adresa: klijentAdresa || undefined, grad: klijentGrad || undefined }
           : undefined,
@@ -475,6 +497,7 @@ function TroskovnikContent() {
           : undefined,
         protustranka_polozaj: protustrankaPolozaj || undefined,
         has_vat: hasVat,
+        is_pdv_ukljucen: isPdvUkljucen,
         opis_predmeta: opisPredmeta || undefined,
         client_id: selectedClientId || undefined,
       };
@@ -514,15 +537,15 @@ function TroskovnikContent() {
     const rows = source
       .map((l, i) => {
         const rbr = "rbr" in l ? l.rbr : i + 1;
-        return `${rbr};"${l.tarifni_broj}";"${l.opis}";${l.kolicina};${l.bodova_po_jedinici};${l.ukupno_bodova};${l.iznos_eur.toFixed(2)}`;
+        return `${rbr};"${l.tarifni_broj}";"${l.opis}";${l.kolicina};${l.bodova_po_jedinici};${l.ukupno_bodova};${formatNumber(l.iznos_eur)}`;
       })
       .join("\n");
 
     // Dynamic PDV label
     const pdvLabel = result ? (result.pdv > 0 ? `PDV 25%` : `PDV 0%`) : (liveCalc.pdv > 0 ? `PDV 25%` : `PDV 0%`);
     const totals = result
-      ? `\n\n;;;;;Ukupno bodova;${result.ukupno_bodova}\n;;;;;Ukupno bez PDV;${result.ukupno_eur_bez_pdv.toFixed(2)}\n;;;;;${pdvLabel};${result.pdv.toFixed(2)}\n;;;;;UKUPNO s PDV;${result.ukupno_eur_s_pdv.toFixed(2)}`
-      : `\n\n;;;;;Ukupno bodova;${liveCalc.ukupnoBodova}\n;;;;;Ukupno bez PDV;${liveCalc.ukupnoEur.toFixed(2)}\n;;;;;${pdvLabel};${liveCalc.pdv.toFixed(2)}\n;;;;;UKUPNO s PDV;${liveCalc.ukupnoSPdv.toFixed(2)}`;
+      ? `\n\n;;;;;Ukupno bodova;${result.ukupno_bodova}\n;;;;;Ukupno bez PDV;${formatNumber(result.ukupno_eur_bez_pdv)}\n;;;;;${pdvLabel};${formatNumber(result.pdv)}\n;;;;;UKUPNO s PDV;${formatNumber(result.ukupno_eur_s_pdv)}`
+      : `\n\n;;;;;Ukupno bodova;${liveCalc.ukupnoBodova}\n;;;;;Ukupno bez PDV;${formatNumber(liveCalc.ukupnoEur)}\n;;;;;${pdvLabel};${formatNumber(liveCalc.pdv)}\n;;;;;UKUPNO s PDV;${formatNumber(liveCalc.ukupnoSPdv)}`;
 
     const bom = "\uFEFF";
     const blob = new Blob([bom + header + rows + totals], { type: "text/csv;charset=utf-8" });
@@ -831,6 +854,30 @@ function TroskovnikContent() {
                       <input type="text" value={odvjetnikAdresa} onChange={(e) => setOdvjetnikAdresa(e.target.value)} placeholder="Adresa" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
                       <input type="text" value={odvjetnikGrad} onChange={(e) => setOdvjetnikGrad(e.target.value)} placeholder="Grad" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
                     </div>
+                  
+                    {/* Protustranka */}
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <User className="h-3.5 w-3.5 text-slate-400" />
+                        <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Protustranka</span>
+                      </div>
+                      <input type="text" value={protustrankaIme} onChange={(e) => setProtustrankaIme(e.target.value)} placeholder="Ime / Naziv" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                      <input type="text" value={protustrankaOib} onChange={(e) => setProtustrankaOib(e.target.value)} placeholder="OIB" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                      <input type="text" value={protustrankaAdresa} onChange={(e) => setProtustrankaAdresa(e.target.value)} placeholder="Adresa" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                      <input type="text" value={protustrankaGrad} onChange={(e) => setProtustrankaGrad(e.target.value)} placeholder="Grad" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                      <label className="block text-xs font-semibold text-slate-600 mb-1 mt-2">Položaj protustranke</label>
+                      <select
+                        value={protustrankaPolozaj}
+                        onChange={(e) => setProtustrankaPolozaj(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                      >
+                        <option value="">— odaberi položaj —</option>
+                        <option value="tužitelj">tužitelj</option>
+                        <option value="tuženik">tuženik</option>
+                        <option value="predlagatelj">predlagatelj</option>
+                        <option value="protustranka">protustranka</option>
+                      </select>
+                    </div>
 
                     {/* Klijent */}
                     <div className="space-y-2">
@@ -842,6 +889,20 @@ function TroskovnikContent() {
                       <input type="text" value={klijentOib} onChange={(e) => setKlijentOib(e.target.value)} placeholder="OIB" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
                       <input type="text" value={klijentAdresa} onChange={(e) => setKlijentAdresa(e.target.value)} placeholder="Adresa" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
                       <input type="text" value={klijentGrad} onChange={(e) => setKlijentGrad(e.target.value)} placeholder="Grad" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                      <label className="block text-xs font-semibold text-slate-600 mb-1 mt-2">
+                        Položaj zastupane stranke
+                      </label>
+                      <select
+                        value={zastupanaPolozaj}
+                        onChange={(e) => setZastupanaPolozaj(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                      >
+                        <option value="">— odaberi položaj —</option>
+                        <option value="tužitelj">tužitelj</option>
+                        <option value="tuženik">tuženik</option>
+                        <option value="predlagatelj">predlagatelj</option>
+                        <option value="zastupana">zastupana</option>
+                      </select>
                     </div>
                   </div>
                 </div>
@@ -911,16 +972,27 @@ function TroskovnikContent() {
                         <span className="font-semibold">{fmtEur(liveCalc.ukupnoEur)}</span>
                       </div>
                       <div className="flex items-center justify-between text-xs text-slate-500">
-                        <label className="inline-flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={hasVat}
-                            onChange={(e) => setHasVat(e.target.checked)}
-                            className="h-4 w-4 rounded border-slate-200 text-indigo-600 focus:ring-indigo-500"
-                          />
-                          <span className="text-xs">Obračunaj PDV</span>
-                        </label>
-                        <span className="font-semibold">{(result && (result as any).has_vat !== undefined) ? ((result as any).has_vat ? 'PDV 25%' : 'PDV 0%') : (hasVat ? 'PDV 25%' : 'PDV 0%')}</span>
+                        <div className="flex items-center gap-3">
+                          <label className="inline-flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={hasVat}
+                              onChange={(e) => setHasVat(e.target.checked)}
+                              className="h-4 w-4 rounded border-slate-200 text-indigo-600 focus:ring-indigo-500"
+                            />
+                            <span className="text-xs">Obračunaj PDV</span>
+                          </label>
+                          <label className="inline-flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={isPdvUkljucen}
+                              onChange={(e) => setIsPdvUkljucen(e.target.checked)}
+                              className="h-4 w-4 rounded border-slate-200 text-indigo-600 focus:ring-indigo-500"
+                            />
+                            <span className="text-xs">U sustavu PDV-a</span>
+                          </label>
+                        </div>
+                        <span className="font-semibold">{(result && (result as any).is_pdv_ukljucen !== undefined) ? ((result as any).is_pdv_ukljucen ? 'PDV 25%' : 'PDV 0%') : ((result && (result as any).has_vat !== undefined) ? ((result as any).has_vat ? 'PDV 25%' : 'PDV 0%') : (hasVat ? 'PDV 25%' : 'PDV 0%'))}</span>
                       </div>
                       <div className="flex justify-between text-xs text-slate-500">
                         <span></span>
@@ -1005,22 +1077,23 @@ function TroskovnikContent() {
                   <span className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Tbr. 7.1 — Tablica bodova</span>
                 </div>
                 <div className="space-y-1 text-[11px]">
-                  {[
-                    ["0 – 332 €", "25"],
-                    ["332 – 664 €", "50"],
-                    ["664 – 1.327 €", "75"],
-                    ["1.327 – 13.272 €", "100"],
-                    ["13.272 – 33.181 €", "250"],
-                    ["33.181 – 66.361 €", "500"],
-                    ["66.361 – 663.614 €", "500+"],
-                    ["663.614 – 1.327.228 €", "4.991+"],
-                    ["> 1.327.228 €", "max 10.000"],
-                  ].map(([range, pts]) => (
-                    <div key={range} className="flex justify-between text-slate-500">
-                      <span>{range}</span>
-                      <span className="font-mono font-semibold text-slate-700">{pts} bod.</span>
-                    </div>
-                  ))}
+                  {(() => {
+                    const ranges: Array<[string, string]> = [];
+                    const bounds = [0, 332, 664, 1327, 13272, 33181, 66361, 663614, 1327228];
+                    const pts = ["25", "50", "75", "100", "250", "500", "500+", "4.991+"];
+                    for (let i = 0; i < bounds.length - 1; i++) {
+                      const from = bounds[i];
+                      const to = bounds[i + 1];
+                      ranges.push([`${formatNumber(from)} – ${formatNumber(to)}`, pts[i]]);
+                    }
+                    ranges.push([`> ${formatNumber(bounds[bounds.length - 1])}`, "max 10.000"]);
+                    return ranges.map(([range, pts]) => (
+                      <div key={range} className="flex justify-between text-slate-500">
+                        <span>{range}</span>
+                        <span className="font-mono font-semibold text-slate-700">{pts} bod.</span>
+                      </div>
+                    ));
+                  })()}
                 </div>
               </div>
 
@@ -1054,6 +1127,66 @@ function TroskovnikContent() {
             </div>
 
             <div className="p-6">
+              {/* Formal document header for print */}
+              <div className="mb-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-slate-800">
+                  <div>
+                    <div className="font-semibold text-xs uppercase text-slate-600 mb-1">PODNOSITELJ</div>
+                    {result.odvjetnik ? (
+                      <div className="text-sm">
+                        <div>{result.odvjetnik.ime}</div>
+                        {result.odvjetnik.oib && <div>OIB: {result.odvjetnik.oib}</div>}
+                        {result.odvjetnik.adresa && <div>{result.odvjetnik.adresa}{result.odvjetnik.grad ? `, ${result.odvjetnik.grad}` : ""}</div>}
+                        {result.odvjetnik.iban && <div>IBAN: {result.odvjetnik.iban}</div>}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-slate-500">—</div>
+                    )}
+                  </div>
+
+                  <div>
+                    <div className="font-semibold text-xs uppercase text-slate-600 mb-1">SUD I POSLOVNI BROJ</div>
+                    <div className="text-sm">
+                      { (result as any).sud || (result as any).broj_predmeta ? (
+                        <>
+                          <div>{(result as any).sud ?? ""}{(result as any).broj_predmeta ? ` · ${ (result as any).broj_predmeta}` : ""}</div>
+                        </>
+                      ) : (
+                        <div className="text-slate-500">—</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 text-sm text-slate-800">
+                  <div>
+                    <div className="font-semibold text-xs uppercase text-slate-600 mb-1">ZASTUPANA STRANKA</div>
+                    {result.klijent ? (
+                      <div className="text-sm">
+                        <div>{result.klijent.ime}</div>
+                        {result.klijent.oib && <div>OIB: {result.klijent.oib}</div>}
+                        {result.klijent.adresa && <div>{result.klijent.adresa}{result.klijent.grad ? `, ${result.klijent.grad}` : ""}</div>}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-slate-500">—</div>
+                    )}
+                  </div>
+
+                  <div>
+                    <div className="font-semibold text-xs uppercase text-slate-600 mb-1">PROTUSTRANKA</div>
+                    {result.protustranka ? (
+                      <div className="text-sm">
+                        {result.protustranka_polozaj && <div className="font-medium">{result.protustranka_polozaj}</div>}
+                        <div>{result.protustranka.ime}</div>
+                        {result.protustranka.oib && <div>OIB: {result.protustranka.oib}</div>}
+                        {result.protustranka.adresa && <div>{result.protustranka.adresa}{result.protustranka.grad ? `, ${result.protustranka.grad}` : ""}</div>}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-slate-500">—</div>
+                    )}
+                  </div>
+                </div>
+              </div>
               {/* Party info */}
               {(result.odvjetnik?.ime || result.klijent?.ime || result.protustranka?.ime) && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -1134,16 +1267,30 @@ function TroskovnikContent() {
                       <td className="py-2 px-2 text-right font-bold text-indigo-700">{fmtNum(result.ukupno_bodova)}</td>
                       <td className="py-2 px-2 text-right font-bold text-indigo-700">{fmtEur(result.ukupno_eur_bez_pdv)}</td>
                     </tr>
-                    <tr>
-                      <td colSpan={5} className="py-1 px-2 text-right text-xs text-slate-500">PDV 25%</td>
-                      <td />
-                      <td className="py-1 px-2 text-right text-sm text-slate-600">{fmtEur(result.pdv)}</td>
-                    </tr>
-                    <tr className="bg-indigo-50">
-                      <td colSpan={5} className="py-3 px-2 text-right text-sm font-bold text-indigo-800">UKUPNO s PDV</td>
-                      <td />
-                      <td className="py-3 px-2 text-right text-lg font-bold text-indigo-800">{fmtEur(result.ukupno_eur_s_pdv)}</td>
-                    </tr>
+                    {(() => {
+                      const isPdv = (result as any).is_pdv_ukljucen !== undefined ? (result as any).is_pdv_ukljucen : ((result as any).has_vat !== undefined ? (result as any).has_vat : false);
+                      const base = Number(result.ukupno_eur_bez_pdv ?? 0);
+                      const pdvCalc = isPdv ? Math.round(base * 0.25 * 100) / 100 : 0;
+                      const grand = Math.round((base + pdvCalc) * 100) / 100;
+
+                      return (
+                        <>
+                          {isPdv && (
+                            <tr>
+                              <td colSpan={5} className="py-1 px-2 text-right text-xs text-slate-500">PDV (25%)</td>
+                              <td />
+                              <td className="py-1 px-2 text-right text-sm text-slate-600">{fmtEur(pdvCalc)}</td>
+                            </tr>
+                          )}
+
+                          <tr className="bg-indigo-50">
+                            <td colSpan={5} className="py-3 px-2 text-right text-sm font-bold text-indigo-800">UKUPNO</td>
+                            <td />
+                            <td className="py-3 px-2 text-right text-lg font-bold text-indigo-800">{fmtEur(grand)}</td>
+                          </tr>
+                        </>
+                      );
+                    })()}
                   </tfoot>
                 </table>
               </div>

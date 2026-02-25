@@ -89,17 +89,13 @@ public sealed class TroskovnikRecord
     public decimal UkupnoEurBezPdv { get; set; }
     public decimal Pdv { get; set; }
     public decimal UkupnoEurSPdv { get; set; }
-    public string? KlijentIme { get; set; }
-    public string? KlijentOib { get; set; }
-    public string? OdvjetnikIme { get; set; }
-    public string? OdvjetnikOib { get; set; }
-    public string? OdvjetnikAdresa { get; set; }
-    public string? OdvjetnikIban { get; set; }
-    public string? ProtustrankaIme { get; set; }
-    public string? ProtustrankaOib { get; set; }
-    public string? ProtustrankaAdresa { get; set; }
-    public string? ProtustrankaPolozaj { get; set; }
+    // Nested objects per requested schema
+    public OdvjetnikInfo? Odvjetnik { get; set; }
+    public PredmetInfo? Predmet { get; set; }
+    public StrankeInfo? Stranke { get; set; }
+
     public bool HasVat { get; set; }
+    public bool IsPdvUkljucen { get; set; }
     public object? RawJsonOutput { get; set; }
 }
 
@@ -116,18 +112,43 @@ public sealed class TroskovnikReadRecord
     public decimal UkupnoEurBezPdv { get; set; }
     public decimal Pdv { get; set; }
     public decimal UkupnoEurSPdv { get; set; }
-    public string? KlijentIme { get; set; }
-    public string? KlijentOib { get; set; }
-    public string? OdvjetnikIme { get; set; }
-    public string? OdvjetnikOib { get; set; }
-    public string? OdvjetnikAdresa { get; set; }
-    public string? OdvjetnikIban { get; set; }
-    public string? ProtustrankaIme { get; set; }
-    public string? ProtustrankaOib { get; set; }
-    public string? ProtustrankaAdresa { get; set; }
-    public string? ProtustrankaPolozaj { get; set; }
+    // Nested objects for read record
+    public OdvjetnikInfo? Odvjetnik { get; set; }
+    public PredmetInfo? Predmet { get; set; }
+    public StrankeInfo? Stranke { get; set; }
+
     public bool HasVat { get; set; }
+    public bool IsPdvUkljucen { get; set; }
     public object? RawJsonOutput { get; set; }
+}
+
+// Nested DTOs for new schema
+public sealed class OdvjetnikInfo
+{
+    public string? Naziv { get; set; }
+    public string? Oib { get; set; }
+    public string? Adresa { get; set; }
+    public string? Iban { get; set; }
+}
+
+public sealed class PredmetInfo
+{
+    public string? Sud { get; set; }
+    public string? PoslovniBroj { get; set; }
+}
+
+public sealed class StrankaInfo
+{
+    public string? Polozaj { get; set; }
+    public string? Naziv { get; set; }
+    public string? Oib { get; set; }
+    public string? Adresa { get; set; }
+}
+
+public sealed class StrankeInfo
+{
+    public StrankaInfo? ZastupanaStranka { get; set; }
+    public StrankaInfo? Protustranka { get; set; }
 }
 
 // ══════════════════════════════════════════════════════════════

@@ -233,7 +233,8 @@ public sealed class TroskovnikService
         var ukupnoBodova = lines.Sum(l => l.UkupnoBodova);
         var ukupnoEur = ukupnoBodova * TarifaConstants.BodValue;
         decimal pdv = 0;
-        if (request.HasVat)
+        var useVat = request.IsPdvUkljucen ?? request.HasVat;
+        if (useVat)
             pdv = Math.Round(ukupnoEur * TarifaConstants.PdvRate, 2);
 
         return new TroskovnikResponse
@@ -244,8 +245,17 @@ public sealed class TroskovnikService
             Pdv = pdv,
             UkupnoEurSPdv = ukupnoEur + pdv,
             Klijent = request.Klijent,
-            Odvjetnik = request.Odvjetnik,
+            // Map nested request Odvjetnik (naziv) into response party `ime` for compatibility
+            Odvjetnik = request.Odvjetnik is null ? null : new TroskovnikParty { Ime = request.Odvjetnik.Naziv ?? "", Oib = request.Odvjetnik.Oib, Adresa = request.Odvjetnik.Adresa },
+            // Map protustranka from nested stranke if present
+            Protustranka = request.Stranke?.Protustranka is null ? null : new TroskovnikParty { Ime = request.Stranke.Protustranka.Naziv ?? "", Oib = request.Stranke.Protustranka.Oib, Adresa = request.Stranke.Protustranka.Adresa },
+            ProtustrankaPolozaj = request.Stranke?.Protustranka?.Polozaj ?? request.ProtustrankaPolozaj,
+            IsPdvUkljucen = request.IsPdvUkljucen ?? request.HasVat,
+            HasVat = request.HasVat,
             OpisPredmeta = request.OpisPredmeta,
+            // Enrich with predmet metadata
+            Sud = request.Predmet?.Sud,
+            BrojPredmeta = request.Predmet?.PoslovniBroj ?? request.CaseId,
             DatumIzrade = DateTime.UtcNow
         };
     }

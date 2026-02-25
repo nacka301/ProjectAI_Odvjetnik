@@ -35,6 +35,7 @@ import type { ValuationResult, ResultTab } from "./types";
 import { formatPrice } from "./constants";
 import { MiniStat, SimilarityBadge, PriceDistributionChart } from "./FormInputs";
 import { generateValuationPdf } from "@/lib/generatePdf";
+import { formatNumber } from "@/lib/format";
 import { MethodologyButton, MethodologyModal } from "@/components/MethodologyModal";
 
 interface ResultViewProps {
@@ -159,9 +160,9 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
             <MiniStat icon={<Search className="h-4 w-4 text-blue-500" />} label="Pronađeno" value={result.total_listings_found ?? 0} />
             <MiniStat icon={<Check className="h-4 w-4 text-green-500" />} label="Korištenih" value={result.comparison_table?.length ?? result.usable_price_points ?? 0} />
             <MiniStat icon={<Hash className="h-4 w-4 text-red-500" />} label="Outlieri" value={result.outliers_removed ?? 0} />
-            <MiniStat icon={<Percent className="h-4 w-4 text-orange-500" />} label="Diskont traž→real" value={`${result.realization_discount_percent?.toFixed(1) ?? "15"}%`} />
+            <MiniStat icon={<Percent className="h-4 w-4 text-orange-500" />} label="Diskont traž→real" value={`${result.realization_discount_percent !== undefined ? formatNumber(result.realization_discount_percent, 1) : "15"}%`} />
             <MiniStat icon={<Target className="h-4 w-4 text-purple-500" />} label="€/m² arit. sred." value={result.elaborat_stats?.arithmetic_mean_per_m2 ? formatPrice(Math.round(result.elaborat_stats.arithmetic_mean_per_m2)) : (result.market_average_asking ? formatPrice(Math.round(result.market_average_asking)) : "—")} />
-            <MiniStat icon={<Activity className="h-4 w-4 text-indigo-500" />} label="Σ korekcija" value={result.total_adjustment_percent !== undefined ? `${result.total_adjustment_percent > 0 ? "+" : ""}${result.total_adjustment_percent.toFixed(1)}%` : "—"} />
+            <MiniStat icon={<Activity className="h-4 w-4 text-indigo-500" />} label="Σ korekcija" value={result.total_adjustment_percent !== undefined ? `${result.total_adjustment_percent > 0 ? "+" : ""}${formatNumber(result.total_adjustment_percent, 1)}%` : "—"} />
           </div>
 
           {/* Comparison Table — Elaborat-style with K-coefficients */}
@@ -204,14 +205,14 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
                             </td>
                             <td className="py-2.5 pr-2 text-right text-gray-700 text-xs">{row.area_m2 > 0 ? row.area_m2 : "—"}</td>
                             <td className="py-2.5 pr-2 text-right text-gray-700">{formatPrice(Math.round(row.raw_price_per_m2))}</td>
-                            {hasK && <td className="py-2.5 pr-1 text-right text-xs text-gray-600">{row.kc?.toFixed(2) ?? "—"}</td>}
-                            {hasK && <td className="py-2.5 pr-1 text-right text-xs text-gray-600">{row.kl?.toFixed(2) ?? "—"}</td>}
-                            {hasK && <td className="py-2.5 pr-1 text-right text-xs text-gray-600">{row.ks?.toFixed(2) ?? "—"}</td>}
-                            {hasK && <td className="py-2.5 pr-1 text-right text-xs text-gray-600">{row.ko?.toFixed(2) ?? "—"}</td>}
+                            {hasK && <td className="py-2.5 pr-1 text-right text-xs text-gray-600">{row.kc != null ? formatNumber(row.kc) : "—"}</td>}
+                            {hasK && <td className="py-2.5 pr-1 text-right text-xs text-gray-600">{row.kl != null ? formatNumber(row.kl) : "—"}</td>}
+                            {hasK && <td className="py-2.5 pr-1 text-right text-xs text-gray-600">{row.ks != null ? formatNumber(row.ks) : "—"}</td>}
+                            {hasK && <td className="py-2.5 pr-1 text-right text-xs text-gray-600">{row.ko != null ? formatNumber(row.ko) : "—"}</td>}
                             {hasK && (
                               <td className={`py-2.5 pr-2 text-right text-xs font-bold ${
                                 (row.k_total ?? 1) > 1.02 ? "text-green-700" : (row.k_total ?? 1) < 0.98 ? "text-red-700" : "text-gray-700"
-                              }`}>{row.k_total?.toFixed(2) ?? "—"}</td>
+                              }`}>{row.k_total != null ? formatNumber(row.k_total) : "—"}</td>
                             )}
                             <td className="py-2.5 pr-2 text-right font-medium text-gray-900">{formatPrice(Math.round(row.adjusted_price_per_m2))}</td>
                             <td className="py-2.5 text-right">
@@ -241,7 +242,7 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
                         {result.market_factors && result.market_factors.combined !== 1 && (
                           <tr className="bg-gray-50 text-sm">
                             <td colSpan={hasK ? 9 : 3} className="py-2 pr-3 text-right text-gray-500">
-                              Tržišni faktor (1+Fp+Ft = {result.market_factors.combined.toFixed(2)}):
+                              Tržišni faktor (1+Fp+Ft = {formatNumber(result.market_factors.combined)}):
                             </td>
                             <td className="py-2 pr-2 text-right font-bold text-teal-700 text-base">
                               {result.elaborat_stats?.arithmetic_mean_per_m2
@@ -255,7 +256,7 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
                         {result.realization_discount_percent && (
                           <tr className="bg-gray-50 text-sm">
                             <td colSpan={hasK ? 9 : 3} className="py-2 pr-3 text-right text-gray-500">
-                              Diskont tražene → realizirane ({result.realization_discount_percent.toFixed(1)}%):
+                              Diskont tražene → realizirane ({formatNumber(result.realization_discount_percent, 1)}%):
                             </td>
                             <td className="py-2 pr-2 text-right font-bold text-indigo-700 text-base">
                               {result.after_discount_per_m2 ? `${formatPrice(Math.round(result.after_discount_per_m2))} €/m²` : (result.calculated_price_per_m2 ? `${formatPrice(Math.round(result.calculated_price_per_m2))} €/m²` : "—")}
@@ -267,7 +268,7 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
                         {result.total_adjustment_percent !== undefined && result.total_adjustment_percent !== 0 && (
                           <tr className="bg-gray-50 text-sm">
                             <td colSpan={hasK ? 9 : 3} className="py-2 pr-3 text-right text-gray-500">
-                              Σ Korekcija agenta ({result.total_adjustment_percent > 0 ? "+" : ""}{result.total_adjustment_percent.toFixed(1)}%):
+                              Σ Korekcija agenta ({result.total_adjustment_percent > 0 ? "+" : ""}{formatNumber(result.total_adjustment_percent, 1)}%):
                             </td>
                             <td className="py-2 pr-2 text-right font-bold text-purple-700 text-base">
                               {result.calculated_price_per_m2 ? `${formatPrice(Math.round(result.calculated_price_per_m2))} €/m²` : "—"}
@@ -311,14 +312,14 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
                   <p className="text-[10px] text-gray-500 uppercase">Aritm. sredina</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-lg font-bold text-gray-900">{result.elaborat_stats.std_dev_per_m2.toFixed(0)} €/m²</p>
+                  <p className="text-lg font-bold text-gray-900">{formatNumber(result.elaborat_stats.std_dev_per_m2, 0)} €/m²</p>
                   <p className="text-[10px] text-gray-500 uppercase">Std. devijacija</p>
                 </div>
                 <div className="text-center">
                   <p className={`text-lg font-bold ${
                     result.elaborat_stats.relative_std_dev_percent <= 15 ? "text-green-700" :
                     result.elaborat_stats.relative_std_dev_percent <= 30 ? "text-yellow-700" : "text-red-700"
-                  }`}>{result.elaborat_stats.relative_std_dev_percent.toFixed(1)}%</p>
+                  }`}>{formatNumber(result.elaborat_stats.relative_std_dev_percent, 1)}%</p>
                   <p className="text-[10px] text-gray-500 uppercase">Koef. varijacije</p>
                 </div>
                 <div className="text-center">
@@ -344,20 +345,20 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
                 <div className="rounded-lg bg-white border border-teal-100 p-3 text-center">
                   <p className="text-xs text-gray-500 mb-1">Fp (veličina)</p>
                   <p className={`text-xl font-bold ${result.market_factors.fp > 0 ? "text-green-700" : result.market_factors.fp < 0 ? "text-red-700" : "text-gray-700"}`}>
-                    {result.market_factors.fp > 0 ? "+" : ""}{(result.market_factors.fp * 100).toFixed(0)}%
+                    {result.market_factors.fp > 0 ? "+" : ""}{formatNumber(result.market_factors.fp * 100, 0)}%
                   </p>
                   <p className="text-[10px] text-gray-400 mt-1">{result.market_factors.fp_reason}</p>
                 </div>
                 <div className="rounded-lg bg-white border border-teal-100 p-3 text-center">
                   <p className="text-xs text-gray-500 mb-1">Ft (tržišni kontekst)</p>
                   <p className={`text-xl font-bold ${result.market_factors.ft > 0 ? "text-green-700" : result.market_factors.ft < 0 ? "text-red-700" : "text-gray-700"}`}>
-                    {result.market_factors.ft > 0 ? "+" : ""}{(result.market_factors.ft * 100).toFixed(0)}%
+                    {result.market_factors.ft > 0 ? "+" : ""}{formatNumber(result.market_factors.ft * 100, 0)}%
                   </p>
                   <p className="text-[10px] text-gray-400 mt-1">{result.market_factors.ft_reason}</p>
                 </div>
                 <div className="rounded-lg bg-teal-100 border border-teal-200 p-3 text-center">
                   <p className="text-xs text-teal-700 font-semibold mb-1">Kombinirani (1+Fp+Ft)</p>
-                  <p className="text-xl font-bold text-teal-900">{result.market_factors.combined.toFixed(2)}</p>
+                  <p className="text-xl font-bold text-teal-900">{formatNumber(result.market_factors.combined)}</p>
                   <p className="text-[10px] text-teal-600 mt-1">Multiplikator na baznu cijenu</p>
                 </div>
               </div>
@@ -390,7 +391,7 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
                     <div className="flex items-center gap-2">
                       <span className="h-6 w-6 rounded-full bg-teal-600 text-white text-xs font-bold flex items-center justify-center">2</span>
                       <span className="text-sm font-medium text-teal-900">
-                        × Tržišni faktor ({result.market_factors.combined.toFixed(2)})
+                        × Tržišni faktor ({formatNumber(result.market_factors.combined)})
                       </span>
                     </div>
                     <span className="text-sm font-bold text-teal-800">
@@ -407,7 +408,7 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
                         {result.market_factors && result.market_factors.combined !== 1 ? "3" : "2"}
                       </span>
                       <span className="text-sm font-medium text-orange-900">
-                        − Diskont oglasna → realizirana ({result.realization_discount_percent.toFixed(1)}%)
+                        − Diskont oglasna → realizirana ({formatNumber(result.realization_discount_percent, 1)}%)
                       </span>
                     </div>
                     <span className="text-sm font-bold text-orange-800">
@@ -429,7 +430,7 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
                         })()}
                       </span>
                       <span className="text-sm font-medium text-purple-900">
-                        {result.total_adjustment_percent > 0 ? "+" : ""}{result.total_adjustment_percent.toFixed(1)}% korekcije
+                        {result.total_adjustment_percent > 0 ? "+" : ""}{formatNumber(result.total_adjustment_percent, 1)}% korekcije
                       </span>
                     </div>
                     <span className="text-sm font-bold text-purple-800">
@@ -558,7 +559,7 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
                         <p className="text-xs text-gray-500 mt-0.5">{f.desc}</p>
                       </div>
                       <span className={`ml-4 text-sm font-bold whitespace-nowrap ${f.pct > 0 ? "text-green-600" : f.pct < 0 ? "text-red-600" : "text-gray-400"}`}>
-                        {f.pct > 0 ? "+" : ""}{f.pct.toFixed(1)}%
+                        {f.pct > 0 ? "+" : ""}{formatNumber(f.pct, 1)}%
                       </span>
                     </div>
                   ))}
@@ -567,7 +568,7 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
                 <div className={`mt-3 flex items-center justify-between p-3 rounded-lg border-2 ${totalPct > 0 ? "border-green-300 bg-green-50" : totalPct < 0 ? "border-red-300 bg-red-50" : "border-gray-300 bg-gray-50"}`}>
                   <span className="text-sm font-bold text-gray-700">Σ Ukupni utjecaj</span>
                   <span className={`text-sm font-bold ${totalPct > 0 ? "text-green-700" : totalPct < 0 ? "text-red-700" : "text-gray-500"}`}>
-                    {totalPct > 0 ? "+" : ""}{totalPct.toFixed(1)}%
+                    {totalPct > 0 ? "+" : ""}{formatNumber(totalPct, 1)}%
                   </span>
                 </div>
               </div>
@@ -666,7 +667,7 @@ export default function ResultView({ result, propertyType, location, areaM2, onR
                     {/* Per-comp correction */}
                     {!c.is_outlier && c.correction_percent !== undefined && c.correction_percent !== 0 && (
                       <div className={`mt-2 text-xs px-3 py-1.5 rounded-md ${c.correction_percent > 0 ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
-                        <span className="font-semibold">Korekcija: {c.correction_percent > 0 ? "+" : ""}{c.correction_percent.toFixed(1)}%</span>
+                        <span className="font-semibold">Korekcija: {c.correction_percent > 0 ? "+" : ""}{formatNumber(c.correction_percent, 1)}%</span>
                         {c.correction_reason && <span className="ml-1 text-gray-500">— {c.correction_reason}</span>}
                       </div>
                     )}

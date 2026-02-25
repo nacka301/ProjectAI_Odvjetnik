@@ -22,6 +22,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { uploadPdfToStorage } from "@/lib/supabase";
+import { formatNumber } from "@/lib/format";
 import SharedProcessingView, { type ProcessingStage } from "@/components/SharedProcessingView";
 import ResultActions from "@/components/ResultActions";
 import { useAuth } from "@/lib/useAuth";
@@ -539,7 +540,7 @@ export default function ValuationPage() {
                         {file.name}
                       </span>
                       <span className="text-xs text-gray-400">
-                        ({(file.size / 1024).toFixed(0)} KB)
+                        ({formatNumber(file.size / 1024, 0)} KB)
                       </span>
                     </div>
                   <div className="flex flex-col items-end gap-2">
@@ -742,7 +743,7 @@ export default function ValuationPage() {
                         <p className={`text-xs font-medium ${
                           cv < 15 ? "text-green-600" : cv < 30 ? "text-yellow-600" : "text-red-600"
                         }`}>
-                          CV: {typeof cv === 'number' ? cv.toFixed(1) : cv}%
+                          CV: {typeof cv === 'number' ? formatNumber(cv, 1) : cv}%
                         </p>
                       );
                     })()}
@@ -865,7 +866,7 @@ export default function ValuationPage() {
                                 }`} style={{ width: `${Math.max(c.similarity_score * 100, 5)}%` }} />
                               </div>
                               <span className={`text-xs w-8 text-right ${c.is_outlier ? "text-gray-400" : "text-gray-500"}`}>
-                                {(c.similarity_score * 100).toFixed(0)}%
+                                    {formatNumber(c.similarity_score * 100, 0)}%
                               </span>
                             </div>
                           </td>
