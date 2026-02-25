@@ -209,8 +209,7 @@ function TroskovnikContent() {
   const [predmetSud, setPredmetSud] = useState("");
   const [predmetPoslovniBroj, setPredmetPoslovniBroj] = useState("");
   const [showParties, setShowParties] = useState(false);
-  // New fields for PDV toggle and party data
-  const [hasVat, setHasVat] = useState(true);
+  // New field for PDV toggle and party data
   // Explicit flag: whether the entity is in the VAT system (preferred by backend)
   const [isPdvUkljucen, setIsPdvUkljucen] = useState(false);
   const [odvjetnikIban, setOdvjetnikIban] = useState("");
@@ -355,10 +354,10 @@ function TroskovnikContent() {
     const ukupnoBodova = lines.reduce((s, l) => s + l.ukupno_bodova, 0);
     const ukupnoEur = ukupnoBodova * BOD_VALUE;
     const rawPdv = Math.round(ukupnoEur * PDV_RATE * 100) / 100;
-    const pdv = hasVat ? rawPdv : 0;
+    const pdv = isPdvUkljucen ? rawPdv : 0;
 
     return { lines, ukupnoBodova, ukupnoEur, pdv, ukupnoSPdv: ukupnoEur + pdv };
-  }, [selectedItems, katalog, baseBodovi, hasVat]);
+  }, [selectedItems, katalog, baseBodovi, isPdvUkljucen]);
 
   // ── Handlers ──
   const toggleCategory = useCallback((cat: string) => {
@@ -434,7 +433,8 @@ function TroskovnikContent() {
           ? { ime: protustrankaIme, oib: protustrankaOib || undefined, adresa: protustrankaAdresa || undefined, grad: protustrankaGrad || undefined }
           : undefined,
         protustranka_polozaj: protustrankaPolozaj || undefined,
-        has_vat: hasVat,
+        // Keep legacy `has_vat` for backward compatibility, mirror new flag
+        has_vat: isPdvUkljucen,
         is_pdv_ukljucen: isPdvUkljucen,
         opis_predmeta: opisPredmeta || undefined,
       };
@@ -496,7 +496,8 @@ function TroskovnikContent() {
           ? { ime: protustrankaIme, oib: protustrankaOib || undefined, adresa: protustrankaAdresa || undefined, grad: protustrankaGrad || undefined }
           : undefined,
         protustranka_polozaj: protustrankaPolozaj || undefined,
-        has_vat: hasVat,
+        // Keep legacy `has_vat` for backward compatibility, mirror new flag
+        has_vat: isPdvUkljucen,
         is_pdv_ukljucen: isPdvUkljucen,
         opis_predmeta: opisPredmeta || undefined,
         client_id: selectedClientId || undefined,
@@ -967,21 +968,10 @@ function TroskovnikContent() {
                         <span>Ukupno bodova</span>
                         <span className="font-semibold">{fmtNum(liveCalc.ukupnoBodova)}</span>
                       </div>
-                      <div className="flex justify-between text-xs text-slate-500">
-                        <span>Ukupno bez PDV</span>
-                        <span className="font-semibold">{fmtEur(liveCalc.ukupnoEur)}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-xs text-slate-500">
+
+                      {/* PDV toggle (single) and label */}
+                      <div className="flex items-center justify-between text-xs text-slate-500 mt-1">
                         <div className="flex items-center gap-3">
-                          <label className="inline-flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={hasVat}
-                              onChange={(e) => setHasVat(e.target.checked)}
-                              className="h-4 w-4 rounded border-slate-200 text-indigo-600 focus:ring-indigo-500"
-                            />
-                            <span className="text-xs">Obračunaj PDV</span>
-                          </label>
                           <label className="inline-flex items-center gap-2">
                             <input
                               type="checkbox"
@@ -992,16 +982,33 @@ function TroskovnikContent() {
                             <span className="text-xs">U sustavu PDV-a</span>
                           </label>
                         </div>
-                        <span className="font-semibold">{(result && (result as any).is_pdv_ukljucen !== undefined) ? ((result as any).is_pdv_ukljucen ? 'PDV 25%' : 'PDV 0%') : ((result && (result as any).has_vat !== undefined) ? ((result as any).has_vat ? 'PDV 25%' : 'PDV 0%') : (hasVat ? 'PDV 25%' : 'PDV 0%'))}</span>
+                        <span className="font-semibold">{isPdvUkljucen ? 'PDV 25%' : 'PDV 0%'}</span>
                       </div>
-                      <div className="flex justify-between text-xs text-slate-500">
-                        <span></span>
-                        <span className="font-semibold">{fmtEur(liveCalc.pdv)}</span>
+
+                      {/* Totals when PDV included */}
+                      <div className={`transition-all duration-300 ease-in-out overflow-hidden ${isPdvUkljucen ? 'max-h-80 opacity-100' : 'max-h-0 opacity-0'}`}>
+                        <div className="flex justify-between text-xs text-slate-500 mt-2">
+                          <span>Osnovica (bez PDV)</span>
+                          <span className="font-semibold">{fmtEur(liveCalc.ukupnoEur)}</span>
+                        </div>
+                        <div className="flex justify-between text-xs text-slate-500">
+                          <span>PDV (25%)</span>
+                          <span className="font-semibold">{fmtEur(liveCalc.pdv)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm font-bold text-indigo-700 pt-1">
+                          <span>SVEUKUPNO s PDV-om</span>
+                          <span>{fmtEur(liveCalc.ukupnoSPdv)}</span>
+                        </div>
                       </div>
-                      <div className="flex justify-between text-sm font-bold text-indigo-700 pt-1">
-                        <span>UKUPNO s PDV</span>
-                        <span>{fmtEur(liveCalc.ukupnoSPdv)}</span>
+
+                      {/* Totals when PDV excluded */}
+                      <div className={`transition-all duration-300 ease-in-out overflow-hidden ${isPdvUkljucen ? 'max-h-0 opacity-0' : 'max-h-40 opacity-100'}`}>
+                        <div className="flex justify-between text-sm font-bold text-indigo-700 pt-1 mt-2">
+                          <span>UKUPNO</span>
+                          <span>{fmtEur(liveCalc.ukupnoEur)}</span>
+                        </div>
                       </div>
+
                       <div className="text-[10px] text-slate-400 text-right">
                         1 bod = {fmtEur(BOD_VALUE)}
                       </div>
