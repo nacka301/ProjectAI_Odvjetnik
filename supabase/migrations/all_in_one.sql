@@ -848,6 +848,404 @@ GRANT EXECUTE ON FUNCTION toggle_archive(TEXT, UUID, UUID, BOOLEAN) TO authentic
 
 
 -- ═══════════════════════════════════════════════════════════════════════════
+-- SEKCIJA 13: Tenant Subscriptions  (GDPR-safe plan tracking)
+-- ═══════════════════════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS tenant_subscriptions (
+    id              UUID            DEFAULT uuid_generate_v4() PRIMARY KEY,
+    created_at      TIMESTAMPTZ     DEFAULT now()   NOT NULL,
+    updated_at      TIMESTAMPTZ     DEFAULT now()   NOT NULL,
+    tenant_id       UUID            NOT NULL REFERENCES law_firms(id) ON DELETE CASCADE,
+    plan_type       TEXT            NOT NULL DEFAULT 'Free',
+    valid_until     TIMESTAMPTZ     NOT NULL DEFAULT (now() + interval '30 days'),
+    is_active       BOOLEAN         NOT NULL DEFAULT TRUE
+);
+
+-- Constraint: plan_type enum
+DO $$ BEGIN
+    ALTER TABLE tenant_subscriptions ADD CONSTRAINT chk_tenant_sub_plan_type
+        CHECK (plan_type IN ('Free', 'Starter', 'Pro', 'Premium', 'Enterprise'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- One active subscription per tenant
+CREATE UNIQUE INDEX IF NOT EXISTS idx_tenant_sub_active_tenant
+    ON tenant_subscriptions (tenant_id) WHERE is_active = TRUE;
+
+-- Fast lookups by tenant + date
+CREATE INDEX IF NOT EXISTS idx_tenant_sub_tenant_valid
+    ON tenant_subscriptions (tenant_id, valid_until DESC);
+
+-- Auto-expire helper: find all overdue subs
+CREATE INDEX IF NOT EXISTS idx_tenant_sub_expiry
+    ON tenant_subscriptions (valid_until)
+    WHERE is_active = TRUE;
+
+-- RLS
+ALTER TABLE tenant_subscriptions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "service_role_full_access" ON tenant_subscriptions;
+CREATE POLICY "service_role_full_access" ON tenant_subscriptions
+    FOR ALL USING (auth.role() = 'service_role');
+
+DROP POLICY IF EXISTS "users_read_own_tenant_sub" ON tenant_subscriptions;
+CREATE POLICY "users_read_own_tenant_sub" ON tenant_subscriptions
+    FOR SELECT USING (
+        tenant_id IN (SELECT law_firm_id FROM user_profiles WHERE user_id = auth.uid())
+    );
+
+-- updated_at trigger
+DROP TRIGGER IF EXISTS trg_tenant_sub_updated_at ON tenant_subscriptions;
+CREATE TRIGGER trg_tenant_sub_updated_at
+    BEFORE UPDATE ON tenant_subscriptions
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- RPC: Check whether a tenant's subscription is active & not expired
+CREATE OR REPLACE FUNCTION is_tenant_subscription_active(p_tenant_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql STABLE SECURITY DEFINER
+AS $$
+    SELECT EXISTS (
+        SELECT 1 FROM tenant_subscriptions
+        WHERE tenant_id = p_tenant_id
+          AND is_active = TRUE
+          AND valid_until > now()
+    );
+$$;
+
+GRANT EXECUTE ON FUNCTION is_tenant_subscription_active(UUID) TO authenticated;
+
+-- RPC: Bulk-expire overdue subscriptions (call from cron or backend)
+CREATE OR REPLACE FUNCTION expire_overdue_subscriptions()
+RETURNS INT
+LANGUAGE plpgsql SECURITY DEFINER
+AS $$
+DECLARE
+    cnt INT;
+BEGIN
+    UPDATE tenant_subscriptions
+       SET is_active   = FALSE,
+           updated_at  = now()
+     WHERE is_active = TRUE
+       AND valid_until <= now();
+
+    GET DIAGNOSTICS cnt = ROW_COUNT;
+    RETURN cnt;
+END;
+$$;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- SEKCIJA 14: API Audit Logs  (HTTP-request-level, GDPR / privilege safe)
+--
+-- DESIGN RULES:
+--   • NO request_body / response_body / payload columns — EVER.
+--   • NO columns for client names, case details, or legal content.
+--   • Stores ONLY: who called what endpoint, when, and the HTTP result.
+--   • Immutable for users — SELECT only. Backend inserts via service_role.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS api_audit_logs (
+    id              UUID            DEFAULT uuid_generate_v4() PRIMARY KEY,
+    created_at      TIMESTAMPTZ     DEFAULT now()   NOT NULL,
+    tenant_id       UUID            REFERENCES law_firms(id) ON DELETE SET NULL,
+    user_id         UUID            REFERENCES auth.users(id) ON DELETE SET NULL,
+    action_name     TEXT            NOT NULL DEFAULT '',          -- e.g. 'POST /api/auth/register'
+    endpoint        TEXT            NOT NULL DEFAULT '',          -- e.g. '/api/evaluate/upload'
+    http_method     TEXT            NOT NULL DEFAULT 'GET',       -- GET | POST | PUT | PATCH | DELETE
+    status_code     SMALLINT        NOT NULL DEFAULT 200,
+    duration_ms     INTEGER,                                      -- optional: request duration
+    ip_hash         TEXT                                           -- SHA-256 of IP (not raw IP)
+);
+
+-- Constraint: http_method enum
+DO $$ BEGIN
+    ALTER TABLE api_audit_logs ADD CONSTRAINT chk_api_audit_http_method
+        CHECK (http_method IN ('GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Constraint: status_code realistic range
+DO $$ BEGIN
+    ALTER TABLE api_audit_logs ADD CONSTRAINT chk_api_audit_status_code
+        CHECK (status_code BETWEEN 100 AND 599);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- ── Admin dashboard indexes ──
+
+-- Primary: query by tenant + date (admin dashboard filter)
+CREATE INDEX IF NOT EXISTS idx_api_audit_tenant_date
+    ON api_audit_logs (tenant_id, created_at DESC);
+
+-- User activity view
+CREATE INDEX IF NOT EXISTS idx_api_audit_user_date
+    ON api_audit_logs (user_id, created_at DESC);
+
+-- Endpoint analytics
+CREATE INDEX IF NOT EXISTS idx_api_audit_endpoint
+    ON api_audit_logs (endpoint, created_at DESC);
+
+-- Error monitoring: quickly find 4xx/5xx
+CREATE INDEX IF NOT EXISTS idx_api_audit_errors
+    ON api_audit_logs (status_code, created_at DESC)
+    WHERE status_code >= 400;
+
+-- Time-based partitioning hint: created_at BRIN index for range scans
+CREATE INDEX IF NOT EXISTS idx_api_audit_created_brin
+    ON api_audit_logs USING BRIN (created_at);
+
+-- ── RLS ──
+
+ALTER TABLE api_audit_logs ENABLE ROW LEVEL SECURITY;
+
+-- Backend (service_role) can insert and read all
+DROP POLICY IF EXISTS "service_role_full_access" ON api_audit_logs;
+CREATE POLICY "service_role_full_access" ON api_audit_logs
+    FOR ALL USING (auth.role() = 'service_role');
+
+-- Users: SELECT only their own rows (immutable — no UPDATE / DELETE)
+DROP POLICY IF EXISTS "users_select_own_api_audit" ON api_audit_logs;
+CREATE POLICY "users_select_own_api_audit" ON api_audit_logs
+    FOR SELECT USING (auth.uid() = user_id);
+
+-- ── Admin RPC: paginated audit log query ──
+-- Security: verifies caller belongs to the requested tenant via user_profiles.
+
+CREATE OR REPLACE FUNCTION get_api_audit_logs(
+    p_tenant_id UUID,
+    p_from      TIMESTAMPTZ DEFAULT now() - interval '30 days',
+    p_to        TIMESTAMPTZ DEFAULT now(),
+    p_limit     INT         DEFAULT 100,
+    p_offset    INT         DEFAULT 0
+)
+RETURNS TABLE (
+    id          UUID,
+    created_at  TIMESTAMPTZ,
+    user_id     UUID,
+    action_name TEXT,
+    endpoint    TEXT,
+    http_method TEXT,
+    status_code SMALLINT,
+    duration_ms INTEGER
+)
+LANGUAGE plpgsql STABLE SECURITY DEFINER
+AS $$
+BEGIN
+    -- Verify caller belongs to this tenant
+    IF NOT EXISTS (
+        SELECT 1 FROM user_profiles
+        WHERE user_id = auth.uid()
+          AND law_firm_id = p_tenant_id
+    ) THEN
+        RAISE EXCEPTION 'Access denied: you do not belong to tenant %', p_tenant_id;
+    END IF;
+
+    RETURN QUERY
+    SELECT a.id, a.created_at, a.user_id, a.action_name, a.endpoint,
+           a.http_method, a.status_code, a.duration_ms
+      FROM api_audit_logs a
+     WHERE a.tenant_id = p_tenant_id
+       AND a.created_at BETWEEN p_from AND p_to
+     ORDER BY a.created_at DESC
+     LIMIT p_limit OFFSET p_offset;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_api_audit_logs(UUID, TIMESTAMPTZ, TIMESTAMPTZ, INT, INT) TO authenticated;
+
+-- ── Admin RPC: aggregate endpoint stats (for dashboard charts) ──
+-- Security: verifies caller belongs to the requested tenant via user_profiles.
+
+CREATE OR REPLACE FUNCTION get_api_audit_stats(
+    p_tenant_id UUID,
+    p_days      INT DEFAULT 30
+)
+RETURNS TABLE (
+    endpoint        TEXT,
+    http_method     TEXT,
+    total_requests  BIGINT,
+    avg_duration_ms NUMERIC,
+    error_count     BIGINT
+)
+LANGUAGE plpgsql STABLE SECURITY DEFINER
+AS $$
+BEGIN
+    -- Verify caller belongs to this tenant
+    IF NOT EXISTS (
+        SELECT 1 FROM user_profiles
+        WHERE user_id = auth.uid()
+          AND law_firm_id = p_tenant_id
+    ) THEN
+        RAISE EXCEPTION 'Access denied: you do not belong to tenant %', p_tenant_id;
+    END IF;
+
+    RETURN QUERY
+    SELECT a.endpoint, a.http_method,
+           COUNT(*)                                         AS total_requests,
+           ROUND(AVG(a.duration_ms), 1)                    AS avg_duration_ms,
+           COUNT(*) FILTER (WHERE a.status_code >= 400)    AS error_count
+      FROM api_audit_logs a
+     WHERE a.tenant_id = p_tenant_id
+       AND a.created_at >= now() - (p_days || ' days')::interval
+     GROUP BY a.endpoint, a.http_method
+     ORDER BY total_requests DESC;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_api_audit_stats(UUID, INT) TO authenticated;
+
+-- ── Auto-cleanup: purge logs older than 90 days (call from pg_cron) ──
+
+CREATE OR REPLACE FUNCTION purge_old_api_audit_logs(p_retention_days INT DEFAULT 90)
+RETURNS INT
+LANGUAGE plpgsql SECURITY DEFINER
+AS $$
+DECLARE
+    cnt INT;
+BEGIN
+    DELETE FROM api_audit_logs
+     WHERE created_at < now() - (p_retention_days || ' days')::interval;
+
+    GET DIAGNOSTICS cnt = ROW_COUNT;
+    RETURN cnt;
+END;
+$$;
+
+-- NOTE: Schedule via pg_cron:
+--   SELECT cron.schedule('purge-api-audit-logs', '0 3 * * 0',
+--       $$SELECT purge_old_api_audit_logs(90)$$);
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- SEKCIJA 15: Case Events / Upisnik  (kronološki pregled radnji u spisu)
+--
+-- Svaka radnja u spisu (podnesak, ročište, savjet, pristup sudu, itd.)
+-- evidentira se ovdje. Povezuje se s tarifom za automatski izračun troškova.
+--
+-- event_type vrijednosti mapiraju se na stavke Odvjetničke tarife (NN 142/2012).
+-- ═══════════════════════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS case_events (
+    id              UUID            DEFAULT uuid_generate_v4() PRIMARY KEY,
+    created_at      TIMESTAMPTZ     DEFAULT now()   NOT NULL,
+    updated_at      TIMESTAMPTZ     DEFAULT now()   NOT NULL,
+    case_id         UUID            NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+    user_id         UUID            NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    tenant_id       UUID            REFERENCES law_firms(id) ON DELETE SET NULL,
+
+    -- Event data
+    event_date      TIMESTAMPTZ     NOT NULL DEFAULT now(),
+    event_type      TEXT            NOT NULL DEFAULT 'Ostalo',
+    description     TEXT            NOT NULL DEFAULT '',
+    tariff_item     TEXT,                                          -- Tbr. iz tarife (npr. 'Tbr. 7')
+    tariff_points   NUMERIC(10,2)   NOT NULL DEFAULT 0,            -- Bodovi iz tarife
+    point_value     NUMERIC(10,2)   NOT NULL DEFAULT 0.50,         -- Vrijednost boda (EUR)
+    total_eur       NUMERIC(12,2)   GENERATED ALWAYS AS (tariff_points * point_value) STORED,
+    is_billable     BOOLEAN         NOT NULL DEFAULT TRUE,
+    billing_status  TEXT            NOT NULL DEFAULT 'pending'      -- pending | billed | written_off
+);
+
+-- Constraints
+DO $$ BEGIN
+    ALTER TABLE case_events ADD CONSTRAINT chk_case_events_points_positive
+        CHECK (tariff_points >= 0);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+    ALTER TABLE case_events ADD CONSTRAINT chk_case_events_point_value_positive
+        CHECK (point_value >= 0);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+    ALTER TABLE case_events ADD CONSTRAINT chk_case_events_billing_status
+        CHECK (billing_status IN ('pending', 'billed', 'written_off'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+    ALTER TABLE case_events ADD CONSTRAINT chk_case_events_type
+        CHECK (event_type IN (
+            'Podnesak', 'Ročište', 'Pravni savjet', 'Pristup sudu',
+            'Pregled spisa', 'Sastanak s klijentom', 'Dopis',
+            'Žalba', 'Prigovor', 'Nagodba', 'Ovrha',
+            'Uvid u dokaze', 'Vještačenje', 'Ostalo'
+        ));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Indexes: fast chronological retrieval by case
+CREATE INDEX IF NOT EXISTS idx_case_events_case_date
+    ON case_events (case_id, event_date DESC);
+
+-- Indexes: user's events across all cases
+CREATE INDEX IF NOT EXISTS idx_case_events_user_date
+    ON case_events (user_id, event_date DESC);
+
+-- Indexes: tenant-level view
+CREATE INDEX IF NOT EXISTS idx_case_events_tenant_date
+    ON case_events (tenant_id, event_date DESC)
+    WHERE tenant_id IS NOT NULL;
+
+-- Indexes: billable events only
+CREATE INDEX IF NOT EXISTS idx_case_events_billable
+    ON case_events (case_id, billing_status)
+    WHERE is_billable = TRUE;
+
+-- RLS
+ALTER TABLE case_events ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "service_role_full_access" ON case_events;
+CREATE POLICY "service_role_full_access" ON case_events
+    FOR ALL USING (auth.role() = 'service_role');
+
+DROP POLICY IF EXISTS "users_own_case_events" ON case_events;
+CREATE POLICY "users_own_case_events" ON case_events
+    FOR ALL USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
+
+-- updated_at trigger
+DROP TRIGGER IF EXISTS trg_case_events_updated_at ON case_events;
+CREATE TRIGGER trg_case_events_updated_at
+    BEFORE UPDATE ON case_events
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- RPC: Get case events summary (total points, total EUR, counts by type)
+CREATE OR REPLACE FUNCTION get_case_events_summary(p_case_id UUID, p_user_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql STABLE SECURITY DEFINER
+AS $$
+DECLARE
+    result JSON;
+BEGIN
+    SELECT json_build_object(
+        'total_events',      (SELECT COUNT(*) FROM case_events WHERE case_id = p_case_id AND user_id = p_user_id),
+        'billable_events',   (SELECT COUNT(*) FROM case_events WHERE case_id = p_case_id AND user_id = p_user_id AND is_billable = TRUE),
+        'total_points',      COALESCE((SELECT SUM(tariff_points) FROM case_events WHERE case_id = p_case_id AND user_id = p_user_id AND is_billable = TRUE), 0),
+        'total_eur',         COALESCE((SELECT SUM(total_eur) FROM case_events WHERE case_id = p_case_id AND user_id = p_user_id AND is_billable = TRUE), 0),
+        'pending_eur',       COALESCE((SELECT SUM(total_eur) FROM case_events WHERE case_id = p_case_id AND user_id = p_user_id AND is_billable = TRUE AND billing_status = 'pending'), 0),
+        'billed_eur',        COALESCE((SELECT SUM(total_eur) FROM case_events WHERE case_id = p_case_id AND user_id = p_user_id AND is_billable = TRUE AND billing_status = 'billed'), 0),
+        'by_type', (
+            SELECT COALESCE(json_agg(row_to_json(t)), '[]'::json)
+            FROM (
+                SELECT event_type, COUNT(*) AS cnt, SUM(tariff_points) AS points, SUM(total_eur) AS eur
+                FROM case_events
+                WHERE case_id = p_case_id AND user_id = p_user_id AND is_billable = TRUE
+                GROUP BY event_type ORDER BY eur DESC
+            ) t
+        )
+    ) INTO result;
+
+    RETURN result;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_case_events_summary(UUID, UUID) TO authenticated;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
 -- GOTOVO! Sve migracije su primijenjene.
 -- ═══════════════════════════════════════════════════════════════════════════
 -- TIP: Za Supabase Storage bucket "documents", idi na:
@@ -857,4 +1255,10 @@ GRANT EXECUTE ON FUNCTION toggle_archive(TEXT, UUID, UUID, BOOLEAN) TO authentic
 -- TIP: Za automatski refresh materialized viewa:
 --   SELECT cron.schedule('refresh-monthly-revenue', '0 2 * * *',
 --       'REFRESH MATERIALIZED VIEW CONCURRENTLY monthly_revenue');
+--
+-- TIP: Za auto-expire pretplata i čišćenje audit logova:
+--   SELECT cron.schedule('expire-subscriptions', '0 1 * * *',
+--       $$SELECT expire_overdue_subscriptions()$$);
+--   SELECT cron.schedule('purge-api-audit-logs', '0 3 * * 0',
+--       $$SELECT purge_old_api_audit_logs(90)$$);
 -- ═══════════════════════════════════════════════════════════════════════════

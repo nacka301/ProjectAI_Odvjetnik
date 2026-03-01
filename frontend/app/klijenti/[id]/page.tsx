@@ -578,10 +578,13 @@ export default function ClientProfilePage() {
                     key={c.id}
                     className="group flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-[#1B2A4A]/40 hover:shadow-md"
                   >
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#1B2A4A]/10">
+                    <Link
+                      href={`/predmeti/${c.id}`}
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#1B2A4A]/10 transition hover:bg-[#1B2A4A]/20"
+                    >
                       <Scale className="h-5 w-5 text-[#1B2A4A]" />
-                    </div>
-                    <div className="min-w-0 flex-1">
+                    </Link>
+                    <Link href={`/predmeti/${c.id}`} className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <h4 className="truncate text-sm font-semibold text-slate-900">
                           {c.naziv}
@@ -609,7 +612,7 @@ export default function ClientProfilePage() {
                           <span>{formatDate(c.datum_pokretanja)}</span>
                         )}
                       </div>
-                    </div>
+                    </Link>
                     <button
                       onClick={() => handleDeleteCase(c.id)}
                       className="rounded-lg p-2 text-slate-300 opacity-0 transition hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"

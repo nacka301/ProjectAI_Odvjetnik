@@ -40,6 +40,23 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(homeUrl);
   }
 
+  // ── Admin route protection ──
+  // Only the single email defined in ADMIN_EMAIL env var may access /admin/*
+  if (pathname.startsWith("/admin")) {
+    const adminEmail = process.env.ADMIN_EMAIL;
+
+    if (
+      !user ||
+      !adminEmail ||
+      user.email?.toLowerCase() !== adminEmail.toLowerCase()
+    ) {
+      const denyUrl = request.nextUrl.clone();
+      denyUrl.pathname = "/";
+      denyUrl.searchParams.delete("next");
+      return NextResponse.redirect(denyUrl);
+    }
+  }
+
   // ── Inject cache-busting headers on every HTML response ──
   // Prevents browsers from serving stale pages after a deploy.
   // _next/static/* is content-hashed and stays long-cached by default.

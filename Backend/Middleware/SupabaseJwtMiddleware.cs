@@ -1,24 +1,22 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Backend.Services;
 
 namespace Backend.Middleware;
 
 /// <summary>
 /// Verifies Supabase JWT access tokens on every API request.
-/// Extracts the authenticated user_id (sub claim) and stores it in HttpContext.Items.
+/// Extracts and stores in HttpContext.Items:
+///   • "AuthUserId"   — sub claim (UUID)
+///   • "AuthEmail"    — email claim (string)
+///   • "AuthTenantId" — resolved via ITenantResolver (law_firm_id)
 ///
 /// Security model:
 ///   - Production: SUPABASE_JWT_SECRET must be set. Every request must include
 ///     a valid "Authorization: Bearer {access_token}" header.
 ///   - Development: If SUPABASE_JWT_SECRET is not set, falls back to x-user-id
 ///     header (trusted, for local dev only). Logs a warning on startup.
-///
-/// Controllers read the verified user ID via:
-///   HttpContext.Items["AuthUserId"] as string
-///
-/// This eliminates the user impersonation vulnerability where an attacker
-/// could set x-user-id to any UUID and access another lawyer's data.
 /// </summary>
 public sealed class SupabaseJwtMiddleware
 {
@@ -68,10 +66,11 @@ public sealed class SupabaseJwtMiddleware
 
             if (_jwtSecret != null)
             {
-                var userId = VerifyJwtAndExtractSub(token);
-                if (userId != null)
+                var claims = VerifyJwtAndExtractClaims(token);
+                if (claims != null)
                 {
-                    context.Items["AuthUserId"] = userId;
+                    SetContextItems(context, claims.Value);
+                    await ResolveTenantIdAsync(context, claims.Value.UserId);
                     await _next(context);
                     return;
                 }
@@ -84,11 +83,12 @@ public sealed class SupabaseJwtMiddleware
             }
             else
             {
-                // Dev mode — extract user_id from JWT payload without verification
-                var userId = ExtractSubWithoutVerification(token);
-                if (userId != null)
+                // Dev mode — extract claims from JWT payload without verification
+                var claims = ExtractClaimsWithoutVerification(token);
+                if (claims != null)
                 {
-                    context.Items["AuthUserId"] = userId;
+                    SetContextItems(context, claims.Value);
+                    await ResolveTenantIdAsync(context, claims.Value.UserId);
                     await _next(context);
                     return;
                 }
@@ -104,21 +104,50 @@ public sealed class SupabaseJwtMiddleware
                 if (!string.IsNullOrWhiteSpace(raw) && raw.Length <= 40 && Guid.TryParse(raw, out _))
                 {
                     context.Items["AuthUserId"] = raw;
+                    await ResolveTenantIdAsync(context, raw);
                 }
             }
         }
 
-        // Allow request through — controllers enforce auth via GetUserId().
-        // AI endpoints reject null userId via credit check (ConsumeCreditAsync).
-        // Non-AI endpoints (settings, norms, health) don't need user_id.
         await _next(context);
     }
 
-    /// <summary>
-    /// Verify HS256 JWT signature and extract the "sub" claim (user UUID).
-    /// Also checks token expiration.
-    /// </summary>
-    private string? VerifyJwtAndExtractSub(string token)
+    // ── Claims DTO ──
+
+    private readonly record struct JwtClaims(string UserId, string? Email, string? Role);
+
+    private static void SetContextItems(HttpContext context, JwtClaims claims)
+    {
+        context.Items["AuthUserId"] = claims.UserId;
+        if (claims.Email != null)
+            context.Items["AuthEmail"] = claims.Email;
+        if (claims.Role != null)
+            context.Items["AuthRole"] = claims.Role;
+    }
+
+    // ── Tenant resolution via ITenantResolver (cached) ──
+
+    private static async Task ResolveTenantIdAsync(HttpContext context, string userId)
+    {
+        try
+        {
+            var resolver = context.RequestServices.GetService<ITenantResolver>();
+            if (resolver != null)
+            {
+                var tenantId = await resolver.GetTenantIdForUserAsync(userId);
+                if (tenantId != null)
+                    context.Items["AuthTenantId"] = tenantId;
+            }
+        }
+        catch
+        {
+            // Non-critical — don't fail the request
+        }
+    }
+
+    // ── JWT verification + claims extraction ──
+
+    private JwtClaims? VerifyJwtAndExtractClaims(string token)
     {
         try
         {
@@ -135,28 +164,7 @@ public sealed class SupabaseJwtMiddleware
                 Encoding.UTF8.GetBytes(parts[2])))
                 return null;
 
-            // Decode payload
-            var payloadJson = Encoding.UTF8.GetString(Base64UrlDecode(parts[1]));
-            using var doc = JsonDocument.Parse(payloadJson);
-            var payload = doc.RootElement;
-
-            // Check expiration
-            if (payload.TryGetProperty("exp", out var expProp))
-            {
-                var exp = DateTimeOffset.FromUnixTimeSeconds(expProp.GetInt64());
-                if (exp < DateTimeOffset.UtcNow)
-                    return null; // Token expired
-            }
-
-            // Extract sub (user UUID) — this is the Supabase user ID
-            if (payload.TryGetProperty("sub", out var subProp))
-            {
-                var sub = subProp.GetString();
-                if (!string.IsNullOrWhiteSpace(sub) && Guid.TryParse(sub, out _))
-                    return sub;
-            }
-
-            return null;
+            return ExtractClaimsFromPayload(parts[1]);
         }
         catch
         {
@@ -164,28 +172,52 @@ public sealed class SupabaseJwtMiddleware
         }
     }
 
-    /// <summary>
-    /// Extract "sub" claim without signature verification (development only).
-    /// </summary>
-    private static string? ExtractSubWithoutVerification(string token)
+    private static JwtClaims? ExtractClaimsWithoutVerification(string token)
     {
         try
         {
             var parts = token.Split('.');
             if (parts.Length != 3) return null;
-
-            var payloadJson = Encoding.UTF8.GetString(Base64UrlDecode(parts[1]));
-            using var doc = JsonDocument.Parse(payloadJson);
-
-            if (doc.RootElement.TryGetProperty("sub", out var subProp))
-            {
-                var sub = subProp.GetString();
-                if (!string.IsNullOrWhiteSpace(sub) && Guid.TryParse(sub, out _))
-                    return sub;
-            }
-            return null;
+            return ExtractClaimsFromPayload(parts[1]);
         }
         catch { return null; }
+    }
+
+    private static JwtClaims? ExtractClaimsFromPayload(string base64Payload)
+    {
+        var payloadJson = Encoding.UTF8.GetString(Base64UrlDecode(base64Payload));
+        using var doc = JsonDocument.Parse(payloadJson);
+        var payload = doc.RootElement;
+
+        // Check expiration
+        if (payload.TryGetProperty("exp", out var expProp))
+        {
+            var exp = DateTimeOffset.FromUnixTimeSeconds(expProp.GetInt64());
+            if (exp < DateTimeOffset.UtcNow)
+                return null;
+        }
+
+        // Extract sub (user UUID)
+        string? userId = null;
+        if (payload.TryGetProperty("sub", out var subProp))
+        {
+            var sub = subProp.GetString();
+            if (!string.IsNullOrWhiteSpace(sub) && Guid.TryParse(sub, out _))
+                userId = sub;
+        }
+        if (userId == null) return null;
+
+        // Extract email
+        string? email = null;
+        if (payload.TryGetProperty("email", out var emailProp))
+            email = emailProp.GetString();
+
+        // Extract role (Supabase puts it in "role" claim)
+        string? role = null;
+        if (payload.TryGetProperty("role", out var roleProp))
+            role = roleProp.GetString();
+
+        return new JwtClaims(userId, email, role);
     }
 
     private static byte[] Base64UrlDecode(string input)

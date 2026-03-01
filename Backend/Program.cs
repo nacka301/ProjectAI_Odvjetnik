@@ -116,6 +116,14 @@ builder.Services.AddRateLimiter(options =>
         opt.QueueLimit = 2;
     });
 
+    // Auth endpoints: 5 requests per 10 minutes per IP (anti-brute-force)
+    options.AddFixedWindowLimiter("auth", opt =>
+    {
+        opt.PermitLimit = 5;
+        opt.Window = TimeSpan.FromMinutes(10);
+        opt.QueueLimit = 0;
+    });
+
     options.OnRejected = async (context, cancellationToken) =>
     {
         context.HttpContext.Response.ContentType = "application/json";
@@ -156,6 +164,19 @@ builder.Services.AddSingleton<NormValidityService>();
 builder.Services.AddScoped<InvoiceService>();
 builder.Services.AddScoped<TranslationService>();
 builder.Services.AddHttpClient<EmailService>();
+
+// ── Auth registration (MailKit email + Supabase Admin API) ──
+builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection(SmtpSettings.SectionName));
+builder.Services.AddSingleton<IAuthEmailService, AuthEmailService>();
+builder.Services.AddHttpClient<AuthService>();
+
+// ── Audit logging (GDPR-safe, fire-and-forget) ──
+builder.Services.AddHttpClient<AuditLogService>();
+builder.Services.AddScoped<IAuditLogService>(sp => sp.GetRequiredService<AuditLogService>());
+
+// ── Tenant resolution (user → law_firm, cached 5 min) ──
+builder.Services.AddHttpClient<TenantResolver>();
+builder.Services.AddScoped<ITenantResolver>(sp => sp.GetRequiredService<TenantResolver>());
 builder.Services.AddHttpClient<EmbeddingService>(client =>
 {
     client.Timeout = TimeSpan.FromMinutes(2);
@@ -196,9 +217,19 @@ if (app.Environment.IsDevelopment())
 app.UseCors("Frontend");
 
 // ── Supabase JWT Authentication Middleware ──
-// Verifies Bearer token, extracts user_id from JWT "sub" claim.
+// Verifies Bearer token, extracts user_id/email from JWT claims.
+// Resolves TenantId via ITenantResolver (cached).
 // In dev (no SUPABASE_JWT_SECRET): falls back to x-user-id header.
 app.UseMiddleware<SupabaseJwtMiddleware>();
+
+// ── Admin Guard Middleware — blocks non-admin users from /api/rag/, /api/admin/, etc. ──
+// MUST run after SupabaseJwtMiddleware (needs AuthEmail in HttpContext.Items).
+app.UseMiddleware<AdminGuardMiddleware>();
+
+// ── Audit Logging Middleware ──
+// Logs: userId, tenantId, endpoint, HTTP method, status code, duration.
+// NEVER logs request/response bodies (GDPR + attorney-client privilege).
+app.UseMiddleware<AuditLoggingMiddleware>();
 
 // ── API Key Authentication Middleware (optional, activate via API_KEY env var) ──
 var apiKey = Environment.GetEnvironmentVariable("API_KEY");

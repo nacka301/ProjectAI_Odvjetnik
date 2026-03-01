@@ -351,4 +351,58 @@ public sealed class ClientCaseService
             Troskovnici = troskovniciTask.Result
         };
     }
+
+    // ═══════════════════════════════════════════════════════════
+    //  Case Events / Upisnik
+    // ═══════════════════════════════════════════════════════════
+
+    public Task<CaseEventReadRecord?> CreateCaseEventAsync(CaseEventRecord record)
+        => InsertAsync<CaseEventReadRecord>("case_events", record);
+
+    public Task<List<CaseEventReadRecord>> GetCaseEventsByCaseAsync(string caseId, string userId)
+        => UuidRegex.IsMatch(caseId) && UuidRegex.IsMatch(userId)
+            ? SelectAsync<CaseEventReadRecord>(
+                "case_events",
+                $"case_id=eq.{Uri.EscapeDataString(caseId)}&user_id=eq.{Uri.EscapeDataString(userId)}",
+                "event_date.desc")
+            : Task.FromResult(new List<CaseEventReadRecord>());
+
+    public Task<CaseEventReadRecord?> GetCaseEventByIdAsync(string id)
+        => GetByIdAsync<CaseEventReadRecord>("case_events", id);
+
+    public Task<CaseEventReadRecord?> UpdateCaseEventAsync(string id, object patch)
+        => UpdateAsync<CaseEventReadRecord>("case_events", id, patch);
+
+    public Task<bool> DeleteCaseEventAsync(string id)
+        => DeleteAsync("case_events", id);
+
+    /// <summary>
+    /// Get all billable (pending) events for a case, ready for Troškovnik generation.
+    /// </summary>
+    public async Task<List<CaseEventReadRecord>> GetBillableEventsForCaseAsync(string caseId, string userId)
+    {
+        if (!UuidRegex.IsMatch(caseId) || !UuidRegex.IsMatch(userId))
+            return [];
+
+        return await SelectAsync<CaseEventReadRecord>(
+            "case_events",
+            $"case_id=eq.{Uri.EscapeDataString(caseId)}&user_id=eq.{Uri.EscapeDataString(userId)}&is_billable=eq.true&billing_status=eq.pending",
+            "event_date.asc",
+            500);
+    }
+
+    /// <summary>
+    /// Mark events as billed (after Troškovnik is generated from them).
+    /// </summary>
+    public async Task<int> MarkEventsAsBilledAsync(IEnumerable<string> eventIds)
+    {
+        var count = 0;
+        foreach (var id in eventIds)
+        {
+            var result = await UpdateAsync<CaseEventReadRecord>("case_events", id,
+                new { billing_status = "billed" });
+            if (result != null) count++;
+        }
+        return count;
+    }
 }
