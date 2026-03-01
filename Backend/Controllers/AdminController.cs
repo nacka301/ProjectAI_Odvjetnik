@@ -1,15 +1,46 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Backend.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 
 namespace Backend.Controllers;
 
+// ═══════════════════════════════════════════════════════════
+//  DTOs for GET /api/admin/users
+// ═══════════════════════════════════════════════════════════
+
+public class AdminUserDto
+{
+    [JsonPropertyName("user_id")]       public string UserId { get; set; } = "";
+    [JsonPropertyName("email")]         public string Email { get; set; } = "";
+    [JsonPropertyName("full_name")]     public string FullName { get; set; } = "";
+    [JsonPropertyName("phone_number")]  public string? PhoneNumber { get; set; }
+    [JsonPropertyName("role")]          public string Role { get; set; } = "admin";
+    [JsonPropertyName("totp_enabled")]  public bool TotpEnabled { get; set; }
+    [JsonPropertyName("created_at")]    public string CreatedAt { get; set; } = "";
+    [JsonPropertyName("last_sign_in")]  public string? LastSignIn { get; set; }
+
+    // Firm info
+    [JsonPropertyName("firm_name")]     public string? FirmName { get; set; }
+    [JsonPropertyName("firm_oib")]      public string? FirmOib { get; set; }
+
+    // Subscription (from subscriptions table linked to law_firm)
+    [JsonPropertyName("plan")]          public string? Plan { get; set; }
+    [JsonPropertyName("sub_status")]    public string? SubStatus { get; set; }
+    [JsonPropertyName("valid_until")]   public string? ValidUntil { get; set; }
+
+    // Credit usage (summed across modules)
+    [JsonPropertyName("used_credits")]  public int UsedCredits { get; set; }
+    [JsonPropertyName("max_credits")]   public int MaxCredits { get; set; }
+}
+
 /// <summary>
 /// Admin-only controller — protected by AdminGuardMiddleware (/api/admin/* prefix).
 ///
 /// Endpoints:
+///   GET  /api/admin/users                             → Structured user overview
 ///   GET  /api/admin/audit-logs?limit=25&amp;offset=0  → Paginated audit logs
 ///   GET  /api/admin/subscriptions                     → All tenant subscriptions
 ///   POST /api/admin/seed-demo-data                    → Seed 10 clients / 10 cases / 100 events
@@ -53,6 +84,169 @@ public class AdminController : ControllerBase
 
     private string? GetUserId() => HttpContext.Items["AuthUserId"] as string;
     private string? GetTenantId() => HttpContext.Items["AuthTenantId"] as string;
+
+    // ═══════════════════════════════════════════════════════════
+    //  GET /api/admin/users — structured user overview
+    // ═══════════════════════════════════════════════════════════
+
+    [HttpGet("users")]
+    public async Task<IActionResult> GetUsers()
+    {
+        if (!_isConfigured)
+            return StatusCode(503, new { error = "Supabase nije konfiguriran." });
+
+        try
+        {
+            // 1) Fetch all Supabase Auth users (email, created_at, last_sign_in_at)
+            var authUsersUrl = $"{_supabaseUrl!.TrimEnd('/')}/auth/v1/admin/users?per_page=500";
+            var authReq = new HttpRequestMessage(HttpMethod.Get, authUsersUrl);
+            authReq.Headers.Add("apikey", _serviceKey);
+            authReq.Headers.Add("Authorization", $"Bearer {_serviceKey}");
+            var authRes = await _httpClient.SendAsync(authReq);
+            var authBody = await authRes.Content.ReadAsStringAsync();
+
+            Dictionary<string, (string email, string createdAt, string? lastSignIn)> authMap = new();
+
+            if (authRes.IsSuccessStatusCode)
+            {
+                using var authDoc = JsonDocument.Parse(authBody);
+                JsonElement usersArray;
+
+                // Supabase returns { users: [...] } OR just [...]
+                if (authDoc.RootElement.ValueKind == JsonValueKind.Object &&
+                    authDoc.RootElement.TryGetProperty("users", out usersArray))
+                {
+                    // standard format
+                }
+                else if (authDoc.RootElement.ValueKind == JsonValueKind.Array)
+                {
+                    usersArray = authDoc.RootElement;
+                }
+                else
+                {
+                    usersArray = default;
+                }
+
+                if (usersArray.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var u in usersArray.EnumerateArray())
+                    {
+                        var uid = u.GetProperty("id").GetString() ?? "";
+                        var email = u.TryGetProperty("email", out var e) ? e.GetString() ?? "" : "";
+                        var created = u.TryGetProperty("created_at", out var c) ? c.GetString() ?? "" : "";
+                        var lastIn = u.TryGetProperty("last_sign_in_at", out var l) ? l.GetString() : null;
+                        if (!string.IsNullOrEmpty(uid))
+                            authMap[uid] = (email, created, lastIn);
+                    }
+                }
+            }
+            else
+            {
+                _logger.LogWarning("Auth admin/users call failed ({Status}): {Body}", authRes.StatusCode, authBody);
+            }
+
+            // 2) Fetch user_profiles with embedded law_firms → subscriptions + firm_usage
+            var profilesUrl = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/user_profiles" +
+                "?select=user_id,full_name,phone_number,role,totp_enabled,created_at," +
+                "law_firms(id,name,oib,subscriptions(plan_name,status,valid_until),firm_usage(module_name,used_credits,max_credits))";
+            var profilesReq = CreateRequest(HttpMethod.Get, profilesUrl);
+            var profilesRes = await _httpClient.SendAsync(profilesReq);
+            var profilesBody = await profilesRes.Content.ReadAsStringAsync();
+
+            var result = new List<AdminUserDto>();
+
+            if (profilesRes.IsSuccessStatusCode)
+            {
+                using var doc = JsonDocument.Parse(profilesBody);
+                foreach (var p in doc.RootElement.EnumerateArray())
+                {
+                    var userId = p.GetProperty("user_id").GetString() ?? "";
+                    var dto = new AdminUserDto
+                    {
+                        UserId = userId,
+                        FullName = p.TryGetProperty("full_name", out var fn) ? fn.GetString() ?? "" : "",
+                        PhoneNumber = p.TryGetProperty("phone_number", out var ph) ? ph.GetString() : null,
+                        Role = p.TryGetProperty("role", out var r) ? r.GetString() ?? "admin" : "admin",
+                        TotpEnabled = p.TryGetProperty("totp_enabled", out var tp) && tp.GetBoolean(),
+                        CreatedAt = p.TryGetProperty("created_at", out var ca) ? ca.GetString() ?? "" : "",
+                    };
+
+                    // Merge auth data (email, last sign in)
+                    if (authMap.TryGetValue(userId, out var auth))
+                    {
+                        dto.Email = auth.email;
+                        dto.LastSignIn = auth.lastSignIn;
+                        if (string.IsNullOrEmpty(dto.CreatedAt))
+                            dto.CreatedAt = auth.createdAt;
+                    }
+
+                    // Law firm + subscriptions + usage
+                    if (p.TryGetProperty("law_firms", out var firm) && firm.ValueKind == JsonValueKind.Object)
+                    {
+                        dto.FirmName = firm.TryGetProperty("name", out var n) ? n.GetString() : null;
+                        dto.FirmOib = firm.TryGetProperty("oib", out var o) ? o.GetString() : null;
+
+                        // Best subscription
+                        if (firm.TryGetProperty("subscriptions", out var subs) && subs.ValueKind == JsonValueKind.Array)
+                        {
+                            foreach (var s in subs.EnumerateArray())
+                            {
+                                var status = s.TryGetProperty("status", out var st) ? st.GetString() : "";
+                                if (status == "active" || status == "trial" || dto.Plan == null)
+                                {
+                                    dto.Plan = s.TryGetProperty("plan_name", out var pn) ? pn.GetString() : null;
+                                    dto.SubStatus = status;
+                                    dto.ValidUntil = s.TryGetProperty("valid_until", out var vu) ? vu.GetString() : null;
+                                    if (status == "active" || status == "trial") break;
+                                }
+                            }
+                        }
+
+                        // Aggregate firm_usage
+                        if (firm.TryGetProperty("firm_usage", out var usage) && usage.ValueKind == JsonValueKind.Array)
+                        {
+                            foreach (var u in usage.EnumerateArray())
+                            {
+                                dto.UsedCredits += u.TryGetProperty("used_credits", out var uc) ? uc.GetInt32() : 0;
+                                dto.MaxCredits += u.TryGetProperty("max_credits", out var mc) ? mc.GetInt32() : 0;
+                            }
+                        }
+                    }
+
+                    result.Add(dto);
+                }
+            }
+            else
+            {
+                _logger.LogError("Admin users profiles query failed ({Status}): {Body}", profilesRes.StatusCode, profilesBody);
+            }
+
+            // 3) Add auth-only users who don't have a profile yet
+            foreach (var kvp in authMap)
+            {
+                if (result.All(u => u.UserId != kvp.Key))
+                {
+                    result.Add(new AdminUserDto
+                    {
+                        UserId = kvp.Key,
+                        Email = kvp.Value.email,
+                        CreatedAt = kvp.Value.createdAt,
+                        LastSignIn = kvp.Value.lastSignIn,
+                    });
+                }
+            }
+
+            // Sort by created_at desc
+            result.Sort((a, b) => string.Compare(b.CreatedAt, a.CreatedAt, StringComparison.Ordinal));
+
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching admin users");
+            return StatusCode(500, new { error = "Interna greška." });
+        }
+    }
 
     // ═══════════════════════════════════════════════════════════
     //  GET /api/admin/audit-logs?limit=25&offset=0
