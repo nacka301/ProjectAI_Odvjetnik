@@ -524,44 +524,64 @@ GRANT EXECUTE ON FUNCTION get_monthly_revenue(UUID, INT) TO authenticated;
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- SEKCIJA 10: Data validation constraints  (ex 012)
+-- VAŽNO: Svaki constraint ima UPDATE koji prvo čisti postojeće podatke,
+--        tako da constraint nikad ne padne na postojećim redovima.
 -- ═══════════════════════════════════════════════════════════════════════════
 
--- Clients: OIB 11 znamenki
+-- ── Clients: OIB 11 znamenki (ili prazan ili NULL) ──
+UPDATE clients SET oib = NULL
+    WHERE oib IS NOT NULL AND oib != '' AND oib !~ '^\d{11}$';
+
 DO $$ BEGIN
     ALTER TABLE clients ADD CONSTRAINT chk_clients_oib_format
-        CHECK (oib IS NULL OR oib ~ '^\d{11}$');
+        CHECK (oib IS NULL OR oib = '' OR oib ~ '^\d{11}$');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
--- Clients: tip enum
+-- ── Clients: tip enum ──
+UPDATE clients SET tip = 'fizicka'
+    WHERE tip NOT IN ('fizicka', 'pravna');
+
 DO $$ BEGIN
     ALTER TABLE clients ADD CONSTRAINT chk_clients_tip
         CHECK (tip IN ('fizicka', 'pravna'));
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
--- Cases: status enum
+-- ── Cases: status enum ──
+UPDATE cases SET status = 'aktivan'
+    WHERE status NOT IN ('aktivan', 'zatvoren', 'mirovanje', 'arhiviran');
+
 DO $$ BEGIN
     ALTER TABLE cases ADD CONSTRAINT chk_cases_status
         CHECK (status IN ('aktivan', 'zatvoren', 'mirovanje', 'arhiviran'));
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
--- Cases: vrsta enum
+-- ── Cases: vrsta enum ──
+UPDATE cases SET vrsta = 'ostalo'
+    WHERE vrsta NOT IN ('parnica', 'ovrha', 'savjetovanje', 'kazneni', 'upravni', 'izvanparnicni', 'stecajni', 'registarski', 'ostalo');
+
 DO $$ BEGIN
     ALTER TABLE cases ADD CONSTRAINT chk_cases_vrsta
         CHECK (vrsta IN ('parnica', 'ovrha', 'savjetovanje', 'kazneni', 'upravni', 'izvanparnicni', 'stecajni', 'registarski', 'ostalo'));
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
--- Invoices: status enum
+-- ── Invoices: status enum ──
+UPDATE invoices SET status = 'DRAFT'
+    WHERE status NOT IN ('DRAFT', 'ISSUED', 'SENT', 'PAID', 'CANCELLED');
+
 DO $$ BEGIN
     ALTER TABLE invoices ADD CONSTRAINT chk_invoices_status
         CHECK (status IN ('DRAFT', 'ISSUED', 'SENT', 'PAID', 'CANCELLED'));
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
--- Invoices: amounts non-negative
+-- ── Invoices: amounts non-negative ──
+UPDATE invoices SET net_amount = 0 WHERE net_amount < 0;
+UPDATE invoices SET gross_amount = 0 WHERE gross_amount < 0;
+
 DO $$ BEGIN
     ALTER TABLE invoices ADD CONSTRAINT chk_invoices_net_positive
         CHECK (net_amount >= 0);
@@ -574,61 +594,83 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
--- Invoices: OIB format
+-- ── Invoices: OIB format (NULL, prazan, ili 11 znamenki) ──
+UPDATE invoices SET issuer_oib = ''
+    WHERE issuer_oib IS NOT NULL AND issuer_oib != '' AND issuer_oib !~ '^\d{11}$';
+UPDATE invoices SET client_oib = ''
+    WHERE client_oib IS NOT NULL AND client_oib != '' AND client_oib !~ '^\d{11}$';
+
 DO $$ BEGIN
     ALTER TABLE invoices ADD CONSTRAINT chk_invoices_issuer_oib
-        CHECK (issuer_oib = '' OR issuer_oib ~ '^\d{11}$');
+        CHECK (issuer_oib IS NULL OR issuer_oib = '' OR issuer_oib ~ '^\d{11}$');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$ BEGIN
     ALTER TABLE invoices ADD CONSTRAINT chk_invoices_client_oib
-        CHECK (client_oib = '' OR client_oib ~ '^\d{11}$');
+        CHECK (client_oib IS NULL OR client_oib = '' OR client_oib ~ '^\d{11}$');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
--- Troskovnici: bodovi i iznosi non-negative
+-- ── Troskovnici: bodovi i iznosi non-negative ──
+UPDATE troskovnici SET ukupno_bodova = 0 WHERE ukupno_bodova < 0;
+UPDATE troskovnici SET ukupno_eur_bez_pdv = 0 WHERE ukupno_eur_bez_pdv < 0;
+
 DO $$ BEGIN
     ALTER TABLE troskovnici ADD CONSTRAINT chk_troskovnici_bodovi_positive
-        CHECK (ukupno_bodova >= 0);
+        CHECK (ukupno_bodova IS NULL OR ukupno_bodova >= 0);
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$ BEGIN
     ALTER TABLE troskovnici ADD CONSTRAINT chk_troskovnici_eur_positive
-        CHECK (ukupno_eur_bez_pdv >= 0);
+        CHECK (ukupno_eur_bez_pdv IS NULL OR ukupno_eur_bez_pdv >= 0);
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
--- Evaluations: estimated_value pozitivan
+-- ── Evaluations: estimated_value pozitivan ──
+UPDATE evaluations SET estimated_value = 1 WHERE estimated_value <= 0;
+
 DO $$ BEGIN
     ALTER TABLE evaluations ADD CONSTRAINT chk_evaluations_value_positive
         CHECK (estimated_value > 0);
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
--- Legal strategies: win_probability 0-100
+-- ── Legal strategies: win_probability 0-100 ──
+UPDATE legal_strategies SET win_probability = 0 WHERE win_probability < 0;
+UPDATE legal_strategies SET win_probability = 100 WHERE win_probability > 100;
+
 DO $$ BEGIN
     ALTER TABLE legal_strategies ADD CONSTRAINT chk_legal_strategies_win_prob
         CHECK (win_probability BETWEEN 0 AND 100);
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
--- Firm usage: credits non-negative
+-- ── Firm usage: credits non-negative ──
+UPDATE firm_usage SET used_credits = 0 WHERE used_credits < 0;
+UPDATE firm_usage SET max_credits = 0 WHERE max_credits < 0;
+
 DO $$ BEGIN
     ALTER TABLE firm_usage ADD CONSTRAINT chk_firm_usage_credits
         CHECK (used_credits >= 0 AND max_credits >= 0);
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
--- Subscriptions: plan enum
+-- ── Subscriptions: plan enum ──
+UPDATE subscriptions SET plan_name = 'Pro'
+    WHERE plan_name NOT IN ('Starter', 'Pro', 'Enterprise');
+
 DO $$ BEGIN
     ALTER TABLE subscriptions ADD CONSTRAINT chk_subscriptions_plan
         CHECK (plan_name IN ('Starter', 'Pro', 'Enterprise'));
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
--- Subscriptions: status enum
+-- ── Subscriptions: status enum ──
+UPDATE subscriptions SET status = 'active'
+    WHERE status NOT IN ('active', 'trial', 'canceled', 'expired');
+
 DO $$ BEGIN
     ALTER TABLE subscriptions ADD CONSTRAINT chk_subscriptions_status
         CHECK (status IN ('active', 'trial', 'canceled', 'expired'));
