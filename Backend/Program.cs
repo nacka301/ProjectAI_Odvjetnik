@@ -195,6 +195,9 @@ builder.Services.AddHttpClient<TwoFactorService>();
 builder.Services.AddHttpClient<SettingsService>();
 builder.Services.AddHttpClient<CreditService>();
 builder.Services.AddHttpClient<ClientCaseService>();
+
+// ── DataSeeder (admin-only, uses ClientCaseService) ──
+builder.Services.AddScoped<DataSeederService>();
 builder.Services.AddHttpClient<PerplexityAuditService>(client =>
 {
     client.Timeout = TimeSpan.FromMinutes(2);

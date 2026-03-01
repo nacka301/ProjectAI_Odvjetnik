@@ -15,6 +15,9 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
+  FlaskConical,
+  Loader2,
+  DatabaseZap,
 } from "lucide-react";
 
 // ═══════════════════════════════════════════════════════════
@@ -212,6 +215,14 @@ export default function AdminDashboard() {
   const [loadingSubs, setLoadingSubs] = useState(true);
   const [logPage, setLogPage] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
+  const [seeding, setSeeding] = useState(false);
+  const [seedResult, setSeedResult] = useState<{
+    success: boolean;
+    clients_created: number;
+    cases_created: number;
+    events_created: number;
+    errors: string[];
+  } | null>(null);
 
   const PAGE_SIZE = 25;
 
@@ -233,6 +244,30 @@ export default function AdminDashboard() {
     setSubscriptions(data);
     setLoadingSubs(false);
   }, [userId, authHeaders]);
+
+  const handleSeedDemoData = async () => {
+    if (seeding) return;
+    setSeedResult(null);
+    setSeeding(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/seed-demo-data`, {
+        method: "POST",
+        headers: { ...authHeaders, "Content-Type": "application/json" },
+      });
+      const data = await res.json();
+      setSeedResult(data);
+    } catch {
+      setSeedResult({
+        success: false,
+        clients_created: 0,
+        cases_created: 0,
+        events_created: 0,
+        errors: ["Mrežna greška — pokušajte ponovno."],
+      });
+    } finally {
+      setSeeding(false);
+    }
+  };
 
   useEffect(() => {
     loadLogs(logPage);
@@ -553,6 +588,95 @@ export default function AdminDashboard() {
                 )}
               </tbody>
             </table>
+          </div>
+        </section>
+
+        {/* ── Developer Tools — Danger Zone ── */}
+        <section className="rounded-xl border-2 border-red-300 bg-red-50/30 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-red-200 flex items-center gap-2">
+            <FlaskConical className="h-4 w-4 text-red-600" />
+            <h2 className="text-sm font-bold text-red-900">
+              Developer Tools — Opasna zona
+            </h2>
+          </div>
+
+          <div className="px-5 py-5 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-red-100 shrink-0 mt-0.5">
+                <DatabaseZap className="h-5 w-5 text-red-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-slate-900">
+                  Generiraj Demo Podatke
+                </h3>
+                <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
+                  Stvara 10 klijenata s hrvatskim imenima i OIB-ovima, 10
+                  predmeta (parnice, ovrhe, savjetovanja…) i 100 događaja u
+                  upisniku. Podaci se vežu na vaš korisnički račun i <strong>ne mogu
+                  se automatski obrisati</strong>.
+                </p>
+
+                <div className="flex items-center gap-3 mt-3">
+                  <button
+                    onClick={handleSeedDemoData}
+                    disabled={seeding}
+                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed rounded-lg transition shadow-sm"
+                  >
+                    {seeding ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Generiranje…
+                      </>
+                    ) : (
+                      <>
+                        <DatabaseZap className="h-4 w-4" />
+                        Generiraj Demo Podatke
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Seed result toast */}
+                {seedResult && (
+                  <div
+                    className={`mt-3 rounded-lg border p-3 text-xs ${
+                      seedResult.success
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                        : "border-amber-200 bg-amber-50 text-amber-800"
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 font-semibold mb-1">
+                      {seedResult.success ? (
+                        <>
+                          <CheckCircle2 className="h-3.5 w-3.5" /> Podaci
+                          uspješno generirani!
+                        </>
+                      ) : (
+                        <>
+                          <AlertTriangle className="h-3.5 w-3.5" /> Djelomično
+                          generirano (s greškama)
+                        </>
+                      )}
+                    </div>
+                    <p>
+                      Klijenata: {seedResult.clients_created} · Predmeta:{" "}
+                      {seedResult.cases_created} · Događaja:{" "}
+                      {seedResult.events_created}
+                    </p>
+                    {seedResult.errors.length > 0 && (
+                      <ul className="mt-1 list-disc list-inside text-[11px] opacity-80">
+                        {seedResult.errors.slice(0, 5).map((e, i) => (
+                          <li key={i}>{e}</li>
+                        ))}
+                        {seedResult.errors.length > 5 && (
+                          <li>…i još {seedResult.errors.length - 5} grešaka</li>
+                        )}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </section>
 
