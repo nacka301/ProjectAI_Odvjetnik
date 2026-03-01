@@ -120,6 +120,14 @@ public sealed class TroskovnikRequest
     /// <summary>ID predmeta (opcija — za povezivanje s predmetom).</summary>
     [JsonPropertyName("case_id")]
     public string? CaseId { get; set; }
+
+    /// <summary>If true and no ClientId, backend will auto-create a client from stranke data.</summary>
+    [JsonPropertyName("auto_create_client")]
+    public bool AutoCreateClient { get; set; }
+
+    /// <summary>Grad for client auto-creation (not in nested stranke object).</summary>
+    [JsonPropertyName("client_grad")]
+    public string? ClientGrad { get; set; }
 }
 
 // New request DTOs for nested schema

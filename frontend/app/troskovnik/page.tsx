@@ -295,6 +295,11 @@ function TroskovnikContent() {
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string>("");
   const [loadingClients, setLoadingClients] = useState(false);
+  /** True when fields were auto-filled from DB selection (vs manual typing) */
+  const [clientAutoFilled, setClientAutoFilled] = useState(false);
+  const [clientSearchQuery, setClientSearchQuery] = useState("");
+  const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
+  const clientContainerRef = useRef<HTMLDivElement>(null);
 
   // ── Save state ──
   const [saving, setSaving] = useState(false);
@@ -337,11 +342,7 @@ function TroskovnikContent() {
         if (preselectedClientId) {
           const match = data.find((c) => c.id === preselectedClientId);
           if (match) {
-            setSelectedClientId(match.id);
-            setKlijentIme(match.ime_naziv);
-            setKlijentOib(match.oib ?? "");
-            setKlijentAdresa(match.adresa ?? "");
-            setKlijentGrad(match.grad ?? "");
+            handleClientAutoFill(match);
             setShowParties(true);
           }
         }
@@ -350,18 +351,63 @@ function TroskovnikContent() {
       .finally(() => setLoadingClients(false));
   }, [userId, preselectedClientId]);
 
-  // ── Client selection handler ──
-  const handleClientSelect = (clientId: string) => {
-    setSelectedClientId(clientId);
-    if (!clientId) return;
-    const c = clients.find((cl) => cl.id === clientId);
-    if (c) {
-      setKlijentIme(c.ime_naziv);
-      setKlijentOib(c.oib ?? "");
-      setKlijentAdresa(c.adresa ?? "");
-      setKlijentGrad(c.grad ?? "");
-    }
-  };
+  // ── Close client dropdown on outside click ──
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (clientContainerRef.current && !clientContainerRef.current.contains(e.target as Node)) {
+        setClientDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  // ── Filtered clients for combobox ──
+  const filteredClients = useMemo(() => {
+    if (!clientSearchQuery.trim()) return clients;
+    const q = clientSearchQuery.toLowerCase();
+    return clients.filter(
+      (c) =>
+        c.ime_naziv.toLowerCase().includes(q) ||
+        (c.oib && c.oib.includes(q)) ||
+        (c.adresa && c.adresa.toLowerCase().includes(q)) ||
+        (c.grad && c.grad?.toLowerCase().includes(q))
+    );
+  }, [clients, clientSearchQuery]);
+
+  // ── Client selection handler (from combobox) ──
+  const handleClientAutoFill = useCallback((client: ClientOption) => {
+    setSelectedClientId(client.id);
+    setKlijentIme(client.ime_naziv);
+    setKlijentOib(client.oib ?? "");
+    setKlijentAdresa(client.adresa ?? "");
+    setKlijentGrad(client.grad ?? "");
+    setClientAutoFilled(true);
+    setClientSearchQuery("");
+    setClientDropdownOpen(false);
+  }, []);
+
+  const handleClientClear = useCallback(() => {
+    setSelectedClientId("");
+    setKlijentIme("");
+    setKlijentOib("");
+    setKlijentAdresa("");
+    setKlijentGrad("");
+    setClientAutoFilled(false);
+    setClientSearchQuery("");
+  }, []);
+
+  // When user manually edits client fields after auto-fill, unlink
+  const handleKlijentManualEdit = useCallback(
+    (setter: (v: string) => void, value: string) => {
+      setter(value);
+      if (clientAutoFilled && selectedClientId) {
+        setSelectedClientId("");
+        setClientAutoFilled(false);
+      }
+    },
+    [clientAutoFilled, selectedClientId]
+  );
 
   // ── Derived values ──
   const vrijednostNum = parseFloat(vrijednostSpora.replace(/\./g, "").replace(",", ".")) || 0;
@@ -628,6 +674,9 @@ function TroskovnikContent() {
         is_oduzimanje_prekrsaj: isOduzimanjePrekrsaj,
         vrijednost_oduzimanja: parsedVrijednostOduzimanja,
         client_id: selectedClientId || undefined,
+        // Signal backend to auto-create client from stranke data if no client_id
+        auto_create_client: !selectedClientId && !!klijentIme.trim(),
+        client_grad: klijentGrad || undefined,
       };
 
       const res = await fetch(`${API}/api/troskovnik/spremi`, {
@@ -644,6 +693,17 @@ function TroskovnikContent() {
       const data = await res.json();
       setResult(data.troskovnik);
       setSavedId(data.savedId ?? null);
+
+      // If backend auto-created a client, update local state
+      if (data.createdClientId) {
+        setSelectedClientId(data.createdClientId);
+        setClientAutoFilled(true);
+        // Refresh client list so new client appears in combobox
+        fetch(`${API}/api/client`, { headers: authHeaders })
+          .then((r) => (r.ok ? r.json() : []))
+          .then((freshClients: ClientOption[]) => setClients(freshClients))
+          .catch(() => {});
+      }
     } catch (err) {
       setCalcError(err instanceof Error ? err.message : "Nepoznata greška");
     } finally {
@@ -1093,31 +1153,121 @@ function TroskovnikContent() {
                     </div>
                   </div>
 
-                  {/* Client picker */}
-                  {clients.length > 0 && (
-                    <div>
+                  {/* ══ Searchable Client Combobox ══ */}
+                  {(clients.length > 0 || userId) && (
+                    <div ref={clientContainerRef} className="relative">
                       <label className="block text-xs font-semibold text-slate-600 mb-1">
                         <div className="flex items-center gap-1.5">
                           <Users className="h-3.5 w-3.5 text-slate-400" />
                           Poveži sa strankom
                         </div>
                       </label>
-                      <select
-                        value={selectedClientId}
-                        onChange={(e) => handleClientSelect(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-                      >
-                        <option value="">— bez stranke —</option>
-                        {clients.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.ime_naziv}{c.oib ? ` (OIB: ${c.oib})` : ""} — {c.tip === "pravna" ? "Pravna" : "Fizička"}
-                          </option>
-                        ))}
-                      </select>
-                      {selectedClientId && (
+
+                      {/* Selected state — green badge */}
+                      {selectedClientId && clientAutoFilled ? (
+                        <div className="flex items-center gap-2 px-3 py-2 border border-emerald-300 bg-emerald-50 rounded-lg text-sm">
+                          <div className="flex-1 min-w-0">
+                            <span className="font-medium text-emerald-800 truncate">
+                              {clients.find((c) => c.id === selectedClientId)?.ime_naziv ?? klijentIme}
+                            </span>
+                            {klijentOib && (
+                              <span className="ml-2 text-emerald-600 text-xs">OIB: {klijentOib}</span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleClientClear}
+                            className="shrink-0 p-1 rounded hover:bg-emerald-100 text-emerald-600 transition"
+                            title="Ukloni stranku"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        /* Search input */
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                          <input
+                            type="text"
+                            value={clientSearchQuery}
+                            onChange={(e) => {
+                              setClientSearchQuery(e.target.value);
+                              if (!clientDropdownOpen) setClientDropdownOpen(true);
+                            }}
+                            onFocus={() => setClientDropdownOpen(true)}
+                            placeholder="Pretraži stranke po imenu, OIB-u, adresi..."
+                            className="w-full pl-10 pr-10 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setClientDropdownOpen(!clientDropdownOpen)}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600"
+                          >
+                            <ChevronDown className={`h-4 w-4 transition ${clientDropdownOpen ? "rotate-180" : ""}`} />
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Dropdown list */}
+                      {clientDropdownOpen && !selectedClientId && (
+                        <div className="absolute z-50 mt-1 w-full max-h-64 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-lg">
+                          {loadingClients ? (
+                            <div className="flex items-center justify-center py-6 text-slate-400">
+                              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                              <span className="text-xs">Učitavanje stranaka...</span>
+                            </div>
+                          ) : filteredClients.length === 0 ? (
+                            <div className="py-6 text-center">
+                              <p className="text-xs text-slate-400">
+                                {clientSearchQuery ? "Nema rezultata pretrage" : "Nema spremljenih stranaka"}
+                              </p>
+                              <p className="text-[10px] text-slate-400 mt-1">
+                                Unesite podatke ručno — stranka će se automatski spremiti
+                              </p>
+                            </div>
+                          ) : (
+                            filteredClients.map((c) => (
+                              <button
+                                key={c.id}
+                                type="button"
+                                onClick={() => {
+                                  handleClientAutoFill(c);
+                                  if (!showParties) setShowParties(true);
+                                }}
+                                className="w-full text-left px-4 py-2.5 hover:bg-indigo-50 transition flex items-center gap-3 border-b border-slate-100 last:border-0"
+                              >
+                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100">
+                                  {c.tip === "pravna" ? (
+                                    <Building2 className="h-3.5 w-3.5 text-slate-500" />
+                                  ) : (
+                                    <User className="h-3.5 w-3.5 text-slate-500" />
+                                  )}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-slate-800 truncate">{c.ime_naziv}</p>
+                                  <div className="flex items-center gap-2 text-[10px] text-slate-400">
+                                    {c.oib && <span>OIB: {c.oib}</span>}
+                                    {c.grad && <span>· {c.grad}</span>}
+                                    {c.tip === "pravna" && <span className="text-indigo-500">Pravna</span>}
+                                  </div>
+                                </div>
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      )}
+
+                      {/* Status hints */}
+                      {clientAutoFilled && selectedClientId && (
                         <p className="mt-1 text-[10px] text-emerald-600 flex items-center gap-1">
                           <CheckCircle className="h-3 w-3" />
-                          Troškovnik će biti povezan s ovom strankom
+                          Podaci stranke automatski popunjeni iz baze
+                        </p>
+                      )}
+                      {!selectedClientId && klijentIme.trim() && userId && (
+                        <p className="mt-1 text-[10px] text-indigo-500 flex items-center gap-1">
+                          <Plus className="h-3 w-3" />
+                          Nova stranka — automatski će se spremiti pri spremanju troškovnika
                         </p>
                       )}
                     </div>
@@ -1161,16 +1311,16 @@ function TroskovnikContent() {
                       </select>
                     </div>
 
-                    {/* Klijent */}
+                    {/* Klijent — ZASTUPANA STRANKA (tracks manual edits) */}
                     <div className="space-y-2">
                       <div className="flex items-center gap-1.5 mb-1">
                         <User className="h-3.5 w-3.5 text-slate-400" />
                         <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">ZASTUPANA STRANKA</span>
                       </div>
-                      <input type="text" value={klijentIme} onChange={(e) => setKlijentIme(e.target.value)} placeholder="Ime / Naziv" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
-                      <input type="text" value={klijentOib} onChange={(e) => setKlijentOib(e.target.value)} placeholder="OIB" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
-                      <input type="text" value={klijentAdresa} onChange={(e) => setKlijentAdresa(e.target.value)} placeholder="Adresa" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
-                      <input type="text" value={klijentGrad} onChange={(e) => setKlijentGrad(e.target.value)} placeholder="Grad" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                      <input type="text" value={klijentIme} onChange={(e) => handleKlijentManualEdit(setKlijentIme, e.target.value)} placeholder="Ime / Naziv" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                      <input type="text" value={klijentOib} onChange={(e) => handleKlijentManualEdit(setKlijentOib, e.target.value)} placeholder="OIB" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                      <input type="text" value={klijentAdresa} onChange={(e) => handleKlijentManualEdit(setKlijentAdresa, e.target.value)} placeholder="Adresa" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                      <input type="text" value={klijentGrad} onChange={(e) => handleKlijentManualEdit(setKlijentGrad, e.target.value)} placeholder="Grad" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
                       <label className="block text-xs font-semibold text-slate-600 mb-1 mt-2">
                         Položaj zastupane stranke
                       </label>

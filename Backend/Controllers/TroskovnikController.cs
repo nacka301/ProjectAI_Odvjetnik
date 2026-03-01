@@ -85,10 +85,45 @@ public class TroskovnikController : ControllerBase
 
         var result = _service.Izracunaj(request);
 
+        // ═════════════════════════════════════════════════════════
+        //  CLIENT UPSERT LOGIC
+        //  1. If client_id provided → use it (existing client selected from combobox)
+        //  2. If auto_create_client && no client_id → find or create client
+        // ═════════════════════════════════════════════════════════
+
+        string? resolvedClientId = request.ClientId;
+        string? createdClientId = null;
+
+        if (string.IsNullOrWhiteSpace(resolvedClientId) && request.AutoCreateClient)
+        {
+            // Extract client data from stranke > zastupana_stranka (preferred) or legacy klijent
+            var clientNaziv = request.Stranke?.ZastupanaStranka?.Naziv
+                              ?? request.Klijent?.Ime;
+            var clientOib = request.Stranke?.ZastupanaStranka?.Oib
+                            ?? request.Klijent?.Oib;
+            var clientAdresa = request.Stranke?.ZastupanaStranka?.Adresa
+                               ?? request.Klijent?.Adresa;
+            var clientGrad = request.ClientGrad
+                             ?? request.Klijent?.Grad;
+
+            if (!string.IsNullOrWhiteSpace(clientNaziv))
+            {
+                var (upsertedId, wasCreated) = await _clientCaseService.UpsertClientForTroskovnikAsync(
+                    userId, clientNaziv, clientOib, clientAdresa, clientGrad
+                );
+
+                if (upsertedId != null)
+                {
+                    resolvedClientId = upsertedId;
+                    if (wasCreated) createdClientId = upsertedId;
+                }
+            }
+        }
+
         var record = new TroskovnikRecord
         {
             UserId = userId,
-            ClientId = request.ClientId,
+            ClientId = resolvedClientId,
             CaseId = request.CaseId,
             OpisPredmeta = request.OpisPredmeta,
             VrijednostSpora = request.VrijednostSpora,
@@ -142,7 +177,13 @@ public class TroskovnikController : ControllerBase
 
         var saved = await _clientCaseService.SaveTroskovnikAsync(record);
 
-        return Ok(new { troskovnik = result, savedId = saved?.Id });
+        return Ok(new
+        {
+            troskovnik = result,
+            savedId = saved?.Id,
+            clientId = resolvedClientId,
+            createdClientId
+        });
     }
 
     /// <summary>GET /api/troskovnik/popis — lista svih spremljenih troškovnika korisnika.</summary>

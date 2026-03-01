@@ -181,6 +181,100 @@ public sealed class ClientCaseService
     public Task<bool> DeleteClientAsync(string id)
         => DeleteAsync("clients", id);
 
+    /// <summary>
+    /// Finds a client by OIB for a specific user.
+    /// Returns null if not found or OIB is empty/invalid.
+    /// </summary>
+    public async Task<ClientReadRecord?> FindClientByOibAsync(string userId, string oib)
+    {
+        if (string.IsNullOrWhiteSpace(oib) || oib.Length != 11 || !UuidRegex.IsMatch(userId))
+            return null;
+
+        var results = await SelectAsync<ClientReadRecord>(
+            "clients",
+            $"user_id=eq.{Uri.EscapeDataString(userId)}&oib=eq.{Uri.EscapeDataString(oib)}",
+            limit: 1
+        );
+
+        return results.FirstOrDefault();
+    }
+
+    /// <summary>
+    /// Finds a client by exact name match for a specific user.
+    /// Fallback when OIB is not available.
+    /// </summary>
+    public async Task<ClientReadRecord?> FindClientByNameAsync(string userId, string name)
+    {
+        if (string.IsNullOrWhiteSpace(name) || !UuidRegex.IsMatch(userId))
+            return null;
+
+        var results = await SelectAsync<ClientReadRecord>(
+            "clients",
+            $"user_id=eq.{Uri.EscapeDataString(userId)}&ime_naziv=eq.{Uri.EscapeDataString(name)}",
+            limit: 1
+        );
+
+        return results.FirstOrDefault();
+    }
+
+    /// <summary>
+    /// Ensures a client exists for the given user. If a matching client is found
+    /// by OIB (preferred) or exact name, returns it. Otherwise creates a new one.
+    /// Returns (clientId, wasCreated).
+    /// </summary>
+    public async Task<(string? ClientId, bool WasCreated)> UpsertClientForTroskovnikAsync(
+        string userId,
+        string? naziv,
+        string? oib,
+        string? adresa,
+        string? grad)
+    {
+        if (string.IsNullOrWhiteSpace(naziv))
+            return (null, false);
+
+        // 1. Try to find by OIB first (most reliable match)
+        if (!string.IsNullOrWhiteSpace(oib) && oib.Length == 11)
+        {
+            var byOib = await FindClientByOibAsync(userId, oib);
+            if (byOib != null)
+            {
+                _logger.LogInformation("Found existing client by OIB {Oib}: {Id}", oib, byOib.Id);
+                return (byOib.Id, false);
+            }
+        }
+
+        // 2. Fallback: try to find by exact name
+        var byName = await FindClientByNameAsync(userId, naziv);
+        if (byName != null)
+        {
+            _logger.LogInformation("Found existing client by name '{Name}': {Id}", naziv, byName.Id);
+            return (byName.Id, false);
+        }
+
+        // 3. Create new client
+        _logger.LogInformation("Auto-creating new client '{Name}' for user {UserId}", naziv, userId);
+
+        var record = new ClientRecord
+        {
+            UserId = userId,
+            ImeNaziv = naziv,
+            Oib = string.IsNullOrWhiteSpace(oib) ? null : oib,
+            Adresa = adresa,
+            Grad = grad,
+            Tip = "fizicka"
+        };
+
+        var created = await CreateClientAsync(record);
+        if (created != null)
+        {
+            _logger.LogInformation("Auto-created client {Id} for user {UserId}", created.Id, userId);
+            return (created.Id, true);
+        }
+
+        _logger.LogWarning("Failed to auto-create client for user {UserId}", userId);
+        return (null, false);
+    }
+
     // ═══════════════════════════════════════════════════════════
     //  Cases (Predmeti)
     // ═══════════════════════════════════════════════════════════
