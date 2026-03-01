@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Scale, Clock, ShieldAlert, ShieldCheck, Shield, LogOut, Search, Zap } from "lucide-react";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
 import { useUserId } from "@/lib/useUserId";
@@ -32,21 +32,8 @@ export default function AppHeader({ extraStart }: AppHeaderProps) {
   const userId = useUserId();
   const credits = useCredits(userId);
 
-  // ── Admin detection ──
-  const [isAdmin, setIsAdmin] = useState(false);
-  useEffect(() => {
-    const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
-    if (!adminEmail) return;
-    const supabase = createSupabaseBrowser();
-    supabase.auth.getUser().then(({ data }) => {
-      if (
-        data.user?.email &&
-        data.user.email.toLowerCase() === adminEmail.toLowerCase()
-      ) {
-        setIsAdmin(true);
-      }
-    });
-  }, []);
+  // ── Admin detection (cookie set by middleware) ──
+  const isAdmin = typeof document !== "undefined" && document.cookie.split(";").some((c) => c.trim() === "is-admin=1");
 
   return (
     <header className="bg-slate-900 text-white">
