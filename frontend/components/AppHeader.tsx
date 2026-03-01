@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Scale, Clock, ShieldAlert, Shield, LogOut, Search, Zap } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Scale, Clock, ShieldAlert, ShieldCheck, Shield, LogOut, Search, Zap } from "lucide-react";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
 import { useUserId } from "@/lib/useUserId";
 import { useCredits } from "@/lib/useCredits";
@@ -30,6 +31,22 @@ export default function AppHeader({ extraStart }: AppHeaderProps) {
   const router = useRouter();
   const userId = useUserId();
   const credits = useCredits(userId);
+
+  // ── Admin detection ──
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
+    if (!adminEmail) return;
+    const supabase = createSupabaseBrowser();
+    supabase.auth.getUser().then(({ data }) => {
+      if (
+        data.user?.email &&
+        data.user.email.toLowerCase() === adminEmail.toLowerCase()
+      ) {
+        setIsAdmin(true);
+      }
+    });
+  }, []);
 
   return (
     <header className="bg-slate-900 text-white">
@@ -84,6 +101,25 @@ export default function AppHeader({ extraStart }: AppHeaderProps) {
               </Link>
             );
           })}
+
+          {/* ── Admin link (visible only to admin email) ── */}
+          {isAdmin && (
+            <Link
+              href="/admin"
+              className={`relative text-xs transition flex items-center gap-1 p-1.5 sm:p-0 rounded ${
+                pathname === "/admin"
+                  ? "text-amber-400 font-semibold"
+                  : "text-amber-500/70 hover:text-amber-400"
+              }`}
+              title="Admin Dashboard"
+            >
+              <ShieldCheck className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
+              <span className="hidden sm:inline">Admin</span>
+              {pathname === "/admin" && (
+                <span className="hidden sm:block absolute -bottom-3 left-1/2 -translate-x-1/2 w-5 h-0.5 bg-amber-400 rounded-full" />
+              )}
+            </Link>
+          )}
 
           <div className="h-4 w-px bg-slate-700 hidden sm:block" />
 
