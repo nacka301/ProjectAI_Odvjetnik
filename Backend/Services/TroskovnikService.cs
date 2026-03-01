@@ -317,6 +317,13 @@ public sealed class TroskovnikService
         if (useVat)
             pdv = Math.Round(ukupnoEur * TarifaConstants.PdvRate, 2);
 
+        // Sudske pristojbe (Tbr. 1 — Uredba o tarifi sudskih pristojbi)
+        var sudskaPristojba = request.IsOslobodjenPristojbi
+            ? 0m
+            : SudskePristojbeCalculator.Izracunaj(request.VrijednostSpora);
+        var odvjetnickiTrosak = ukupnoEur + pdv;
+        var sveukupniTrosak = odvjetnickiTrosak + sudskaPristojba;
+
         return new TroskovnikResponse
         {
             Stavke = lines,
@@ -348,7 +355,11 @@ public sealed class TroskovnikService
             IsZastupnikDjeteta = request.IsZastupnikDjeteta,
             IsStjecaj = request.IsStjecaj,
             IsOduzimanjePrekrsaj = request.IsOduzimanjePrekrsaj,
-            VrijednostOduzimanja = request.VrijednostOduzimanja
+            VrijednostOduzimanja = request.VrijednostOduzimanja,
+            // Sudske pristojbe
+            SudskaPristojba = sudskaPristojba,
+            IsOslobodjenPristojbi = request.IsOslobodjenPristojbi,
+            SveukupniTrosak = sveukupniTrosak
         };
     }
 

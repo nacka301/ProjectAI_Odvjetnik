@@ -128,6 +128,10 @@ public sealed class TroskovnikRequest
     /// <summary>Grad for client auto-creation (not in nested stranke object).</summary>
     [JsonPropertyName("client_grad")]
     public string? ClientGrad { get; set; }
+
+    /// <summary>Oslobođenje od plaćanja sudskih pristojbi (čl. 11. Zakona).</summary>
+    [JsonPropertyName("is_oslobodjen_pristojbi")]
+    public bool IsOslobodjenPristojbi { get; set; }
 }
 
 // New request DTOs for nested schema
@@ -286,6 +290,17 @@ public sealed class TroskovnikResponse
 
     [JsonPropertyName("vrijednost_oduzimanja")]
     public decimal VrijednostOduzimanja { get; set; }
+
+    // Sudske pristojbe
+    [JsonPropertyName("sudska_pristojba")]
+    public decimal SudskaPristojba { get; set; }
+
+    [JsonPropertyName("is_oslobodjen_pristojbi")]
+    public bool IsOslobodjenPristojbi { get; set; }
+
+    /// <summary>Grand total = odvjetnički trošak (s PDV) + sudska pristojba.</summary>
+    [JsonPropertyName("sveukupni_trosak")]
+    public decimal SveukupniTrosak { get; set; }
 }
 
 public sealed class TroskovnikLineItem
