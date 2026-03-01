@@ -27,6 +27,12 @@ public sealed class ClientCaseService
         @"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
         RegexOptions.Compiled);
 
+    private static readonly Regex OibRegex = new(@"^\d{11}$", RegexOptions.Compiled);
+
+    /// <summary>Returns the OIB if it's exactly 11 digits, otherwise null.</summary>
+    private static string? SanitizeOib(string? oib)
+        => !string.IsNullOrWhiteSpace(oib) && OibRegex.IsMatch(oib) ? oib : null;
+
     public ClientCaseService(HttpClient httpClient, IConfiguration config, ILogger<ClientCaseService> logger)
     {
         _httpClient = httpClient;
@@ -258,7 +264,7 @@ public sealed class ClientCaseService
         {
             UserId = userId,
             ImeNaziv = naziv,
-            Oib = string.IsNullOrWhiteSpace(oib) ? null : oib,
+            Oib = SanitizeOib(oib),
             Adresa = adresa,
             Grad = grad,
             Tip = "fizicka"

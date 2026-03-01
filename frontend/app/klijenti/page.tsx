@@ -248,14 +248,18 @@ export default function KlijentiPage() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs text-slate-500">OIB</label>
+                <label className="mb-1 block text-xs text-slate-500">OIB (11 znamenki)</label>
                 <input
                   value={form.oib}
-                  onChange={(e) => setForm({ ...form, oib: e.target.value })}
+                  onChange={(e) => setForm({ ...form, oib: e.target.value.replace(/\D/g, '').slice(0, 11) })}
                   maxLength={11}
-                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-[#1B2A4A]/50 focus:outline-none focus:ring-1 focus:ring-[#1B2A4A]/30"
+                  pattern="\d{11}"
+                  className={`w-full rounded-lg border bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-[#1B2A4A]/50 focus:outline-none focus:ring-1 focus:ring-[#1B2A4A]/30 ${form.oib && form.oib.length > 0 && form.oib.length !== 11 ? 'border-amber-400 bg-amber-50' : 'border-slate-200'}`}
                   placeholder="12345678901"
                 />
+                {form.oib && form.oib.length > 0 && form.oib.length !== 11 && (
+                  <p className="mt-0.5 text-xs text-amber-600">OIB mora sadržavati točno 11 znamenki ({form.oib.length}/11)</p>
+                )}
               </div>
               <div>
                 <label className="mb-1 block text-xs text-slate-500">Tip</label>

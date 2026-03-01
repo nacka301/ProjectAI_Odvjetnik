@@ -1375,7 +1375,10 @@ function TroskovnikContent() {
                         <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">ZASTUPANA STRANKA</span>
                       </div>
                       <input type="text" value={klijentIme} onChange={(e) => handleKlijentManualEdit(setKlijentIme, e.target.value)} placeholder="Ime / Naziv" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
-                      <input type="text" value={klijentOib} onChange={(e) => handleKlijentManualEdit(setKlijentOib, e.target.value)} placeholder="OIB" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                      <input type="text" value={klijentOib} onChange={(e) => handleKlijentManualEdit(setKlijentOib, e.target.value.replace(/\D/g, '').slice(0, 11))} placeholder="OIB (11 znamenki)" maxLength={11} pattern="\d{11}" className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none ${klijentOib && klijentOib.length !== 11 ? 'border-amber-400 bg-amber-50' : 'border-slate-200'}`} />
+                      {klijentOib && klijentOib.length > 0 && klijentOib.length !== 11 && (
+                        <p className="text-xs text-amber-600">OIB mora sadržavati točno 11 znamenki ({klijentOib.length}/11)</p>
+                      )}
                       <input type="text" value={klijentAdresa} onChange={(e) => handleKlijentManualEdit(setKlijentAdresa, e.target.value)} placeholder="Adresa" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
                       <input type="text" value={klijentGrad} onChange={(e) => handleKlijentManualEdit(setKlijentGrad, e.target.value)} placeholder="Grad" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
                       <label className="block text-xs font-semibold text-slate-600 mb-1 mt-2">

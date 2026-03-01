@@ -84,11 +84,15 @@ public class ClientController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.ImeNaziv))
             return BadRequest(new { error = "Ime/naziv stranke je obavezan." });
 
+        // Sanitize OIB: must be exactly 11 digits, otherwise store as null
+        var sanitizedOib = !string.IsNullOrWhiteSpace(request.Oib) && System.Text.RegularExpressions.Regex.IsMatch(request.Oib, @"^\d{11}$")
+            ? request.Oib : null;
+
         var record = new ClientRecord
         {
             UserId = userId,
             ImeNaziv = request.ImeNaziv,
-            Oib = request.Oib,
+            Oib = sanitizedOib,
             Adresa = request.Adresa,
             Grad = request.Grad,
             PostanskiBroj = request.PostanskiBroj,
