@@ -96,6 +96,13 @@ public sealed class TroskovnikRecord
 
     public bool HasVat { get; set; }
     public bool IsPdvUkljucen { get; set; }
+    public string? ZaprijecenaKazna { get; set; }
+    public bool IsPoSluzbenojDuznosti { get; set; }
+    public bool IsNaTeretProracuna { get; set; }
+    public bool IsZastupnikDjeteta { get; set; }
+    public bool IsStjecaj { get; set; }
+    public bool IsOduzimanjePrekrsaj { get; set; }
+    public decimal VrijednostOduzimanja { get; set; }
     public object? RawJsonOutput { get; set; }
 }
 
@@ -119,6 +126,13 @@ public sealed class TroskovnikReadRecord
 
     public bool HasVat { get; set; }
     public bool IsPdvUkljucen { get; set; }
+    public string? ZaprijecenaKazna { get; set; }
+    public bool IsPoSluzbenojDuznosti { get; set; }
+    public bool IsNaTeretProracuna { get; set; }
+    public bool IsZastupnikDjeteta { get; set; }
+    public bool IsStjecaj { get; set; }
+    public bool IsOduzimanjePrekrsaj { get; set; }
+    public decimal VrijednostOduzimanja { get; set; }
     public object? RawJsonOutput { get; set; }
 }
 

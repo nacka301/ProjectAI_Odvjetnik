@@ -10,6 +10,28 @@ public static class TarifaConstants
 {
     public const decimal BodValue = 2.00m;
     public const decimal PdvRate = 0.25m; // 25% PDV
+    public const decimal KazneniReductionRate = 0.50m;   // Tbr. 4.7 — branitelj po službenoj dužnosti / na teret proračuna
+    public const decimal Tbr4t8Rate = 0.50m;             // Tbr. 4.8 — zastupanje oštećenika = 50% Tbr. 4
+    public const decimal ZastupnikDjetetaRate = 0.70m;   // Opunomoćenik djeteta žrtve = 70% od Tbr. 4.8
+    // Efektivni postotak za dijete žrtve: Tbr4t8Rate × ZastupnikDjetetaRate = 35%
+}
+
+/// <summary>Zapriječena kazna → bodovi (Tbr. 4)</summary>
+/// <summary>
+/// Tbr. 4. toč. 1 — bodovi po zapriječenoj kazni.
+/// Novčana kazna ili kazna do 3 god. zatvora = 100,
+/// do 5 = 200, do 10 = 300, preko 10 = 400, dugotrajni = 500.
+/// </summary>
+public static class ZaprijecenaKaznaTiers
+{
+    public static readonly Dictionary<string, int> Bodovi = new()
+    {
+        ["novcana_do3"] = 100,   // novčana kazna ili kazna do 3 godine zatvora
+        ["do_5"]        = 200,   // do 5 godina zatvora
+        ["do_10"]       = 300,   // do 10 godina zatvora
+        ["preko_10"]    = 400,   // preko 10 godina zatvora
+        ["dugotrajni"]  = 500    // dugotrajni zatvor
+    };
 }
 
 // ── Request / Response ────────────────────────────────────────
@@ -58,6 +80,34 @@ public sealed class TroskovnikRequest
     /// </summary>
     [JsonPropertyName("is_pdv_ukljucen")]
     public bool? IsPdvUkljucen { get; set; } = null;
+
+    /// <summary>Zapriječena kazna – tier key (novcana, do_1, do_3, do_5, do_10, preko_10, dugotrajni).</summary>
+    [JsonPropertyName("zaprijecena_kazna")]
+    public string? ZaprijecenaKazna { get; set; }
+
+    /// <summary>Obrana po službenoj dužnosti – 50% umanjenje.</summary>
+    [JsonPropertyName("is_po_sluzbenoj_duznosti")]
+    public bool IsPoSluzbenojDuznosti { get; set; }
+
+    /// <summary>Obrana na teret proračuna – 50% umanjenje.</summary>
+    [JsonPropertyName("is_na_teret_proracuna")]
+    public bool IsNaTeretProracuna { get; set; }
+
+    /// <summary>Zastupnik djeteta – 70% od Tbr. 4.</summary>
+    [JsonPropertyName("is_zastupnik_djeteta")]
+    public bool IsZastupnikDjeteta { get; set; }
+
+    /// <summary>Stjecaj / produljeno KD – korisnik bira tier prema najtežoj kazni.</summary>
+    [JsonPropertyName("is_stjecaj")]
+    public bool IsStjecaj { get; set; }
+
+    /// <summary>Prekršaj s oduzimanjem predmeta – nagrada po Tbr. 7.1 umjesto fiksnih 100.</summary>
+    [JsonPropertyName("is_oduzimanje_prekrsaj")]
+    public bool IsOduzimanjePrekrsaj { get; set; }
+
+    /// <summary>Vrijednost oduzetog predmeta / imovinske koristi (EUR) za Tbr. 7.1 lookup.</summary>
+    [JsonPropertyName("vrijednost_oduzimanja")]
+    public decimal VrijednostOduzimanja { get; set; }
 
     /// <summary>Opis predmeta / napomena.</summary>
     [JsonPropertyName("opis_predmeta")]
@@ -196,6 +246,38 @@ public sealed class TroskovnikResponse
 
     [JsonPropertyName("broj_predmeta")]
     public string? BrojPredmeta { get; set; }
+
+    // Nested objects (new schema) — carried alongside legacy flat fields for gradual migration
+    [JsonPropertyName("odvjetnik_info")]
+    public OdvjetnikRequest? OdvjetnikInfo { get; set; }
+
+    [JsonPropertyName("predmet_info")]
+    public PredmetRequest? PredmetInfo { get; set; }
+
+    [JsonPropertyName("stranke_info")]
+    public StrankeRequest? StrankeInfo { get; set; }
+
+    // Kazneni echo fields
+    [JsonPropertyName("zaprijecena_kazna")]
+    public string? ZaprijecenaKazna { get; set; }
+
+    [JsonPropertyName("is_po_sluzbenoj_duznosti")]
+    public bool IsPoSluzbenojDuznosti { get; set; }
+
+    [JsonPropertyName("is_na_teret_proracuna")]
+    public bool IsNaTeretProracuna { get; set; }
+
+    [JsonPropertyName("is_zastupnik_djeteta")]
+    public bool IsZastupnikDjeteta { get; set; }
+
+    [JsonPropertyName("is_stjecaj")]
+    public bool IsStjecaj { get; set; }
+
+    [JsonPropertyName("is_oduzimanje_prekrsaj")]
+    public bool IsOduzimanjePrekrsaj { get; set; }
+
+    [JsonPropertyName("vrijednost_oduzimanja")]
+    public decimal VrijednostOduzimanja { get; set; }
 }
 
 public sealed class TroskovnikLineItem
@@ -268,4 +350,16 @@ public sealed class TarifnaStavka
     /// <summary>Redoslijed za prikaz.</summary>
     [JsonPropertyName("sort_order")]
     public int SortOrder { get; set; }
+
+    /// <summary>True = bodovi dolaze iz ZaprijecenaKaznaTiers lookup-a (kazneni postupak).</summary>
+    [JsonPropertyName("kazneni_base")]
+    public bool KazneniBase { get; set; }
+
+    /// <summary>Dodatno povećanje na kazneni base bodove (npr. 0.5 = +50% za žalbu).</summary>
+    [JsonPropertyName("kazneni_povecanje")]
+    public decimal? KazneniPovecanje { get; set; }
+
+    /// <summary>True = prekršajni stavka s mogućnošću oduzimanja; kad je oduzimanje aktivno, koristi Tbr. 7.1 po vrijednosti.</summary>
+    [JsonPropertyName("prekrsaj_oduzimanje")]
+    public bool PrekrsajOduzimanje { get; set; }
 }

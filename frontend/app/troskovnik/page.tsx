@@ -31,7 +31,7 @@ import { API_BASE } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
 import { useCredits, getModuleQuota } from "@/lib/useCredits";
 import { CreditQuotaBadge, CreditExhaustedWarning } from "@/components/CreditQuotaBadge";
-import { formatEur, formatNumber } from "@/lib/format";
+import { formatEur, formatNumber, formatThreshold } from "@/lib/format";
 
 const API = API_BASE;
 const BOD_VALUE = 2.0;
@@ -51,6 +51,9 @@ interface TarifnaStavka {
   min_bodova: number | null;
   jedinica: string;
   sort_order: number;
+  kazneni_base: boolean;
+  kazneni_povecanje: number | null;
+  prekrsaj_oduzimanje: boolean;
 }
 
 interface SelectedItem {
@@ -86,6 +89,21 @@ interface TroskovnikResponse {
   datum_izrade: string;
   sud?: string | null;
   broj_predmeta?: string | null;
+  // Nested objects (new schema)
+  odvjetnik_info?: { naziv?: string; oib?: string; adresa?: string; iban?: string } | null;
+  predmet_info?: { sud?: string; poslovni_broj?: string } | null;
+  stranke_info?: {
+    zastupana_stranka?: { polozaj?: string; naziv?: string; oib?: string; adresa?: string } | null;
+    protustranka?: { polozaj?: string; naziv?: string; oib?: string; adresa?: string } | null;
+  } | null;
+  // Kazneni echo fields
+  zaprijecena_kazna?: string | null;
+  is_po_sluzbenoj_duznosti?: boolean;
+  is_na_teret_proracuna?: boolean;
+  is_zastupnik_djeteta?: boolean;
+  is_stjecaj?: boolean;
+  is_oduzimanje_prekrsaj?: boolean;
+  vrijednost_oduzimanja?: number;
 }
 
 // ── Tbr. 7.1 client-side point lookup (mirrors backend) ──
@@ -125,6 +143,49 @@ function izracunajBodove(def: TarifnaStavka, baseBodovi: number): number {
     bodovi = baseBodovi;
   }
 
+  if (def.max_bodova !== null && def.max_bodova !== undefined && bodovi > def.max_bodova)
+    bodovi = def.max_bodova;
+  if (def.min_bodova !== null && def.min_bodova !== undefined && bodovi < def.min_bodova)
+    bodovi = def.min_bodova;
+
+  return bodovi;
+}
+
+// ── Kazneni tier lookup ──
+
+const ZAPRIJECENA_KAZNA_TIERS: Record<string, { label: string; bodovi: number }> = {
+  novcana_do3: { label: "Novčana kazna ili kazna do 3 godine zatvora", bodovi: 100 },
+  do_5:        { label: "Do 5 godina zatvora",                         bodovi: 200 },
+  do_10:       { label: "Do 10 godina zatvora",                        bodovi: 300 },
+  preko_10:    { label: "Preko 10 godina zatvora",                     bodovi: 400 },
+  dugotrajni:  { label: "Dugotrajni zatvor",                           bodovi: 500 },
+};
+
+function izracunajKazneneBodove(
+  def: TarifnaStavka,
+  tierBodovi: number,
+  isZastupnikDjeteta: boolean,
+  isPoSluzbenojDuznosti: boolean,
+  isNaTeretProracuna: boolean,
+): number {
+  let bodovi = tierBodovi;
+
+  // Kazneni povećanje (e.g. +50% za žalbu)
+  if (def.kazneni_povecanje !== null && def.kazneni_povecanje !== undefined) {
+    bodovi = Math.ceil(bodovi * (1 + def.kazneni_povecanje));
+  }
+
+  // Zastupnik djeteta → 70% od Tbr. 4.8 (= 70% × 50% = 35% baze)
+  if (isZastupnikDjeteta) {
+    bodovi = Math.ceil(bodovi * 0.50 * 0.70);
+  }
+
+  // Branitelj po službenoj dužnosti ili na teret proračuna → 50%
+  if (isPoSluzbenojDuznosti || isNaTeretProracuna) {
+    bodovi = Math.ceil(bodovi * 0.50);
+  }
+
+  // Clamp
   if (def.max_bodova !== null && def.max_bodova !== undefined && bodovi > def.max_bodova)
     bodovi = def.max_bodova;
   if (def.min_bodova !== null && def.min_bodova !== undefined && bodovi < def.min_bodova)
@@ -220,6 +281,15 @@ function TroskovnikContent() {
   const [protustrankaPolozaj, setProtustrankaPolozaj] = useState("");
   const [zastupanaPolozaj, setZastupanaPolozaj] = useState("");
 
+  // ── Kazneni postupak state ──
+  const [zaprijecenaKazna, setZaprijecenaKazna] = useState("");
+  const [isPoSluzbenojDuznosti, setIsPoSluzbenojDuznosti] = useState(false);
+  const [isNaTeretProracuna, setIsNaTeretProracuna] = useState(false);
+  const [isZastupnikDjeteta, setIsZastupnikDjeteta] = useState(false);
+  const [isStjecaj, setIsStjecaj] = useState(false);
+  const [isOduzimanjePrekrsaj, setIsOduzimanjePrekrsaj] = useState(false);
+  const [vrijednostOduzimanja, setVrijednostOduzimanja] = useState("");
+
   // ── Client picker state ──
   type ClientOption = { id: string; ime_naziv: string; oib?: string; adresa?: string; grad?: string; tip: string };
   const [clients, setClients] = useState<ClientOption[]>([]);
@@ -297,6 +367,35 @@ function TroskovnikContent() {
   const vrijednostNum = parseFloat(vrijednostSpora.replace(/\./g, "").replace(",", ".")) || 0;
   const baseBodovi = tbr71Bodovi(vrijednostNum);
 
+  // Detect kazneni mode: any selected item belongs to "Kazneni postupak" category
+  const isKazneniMode = useMemo(() => {
+    const catalogMap = new Map(katalog.map((s) => [s.id, s]));
+    for (const itemId of selectedItems.keys()) {
+      const def = catalogMap.get(itemId);
+      if (def && def.kategorija === "Kazneni postupak") return true;
+    }
+    return false;
+  }, [selectedItems, katalog]);
+
+  // Check if ONLY kazneni items are selected (hide VPS)
+  const isOnlyKazneni = useMemo(() => {
+    if (selectedItems.size === 0) return false;
+    const catalogMap = new Map(katalog.map((s) => [s.id, s]));
+    for (const itemId of selectedItems.keys()) {
+      const def = catalogMap.get(itemId);
+      if (def && def.kategorija !== "Kazneni postupak") return false;
+    }
+    return true;
+  }, [selectedItems, katalog]);
+
+  // Resolved kazneni tier points
+  const kazneniTierBodovi = zaprijecenaKazna
+    ? (ZAPRIJECENA_KAZNA_TIERS[zaprijecenaKazna]?.bodovi ?? 0)
+    : 0;
+
+  // Parsed vrijednost oduzimanja for prekršaj oduzimanje calc
+  const parsedVrijednostOduzimanja = parseFloat(vrijednostOduzimanja.replace(/\./g, "").replace(",", ".")) || 0;
+
   // Group catalog by category
   const categories = useMemo(() => {
     const map = new Map<string, TarifnaStavka[]>();
@@ -339,7 +438,21 @@ function TroskovnikContent() {
     selectedItems.forEach((kol, itemId) => {
       const def = catalogMap.get(itemId);
       if (!def || kol <= 0) return;
-      const bodovi = izracunajBodove(def, baseBodovi);
+
+      let bodovi: number;
+      if (def.prekrsaj_oduzimanje) {
+        // Prekršaj s oduzimanjem — Tbr. 7.1 po vrijednosti oduzetog predmeta
+        if (isOduzimanjePrekrsaj && parsedVrijednostOduzimanja > 0) {
+          bodovi = tbr71Bodovi(parsedVrijednostOduzimanja);
+        } else {
+          bodovi = 100; // fallback: standard prekršaj 100 bodova
+        }
+      } else if (def.kazneni_base) {
+        bodovi = izracunajKazneneBodove(def, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna);
+      } else {
+        bodovi = izracunajBodove(def, baseBodovi);
+      }
+
       lines.push({
         opis: def.opis,
         tarifni_broj: def.tarifni_broj,
@@ -357,7 +470,7 @@ function TroskovnikContent() {
     const pdv = isPdvUkljucen ? rawPdv : 0;
 
     return { lines, ukupnoBodova, ukupnoEur, pdv, ukupnoSPdv: ukupnoEur + pdv };
-  }, [selectedItems, katalog, baseBodovi, isPdvUkljucen]);
+  }, [selectedItems, katalog, baseBodovi, isPdvUkljucen, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, isOduzimanjePrekrsaj, parsedVrijednostOduzimanja]);
 
   // ── Handlers ──
   const toggleCategory = useCallback((cat: string) => {
@@ -436,6 +549,14 @@ function TroskovnikContent() {
         // Keep legacy `has_vat` for backward compatibility, mirror new flag
         has_vat: isPdvUkljucen,
         is_pdv_ukljucen: isPdvUkljucen,
+        // Kazneni fields
+        zaprijecena_kazna: zaprijecenaKazna || undefined,
+        is_po_sluzbenoj_duznosti: isPoSluzbenojDuznosti,
+        is_na_teret_proracuna: isNaTeretProracuna,
+        is_zastupnik_djeteta: isZastupnikDjeteta,
+        is_stjecaj: isStjecaj,
+        is_oduzimanje_prekrsaj: isOduzimanjePrekrsaj,
+        vrijednost_oduzimanja: parsedVrijednostOduzimanja,
       };
 
       const res = await fetch(`${API}/api/troskovnik/izracunaj`, {
@@ -498,6 +619,14 @@ function TroskovnikContent() {
         // Keep legacy `has_vat` for backward compatibility, mirror new flag
         has_vat: isPdvUkljucen,
         is_pdv_ukljucen: isPdvUkljucen,
+        // Kazneni fields
+        zaprijecena_kazna: zaprijecenaKazna || undefined,
+        is_po_sluzbenoj_duznosti: isPoSluzbenojDuznosti,
+        is_na_teret_proracuna: isNaTeretProracuna,
+        is_zastupnik_djeteta: isZastupnikDjeteta,
+        is_stjecaj: isStjecaj,
+        is_oduzimanje_prekrsaj: isOduzimanjePrekrsaj,
+        vrijednost_oduzimanja: parsedVrijednostOduzimanja,
         client_id: selectedClientId || undefined,
       };
 
@@ -540,11 +669,20 @@ function TroskovnikContent() {
       })
       .join("\n");
 
-    // Dynamic PDV label
-    const pdvLabel = result ? (result.pdv > 0 ? `PDV 25%` : `PDV 0%`) : (liveCalc.pdv > 0 ? `PDV 25%` : `PDV 0%`);
-    const totals = result
-      ? `\n\n;;;;;Ukupno bodova;${result.ukupno_bodova}\n;;;;;Ukupno bez PDV;${formatNumber(result.ukupno_eur_bez_pdv)}\n;;;;;${pdvLabel};${formatNumber(result.pdv)}\n;;;;;UKUPNO s PDV;${formatNumber(result.ukupno_eur_s_pdv)}`
-      : `\n\n;;;;;Ukupno bodova;${liveCalc.ukupnoBodova}\n;;;;;Ukupno bez PDV;${formatNumber(liveCalc.ukupnoEur)}\n;;;;;${pdvLabel};${formatNumber(liveCalc.pdv)}\n;;;;;UKUPNO s PDV;${formatNumber(liveCalc.ukupnoSPdv)}`;
+    // Conditionally include PDV rows in CSV based on toggle
+    const csvPdvActive = result ? (result.is_pdv_ukljucen ?? result.has_vat ?? isPdvUkljucen) : isPdvUkljucen;
+    let totals: string;
+    if (csvPdvActive) {
+      const base = result ? result.ukupno_eur_bez_pdv : liveCalc.ukupnoEur;
+      const pdvAmt = result ? result.pdv : liveCalc.pdv;
+      const grand = result ? result.ukupno_eur_s_pdv : liveCalc.ukupnoSPdv;
+      const bodova = result ? result.ukupno_bodova : liveCalc.ukupnoBodova;
+      totals = `\n\n;;;;;Ukupno bodova;${bodova}\n;;;;;Osnovica (bez PDV);${formatNumber(base)}\n;;;;;PDV (25%);${formatNumber(pdvAmt)}\n;;;;;SVEUKUPNO s PDV-om;${formatNumber(grand)}`;
+    } else {
+      const base = result ? result.ukupno_eur_bez_pdv : liveCalc.ukupnoEur;
+      const bodova = result ? result.ukupno_bodova : liveCalc.ukupnoBodova;
+      totals = `\n\n;;;;;Ukupno bodova;${bodova}\n;;;;;UKUPNO;${formatNumber(base)}`;
+    }
 
     const bom = "\uFEFF";
     const blob = new Blob([bom + header + rows + totals], { type: "text/csv;charset=utf-8" });
@@ -626,7 +764,8 @@ function TroskovnikContent() {
               LEFT COLUMN — Catalog & Selection
           ═══════════════════════════════════════════════════════ */}
           <div className="lg:col-span-2 space-y-4 print:hidden">
-            {/* ── Case value input ── */}
+            {/* ── Case value input (hidden when only kazneni items) ── */}
+            {!isOnlyKazneni && (
             <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
               <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
                 <Euro className="h-3.5 w-3.5 inline mr-1 -mt-0.5" />
@@ -647,6 +786,115 @@ function TroskovnikContent() {
                 </div>
               </div>
             </div>
+            )}
+
+            {/* ── Kazneni postupak panel ── */}
+            {isKazneniMode && (
+            <div className="bg-white rounded-xl border border-red-200 p-4 shadow-sm space-y-3">
+              <div className="flex items-center gap-2 mb-1">
+                <Scale className="h-4 w-4 text-red-600" />
+                <span className="text-xs font-semibold text-red-700 uppercase tracking-wider">Kazneni postupak — parametri</span>
+              </div>
+
+              {/* Zapriječena kazna dropdown */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Zapriječena kazna</label>
+                <select
+                  value={zaprijecenaKazna}
+                  onChange={(e) => setZaprijecenaKazna(e.target.value)}
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition"
+                >
+                  <option value="">— odaberi zapriječenu kaznu —</option>
+                  {Object.entries(ZAPRIJECENA_KAZNA_TIERS).map(([key, tier]) => (
+                    <option key={key} value={key}>
+                      {tier.label} ({tier.bodovi} bod.)
+                    </option>
+                  ))}
+                </select>
+                {zaprijecenaKazna && (
+                  <p className="mt-1 text-[10px] text-red-600">
+                    Tbr. 4.1 bazni bodovi: <span className="font-semibold">{kazneniTierBodovi}</span>
+                  </p>
+                )}
+              </div>
+
+              {/* Boolean modifiers */}
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isPoSluzbenojDuznosti}
+                    onChange={(e) => setIsPoSluzbenojDuznosti(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
+                  />
+                  <span className="text-xs text-slate-700">Branitelj po službenoj dužnosti <span className="text-slate-400">(–50%)</span></span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isNaTeretProracuna}
+                    onChange={(e) => setIsNaTeretProracuna(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
+                  />
+                  <span className="text-xs text-slate-700">Branitelj na teret proračunskih sredstava <span className="text-slate-400">(–50%)</span></span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isZastupnikDjeteta}
+                    onChange={(e) => setIsZastupnikDjeteta(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
+                  />
+                  <span className="text-xs text-slate-700">Opunomoćenik djeteta žrtve kaznenog djela <span className="text-slate-400">(70% od Tbr. 4.8 = 35%)</span></span>
+                </label>
+
+                {/* Stjecaj / produljeno kazneno djelo */}
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isStjecaj}
+                    onChange={(e) => setIsStjecaj(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
+                  />
+                  <span className="text-xs text-slate-700">Stjecaj / produljeno kazneno djelo</span>
+                </label>
+                {isStjecaj && (
+                  <p className="ml-6 text-[10px] text-red-600 italic leading-relaxed">
+                    Za kaznena djela u stjecaju i produljena kaznena djela, odaberite tier prema <strong>najtežoj kazni</strong> koja se u postupku može izreći (Tbr. 4.1).
+                  </p>
+                )}
+
+                {/* Prekršaj s oduzimanjem predmeta */}
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isOduzimanjePrekrsaj}
+                    onChange={(e) => setIsOduzimanjePrekrsaj(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
+                  />
+                  <span className="text-xs text-slate-700">Prekršaj s oduzimanjem predmeta / imovinske koristi <span className="text-slate-400">(Tbr. 7.1 po vrijednosti)</span></span>
+                </label>
+                {isOduzimanjePrekrsaj && (
+                  <div className="ml-6 space-y-1">
+                    <label className="block text-[10px] font-semibold text-slate-600">Vrijednost oduzetog predmeta / imovinske koristi (EUR)</label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={vrijednostOduzimanja}
+                      onChange={(e) => setVrijednostOduzimanja(e.target.value)}
+                      placeholder="0,00"
+                      className="w-full px-3 py-2 border border-red-200 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition"
+                    />
+                    {parsedVrijednostOduzimanja > 0 && (
+                      <p className="text-[10px] text-red-600">
+                        Tbr. 7.1 bodovi za oduzimanje: <span className="font-semibold">{fmtNum(tbr71Bodovi(parsedVrijednostOduzimanja))}</span>
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+            )}
 
             {/* ── Search ── */}
             <div className="relative">
@@ -712,7 +960,13 @@ function TroskovnikContent() {
                     <div className="bg-white divide-y divide-slate-100">
                       {items.map((item) => {
                         const qty = selectedItems.get(item.id) || 0;
-                        const bodovi = izracunajBodove(item, baseBodovi);
+                        const bodovi = item.prekrsaj_oduzimanje
+                          ? (isOduzimanjePrekrsaj && parsedVrijednostOduzimanja > 0
+                              ? tbr71Bodovi(parsedVrijednostOduzimanja)
+                              : 100)
+                          : item.kazneni_base
+                          ? izracunajKazneneBodove(item, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna)
+                          : izracunajBodove(item, baseBodovi);
                         const iznosPerUnit = bodovi * BOD_VALUE;
 
                         return (
@@ -725,10 +979,24 @@ function TroskovnikContent() {
                             {/* Info */}
                             <div className="flex-1 min-w-0">
                               <p className="text-sm text-slate-800 leading-snug">{item.opis}</p>
-                              <div className="flex items-center gap-3 mt-1">
+                              <div className="flex items-center gap-3 mt-1 flex-wrap">
                                 <span className="text-[10px] font-mono text-slate-400">{item.tarifni_broj}</span>
+                                {item.kazneni_base && (
+                                  <span className="text-[10px] font-semibold text-red-500 bg-red-50 px-1.5 py-0.5 rounded">
+                                    ↔ po Tbr. 4.1
+                                  </span>
+                                )}
+                                {item.prekrsaj_oduzimanje && (
+                                  <span className="text-[10px] font-semibold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded">
+                                    {isOduzimanjePrekrsaj ? "↔ Tbr. 7.1 oduzimanje" : "100 bod. (prekršaj)"}
+                                  </span>
+                                )}
                                 <span className="text-[10px] text-indigo-600 font-semibold">
-                                  {fmtNum(bodovi)} bod. = {fmtEur(iznosPerUnit)}
+                                  {item.kazneni_base && !zaprijecenaKazna
+                                    ? "— odaberi kaznu —"
+                                    : item.prekrsaj_oduzimanje && isOduzimanjePrekrsaj && parsedVrijednostOduzimanja <= 0
+                                    ? "— unesi vrijednost oduzimanja —"
+                                    : `${fmtNum(bodovi)} bod. = ${fmtEur(iznosPerUnit)}`}
                                 </span>
                                 <span className="text-[10px] text-slate-400">/ {item.jedinica}</span>
                               </div>
@@ -1104,9 +1372,9 @@ function TroskovnikContent() {
                     for (let i = 0; i < bounds.length - 1; i++) {
                       const from = bounds[i];
                       const to = bounds[i + 1];
-                      ranges.push([`${formatNumber(from)} – ${formatNumber(to)}`, pts[i]]);
+                      ranges.push([`${formatThreshold(from)} – ${formatThreshold(to)}`, pts[i]]);
                     }
-                    ranges.push([`> ${formatNumber(bounds[bounds.length - 1])}`, "max 10.000"]);
+                    ranges.push([`> ${formatThreshold(bounds[bounds.length - 1])}`, "max 10.000"]);
                     return ranges.map(([range, pts]) => (
                       <div key={range} className="flex justify-between text-slate-500">
                         <span>{range}</span>
@@ -1293,22 +1561,34 @@ function TroskovnikContent() {
                       const pdvCalc = isPdv ? Math.round(base * 0.25 * 100) / 100 : 0;
                       const grand = Math.round((base + pdvCalc) * 100) / 100;
 
-                      return (
-                        <>
-                          {isPdv && (
+                      if (isPdv) {
+                        return (
+                          <>
+                            <tr>
+                              <td colSpan={5} className="py-1 px-2 text-right text-xs text-slate-500">Osnovica (bez PDV)</td>
+                              <td />
+                              <td className="py-1 px-2 text-right text-sm text-slate-600">{fmtEur(base)}</td>
+                            </tr>
                             <tr>
                               <td colSpan={5} className="py-1 px-2 text-right text-xs text-slate-500">PDV (25%)</td>
                               <td />
                               <td className="py-1 px-2 text-right text-sm text-slate-600">{fmtEur(pdvCalc)}</td>
                             </tr>
-                          )}
+                            <tr className="bg-indigo-50">
+                              <td colSpan={5} className="py-3 px-2 text-right text-sm font-bold text-indigo-800">SVEUKUPNO s PDV-om</td>
+                              <td />
+                              <td className="py-3 px-2 text-right text-lg font-bold text-indigo-800">{fmtEur(grand)}</td>
+                            </tr>
+                          </>
+                        );
+                      }
 
-                          <tr className="bg-indigo-50">
-                            <td colSpan={5} className="py-3 px-2 text-right text-sm font-bold text-indigo-800">UKUPNO</td>
-                            <td />
-                            <td className="py-3 px-2 text-right text-lg font-bold text-indigo-800">{fmtEur(grand)}</td>
-                          </tr>
-                        </>
+                      return (
+                        <tr className="bg-indigo-50">
+                          <td colSpan={5} className="py-3 px-2 text-right text-sm font-bold text-indigo-800">UKUPNO</td>
+                          <td />
+                          <td className="py-3 px-2 text-right text-lg font-bold text-indigo-800">{fmtEur(base)}</td>
+                        </tr>
                       );
                     })()}
                   </tfoot>

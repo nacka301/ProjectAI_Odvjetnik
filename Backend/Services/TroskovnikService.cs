@@ -54,19 +54,69 @@ public sealed class TroskovnikService
         // ═══════════════════════════════════════════════════════════
         // I.  KAZNENI I PREKRŠAJNI POSTUPAK
         // ═══════════════════════════════════════════════════════════
-        new() { Id = "kaz_privatna_tuzba", Kategorija = "Kazneni postupak", Opis = "Privatna tužba / kaznena prijava / optužni prijedlog (Tbr. 1.1)", TarifniBroj = "Tbr. 1.1", FiksniBody = null, Tbr71Postotak = null, MinBodova = 100, SortOrder = 100, Jedinica = "komad" },
-        new() { Id = "kaz_ostali_podnesci", Kategorija = "Kazneni postupak", Opis = "Ostali podnesci u kaznenom postupku (Tbr. 1.5)", TarifniBroj = "Tbr. 1.5", FiksniBody = 50, SortOrder = 105, Jedinica = "komad" },
+
+        // ── Tbr. 1 — Sastavljanje podnesaka ──
+        // Toč. 1, 2, 3 → "nagrada po Tbr. 4. toč. 1." = bodovi ovise o zapriječenoj kazni
+        new() { Id = "kaz_privatna_tuzba", Kategorija = "Kazneni postupak", Opis = "Privatna tužba / kaznena prijava / optužni prijedlog (Tbr. 1.1)", TarifniBroj = "Tbr. 1.1", KazneniBase = true, MinBodova = 100, SortOrder = 100, Jedinica = "komad" },
+        new() { Id = "kaz_podnesak_obrana", Kategorija = "Kazneni postupak", Opis = "Podnesci s navođenjem činjenica / pisana obrana (Tbr. 1.2)", TarifniBroj = "Tbr. 1.2", KazneniBase = true, SortOrder = 101, Jedinica = "komad" },
+        new() { Id = "kaz_zahtjev_ostecenik", Kategorija = "Kazneni postupak", Opis = "Zahtjev oštećenika za dokazne radnje / preuzimanje progona (Tbr. 1.3)", TarifniBroj = "Tbr. 1.3", KazneniBase = true, SortOrder = 102, Jedinica = "komad" },
         new() { Id = "kaz_imovinskopravni", Kategorija = "Kazneni postupak", Opis = "Podnesak za imovinskopravni zahtjev oštećenika (Tbr. 1.4)", TarifniBroj = "Tbr. 1.4", FiksniBody = 75, SortOrder = 103, Jedinica = "komad" },
-        new() { Id = "kaz_obrana_do3", Kategorija = "Kazneni postupak", Opis = "Obrana – novčana / do 3 god. zatvora (Tbr. 4.1)", TarifniBroj = "Tbr. 4.1", FiksniBody = 100, SortOrder = 110, Jedinica = "sat" },
-        new() { Id = "kaz_obrana_do5", Kategorija = "Kazneni postupak", Opis = "Obrana – do 5 godina zatvora (Tbr. 4.1)", TarifniBroj = "Tbr. 4.1", FiksniBody = 200, SortOrder = 111, Jedinica = "sat" },
-        new() { Id = "kaz_obrana_do10", Kategorija = "Kazneni postupak", Opis = "Obrana – do 10 godina zatvora (Tbr. 4.1)", TarifniBroj = "Tbr. 4.1", FiksniBody = 300, SortOrder = 112, Jedinica = "sat" },
-        new() { Id = "kaz_obrana_preko10", Kategorija = "Kazneni postupak", Opis = "Obrana – preko 10 godina zatvora (Tbr. 4.1)", TarifniBroj = "Tbr. 4.1", FiksniBody = 400, SortOrder = 113, Jedinica = "sat" },
-        new() { Id = "kaz_obrana_dugotrajni", Kategorija = "Kazneni postupak", Opis = "Obrana – dugotrajni zatvor (Tbr. 4.1)", TarifniBroj = "Tbr. 4.1", FiksniBody = 500, SortOrder = 114, Jedinica = "sat" },
-        new() { Id = "kaz_obrana_prekrsaj", Kategorija = "Kazneni postupak", Opis = "Obrana u prekršajnom postupku (Tbr. 4.1)", TarifniBroj = "Tbr. 4.1", FiksniBody = 100, SortOrder = 115, Jedinica = "sat" },
-        new() { Id = "kaz_dodatni_sat", Kategorija = "Kazneni postupak", Opis = "Svaki sljedeći započeti sat rasprave (Tbr. 4.1)", TarifniBroj = "Tbr. 4.1", FiksniBody = 50, SortOrder = 116, Jedinica = "sat" },
-        new() { Id = "kaz_razgovor_pritvor", Kategorija = "Kazneni postupak", Opis = "Razgovor s okrivljenikom u pritvoru (Tbr. 4.5)", TarifniBroj = "Tbr. 4.5", FiksniBody = 50, SortOrder = 120, Jedinica = "komad" },
-        new() { Id = "kaz_zalba_presuda", Kategorija = "Kazneni postupak", Opis = "Žalba protiv presude (Tbr. 5.1) – Tbr. 4.1 + 50%", TarifniBroj = "Tbr. 5.1", FiksniBody = null, SortOrder = 130, Jedinica = "komad" },
-        new() { Id = "kaz_zalba_troskovi", Kategorija = "Kazneni postupak", Opis = "Žalba protiv odluke o trošku (Tbr. 5.5)", TarifniBroj = "Tbr. 5.5", FiksniBody = 50, SortOrder = 135, Jedinica = "komad" },
+        new() { Id = "kaz_ostali_podnesci", Kategorija = "Kazneni postupak", Opis = "Ostali podnesci u kaznenom postupku (Tbr. 1.5)", TarifniBroj = "Tbr. 1.5", FiksniBody = 50, SortOrder = 104, Jedinica = "komad" },
+
+        // ── Tbr. 2 — Prijedlozi izvan rasprave ──
+        // Toč. 1, 2, 4 → fiksni; Toč. 3 → "nagrada po Tbr. 4. toč. 1."
+        new() { Id = "kaz_odgoda_izvrsenja", Kategorija = "Kazneni postupak", Opis = "Prijedlog za odgodu izvršenja kazne / uvjetni otpust (Tbr. 2.1)", TarifniBroj = "Tbr. 2.1", FiksniBody = 100, SortOrder = 110, Jedinica = "komad" },
+        new() { Id = "kaz_rehabilitacija", Kategorija = "Kazneni postupak", Opis = "Prijedlog za rehabilitaciju (Tbr. 2.2)", TarifniBroj = "Tbr. 2.2", FiksniBody = 50, SortOrder = 111, Jedinica = "komad" },
+        new() { Id = "kaz_pomilovanje", Kategorija = "Kazneni postupak", Opis = "Molba za pomilovanje (Tbr. 2.3)", TarifniBroj = "Tbr. 2.3", KazneniBase = true, SortOrder = 112, Jedinica = "komad" },
+        new() { Id = "kaz_opoziv_uvjetne", Kategorija = "Kazneni postupak", Opis = "Prijedlog za opoziv uvjetne osude (Tbr. 2.4)", TarifniBroj = "Tbr. 2.4", FiksniBody = 50, SortOrder = 113, Jedinica = "komad" },
+
+        // ── Tbr. 3 — Zastupanje i obrana pred policijom / DO / sucem istrage ──
+        // Toč. 1: prvi sat = Tbr. 4.1, svaki sljedeći sat = 50 bodova
+        // Toč. 3: punomoćnik oštećenika = 50% nagrade iz Tbr. 3 (= 50% Tbr. 4.1)
+        // Toč. 4: odgoda radnje = 50% nagrade iz toč. 1 (= 50% Tbr. 4.1)
+        new() { Id = "kaz_sudjelovanje_istraga", Kategorija = "Kazneni postupak", Opis = "Sudjelovanje pred policijom / DO / sucem istrage – prvi sat (Tbr. 3.1)", TarifniBroj = "Tbr. 3.1", KazneniBase = true, SortOrder = 120, Jedinica = "sat" },
+        new() { Id = "kaz_istraga_dodatni_sat", Kategorija = "Kazneni postupak", Opis = "Svaki sljedeći započeti sat u istrazi (Tbr. 3.1)", TarifniBroj = "Tbr. 3.1", FiksniBody = 50, SortOrder = 121, Jedinica = "sat" },
+        new() { Id = "kaz_istraga_ostecenik", Kategorija = "Kazneni postupak", Opis = "Punomoćnik oštećenika / žrtve u istrazi – 50% Tbr. 4.1 (Tbr. 3.3)", TarifniBroj = "Tbr. 3.3", KazneniBase = true, KazneniPovecanje = -0.5m, SortOrder = 122, Jedinica = "sat" },
+        new() { Id = "kaz_istraga_odgoda", Kategorija = "Kazneni postupak", Opis = "Pristup odgođenoj radnji u istrazi – 50% Tbr. 4.1 (Tbr. 3.4)", TarifniBroj = "Tbr. 3.4", KazneniBase = true, KazneniPovecanje = -0.5m, SortOrder = 123, Jedinica = "komad" },
+
+        // ── Tbr. 4 — Obrana na raspravi ──
+        new() { Id = "kaz_obrana", Kategorija = "Kazneni postupak", Opis = "Obrana okrivljenika na raspravi – prvi sat (Tbr. 4.1)", TarifniBroj = "Tbr. 4.1", KazneniBase = true, SortOrder = 130, Jedinica = "sat" },
+        new() { Id = "kaz_obrana_prekrsaj", Kategorija = "Kazneni postupak", Opis = "Obrana u prekršajnom postupku (Tbr. 4.1)", TarifniBroj = "Tbr. 4.1", FiksniBody = 100, SortOrder = 131, Jedinica = "sat" },
+        new() { Id = "kaz_dodatni_sat", Kategorija = "Kazneni postupak", Opis = "Svaki sljedeći započeti sat rasprave (Tbr. 4.1)", TarifniBroj = "Tbr. 4.1", FiksniBody = 50, SortOrder = 132, Jedinica = "sat" },
+        new() { Id = "kaz_objava_presude", Kategorija = "Kazneni postupak", Opis = "Ročište za objavu presude (Tbr. 4.2)", TarifniBroj = "Tbr. 4.2", FiksniBody = 50, SortOrder = 133, Jedinica = "komad" },
+        new() { Id = "kaz_sjednica_drugostupanjska", Kategorija = "Kazneni postupak", Opis = "Sjednica vijeća drugog stupnja (Tbr. 4.2) – po Tbr. 4.1", TarifniBroj = "Tbr. 4.2", KazneniBase = true, SortOrder = 134, Jedinica = "komad" },
+        new() { Id = "kaz_rasprava_drugostupanjska", Kategorija = "Kazneni postupak", Opis = "Rasprava pred sudom drugog stupnja (Tbr. 4.2) – Tbr. 4.1 + 25%", TarifniBroj = "Tbr. 4.2", KazneniBase = true, KazneniPovecanje = 0.25m, SortOrder = 135, Jedinica = "komad" },
+        new() { Id = "kaz_razgovor_pritvor", Kategorija = "Kazneni postupak", Opis = "Razgovor s okrivljenikom u pritvoru (Tbr. 4.5)", TarifniBroj = "Tbr. 4.5", FiksniBody = 50, SortOrder = 136, Jedinica = "komad" },
+
+        // ── Tbr. 4.1 — Prekršaj s oduzimanjem predmeta ──
+        // Ako se uz novčanu kaznu / kaznu zatvora može izreći i kazna oduzimanja predmeta,
+        // odvjetniku pripada nagrada po Tbr. 7. toč. 1. ovisno o vrijednosti oduzetog predmeta.
+        new() { Id = "kaz_prekrsaj_oduzimanje", Kategorija = "Kazneni postupak", Opis = "Prekršaj s oduzimanjem – nagrada po Tbr. 7.1 prema vrijednosti (Tbr. 4.1)", TarifniBroj = "Tbr. 4.1", PrekrsajOduzimanje = true, SortOrder = 137, Jedinica = "sat" },
+
+        // ── Tbr. 4.1, al. 9 — Obrana pravne osobe ──
+        // Za obranu pravne osobe u kaznenom ili prekršajnom postupku,
+        // prema visini predviđene kazne za odgovornu osobu = KazneniBase (tier).
+        new() { Id = "kaz_obrana_pravna_osoba", Kategorija = "Kazneni postupak", Opis = "Obrana pravne osobe u kazn./prekrš. postupku – po kazni za odg. osobu (Tbr. 4.1 al. 9)", TarifniBroj = "Tbr. 4.1", KazneniBase = true, SortOrder = 138, Jedinica = "sat" },
+
+        // ── Tbr. 4.1, al. 10 — Predstavnik pravne osobe (postavi sud) ──
+        // Kad odvjetnika u kaznenom postupku za predstavnika pravne osobe postavi sud = 100 bodova.
+        new() { Id = "kaz_predstavnik_sud", Kategorija = "Kazneni postupak", Opis = "Predstavnik pravne osobe – postavi sud, 100 bodova (Tbr. 4.1 al. 10)", TarifniBroj = "Tbr. 4.1", FiksniBody = 100, SortOrder = 139, Jedinica = "sat" },
+
+        // ── Tbr. 4.1, al. 10 — Predstavnik pravne osobe (postavi pravna osoba) ──
+        // Kad ga postavi pravna osoba, nagrada prema al. 9 (= tier za odgovornu osobu).
+        new() { Id = "kaz_predstavnik_pravna_osoba", Kategorija = "Kazneni postupak", Opis = "Predstavnik pravne osobe – postavi pravna osoba, po kazni za odg. osobu (Tbr. 4.1 al. 10→9)", TarifniBroj = "Tbr. 4.1", KazneniBase = true, SortOrder = 140, Jedinica = "sat" },
+
+        // ── Tbr. 5 — Pravni lijekovi ──
+        new() { Id = "kaz_zalba_presuda", Kategorija = "Kazneni postupak", Opis = "Žalba protiv presude (Tbr. 5.1) – Tbr. 4.1 + 50%", TarifniBroj = "Tbr. 5.1", KazneniBase = true, KazneniPovecanje = 0.5m, SortOrder = 150, Jedinica = "komad" },
+        new() { Id = "kaz_odgovor_zalba", Kategorija = "Kazneni postupak", Opis = "Odgovor na žalbu protiv presude (Tbr. 5.2) – 50% od Tbr. 5.1", TarifniBroj = "Tbr. 5.2", KazneniBase = true, KazneniPovecanje = -0.25m, SortOrder = 151, Jedinica = "komad" },
+        new() { Id = "kaz_zalba_istrazni_zatvor", Kategorija = "Kazneni postupak", Opis = "Žalba protiv rješenja o istražnom zatvoru (Tbr. 5.3) – po Tbr. 4.1", TarifniBroj = "Tbr. 5.3", KazneniBase = true, SortOrder = 152, Jedinica = "komad" },
+        new() { Id = "kaz_odgovor_zalba_rjesenje", Kategorija = "Kazneni postupak", Opis = "Odgovor na žalbu iz Tbr. 5.3 (Tbr. 5.4) – 50% Tbr. 4.1", TarifniBroj = "Tbr. 5.4", KazneniBase = true, KazneniPovecanje = -0.5m, SortOrder = 153, Jedinica = "komad" },
+        new() { Id = "kaz_zalba_troskovi", Kategorija = "Kazneni postupak", Opis = "Žalba protiv odluke o trošku (Tbr. 5.5)", TarifniBroj = "Tbr. 5.5", FiksniBody = 50, SortOrder = 154, Jedinica = "komad" },
+        new() { Id = "kaz_odgovor_optuznica", Kategorija = "Kazneni postupak", Opis = "Odgovor na optužnicu (Tbr. 5.6) – po Tbr. 4.1", TarifniBroj = "Tbr. 5.6", KazneniBase = true, SortOrder = 155, Jedinica = "komad" },
+
+        // ── Tbr. 6 — Izvanredni pravni lijekovi ──
+        new() { Id = "kaz_izvanredni_pravni_lijek", Kategorija = "Kazneni postupak", Opis = "Izvanredni pravni lijek (Tbr. 6.1) – po Tbr. 5.1 (Tbr. 4.1 + 50%)", TarifniBroj = "Tbr. 6.1", KazneniBase = true, KazneniPovecanje = 0.5m, SortOrder = 170, Jedinica = "komad" },
+        new() { Id = "kaz_odgovor_izvanredni", Kategorija = "Kazneni postupak", Opis = "Odgovor na izvanredni pravni lijek (Tbr. 6.2) – 50% Tbr. 4.1", TarifniBroj = "Tbr. 6.2", KazneniBase = true, KazneniPovecanje = -0.5m, SortOrder = 171, Jedinica = "komad" },
 
         // ═══════════════════════════════════════════════════════════
         // II. PARNIČNI POSTUPAK
@@ -207,6 +257,14 @@ public sealed class TroskovnikService
         var lines = new List<TroskovnikLineItem>();
         var rbr = 0;
 
+        // Resolve kazneni tier points (0 if not set or invalid)
+        int kazneniTierBodovi = 0;
+        if (!string.IsNullOrEmpty(request.ZaprijecenaKazna) &&
+            ZaprijecenaKaznaTiers.Bodovi.TryGetValue(request.ZaprijecenaKazna, out var tierPts))
+        {
+            kazneniTierBodovi = tierPts;
+        }
+
         foreach (var stavka in request.Stavke)
         {
             if (!catalogMap.TryGetValue(stavka.ItemId, out var def))
@@ -214,7 +272,29 @@ public sealed class TroskovnikService
             if (stavka.Kolicina <= 0)
                 continue;
 
-            var bodovi = IzracunajBodove(def, baseBodovi);
+            int bodovi;
+            if (def.PrekrsajOduzimanje)
+            {
+                // Prekršaj s oduzimanjem — uses Tbr. 7.1 on VrijednostOduzimanja instead of tier
+                if (request.IsOduzimanjePrekrsaj && request.VrijednostOduzimanja > 0)
+                {
+                    bodovi = Tbr71Bodovi(request.VrijednostOduzimanja);
+                }
+                else
+                {
+                    // If toggle not active, fall back to standard prekršaj = 100
+                    bodovi = 100;
+                }
+            }
+            else if (def.KazneniBase)
+            {
+                bodovi = IzracunajKazneneBodove(def, kazneniTierBodovi, request);
+            }
+            else
+            {
+                bodovi = IzracunajBodove(def, baseBodovi);
+            }
+
             rbr++;
 
             lines.Add(new TroskovnikLineItem
@@ -256,7 +336,19 @@ public sealed class TroskovnikService
             // Enrich with predmet metadata
             Sud = request.Predmet?.Sud,
             BrojPredmeta = request.Predmet?.PoslovniBroj ?? request.CaseId,
-            DatumIzrade = DateTime.UtcNow
+            DatumIzrade = DateTime.UtcNow,
+            // Nested objects (new schema) — pass through as-is for frontend consumption
+            OdvjetnikInfo = request.Odvjetnik,
+            PredmetInfo = request.Predmet,
+            StrankeInfo = request.Stranke,
+            // Kazneni echo fields
+            ZaprijecenaKazna = request.ZaprijecenaKazna,
+            IsPoSluzbenojDuznosti = request.IsPoSluzbenojDuznosti,
+            IsNaTeretProracuna = request.IsNaTeretProracuna,
+            IsZastupnikDjeteta = request.IsZastupnikDjeteta,
+            IsStjecaj = request.IsStjecaj,
+            IsOduzimanjePrekrsaj = request.IsOduzimanjePrekrsaj,
+            VrijednostOduzimanja = request.VrijednostOduzimanja
         };
     }
 
@@ -282,6 +374,43 @@ public sealed class TroskovnikService
             bodovi = baseBodovi;
         }
 
+        return ClampBodovi(bodovi, def);
+    }
+
+    // ── Kazneni point calculation ─────────────────────────────────
+
+    /// <summary>
+    /// Izračunava bodove za stavke s KazneniBase = true.
+    /// Koristi ZaprijecenaKaznaTiers lookup i primjenjuje modifikatore:
+    ///   - KazneniPovecanje (npr. +50% za žalbu)
+    ///   - IsZastupnikDjeteta → 70% od Tbr. 4.8 (= 70% × 50% = 35% baze)
+    ///   - IsPoSluzbenojDuznosti / IsNaTeretProracuna → 50% umanjenje
+    /// </summary>
+    private static int IzracunajKazneneBodove(TarifnaStavka def, int tierBodovi, TroskovnikRequest req)
+    {
+        int bodovi = tierBodovi;
+
+        // Kazneni povećanje (e.g. +50% za žalbu protiv presude, Tbr. 5.1)
+        if (def.KazneniPovecanje.HasValue)
+            bodovi = (int)Math.Ceiling(bodovi * (1 + def.KazneniPovecanje.Value));
+
+        // Opunomoćenik djeteta žrtve kaznenog djela →
+        //   Tbr. 4.8: zastupanje oštećenika = 50% od Tbr. 4
+        //   Dijete žrtve = 70% od Tbr. 4.8  ⇒ efektivno 35%
+        if (req.IsZastupnikDjeteta)
+            bodovi = (int)Math.Ceiling(bodovi * TarifaConstants.Tbr4t8Rate * TarifaConstants.ZastupnikDjetetaRate);
+
+        // Branitelj po službenoj dužnosti ili na teret proračunskih sredstava → 50%
+        if (req.IsPoSluzbenojDuznosti || req.IsNaTeretProracuna)
+            bodovi = (int)Math.Ceiling(bodovi * TarifaConstants.KazneniReductionRate);
+
+        return ClampBodovi(bodovi, def);
+    }
+
+    // ── Clamp helper ──────────────────────────────────────────────
+
+    private static int ClampBodovi(int bodovi, TarifnaStavka def)
+    {
         if (def.MaxBodova.HasValue && bodovi > def.MaxBodova.Value)
             bodovi = def.MaxBodova.Value;
         if (def.MinBodova.HasValue && bodovi < def.MinBodova.Value)

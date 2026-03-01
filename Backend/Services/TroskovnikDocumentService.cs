@@ -91,7 +91,8 @@ public sealed class TroskovnikDocumentService
         // Prefer explicit polozaj from persisted nested object, then response-level protustranka_polozaj
         var protPolozaj = record.Stranke?.Protustranka?.Polozaj ?? resp.ProtustrankaPolozaj ?? string.Empty;
 
-        var includeVat = resp.IsPdvUkljucen ?? resp.HasVat || record.IsPdvUkljucen || record.HasVat;
+        // Prefer the new IsPdvUkljucen flag; fall back to legacy HasVat; finally check persisted record
+        var includeVat = resp.IsPdvUkljucen ?? (resp.HasVat || record.IsPdvUkljucen || record.HasVat);
 
         var sb = new StringBuilder();
 
@@ -126,24 +127,50 @@ public sealed class TroskovnikDocumentService
         // Totals
         sb.AppendLine("<h3>Ukupno</h3>");
         sb.AppendLine("<table style=\"width:320px;float:right;\">");
-        sb.AppendLine($"<tr><td>Ukupno (EUR bez PDV)</td><td style=\"text-align:right\">{FormatCurrency(resp.UkupnoEurBezPdv)}</td></tr>");
 
         if (includeVat)
         {
+            sb.AppendLine($"<tr><td>Osnovica (bez PDV)</td><td style=\"text-align:right\">{FormatCurrency(resp.UkupnoEurBezPdv)}</td></tr>");
             sb.AppendLine($"<tr><td>PDV (25%)</td><td style=\"text-align:right\">{FormatCurrency(resp.Pdv)}</td></tr>");
-            sb.AppendLine($"<tr><th>Ukupno s PDV</th><th style=\"text-align:right\">{FormatCurrency(resp.UkupnoEurSPdv)}</th></tr>");
+            sb.AppendLine($"<tr><th>SVEUKUPNO s PDV-om</th><th style=\"text-align:right\">{FormatCurrency(resp.UkupnoEurSPdv)}</th></tr>");
         }
         else
         {
-            sb.AppendLine($"<tr><th>Ukupno</th><th style=\"text-align:right\">{FormatCurrency(resp.UkupnoEurBezPdv)}</th></tr>");
+            sb.AppendLine($"<tr><th>UKUPNO</th><th style=\"text-align:right\">{FormatCurrency(resp.UkupnoEurBezPdv)}</th></tr>");
         }
 
         sb.AppendLine("</table>");
 
         sb.AppendLine("<div style=\"clear:both;\"></div>");
+
+        // Tbr. 7.1 — VPS range reference table
+        AppendVpsRangeTable(sb);
+
         sb.AppendLine($"<p style=\"margin-top:32px;\">Datum izrade: {resp.DatumIzrade.ToString("g", _hr)}</p>");
         sb.AppendLine("</body></html>");
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Appends a Tbr. 7.1 quick-reference table with VPS ranges formatted
+    /// using FormatThreshold (hr-HR, exactly 2 decimal places).
+    /// </summary>
+    private void AppendVpsRangeTable(StringBuilder sb)
+    {
+        sb.AppendLine("<h3 style=\"margin-top:24px;\">Tbr. 7.1 — Tablica bodova (VPS rasponi)</h3>");
+        sb.AppendLine("<table style=\"width:420px;\">");
+        sb.AppendLine("<tr><th>Vrijednost predmeta spora (EUR)</th><th style=\"text-align:right\">Bodovi</th></tr>");
+
+        var bounds = new[] { 0m, 332m, 664m, 1_327m, 13_272m, 33_181m, 66_361m, 663_614m, 1_327_228m };
+        var points = new[] { "25", "50", "75", "100", "250", "500", "500+", "4.991+" };
+
+        for (int i = 0; i < bounds.Length - 1; i++)
+        {
+            sb.AppendLine($"<tr><td>{FormatThreshold(bounds[i])} – {FormatThreshold(bounds[i + 1])}</td><td style=\"text-align:right\">{points[i]}</td></tr>");
+        }
+
+        sb.AppendLine($"<tr><td>&gt; {FormatThreshold(bounds[^1])}</td><td style=\"text-align:right\">max 10.000</td></tr>");
+        sb.AppendLine("</table>");
     }
 }

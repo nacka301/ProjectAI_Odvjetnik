@@ -96,13 +96,13 @@ public class TroskovnikController : ControllerBase
             UkupnoEurBezPdv = result.UkupnoEurBezPdv,
             Pdv = result.Pdv,
             UkupnoEurSPdv = result.UkupnoEurSPdv,
-            // Nested objects
+            // Nested objects — prefer new schema, fall back to legacy Klijent
             Odvjetnik = request.Odvjetnik is null ? null : new OdvjetnikInfo
             {
-                Naziv = request.Odvjetnik?.Naziv,
-                Oib = request.Odvjetnik?.Oib,
-                Adresa = request.Odvjetnik?.Adresa,
-                Iban = request.Odvjetnik?.Iban
+                Naziv = request.Odvjetnik.Naziv,
+                Oib = request.Odvjetnik.Oib,
+                Adresa = request.Odvjetnik.Adresa,
+                Iban = request.Odvjetnik.Iban
             },
             Predmet = new PredmetInfo
             {
@@ -113,22 +113,30 @@ public class TroskovnikController : ControllerBase
             {
                 ZastupanaStranka = new StrankaInfo
                 {
-                    Polozaj = "zastupana",
-                    Naziv = result.Klijent?.Ime,
-                    Oib = result.Klijent?.Oib,
-                    Adresa = null
+                    Polozaj = request.Stranke?.ZastupanaStranka?.Polozaj ?? "zastupana",
+                    Naziv = request.Stranke?.ZastupanaStranka?.Naziv ?? result.Klijent?.Ime,
+                    Oib = request.Stranke?.ZastupanaStranka?.Oib ?? result.Klijent?.Oib,
+                    Adresa = request.Stranke?.ZastupanaStranka?.Adresa ?? result.Klijent?.Adresa
                 },
                 Protustranka = request.Stranke?.Protustranka is null ? null : new StrankaInfo
                 {
-                    Polozaj = request.Stranke?.Protustranka?.Polozaj ?? request.ProtustrankaPolozaj,
-                    Naziv = request.Stranke?.Protustranka?.Naziv,
-                    Oib = request.Stranke?.Protustranka?.Oib,
-                    Adresa = request.Stranke?.Protustranka?.Adresa
+                    Polozaj = request.Stranke.Protustranka.Polozaj ?? request.ProtustrankaPolozaj,
+                    Naziv = request.Stranke.Protustranka.Naziv,
+                    Oib = request.Stranke.Protustranka.Oib,
+                    Adresa = request.Stranke.Protustranka.Adresa
                 }
             },
             // Save both flags for compatibility: prefer explicit IsPdvUkljucen if provided
             IsPdvUkljucen = request.IsPdvUkljucen ?? request.HasVat,
             HasVat = request.HasVat,
+            // Kazneni fields
+            ZaprijecenaKazna = request.ZaprijecenaKazna,
+            IsPoSluzbenojDuznosti = request.IsPoSluzbenojDuznosti,
+            IsNaTeretProracuna = request.IsNaTeretProracuna,
+            IsZastupnikDjeteta = request.IsZastupnikDjeteta,
+            IsStjecaj = request.IsStjecaj,
+            IsOduzimanjePrekrsaj = request.IsOduzimanjePrekrsaj,
+            VrijednostOduzimanja = request.VrijednostOduzimanja,
             RawJsonOutput = result
         };
 
