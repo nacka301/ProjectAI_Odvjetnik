@@ -23,6 +23,7 @@ public sealed class CreditService
     private readonly ILogger<CreditService> _logger;
     private readonly bool _isConfigured;
     private readonly SettingsService _settingsService;
+    private readonly UsageService _usageService;
 
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
@@ -38,11 +39,13 @@ public sealed class CreditService
         HttpClient httpClient,
         IConfiguration config,
         ILogger<CreditService> logger,
-        SettingsService settingsService)
+        SettingsService settingsService,
+        UsageService usageService)
     {
         _httpClient = httpClient;
         _logger = logger;
         _settingsService = settingsService;
+        _usageService = usageService;
 
         _supabaseUrl = Environment.GetEnvironmentVariable("SUPABASE_URL")
             ?? config["Supabase:Url"];
@@ -103,6 +106,13 @@ public sealed class CreditService
             }
 
             var firmId = profile.LawFirmId;
+
+            // 1b. Tenant-level AI credit limit check (tenant_subscriptions + tenant_usage_stats)
+            var usageCheck = await _usageService.CheckLimitAsync(firmId, UsageResource.AiCredit);
+            if (!usageCheck.Allowed)
+            {
+                return CreditCheckResult.Deny(usageCheck.Message);
+            }
 
             // 2. Query firm_usage for this firm + module
             var usage = await GetUsageAsync(firmId, moduleName);

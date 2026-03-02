@@ -1,3 +1,4 @@
+using Backend.Filters;
 using Backend.Models;
 using Backend.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -35,6 +36,7 @@ public class InvoiceController : ControllerBase
     /// </summary>
     [HttpPost("generate")]
     [EnableRateLimiting("valuation")]
+    [LimitEnforcement(UsageResource.Invoice)]
     public async Task<ActionResult<InvoiceResult>> Generate([FromBody] InvoiceRequest request)
     {
         // ── Validation ──

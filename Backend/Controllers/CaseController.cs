@@ -1,3 +1,4 @@
+using Backend.Filters;
 using Backend.Models;
 using Backend.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -73,6 +74,7 @@ public class CaseController : ControllerBase
 
     /// <summary>POST /api/case — create a new case.</summary>
     [HttpPost]
+    [LimitEnforcement(UsageResource.Case)]
     public async Task<IActionResult> Create([FromBody] CreateCaseRequest request)
     {
         var userId = GetUserId();

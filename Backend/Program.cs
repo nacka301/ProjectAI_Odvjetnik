@@ -194,6 +194,7 @@ builder.Services.AddHttpClient<SupabaseService>();
 builder.Services.AddHttpClient<TwoFactorService>();
 builder.Services.AddHttpClient<SettingsService>();
 builder.Services.AddHttpClient<CreditService>();
+builder.Services.AddHttpClient<UsageService>();
 builder.Services.AddHttpClient<ClientCaseService>();
 
 // ── DataSeeder (admin-only, uses ClientCaseService) ──
