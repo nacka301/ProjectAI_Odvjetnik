@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import AutoLogoutProvider from "@/components/AutoLogoutProvider";
+import SessionGuard from "@/components/SessionGuard";
 import { ConditionalSecurityFooter } from "@/components/ConditionalFooter";
 import CommandPalette from "@/components/CommandPalette";
 
@@ -49,9 +50,11 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} antialiased overflow-x-hidden min-h-screen flex flex-col`}
       >
         <AutoLogoutProvider>
-          <CommandPalette />
-          <main className="flex-1">{children}</main>
-          <ConditionalSecurityFooter />
+          <SessionGuard>
+            <CommandPalette />
+            <main className="flex-1">{children}</main>
+            <ConditionalSecurityFooter />
+          </SessionGuard>
         </AutoLogoutProvider>
       </body>
     </html>

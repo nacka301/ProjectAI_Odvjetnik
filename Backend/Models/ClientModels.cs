@@ -72,6 +72,7 @@ public sealed class CaseReadRecord
     public string? Sudac { get; set; }
     public string? DatumPokretanja { get; set; }
     public string? DatumZatvaranja { get; set; }
+    public bool IsDeleted { get; set; }
 }
 
 // ══════════════════════════════════════════════════════════════

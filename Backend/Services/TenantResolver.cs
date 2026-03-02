@@ -11,6 +11,7 @@ namespace Backend.Services;
 public interface ITenantResolver
 {
     Task<string?> GetTenantIdForUserAsync(string userId);
+    Task<string?> GetFirmRoleForUserAsync(string userId);
     void InvalidateCache(string userId);
 }
 
@@ -22,8 +23,8 @@ public sealed class TenantResolver : ITenantResolver
     private readonly ILogger<TenantResolver> _logger;
     private readonly bool _isConfigured;
 
-    // Thread-safe cache: userId → (tenantId, expiry)
-    private static readonly ConcurrentDictionary<string, (string? TenantId, DateTime Expiry)> Cache = new();
+    // Thread-safe cache: userId → (tenantId, firmRole, expiry)
+    private static readonly ConcurrentDictionary<string, (string? TenantId, string? FirmRole, DateTime Expiry)> Cache = new();
     private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
 
     public TenantResolver(HttpClient httpClient, IConfiguration config, ILogger<TenantResolver> logger)
@@ -49,10 +50,28 @@ public sealed class TenantResolver : ITenantResolver
         if (Cache.TryGetValue(userId, out var cached) && cached.Expiry > DateTime.UtcNow)
             return cached.TenantId;
 
+        await ResolveAndCacheAsync(userId);
+        return Cache.TryGetValue(userId, out var entry) ? entry.TenantId : null;
+    }
+
+    public async Task<string?> GetFirmRoleForUserAsync(string userId)
+    {
+        if (!_isConfigured || string.IsNullOrWhiteSpace(userId))
+            return null;
+
+        if (Cache.TryGetValue(userId, out var cached) && cached.Expiry > DateTime.UtcNow)
+            return cached.FirmRole;
+
+        await ResolveAndCacheAsync(userId);
+        return Cache.TryGetValue(userId, out var entry) ? entry.FirmRole : null;
+    }
+
+    private async Task ResolveAndCacheAsync(string userId)
+    {
         try
         {
             var safeId = Uri.EscapeDataString(userId);
-            var url = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/user_profiles?user_id=eq.{safeId}&select=law_firm_id&limit=1";
+            var url = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/user_profiles?user_id=eq.{safeId}&select=law_firm_id,role&limit=1";
 
             var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.Add("apikey", _serviceKey);
@@ -60,27 +79,28 @@ public sealed class TenantResolver : ITenantResolver
 
             var response = await _httpClient.SendAsync(request);
             if (!response.IsSuccessStatusCode)
-                return null;
+                return;
 
             var body = await response.Content.ReadAsStringAsync();
             using var doc = JsonDocument.Parse(body);
             var arr = doc.RootElement;
 
             string? tenantId = null;
+            string? firmRole = null;
             if (arr.GetArrayLength() > 0)
             {
                 var row = arr[0];
                 if (row.TryGetProperty("law_firm_id", out var lfProp) && lfProp.ValueKind == JsonValueKind.String)
                     tenantId = lfProp.GetString();
+                if (row.TryGetProperty("role", out var roleProp) && roleProp.ValueKind == JsonValueKind.String)
+                    firmRole = roleProp.GetString();
             }
 
-            Cache[userId] = (tenantId, DateTime.UtcNow.Add(CacheDuration));
-            return tenantId;
+            Cache[userId] = (tenantId, firmRole, DateTime.UtcNow.Add(CacheDuration));
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "TenantResolver: failed to resolve tenant for user {UserId}", userId);
-            return null;
         }
     }
 

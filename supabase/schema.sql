@@ -1020,6 +1020,15 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- ========================================
+-- V49: Soft-delete for Cases
+-- Adds is_deleted flag; existing rows default to false.
+-- Partial index speeds up the default "active only" query.
+-- ========================================
+
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT false;
+CREATE INDEX IF NOT EXISTS idx_cases_not_deleted ON cases (user_id) WHERE is_deleted = false;
+
 DROP TRIGGER IF EXISTS trg_law_firm_provision ON law_firms;
 CREATE TRIGGER trg_law_firm_provision
     AFTER INSERT ON law_firms

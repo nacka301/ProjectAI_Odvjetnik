@@ -288,14 +288,22 @@ public sealed class ClientCaseService
     public Task<CaseReadRecord?> CreateCaseAsync(CaseRecord record)
         => InsertAsync<CaseReadRecord>("cases", record);
 
+    /// <summary>Active (non-deleted) cases for a user.</summary>
     public Task<List<CaseReadRecord>> GetCasesByUserAsync(string userId)
         => UuidRegex.IsMatch(userId)
-            ? SelectAsync<CaseReadRecord>("cases", $"user_id=eq.{Uri.EscapeDataString(userId)}")
+            ? SelectAsync<CaseReadRecord>("cases", $"user_id=eq.{Uri.EscapeDataString(userId)}&is_deleted=eq.false")
             : Task.FromResult(new List<CaseReadRecord>());
 
+    /// <summary>Active (non-deleted) cases linked to a client.</summary>
     public Task<List<CaseReadRecord>> GetCasesByClientAsync(string clientId)
         => UuidRegex.IsMatch(clientId)
-            ? SelectAsync<CaseReadRecord>("cases", $"client_id=eq.{Uri.EscapeDataString(clientId)}")
+            ? SelectAsync<CaseReadRecord>("cases", $"client_id=eq.{Uri.EscapeDataString(clientId)}&is_deleted=eq.false")
+            : Task.FromResult(new List<CaseReadRecord>());
+
+    /// <summary>Soft-deleted cases for the trash view (owner only).</summary>
+    public Task<List<CaseReadRecord>> GetDeletedCasesByUserAsync(string userId)
+        => UuidRegex.IsMatch(userId)
+            ? SelectAsync<CaseReadRecord>("cases", $"user_id=eq.{Uri.EscapeDataString(userId)}&is_deleted=eq.true")
             : Task.FromResult(new List<CaseReadRecord>());
 
     public Task<CaseReadRecord?> GetCaseByIdAsync(string id)
@@ -304,6 +312,15 @@ public sealed class ClientCaseService
     public Task<CaseReadRecord?> UpdateCaseAsync(string id, object patch)
         => UpdateAsync<CaseReadRecord>("cases", id, patch);
 
+    /// <summary>Soft-delete: sets is_deleted = true instead of removing the row.</summary>
+    public Task<CaseReadRecord?> SoftDeleteCaseAsync(string id)
+        => UpdateAsync<CaseReadRecord>("cases", id, new { is_deleted = true });
+
+    /// <summary>Restore a soft-deleted case.</summary>
+    public Task<CaseReadRecord?> RestoreCaseAsync(string id)
+        => UpdateAsync<CaseReadRecord>("cases", id, new { is_deleted = false });
+
+    /// <summary>Hard-delete — kept for admin/cleanup scenarios.</summary>
     public Task<bool> DeleteCaseAsync(string id)
         => DeleteAsync("cases", id);
 

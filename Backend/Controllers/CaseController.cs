@@ -54,6 +54,19 @@ public class CaseController : ControllerBase
         return Ok(cases);
     }
 
+    /// <summary>GET /api/case/trash — list soft-deleted cases (firm owner only).</summary>
+    [HttpGet("trash")]
+    [RequireFirmOwner]
+    public async Task<IActionResult> GetTrash()
+    {
+        var userId = GetUserId();
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized(new { error = "Nedostaje x-user-id header." });
+
+        var deleted = await _service.GetDeletedCasesByUserAsync(userId);
+        return Ok(deleted);
+    }
+
     /// <summary>GET /api/case/{id} — get a single case by ID (ownership verified).</summary>
     [HttpGet("{id}")]
     public async Task<IActionResult> GetById(string id)
@@ -133,7 +146,7 @@ public class CaseController : ControllerBase
         return Ok(updated);
     }
 
-    /// <summary>DELETE /api/case/{id} — delete a case (ownership verified).</summary>
+    /// <summary>DELETE /api/case/{id} — soft-delete a case (ownership verified).</summary>
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(string id)
     {
@@ -146,8 +159,29 @@ public class CaseController : ControllerBase
         if (existing == null || existing.UserId != userId)
             return NotFound(new { error = "Predmet nije pronađen." });
 
-        var success = await _service.DeleteCaseAsync(id);
-        if (!success) return NotFound(new { error = "Predmet nije pronađen." });
+        var result = await _service.SoftDeleteCaseAsync(id);
+        if (result == null) return NotFound(new { error = "Predmet nije pronađen." });
         return NoContent();
+    }
+
+    /// <summary>POST /api/case/{id}/restore — restore a soft-deleted case (firm owner only).</summary>
+    [HttpPost("{id}/restore")]
+    [RequireFirmOwner]
+    public async Task<IActionResult> Restore(string id)
+    {
+        var userId = GetUserId();
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized(new { error = "Nedostaje x-user-id header." });
+
+        var existing = await _service.GetCaseByIdAsync(id);
+        if (existing == null || existing.UserId != userId)
+            return NotFound(new { error = "Predmet nije pronađen." });
+
+        if (!existing.IsDeleted)
+            return BadRequest(new { error = "Predmet nije obrisan." });
+
+        var restored = await _service.RestoreCaseAsync(id);
+        if (restored == null) return NotFound(new { error = "Predmet nije pronađen." });
+        return Ok(restored);
     }
 }

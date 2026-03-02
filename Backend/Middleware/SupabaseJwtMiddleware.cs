@@ -137,6 +137,10 @@ public sealed class SupabaseJwtMiddleware
                 var tenantId = await resolver.GetTenantIdForUserAsync(userId);
                 if (tenantId != null)
                     context.Items["AuthTenantId"] = tenantId;
+
+                var firmRole = await resolver.GetFirmRoleForUserAsync(userId);
+                if (firmRole != null)
+                    context.Items["AuthFirmRole"] = firmRole;
             }
         }
         catch
