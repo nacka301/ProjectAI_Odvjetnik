@@ -72,6 +72,16 @@ function LoginContent() {
     return () => clearInterval(iv);
   }, []);
 
+  // Show error from callback route (e.g. expired reset link)
+  useEffect(() => {
+    const callbackError = searchParams.get("error");
+    if (callbackError && callbackError !== "callback") {
+      setError(decodeURIComponent(callbackError));
+    } else if (callbackError === "callback") {
+      setError("Autentifikacija nije uspjela. Pokušajte ponovo.");
+    }
+  }, [searchParams]);
+
   // ── Email/Password Login ──
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,6 +112,14 @@ function LoginContent() {
           setError("Račun je privremeno zaključan. Pokušajte za 15 minuta.");
         } else if (authError.message.toLowerCase().includes("email not confirmed")) {
           setError("Email adresa još nije potvrđena. Provjerite inbox.");
+        } else if (
+          authError.message.toLowerCase().includes("invalid login credentials") ||
+          authError.message.toLowerCase().includes("invalid credentials")
+        ) {
+          // OAuth collision hint: user may have signed up with Google (no password set)
+          setError(
+            `Pogrešna email adresa ili lozinka. Ako ste se registrirali putem Googlea, koristite gumb "Prijava putem Googlea" ili resetirajte lozinku. Preostalo pokušaja: ${remaining}`
+          );
         } else {
           setError(`Pogrešna email adresa ili lozinka. Preostalo pokušaja: ${remaining}`);
         }
@@ -197,7 +215,7 @@ function LoginContent() {
       const { error: authError } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/auth/callback`,
         },
       });
       if (authError) throw authError;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -13,6 +13,7 @@ import {
   CheckCircle,
   Check,
   X,
+  ShieldAlert,
 } from "lucide-react";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
 import { isPasswordValid, validatePassword } from "@/lib/auth-validation";
@@ -29,6 +30,26 @@ export default function ResetPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  // Session verification — ensure user arrived via a valid reset link
+  const [sessionReady, setSessionReady] = useState(false);
+  const [sessionInvalid, setSessionInvalid] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      // Wait for Supabase to hydrate the session from cookies set by the callback
+      const { data: { user } } = await supabase.auth.getUser();
+      if (cancelled) return;
+      if (user) {
+        setSessionReady(true);
+      } else {
+        setSessionInvalid(true);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const checks = validatePassword(password);
   const pwValid = isPasswordValid(password);
@@ -54,6 +75,13 @@ export default function ResetPasswordPage() {
       if (authError) {
         if (authError.message.toLowerCase().includes("same password")) {
           setError("Nova lozinka mora biti različita od prethodne.");
+        } else if (
+          authError.message.toLowerCase().includes("session") ||
+          authError.message.toLowerCase().includes("not authenticated") ||
+          authError.status === 401
+        ) {
+          // Session expired between page load and form submit
+          setError("Sesija je istekla. Zatražite novi link za oporavak lozinke.");
         } else {
           setError(authError.message);
         }
@@ -72,6 +100,63 @@ export default function ResetPasswordPage() {
       setLoading(false);
     }
   };
+
+  // ── Invalid / expired session — no valid reset token ──
+  if (sessionInvalid) {
+    return (
+      <>
+        <div className="flex items-center justify-center gap-3 mb-8">
+          <div
+            className="w-11 h-11 rounded-xl flex items-center justify-center shadow-lg"
+            style={{ background: "var(--auth-navy)", boxShadow: "0 4px 20px rgba(201,168,76,0.15)" }}
+          >
+            <Scale className="h-5 w-5" style={{ color: "var(--auth-gold)" }} />
+          </div>
+          <div>
+            <h1 className="font-serif text-xl font-bold text-white tracking-tight">PravoTek</h1>
+            <p className="text-[10px] uppercase tracking-[0.2em]" style={{ color: "var(--auth-gold)" }}>
+              Pravna Inteligencija
+            </p>
+          </div>
+        </div>
+
+        <div
+          className="rounded-2xl shadow-2xl p-6 sm:p-8 text-center"
+          style={{
+            background: "var(--auth-card-bg)",
+            border: "1px solid var(--auth-card-border)",
+            boxShadow: "0 25px 50px -12px rgba(0,0,0,0.4), 0 0 0 1px rgba(201,168,76,0.1)",
+          }}
+        >
+          <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <ShieldAlert className="h-7 w-7 text-red-500" />
+          </div>
+          <h2 className="font-serif text-lg font-semibold text-slate-900 mb-2">Link je istekao</h2>
+          <p className="text-sm text-slate-500 mb-6 leading-relaxed">
+            Ovaj link za promjenu lozinke nije valjan ili je istekao.
+            <br />
+            Zatražite novi link za oporavak lozinke.
+          </p>
+          <Link
+            href="/auth/forgot-password"
+            className="inline-flex items-center gap-2 text-white text-sm font-semibold px-6 py-2.5 rounded-xl transition shadow-lg"
+            style={{ background: "var(--auth-navy)", boxShadow: "0 4px 14px rgba(27,42,74,0.4)" }}
+          >
+            Zatraži novi link
+          </Link>
+        </div>
+      </>
+    );
+  }
+
+  // ── Loading session check ──
+  if (!sessionReady && !sessionInvalid) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+      </div>
+    );
+  }
 
   // ── Success state ──
   if (success) {
