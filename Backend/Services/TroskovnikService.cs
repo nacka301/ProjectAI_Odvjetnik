@@ -86,6 +86,8 @@ public sealed class TroskovnikService
         new() { Id = "kaz_objava_presude", Kategorija = "Kazneni postupak", Opis = "Ročište za objavu presude (Tbr. 4.2)", TarifniBroj = "Tbr. 4.2", FiksniBody = 50, SortOrder = 133, Jedinica = "komad" },
         new() { Id = "kaz_sjednica_drugostupanjska", Kategorija = "Kazneni postupak", Opis = "Sjednica vijeća drugog stupnja (Tbr. 4.2) – po Tbr. 4.1", TarifniBroj = "Tbr. 4.2", KazneniBase = true, SortOrder = 134, Jedinica = "komad" },
         new() { Id = "kaz_rasprava_drugostupanjska", Kategorija = "Kazneni postupak", Opis = "Rasprava pred sudom drugog stupnja (Tbr. 4.2) – Tbr. 4.1 + 25%", TarifniBroj = "Tbr. 4.2", KazneniBase = true, KazneniPovecanje = 0.25m, SortOrder = 135, Jedinica = "komad" },
+        // AUDIT NOTE: Za kaznena djela s kaznom dugotrajnog zatvora, Tbr. 4.2 propisuje povišenje
+        // od 50% (ne 25%) pred drugostupanjskim sudom. Trenutno se koristi 25% za sve — rubni slučaj.
         new() { Id = "kaz_razgovor_pritvor", Kategorija = "Kazneni postupak", Opis = "Razgovor s okrivljenikom u pritvoru (Tbr. 4.5)", TarifniBroj = "Tbr. 4.5", FiksniBody = 50, SortOrder = 136, Jedinica = "komad" },
 
         // ── Tbr. 4.1 — Prekršaj s oduzimanjem predmeta ──

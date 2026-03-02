@@ -10,9 +10,13 @@ public static class TarifaConstants
 {
     public const decimal BodValue = 2.00m;
     public const decimal PdvRate = 0.25m; // 25% PDV
-    public const decimal KazneniReductionRate = 0.50m;   // Tbr. 4.7 — branitelj po službenoj dužnosti / na teret proračuna
-    public const decimal Tbr4t8Rate = 0.50m;             // Tbr. 4.8 — zastupanje oštećenika = 50% Tbr. 4
-    public const decimal ZastupnikDjetetaRate = 0.70m;   // Opunomoćenik djeteta žrtve = 70% od Tbr. 4.8
+    // AUDIT NOTE: Tbr. 4.7 u Tarifi kaže "određuje se Pravilnikom ministarstva nadležnog za
+    // poslove pravosuđa" — 50% stopa dolazi iz tog Pravilnika, NE iz same Tarife.
+    public const decimal KazneniReductionRate = 0.50m;   // Branitelj po službenoj dužnosti / na teret proračuna (izvor: Pravilnik, ne Tarifa Tbr. 4.7)
+    public const decimal Tbr4t8Rate = 0.50m;             // Tbr. 4.8 — zastupanje oštećenika = 50% Tbr. 4 ✓ (potvrđeno u PDF-u)
+    // AUDIT NOTE: ZastupnikDjetetaRate od 0.70 NIJE pronađen ni u Tarifi ni u Uredbi o pristojbama.
+    // Izvor ove stope treba potvrditi iz Zakona o zaštiti djece žrtava kaznenih djela ili sl.
+    public const decimal ZastupnikDjetetaRate = 0.70m;   // Opunomoćenik djeteta žrtve = 70% od Tbr. 4.8 — IZVOR NEPOZNAT U PRILOŽENIM PDF-ovima
     // Efektivni postotak za dijete žrtve: Tbr4t8Rate × ZastupnikDjetetaRate = 35%
 }
 

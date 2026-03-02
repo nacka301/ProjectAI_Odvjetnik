@@ -2,54 +2,52 @@ namespace Backend.Services;
 
 /// <summary>
 /// Kalkulator sudskih pristojbi prema Uredbi o tarifi sudskih pristojbi
-/// (NN 95/2015, EUR konverzija NN 156/2022).
-/// Tbr. 1 — I. PARNIČNI POSTUPAK — Tužba (pristojba na tužbu / prijedlog).
+/// (NN 37/2023, objavljena 31. ožujka 2023.).
+/// Tar. br. 1, stavak 1 — pristojba na tužbu / prijedlog.
 ///
-/// Konverzija: 1 EUR = 7,53450 HRK (fiksni tečaj).
-/// Iznosi zaokruženi na 2 decimale.
-/// Maksimalna pristojba: 3.981,68 EUR (= 30.000 HRK).
+/// FIXED: Prethodni kod sadržavao je 26 razreda konvertiranih iz HRK tarife
+/// (NN 95/2015, NN 156/2022) što je bilo potpuno pogrešno.
+/// Ispravna tarifa (NN 37/2023) ima samo 5 fiksnih razreda + progresivnu formulu.
+/// Maksimalna pristojba: 663,61 EUR (ne 3.981,68 EUR).
 /// </summary>
 public static class SudskePristojbeCalculator
 {
-    // ── Tbr. 1 — Fee brackets ──────────────────────────────────
-    // Upper VPS bound (EUR) → Fee (EUR)
-    // Original HRK values converted at fixed rate 7.53450.
+    // ── Tar. br. 1, stavak 1 — fiksni razredi (EUR → EUR) ──────
+    // Izvor: Uredba o tarifi sudskih pristojbi, NN 37/2023, str. 1
+    //
+    //   iznad (EUR)    do (EUR)      pristojba (EUR)
+    //   0,00           398,17        13,27
+    //   398,18         796,34        26,54
+    //   796,35         1.194,51      39,82
+    //   1.194,52       1.592,67      53,09
+    //   1.592,68       1.990,84      66,36
+    //
+    // Preko 1.990,84 EUR: 66,36 + 1% × (VPS − 1.990,84), ali ne više od 663,61 EUR.
 
     private static readonly (decimal MaxVps, decimal Fee)[] Brackets =
     [
-        (    398.17m,    13.27m),  //  do   3.000 HRK →    100 HRK
-        (    796.34m,    26.54m),  //  do   6.000 HRK →    200 HRK
-        (  1_327.23m,    39.82m),  //  do  10.000 HRK →    300 HRK
-        (  1_990.84m,    53.09m),  //  do  15.000 HRK →    400 HRK
-        (  3_318.07m,    79.63m),  //  do  25.000 HRK →    600 HRK
-        (  5_308.91m,   119.45m),  //  do  40.000 HRK →    900 HRK
-        (  7_963.37m,   172.54m),  //  do  60.000 HRK →  1.300 HRK
-        ( 13_272.28m,   265.45m),  //  do 100.000 HRK →  2.000 HRK
-        ( 26_544.56m,   398.17m),  //  do 200.000 HRK →  3.000 HRK
-        ( 39_816.84m,   530.89m),  //  do 300.000 HRK →  4.000 HRK
-        ( 53_089.12m,   663.61m),  //  do 400.000 HRK →  5.000 HRK
-        ( 66_361.40m,   796.34m),  //  do 500.000 HRK →  6.000 HRK
-        ( 99_542.10m,   929.06m),  //  do 750.000 HRK →  7.000 HRK
-        (132_722.81m, 1_061.78m),  //  do 1.000.000 HRK →  8.000 HRK
-        (165_903.51m, 1_194.51m),  //  do 1.250.000 HRK →  9.000 HRK
-        (199_084.21m, 1_327.23m),  //  do 1.500.000 HRK → 10.000 HRK
-        (265_445.61m, 1_592.67m),  //  do 2.000.000 HRK → 12.000 HRK
-        (331_807.02m, 1_858.12m),  //  do 2.500.000 HRK → 14.000 HRK
-        (398_168.42m, 2_123.56m),  //  do 3.000.000 HRK → 16.000 HRK
-        (464_529.82m, 2_389.01m),  //  do 3.500.000 HRK → 18.000 HRK
-        (530_891.22m, 2_654.46m),  //  do 4.000.000 HRK → 20.000 HRK
-        (663_614.03m, 2_919.90m),  //  do 5.000.000 HRK → 22.000 HRK
-        (796_336.83m, 3_185.35m),  //  do 6.000.000 HRK → 24.000 HRK
-        (929_059.64m, 3_450.79m),  //  do 7.000.000 HRK → 26.000 HRK
-        (1_061_782.44m, 3_716.24m),//  do 8.000.000 HRK → 28.000 HRK
-        (1_327_228.05m, 3_981.68m),//  do 10.000.000 HRK → 30.000 HRK
+        (   398.17m,  13.27m),  // FIXED: razred 1 — do 398,17 EUR
+        (   796.34m,  26.54m),  // FIXED: razred 2 — do 796,34 EUR
+        ( 1_194.51m,  39.82m),  // FIXED: razred 3 — do 1.194,51 EUR (bilo 1.327,23 — HALLUCINATION)
+        ( 1_592.67m,  53.09m),  // FIXED: razred 4 — do 1.592,67 EUR (bilo 1.990,84 — HALLUCINATION)
+        ( 1_990.84m,  66.36m),  // FIXED: razred 5 — do 1.990,84 EUR (bilo 3.318,07 — HALLUCINATION)
+        // FIXED: razredi 6-26 iz starog koda su POTPUNO IZBRISANI — ne postoje u NN 37/2023.
     ];
 
-    /// <summary>Maximum court fee (30.000 HRK = 3.981,68 EUR).</summary>
-    public const decimal MaxFee = 3_981.68m;
+    /// <summary>
+    /// Maksimalna sudska pristojba: 663,61 EUR.
+    /// FIXED: prethodno bilo 3.981,68 EUR (= 30.000 HRK) — pogrešna tarifa.
+    /// Izvor: NN 37/2023, Tar. br. 1, stavak 1, zadnji odlomak.
+    /// </summary>
+    public const decimal MaxFee = 663.61m;
+
+    // Konstante za progresivnu formulu iznad 1.990,84 EUR
+    private const decimal ProgressiveThreshold = 1_990.84m;
+    private const decimal ProgressiveBase = 66.36m;
+    private const decimal ProgressiveRate = 0.01m; // 1%
 
     /// <summary>
-    /// Izračunava sudsku pristojbu na tužbu (Tbr. 1) prema VPS-u.
+    /// Izračunava sudsku pristojbu na tužbu (Tar. br. 1) prema VPS-u.
     /// Ako je VPS ≤ 0, vraća 0.
     /// </summary>
     public static decimal Izracunaj(decimal vrijednostSpora)
@@ -57,13 +55,16 @@ public static class SudskePristojbeCalculator
         if (vrijednostSpora <= 0)
             return 0m;
 
+        // Fiksni razredi (5 razreda prema NN 37/2023)
         foreach (var (maxVps, fee) in Brackets)
         {
             if (vrijednostSpora <= maxVps)
                 return fee;
         }
 
-        // Over 1.327.228,05 EUR → max fee
-        return MaxFee;
+        // FIXED: Progresivna formula za VPS > 1.990,84 EUR
+        // "66,36 eura i još 1% na razliku iznad 1.990,84 eura, ali ne više od 663,61 euro."
+        var progressive = ProgressiveBase + ProgressiveRate * (vrijednostSpora - ProgressiveThreshold);
+        return Math.Min(Math.Round(progressive, 2), MaxFee);
     }
 }
