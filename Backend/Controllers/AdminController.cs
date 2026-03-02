@@ -148,7 +148,7 @@ public class AdminController : ControllerBase
             // 2) Fetch user_profiles with embedded law_firms → subscriptions + firm_usage
             var profilesUrl = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/user_profiles" +
                 "?select=user_id,full_name,phone_number,role,totp_enabled,created_at," +
-                "law_firms(id,name,oib,subscriptions(plan_name,status,valid_until),firm_usage(module_name,used_credits,max_credits))";
+                "law_firms(id,name,oib,tenant_subscriptions(plan_id,status,valid_until,price_eur,max_cases,max_invoices,ai_credits_limit),firm_usage(module_name,used_credits,max_credits))";
             var profilesReq = CreateRequest(HttpMethod.Get, profilesUrl);
             var profilesRes = await _httpClient.SendAsync(profilesReq);
             var profilesBody = await profilesRes.Content.ReadAsStringAsync();
@@ -186,15 +186,15 @@ public class AdminController : ControllerBase
                         dto.FirmName = firm.TryGetProperty("name", out var n) ? n.GetString() : null;
                         dto.FirmOib = firm.TryGetProperty("oib", out var o) ? o.GetString() : null;
 
-                        // Best subscription
-                        if (firm.TryGetProperty("subscriptions", out var subs) && subs.ValueKind == JsonValueKind.Array)
+                        // Best subscription (from tenant_subscriptions)
+                        if (firm.TryGetProperty("tenant_subscriptions", out var subs) && subs.ValueKind == JsonValueKind.Array)
                         {
                             foreach (var s in subs.EnumerateArray())
                             {
                                 var status = s.TryGetProperty("status", out var st) ? st.GetString() : "";
                                 if (status == "active" || status == "trial" || dto.Plan == null)
                                 {
-                                    dto.Plan = s.TryGetProperty("plan_name", out var pn) ? pn.GetString() : null;
+                                    dto.Plan = s.TryGetProperty("plan_id", out var pn) ? pn.GetString() : null;
                                     dto.SubStatus = status;
                                     dto.ValidUntil = s.TryGetProperty("valid_until", out var vu) ? vu.GetString() : null;
                                     if (status == "active" || status == "trial") break;

@@ -48,10 +48,18 @@ public class LawFirmUpdateRequest
 public class SubscriptionResponse
 {
     public string Id { get; set; } = "";
-    public string PlanName { get; set; } = "";
+    public string PlanId { get; set; } = "free";
     public string Status { get; set; } = "";
+    public string? ValidFrom { get; set; }
     public string? ValidUntil { get; set; }
+    public decimal PriceEur { get; set; }
+    public int MaxCases { get; set; }
+    public int MaxInvoices { get; set; }
+    public int AiCreditsLimit { get; set; }
     public string? LawFirmId { get; set; }
+
+    // Back-compat alias so existing code reading PlanName still works
+    public string PlanName => SubscriptionPlans.LabelFor(PlanId);
 }
 
 // ── Registration Extension ──

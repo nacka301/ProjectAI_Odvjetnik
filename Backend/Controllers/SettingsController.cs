@@ -157,7 +157,7 @@ public class SettingsController : ControllerBase
         {
             var sub = await _service.GetSubscriptionAsync(userId);
             if (sub == null)
-                return Ok(new SubscriptionResponse { PlanName = "Starter", Status = "trial" });
+                return Ok(new SubscriptionResponse { PlanId = "free", Status = "active" });
 
             return Ok(sub);
         }

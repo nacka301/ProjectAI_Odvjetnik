@@ -12,10 +12,21 @@ function apiHeaders(): Record<string, string> {
 }
 
 interface SubscriptionData {
-  plan_name: string;
+  plan_id: string;
+  plan_name?: string;   // back-compat from C# PlanName getter
   status: string;
   valid_until: string | null;
+  price_eur?: number;
+  max_cases?: number;
+  max_invoices?: number;
+  ai_credits_limit?: number;
 }
+
+const PLAN_LABELS: Record<string, string> = {
+  free: "Besplatno",
+  starter: "Starter",
+  pro: "Pro",
+};
 
 interface Props {
   userId: string;
@@ -75,7 +86,7 @@ export default function SubscriptionView({ userId }: Props) {
     );
   }
 
-  const planName = sub?.plan_name || "Starter";
+  const planName = PLAN_LABELS[sub?.plan_id ?? ""] || sub?.plan_name || "Besplatno";
   const status = sub?.status || "trial";
   const statusInfo = STATUS_LABELS[status] || STATUS_LABELS.trial;
 

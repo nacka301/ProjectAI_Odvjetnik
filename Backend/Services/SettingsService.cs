@@ -286,7 +286,7 @@ public sealed class SettingsService
                 return null;
 
             var safeId = Uri.EscapeDataString(profile.LawFirmId);
-            var url = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/subscriptions?law_firm_id=eq.{safeId}&status=in.(active,trial)&select=id,plan_name,status,valid_until,law_firm_id&order=created_at.desc&limit=1";
+            var url = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/tenant_subscriptions?law_firm_id=eq.{safeId}&status=in.(active,trial)&select=id,plan_id,status,valid_from,valid_until,price_eur,max_cases,max_invoices,ai_credits_limit,law_firm_id&order=created_at.desc&limit=1";
             var request = CreateRequest(HttpMethod.Get, url);
 
             var response = await _httpClient.SendAsync(request);
@@ -409,16 +409,25 @@ public sealed class SettingsService
     {
         try
         {
-            var url = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/subscriptions";
+            // The DB trigger auto_provision_free_tier already creates a Free row
+            // on law_firms INSERT.  This method is kept as a safety net — if the
+            // trigger row is missing we upsert a Free-tier subscription.
+            var url = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/tenant_subscriptions";
             var payload = JsonSerializer.Serialize(new
             {
                 law_firm_id = firmId,
-                plan_name = "Pro",
-                status = "active"
-                // valid_until defaults to now() + 1 year in DB
+                plan_id     = "free",
+                status      = "active",
+                price_eur   = 0,
+                max_cases   = 5,
+                max_invoices    = 3,
+                ai_credits_limit = 5
             }, JsonOpts);
 
             var request = CreateRequest(HttpMethod.Post, url, payload);
+            // Upsert — the trigger may have beaten us to it
+            request.Headers.Remove("Prefer");
+            request.Headers.Add("Prefer", "return=representation,resolution=merge-duplicates");
             var response = await _httpClient.SendAsync(request);
 
             if (!response.IsSuccessStatusCode)
@@ -428,7 +437,7 @@ public sealed class SettingsService
             }
             else
             {
-                _logger.LogInformation("Created default Pro subscription for firm {FirmId}", firmId);
+                _logger.LogInformation("Ensured Free-tier subscription for firm {FirmId}", firmId);
             }
         }
         catch (Exception ex)

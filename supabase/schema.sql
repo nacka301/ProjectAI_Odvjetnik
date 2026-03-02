@@ -890,3 +890,154 @@ CREATE TRIGGER firm_usage_updated_at
     BEFORE UPDATE ON firm_usage
     FOR EACH ROW
     EXECUTE FUNCTION update_firm_usage_updated_at();
+
+-- ========================================
+-- V48: Freemium Subscription Architecture
+-- Replaces the old flat `subscriptions` table with plan-aware
+-- `tenant_subscriptions` and `tenant_usage_stats`.
+--
+-- Tiers:
+--   free    (0 €)  — 5 cases, 3 invoices,   5 AI credits/mo
+--   starter (19 €) — unlimited,  unlimited,  0 AI credits
+--   pro     (39 €) — unlimited,  unlimited, 100 AI credits/mo
+-- ========================================
+
+-- ── tenant_subscriptions ──
+CREATE TABLE IF NOT EXISTS tenant_subscriptions (
+    id                  UUID            DEFAULT uuid_generate_v4() PRIMARY KEY,
+    law_firm_id         UUID            NOT NULL REFERENCES law_firms(id) ON DELETE CASCADE,
+    plan_id             TEXT            NOT NULL DEFAULT 'free',
+    status              TEXT            NOT NULL DEFAULT 'active',
+    billing_cycle       TEXT            NOT NULL DEFAULT 'monthly',
+    price_eur           NUMERIC(10,2)   NOT NULL DEFAULT 0,
+    max_cases           INTEGER         NOT NULL DEFAULT 5,
+    max_invoices        INTEGER         NOT NULL DEFAULT 3,
+    ai_credits_limit    INTEGER         NOT NULL DEFAULT 5,
+    valid_from          TIMESTAMPTZ     NOT NULL DEFAULT now(),
+    valid_until         TIMESTAMPTZ     NOT NULL DEFAULT (now() + interval '100 years'),
+    stripe_subscription_id TEXT,
+    created_at          TIMESTAMPTZ     DEFAULT now() NOT NULL,
+    updated_at          TIMESTAMPTZ     DEFAULT now() NOT NULL,
+
+    CONSTRAINT chk_plan_id CHECK (plan_id IN ('free', 'starter', 'pro')),
+    CONSTRAINT chk_status  CHECK (status  IN ('active', 'trial', 'canceled', 'expired', 'past_due'))
+);
+
+-- One active/trial subscription per firm
+CREATE UNIQUE INDEX IF NOT EXISTS idx_ts_active_firm
+    ON tenant_subscriptions (law_firm_id) WHERE status IN ('active', 'trial');
+
+CREATE INDEX IF NOT EXISTS idx_ts_law_firm    ON tenant_subscriptions (law_firm_id);
+CREATE INDEX IF NOT EXISTS idx_ts_plan        ON tenant_subscriptions (plan_id);
+CREATE INDEX IF NOT EXISTS idx_ts_status      ON tenant_subscriptions (status);
+
+ALTER TABLE tenant_subscriptions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "service_role_full_access" ON tenant_subscriptions;
+CREATE POLICY "service_role_full_access" ON tenant_subscriptions
+    FOR ALL USING (auth.role() = 'service_role');
+
+DROP POLICY IF EXISTS "users_own_tenant_sub" ON tenant_subscriptions;
+CREATE POLICY "users_own_tenant_sub" ON tenant_subscriptions
+    FOR SELECT USING (
+        law_firm_id IN (SELECT law_firm_id FROM user_profiles WHERE user_id = auth.uid())
+    );
+
+CREATE OR REPLACE FUNCTION update_tenant_subscriptions_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS tenant_subscriptions_updated_at ON tenant_subscriptions;
+CREATE TRIGGER tenant_subscriptions_updated_at
+    BEFORE UPDATE ON tenant_subscriptions
+    FOR EACH ROW
+    EXECUTE FUNCTION update_tenant_subscriptions_updated_at();
+
+-- ── tenant_usage_stats ──
+CREATE TABLE IF NOT EXISTS tenant_usage_stats (
+    id                  UUID            DEFAULT uuid_generate_v4() PRIMARY KEY,
+    law_firm_id         UUID            NOT NULL REFERENCES law_firms(id) ON DELETE CASCADE,
+    period_start        DATE            NOT NULL DEFAULT date_trunc('month', now())::date,
+    cases_used          INTEGER         NOT NULL DEFAULT 0,
+    invoices_used       INTEGER         NOT NULL DEFAULT 0,
+    ai_credits_used     INTEGER         NOT NULL DEFAULT 0,
+    created_at          TIMESTAMPTZ     DEFAULT now() NOT NULL,
+    updated_at          TIMESTAMPTZ     DEFAULT now() NOT NULL
+);
+
+-- One row per firm per billing period
+CREATE UNIQUE INDEX IF NOT EXISTS idx_tus_firm_period
+    ON tenant_usage_stats (law_firm_id, period_start);
+
+CREATE INDEX IF NOT EXISTS idx_tus_law_firm ON tenant_usage_stats (law_firm_id);
+
+ALTER TABLE tenant_usage_stats ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "service_role_full_access" ON tenant_usage_stats;
+CREATE POLICY "service_role_full_access" ON tenant_usage_stats
+    FOR ALL USING (auth.role() = 'service_role');
+
+DROP POLICY IF EXISTS "users_own_usage_stats" ON tenant_usage_stats;
+CREATE POLICY "users_own_usage_stats" ON tenant_usage_stats
+    FOR SELECT USING (
+        law_firm_id IN (SELECT law_firm_id FROM user_profiles WHERE user_id = auth.uid())
+    );
+
+CREATE OR REPLACE FUNCTION update_tenant_usage_stats_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS tenant_usage_stats_updated_at ON tenant_usage_stats;
+CREATE TRIGGER tenant_usage_stats_updated_at
+    BEFORE UPDATE ON tenant_usage_stats
+    FOR EACH ROW
+    EXECUTE FUNCTION update_tenant_usage_stats_updated_at();
+
+-- ── Auto-provision: When a law firm is created, insert Free tier + zeroed usage ──
+
+CREATE OR REPLACE FUNCTION auto_provision_free_tier()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Create free subscription
+    INSERT INTO tenant_subscriptions (law_firm_id, plan_id, status, price_eur, max_cases, max_invoices, ai_credits_limit)
+    VALUES (NEW.id, 'free', 'active', 0, 5, 3, 5)
+    ON CONFLICT DO NOTHING;
+
+    -- Create zeroed usage for current month
+    INSERT INTO tenant_usage_stats (law_firm_id, period_start, cases_used, invoices_used, ai_credits_used)
+    VALUES (NEW.id, date_trunc('month', now())::date, 0, 0, 0)
+    ON CONFLICT DO NOTHING;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS trg_law_firm_provision ON law_firms;
+CREATE TRIGGER trg_law_firm_provision
+    AFTER INSERT ON law_firms
+    FOR EACH ROW
+    EXECUTE FUNCTION auto_provision_free_tier();
+
+-- ── Monthly usage reset (call via pg_cron or Supabase scheduled function) ──
+
+CREATE OR REPLACE FUNCTION reset_monthly_usage()
+RETURNS void AS $$
+DECLARE
+    current_period DATE := date_trunc('month', now())::date;
+BEGIN
+    -- Ensure every active firm has a row for the new month
+    INSERT INTO tenant_usage_stats (law_firm_id, period_start, cases_used, invoices_used, ai_credits_used)
+    SELECT ts.law_firm_id, current_period, 0, 0, 0
+    FROM   tenant_subscriptions ts
+    WHERE  ts.status IN ('active', 'trial')
+    ON CONFLICT (law_firm_id, period_start) DO NOTHING;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;

@@ -107,17 +107,26 @@ function timeAgo(iso: string | null): string {
 function PlanBadge({ plan }: { plan: string | null }) {
   if (!plan) return <span className="text-xs text-slate-400">—</span>;
   const colors: Record<string, string> = {
+    free: "bg-slate-100 text-slate-600",
+    starter: "bg-blue-100 text-blue-700",
+    pro: "bg-violet-100 text-violet-700",
+    // legacy capitalised values (back-compat)
     Free: "bg-slate-100 text-slate-600",
     Starter: "bg-blue-100 text-blue-700",
     Pro: "bg-violet-100 text-violet-700",
     Premium: "bg-amber-100 text-amber-700",
     Enterprise: "bg-emerald-100 text-emerald-700",
   };
+  const labels: Record<string, string> = {
+    free: "Besplatno",
+    starter: "Starter",
+    pro: "Pro",
+  };
   return (
     <span
       className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${colors[plan] || "bg-slate-100 text-slate-600"}`}
     >
-      {plan}
+      {labels[plan] || plan}
     </span>
   );
 }
