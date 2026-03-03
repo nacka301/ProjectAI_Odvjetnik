@@ -30,6 +30,7 @@ import { getRecentActivity, type ActivityItem, type ActivityType } from "@/lib/s
 import AppHeader from "@/components/AppHeader";
 import { useUserId } from "@/lib/useUserId";
 import { useCredits } from "@/lib/useCredits";
+import { useSubscription } from "@/lib/useSubscription";
 
 // ── Helpers ──
 
@@ -291,6 +292,7 @@ export default function Dashboard() {
   const router = useRouter();
   const userId = useUserId();
   const credits = useCredits(userId);
+  const subscription = useSubscription();
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [bannerDismissed, setBannerDismissed] = useState(false);
@@ -662,6 +664,107 @@ export default function Dashboard() {
 
           {/* ── RIGHT: Stats ── */}
           <div className="space-y-4">
+            {/* ── Subscription Plan Card ── */}
+            {!subscription.loading && (
+              <Link href="/postavke" className="block">
+                <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3 hover:border-slate-300 hover:shadow-sm transition">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-[11px] text-slate-400 uppercase tracking-wider font-medium">
+                      Vaš Plan
+                    </h3>
+                    <span
+                      className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                        subscription.planId === "pro"
+                          ? "bg-amber-50 text-amber-700 border-amber-200"
+                          : subscription.planId === "starter"
+                            ? "bg-blue-50 text-blue-700 border-blue-200"
+                            : "bg-slate-50 text-slate-500 border-slate-200"
+                      }`}
+                    >
+                      {subscription.planId === "pro" && <Sparkles className="h-2.5 w-2.5" />}
+                      {subscription.isActive ? "Aktivno" : "Neaktivno"}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
+                      style={{ background: "#1B2A4A" }}
+                    >
+                      <span className="text-sm font-bold" style={{ color: "#C9A84C" }}>
+                        {subscription.planId === "pro" ? "P" : subscription.planId === "starter" ? "S" : "F"}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="text-base font-bold text-slate-900">
+                        PravoTek {subscription.planLabel}
+                      </p>
+                      {subscription.data?.ai_credits_limit != null && subscription.data.ai_credits_limit > 0 && (
+                        <p className="text-[11px] text-slate-400">
+                          {subscription.data.ai_credits_limit} AI kredita/mj
+                          {subscription.data.max_cases != null && subscription.data.max_cases > 0 && (
+                            <> · {subscription.data.max_cases === -1 ? "∞" : subscription.data.max_cases} predmeta</>
+                          )}
+                        </p>
+                      )}
+                      {(!subscription.data?.ai_credits_limit || subscription.data.ai_credits_limit === 0) && (
+                        <p className="text-[11px] text-slate-400">
+                          {subscription.data?.max_cases === -1 ? "Neograničeno predmeta" : `${subscription.data?.max_cases ?? 5} predmeta`}
+                          {subscription.data?.max_invoices === -1 && " · ∞ računa"}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* AI Token mini progress (if plan has credits) */}
+                  {!credits.loading && credits.total > 0 && (
+                    <div className="space-y-1.5 pt-1">
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="text-slate-400 flex items-center gap-1">
+                          <Zap className="h-3 w-3 text-amber-400" />
+                          AI Tokeni
+                        </span>
+                        <span className="font-semibold tabular-nums text-slate-600">
+                          {credits.remaining} / {credits.total}
+                        </span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{
+                            width: `${credits.total > 0 ? Math.min(100, Math.round((credits.used / credits.total) * 100)) : 0}%`,
+                            background:
+                              credits.remaining === 0
+                                ? "#ef4444"
+                                : credits.used / credits.total >= 0.9
+                                  ? "#f59e0b"
+                                  : "#1B2A4A",
+                          }}
+                        />
+                      </div>
+                      {credits.remaining === 0 && (
+                        <p className="text-[10px] text-red-500 font-medium">
+                          Limit dosegnut — nadogradite plan za više kredita
+                        </p>
+                      )}
+                      {credits.remaining > 0 && credits.used / credits.total >= 0.85 && (
+                        <p className="text-[10px] text-amber-600">
+                          Preostalo samo {credits.remaining} kredita
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </Link>
+            )}
+            {subscription.loading && (
+              <div className="bg-white rounded-xl border border-slate-200 p-4">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-slate-300 animate-pulse" />
+                  <span className="text-xs text-slate-400">Učitavanje plana…</span>
+                </div>
+              </div>
+            )}
             {/* Quick Stats */}
             {!loading && activity.length > 0 && (
               <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
