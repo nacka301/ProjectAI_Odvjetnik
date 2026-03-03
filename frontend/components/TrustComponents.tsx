@@ -156,6 +156,20 @@ export function SecurityFooter() {
             Analiza ne predstavlja pravni savjet sukladno čl. 1. Zakona o odvjetništvu (NN 9/94, 18/11).
             Obrada osobnih podataka sukladno Uredbi (EU) 2016/679 (GDPR). Svi pozivi prema analitičkim servisima koriste Zero-Data Retention politiku — vaši tekstovi se ne pohranjuju niti koriste za treniranje modela.
           </p>
+          {/* Legal links */}
+          <div className="flex items-center justify-center gap-1 text-xs text-slate-400">
+            <a href="/uvjeti" className="hover:text-slate-600 transition underline underline-offset-2">
+              Uvjeti korištenja
+            </a>
+            <span>·</span>
+            <a href="/privatnost" className="hover:text-slate-600 transition underline underline-offset-2">
+              Politika privatnosti
+            </a>
+            <span>·</span>
+            <a href="/dpa" className="hover:text-slate-600 transition underline underline-offset-2">
+              DPA
+            </a>
+          </div>
           <p className="text-xs text-slate-400">
             © {new Date().getFullYear()} PravoTek. Sva prava pridržana.
           </p>
