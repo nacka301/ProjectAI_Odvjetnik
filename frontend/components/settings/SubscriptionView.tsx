@@ -3,13 +3,7 @@
 import { useEffect, useState } from "react";
 import { Loader2, CreditCard, Download, CheckCircle2, Calendar } from "lucide-react";
 import { API_BASE } from "@/lib/api";
-
-function apiHeaders(): Record<string, string> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  const apiKey = process.env.NEXT_PUBLIC_API_KEY;
-  if (apiKey) headers["X-API-Key"] = apiKey;
-  return headers;
-}
+import { useAuth } from "@/lib/useAuth";
 
 interface SubscriptionData {
   plan_id: string;
@@ -52,7 +46,8 @@ function formatDate(iso: string | null): string {
   }
 }
 
-export default function SubscriptionView({ userId }: Props) {
+export default function SubscriptionView({ userId: _propUserId }: Props) {
+  const { userId, authHeaders } = useAuth();
   const [sub, setSub] = useState<SubscriptionData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -64,8 +59,8 @@ export default function SubscriptionView({ userId }: Props) {
     (async () => {
       try {
         const res = await fetch(
-          `${API_BASE}/api/settings/subscription?userId=${encodeURIComponent(userId)}`,
-          { headers: apiHeaders() }
+          `${API_BASE}/api/settings/subscription`,
+          { headers: { ...authHeaders, "Content-Type": "application/json" } }
         );
         if (res.ok) {
           setSub(await res.json());
@@ -76,7 +71,7 @@ export default function SubscriptionView({ userId }: Props) {
         setLoading(false);
       }
     })();
-  }, [userId]);
+  }, [userId, authHeaders]);
 
   if (loading) {
     return (

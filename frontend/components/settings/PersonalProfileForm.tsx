@@ -3,20 +3,15 @@
 import { useEffect, useState } from "react";
 import { Loader2, Save, User, Phone, Mail } from "lucide-react";
 import { API_BASE } from "@/lib/api";
-
-function apiHeaders(): Record<string, string> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  const apiKey = process.env.NEXT_PUBLIC_API_KEY;
-  if (apiKey) headers["X-API-Key"] = apiKey;
-  return headers;
-}
+import { useAuth } from "@/lib/useAuth";
 
 interface Props {
   userId: string;
   userEmail: string | null;
 }
 
-export default function PersonalProfileForm({ userId, userEmail }: Props) {
+export default function PersonalProfileForm({ userId: _propUserId, userEmail }: Props) {
+  const { userId, authHeaders } = useAuth();
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(true);
@@ -33,8 +28,8 @@ export default function PersonalProfileForm({ userId, userEmail }: Props) {
     (async () => {
       try {
         const res = await fetch(
-          `${API_BASE}/api/settings/profile?userId=${encodeURIComponent(userId)}`,
-          { headers: apiHeaders() }
+          `${API_BASE}/api/settings/profile`,
+          { headers: { ...authHeaders, "Content-Type": "application/json" } }
         );
         if (res.ok) {
           const data = await res.json();
@@ -51,7 +46,7 @@ export default function PersonalProfileForm({ userId, userEmail }: Props) {
         setLoading(false);
       }
     })();
-  }, [userId]);
+  }, [userId, authHeaders]);
 
   // ── Save profile ──
   const handleSave = async (e: React.FormEvent) => {
@@ -68,9 +63,8 @@ export default function PersonalProfileForm({ userId, userEmail }: Props) {
     try {
       const res = await fetch(`${API_BASE}/api/settings/profile`, {
         method: "PUT",
-        headers: apiHeaders(),
+        headers: { ...authHeaders, "Content-Type": "application/json" },
         body: JSON.stringify({
-          user_id: userId,
           full_name: fullName.trim(),
           phone_number: phone.trim() || null,
         }),

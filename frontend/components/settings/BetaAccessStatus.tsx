@@ -3,13 +3,7 @@
 import { useEffect, useState } from "react";
 import { Loader2, Zap, AlertTriangle, Mail, RefreshCw } from "lucide-react";
 import { API_BASE } from "@/lib/api";
-
-function apiHeaders(): Record<string, string> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  const apiKey = process.env.NEXT_PUBLIC_API_KEY;
-  if (apiKey) headers["X-API-Key"] = apiKey;
-  return headers;
-}
+import { useAuth } from "@/lib/useAuth";
 
 interface UsageRow {
   id: string;
@@ -45,7 +39,8 @@ function safeNum(val: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-export default function BetaAccessStatus({ userId }: Props) {
+export default function BetaAccessStatus({ userId: _propUserId }: Props) {
+  const { userId, authHeaders } = useAuth();
   const [usage, setUsage] = useState<UsageRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -59,8 +54,8 @@ export default function BetaAccessStatus({ userId }: Props) {
     setLoading(true);
     try {
       const res = await fetch(
-        `${API_BASE}/api/settings/credits?userId=${encodeURIComponent(userId)}`,
-        { headers: apiHeaders() }
+        `${API_BASE}/api/settings/credits`,
+        { headers: { ...authHeaders, "Content-Type": "application/json" } }
       );
       if (res.ok) {
         const data = await res.json();
@@ -81,7 +76,7 @@ export default function BetaAccessStatus({ userId }: Props) {
   useEffect(() => {
     fetchCredits();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]);
+  }, [userId, authHeaders]);
 
   if (loading) {
     return (

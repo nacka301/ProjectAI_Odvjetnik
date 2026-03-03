@@ -41,10 +41,12 @@ public class TroskovnikController : ControllerBase
         var result = _service.Izracunaj(request);
 
         // If a case id was provided, attempt to enrich the response with case metadata (sud, broj predmeta)
+        // SECURITY: Only enrich if the case belongs to the authenticated user
         if (!string.IsNullOrEmpty(request.CaseId))
         {
+            var userId = GetUserId();
             var cas = await _clientCaseService.GetCaseByIdAsync(request.CaseId);
-            if (cas != null)
+            if (cas != null && cas.UserId == userId)
             {
                 result.Sud = cas.Sud;
                 result.BrojPredmeta = cas.BrojPredmeta;
@@ -84,6 +86,16 @@ public class TroskovnikController : ControllerBase
 
 
         var result = _service.Izracunaj(request);
+
+        // ═════════════════════════════════════════════════════════
+        //  SECURITY: Validate CaseId ownership before linking
+        // ═════════════════════════════════════════════════════════
+        if (!string.IsNullOrWhiteSpace(request.CaseId))
+        {
+            var cas = await _clientCaseService.GetCaseByIdAsync(request.CaseId);
+            if (cas == null || cas.UserId != userId)
+                return StatusCode(403, new { error = "Nemate pristup odabranom predmetu." });
+        }
 
         // ═════════════════════════════════════════════════════════
         //  CLIENT UPSERT LOGIC

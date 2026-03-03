@@ -3,19 +3,14 @@
 import { useEffect, useState } from "react";
 import { Loader2, Save, Building2, Hash, MapPin, Landmark } from "lucide-react";
 import { API_BASE } from "@/lib/api";
-
-function apiHeaders(): Record<string, string> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  const apiKey = process.env.NEXT_PUBLIC_API_KEY;
-  if (apiKey) headers["X-API-Key"] = apiKey;
-  return headers;
-}
+import { useAuth } from "@/lib/useAuth";
 
 interface Props {
   userId: string;
 }
 
-export default function LawFirmForm({ userId }: Props) {
+export default function LawFirmForm({ userId: _propUserId }: Props) {
+  const { userId, authHeaders } = useAuth();
   const [name, setName] = useState("");
   const [oib, setOib] = useState("");
   const [address, setAddress] = useState("");
@@ -34,8 +29,8 @@ export default function LawFirmForm({ userId }: Props) {
     (async () => {
       try {
         const res = await fetch(
-          `${API_BASE}/api/settings/firm?userId=${encodeURIComponent(userId)}`,
-          { headers: apiHeaders() }
+          `${API_BASE}/api/settings/firm`,
+          { headers: { ...authHeaders, "Content-Type": "application/json" } }
         );
         if (res.ok) {
           const data = await res.json();
@@ -58,7 +53,7 @@ export default function LawFirmForm({ userId }: Props) {
         setLoading(false);
       }
     })();
-  }, [userId]);
+  }, [userId, authHeaders]);
 
   // ── Save firm ──
   const handleSave = async (e: React.FormEvent) => {
@@ -80,9 +75,8 @@ export default function LawFirmForm({ userId }: Props) {
     try {
       const res = await fetch(`${API_BASE}/api/settings/firm`, {
         method: "PUT",
-        headers: apiHeaders(),
+        headers: { ...authHeaders, "Content-Type": "application/json" },
         body: JSON.stringify({
-          user_id: userId,
           name: name.trim(),
           oib: oib.trim() || null,
           address: address.trim() || null,

@@ -2,13 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { API_BASE } from "@/lib/api";
-
-function apiHeaders(): Record<string, string> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  const apiKey = process.env.NEXT_PUBLIC_API_KEY;
-  if (apiKey) headers["X-API-Key"] = apiKey;
-  return headers;
-}
+import { useAuth } from "@/lib/useAuth";
 
 export interface CreditRow {
   id: string;
@@ -40,14 +34,16 @@ function safeNum(val: unknown): number {
  *
  * Returns a summary object with totals, per-module rows, loading, and error state.
  * Pass `userId` from Supabase auth — when null/undefined the fetch is skipped.
+ * Auth headers (Bearer token) are obtained automatically from useAuth().
  */
 export function useCredits(userId: string | null): CreditSummary {
+  const { authHeaders } = useAuth();
   const [rows, setRows] = useState<CreditRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!userId) {
+    if (!userId || !authHeaders.Authorization) {
       setLoading(false);
       return;
     }
@@ -58,14 +54,13 @@ export function useCredits(userId: string | null): CreditSummary {
       setError(null);
       try {
         const res = await fetch(
-          `${API_BASE}/api/settings/credits?userId=${encodeURIComponent(userId)}`,
-          { headers: apiHeaders() }
+          `${API_BASE}/api/settings/credits`,
+          { headers: { ...authHeaders, "Content-Type": "application/json" } }
         );
         if (cancelled) return;
 
         if (res.ok) {
           const data = await res.json();
-          console.log("Token Data Received:", data);
           setRows(Array.isArray(data) ? data : []);
         } else {
           console.error("Credits fetch failed:", res.status);
@@ -82,7 +77,7 @@ export function useCredits(userId: string | null): CreditSummary {
     })();
 
     return () => { cancelled = true; };
-  }, [userId]);
+  }, [userId, authHeaders]);
 
   const total = rows.reduce((s, r) => s + safeNum(r.max_credits), 0);
   const used = rows.reduce((s, r) => s + safeNum(r.used_credits), 0);

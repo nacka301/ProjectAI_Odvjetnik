@@ -165,6 +165,9 @@ builder.Services.AddScoped<InvoiceService>();
 builder.Services.AddScoped<TranslationService>();
 builder.Services.AddHttpClient<EmailService>();
 
+// ── Resend transactional email (MailKit SMTP → smtp.resend.com:465) ──
+builder.Services.AddSingleton<IEmailService, ResendEmailService>();
+
 // ── Auth registration (MailKit email + Supabase Admin API) ──
 builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection(SmtpSettings.SectionName));
 builder.Services.AddSingleton<IAuthEmailService, AuthEmailService>();

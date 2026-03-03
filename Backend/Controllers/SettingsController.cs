@@ -32,14 +32,19 @@ public class SettingsController : ControllerBase
         _logger = logger;
     }
 
+    // SECURITY: Verified user_id extracted from Supabase JWT by SupabaseJwtMiddleware
+    private string? GetUserId() => HttpContext.Items["AuthUserId"] as string;
+
     // ─────────────────────────────────────────────────────────
-    //  GET /api/settings/profile?userId=...
+    //  GET /api/settings/profile
+    //  userId derived from JWT — query param ignored.
     // ─────────────────────────────────────────────────────────
     [HttpGet("profile")]
-    public async Task<IActionResult> GetProfile([FromQuery] string userId)
+    public async Task<IActionResult> GetProfile()
     {
+        var userId = GetUserId();
         if (string.IsNullOrWhiteSpace(userId))
-            return BadRequest(new { error = "userId je obavezan." });
+            return Unauthorized(new { error = "Neautorizirani pristup." });
 
         try
         {
@@ -58,13 +63,18 @@ public class SettingsController : ControllerBase
 
     // ─────────────────────────────────────────────────────────
     //  PUT /api/settings/profile
-    //  Body: { "user_id": "...", "full_name": "...", "phone_number": "..." }
+    //  Body: { "full_name": "...", "phone_number": "..." }
+    //  userId derived from JWT — body user_id ignored.
     // ─────────────────────────────────────────────────────────
     [HttpPut("profile")]
     public async Task<IActionResult> UpdateProfile([FromBody] ProfileUpdateRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request?.UserId))
-            return BadRequest(new { error = "userId je obavezan." });
+        var userId = GetUserId();
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized(new { error = "Neautorizirani pristup." });
+
+        // Override body userId with JWT-verified identity
+        request.UserId = userId;
 
         if (string.IsNullOrWhiteSpace(request.FullName))
             return BadRequest(new { error = "Ime i prezime je obavezno." });
@@ -85,13 +95,15 @@ public class SettingsController : ControllerBase
     }
 
     // ─────────────────────────────────────────────────────────
-    //  GET /api/settings/firm?userId=...
+    //  GET /api/settings/firm
+    //  userId derived from JWT — query param ignored.
     // ─────────────────────────────────────────────────────────
     [HttpGet("firm")]
-    public async Task<IActionResult> GetFirm([FromQuery] string userId)
+    public async Task<IActionResult> GetFirm()
     {
+        var userId = GetUserId();
         if (string.IsNullOrWhiteSpace(userId))
-            return BadRequest(new { error = "userId je obavezan." });
+            return Unauthorized(new { error = "Neautorizirani pristup." });
 
         try
         {
@@ -110,13 +122,18 @@ public class SettingsController : ControllerBase
 
     // ─────────────────────────────────────────────────────────
     //  PUT /api/settings/firm
-    //  Body: { "user_id": "...", "name": "...", "oib": "...", "address": "...", "iban": "..." }
+    //  Body: { "name": "...", "oib": "...", "address": "...", "iban": "..." }
+    //  userId derived from JWT — body user_id ignored.
     // ─────────────────────────────────────────────────────────
     [HttpPut("firm")]
     public async Task<IActionResult> UpdateFirm([FromBody] LawFirmUpdateRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request?.UserId))
-            return BadRequest(new { error = "userId je obavezan." });
+        var userId = GetUserId();
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized(new { error = "Neautorizirani pristup." });
+
+        // Override body userId with JWT-verified identity
+        request.UserId = userId;
 
         if (string.IsNullOrWhiteSpace(request.Name))
             return BadRequest(new { error = "Naziv ureda je obavezan." });
@@ -145,13 +162,15 @@ public class SettingsController : ControllerBase
     }
 
     // ─────────────────────────────────────────────────────────
-    //  GET /api/settings/subscription?userId=...
+    //  GET /api/settings/subscription
+    //  userId derived from JWT — query param ignored.
     // ─────────────────────────────────────────────────────────
     [HttpGet("subscription")]
-    public async Task<IActionResult> GetSubscription([FromQuery] string userId)
+    public async Task<IActionResult> GetSubscription()
     {
+        var userId = GetUserId();
         if (string.IsNullOrWhiteSpace(userId))
-            return BadRequest(new { error = "userId je obavezan." });
+            return Unauthorized(new { error = "Neautorizirani pristup." });
 
         try
         {
@@ -170,14 +189,19 @@ public class SettingsController : ControllerBase
 
     // ─────────────────────────────────────────────────────────
     //  POST /api/settings/register-firm
-    //  Body: { "user_id": "...", "full_name": "...", "firm_name": "...", "firm_oib": "..." }
-    //  Called after Supabase Auth signup to create the firm + profile + subscription.
+    //  Body: { "full_name": "...", "firm_name": "...", "firm_oib": "..." }
+    //  Called after Supabase Auth signup — userId from JWT (fallback to body for signup edge case).
     // ─────────────────────────────────────────────────────────
     [HttpPost("register-firm")]
     public async Task<IActionResult> RegisterFirm([FromBody] RegisterFirmRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request?.UserId))
-            return BadRequest(new { error = "userId je obavezan." });
+        // Prefer JWT userId; fall back to body for signup edge case when JWT might not be set yet
+        var userId = GetUserId() ?? request?.UserId;
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized(new { error = "Neautorizirani pristup." });
+
+        // Override body userId with resolved identity
+        request!.UserId = userId;
 
         if (string.IsNullOrWhiteSpace(request.FirmName))
             return BadRequest(new { error = "Naziv ureda je obavezan." });
@@ -198,14 +222,16 @@ public class SettingsController : ControllerBase
     }
 
     // ─────────────────────────────────────────────────────────
-    //  GET /api/settings/credits?userId=...
+    //  GET /api/settings/credits
     //  Returns all module credit usage rows for the user's firm.
+    //  userId derived from JWT — query param ignored.
     // ─────────────────────────────────────────────────────────
     [HttpGet("credits")]
-    public async Task<IActionResult> GetCredits([FromQuery] string userId)
+    public async Task<IActionResult> GetCredits()
     {
+        var userId = GetUserId();
         if (string.IsNullOrWhiteSpace(userId))
-            return BadRequest(new { error = "userId je obavezan." });
+            return Unauthorized(new { error = "Neautorizirani pristup." });
 
         try
         {
@@ -221,21 +247,23 @@ public class SettingsController : ControllerBase
 
     // ─────────────────────────────────────────────────────────
     //  POST /api/settings/consume-credit
-    //  Body: { "user_id": "...", "module_name": "..." }
+    //  Body: { "module_name": "..." }
+    //  userId derived from JWT — body user_id ignored.
     //  Consumes 1 credit. Returns 403 if limit reached.
     // ─────────────────────────────────────────────────────────
     [HttpPost("consume-credit")]
     public async Task<IActionResult> ConsumeCredit([FromBody] CreditConsumeRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request?.UserId))
-            return BadRequest(new { error = "userId je obavezan." });
+        var userId = GetUserId();
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized(new { error = "Neautorizirani pristup." });
 
-        if (string.IsNullOrWhiteSpace(request.ModuleName))
+        if (string.IsNullOrWhiteSpace(request?.ModuleName))
             return BadRequest(new { error = "moduleName je obavezan." });
 
         try
         {
-            var result = await _creditService.ConsumeCreditAsync(request.UserId, request.ModuleName);
+            var result = await _creditService.ConsumeCreditAsync(userId, request.ModuleName);
 
             if (!result.Allowed)
                 return StatusCode(403, new { error = result.Message });
