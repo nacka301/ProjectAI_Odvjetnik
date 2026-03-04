@@ -412,8 +412,8 @@ export default function RegisterPage() {
               />
               <span className="text-xs text-slate-500 leading-relaxed">
                 Prihvaćam{" "}
-                <span className="font-medium" style={{ color: "var(--auth-navy)" }}>Uvjete korištenja</span> i{" "}
-                <span className="font-medium" style={{ color: "var(--auth-navy)" }}>Politiku privatnosti</span>
+                <a href="/uvjeti" target="_blank" className="font-medium underline underline-offset-2 hover:opacity-80 transition" style={{ color: "var(--auth-navy)" }}>Uvjete korištenja</a> i{" "}
+                <a href="/privatnost" target="_blank" className="font-medium underline underline-offset-2 hover:opacity-80 transition" style={{ color: "var(--auth-navy)" }}>Politiku privatnosti</a>
               </span>
             </label>
 

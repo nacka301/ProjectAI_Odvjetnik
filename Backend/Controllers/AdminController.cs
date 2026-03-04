@@ -145,10 +145,10 @@ public class AdminController : ControllerBase
                 _logger.LogWarning("Auth admin/users call failed ({Status}): {Body}", authRes.StatusCode, authBody);
             }
 
-            // 2) Fetch user_profiles with embedded law_firms → subscriptions + firm_usage
+            // 2) Fetch user_profiles with embedded law_firms → subscriptions + firm_usage + tenant_usage_stats
             var profilesUrl = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/user_profiles" +
                 "?select=user_id,full_name,phone_number,role,totp_enabled,created_at," +
-                "law_firms(id,name,oib,tenant_subscriptions(plan_id,status,valid_until,price_eur,max_cases,max_invoices,ai_credits_limit),firm_usage(module_name,used_credits,max_credits))";
+                "law_firms(id,name,oib,tenant_subscriptions(plan_id,status,valid_until,price_eur,max_cases,max_invoices,ai_credits_limit),firm_usage(module_name,used_credits,max_credits),tenant_usage_stats(ai_credits_used,period_start))";
             var profilesReq = CreateRequest(HttpMethod.Get, profilesUrl);
             var profilesRes = await _httpClient.SendAsync(profilesReq);
             var profilesBody = await profilesRes.Content.ReadAsStringAsync();
@@ -209,6 +209,32 @@ public class AdminController : ControllerBase
                             {
                                 dto.UsedCredits += u.TryGetProperty("used_credits", out var uc) ? uc.GetInt32() : 0;
                                 dto.MaxCredits += u.TryGetProperty("max_credits", out var mc) ? mc.GetInt32() : 0;
+                            }
+                        }
+
+                        // Fallback: when no firm_usage rows exist, derive credits
+                        // from the subscription's ai_credits_limit + tenant_usage_stats
+                        if (dto.MaxCredits == 0 && firm.TryGetProperty("tenant_subscriptions", out var subsForCredits)
+                            && subsForCredits.ValueKind == JsonValueKind.Array)
+                        {
+                            foreach (var s in subsForCredits.EnumerateArray())
+                            {
+                                var st = s.TryGetProperty("status", out var stVal) ? stVal.GetString() : "";
+                                if (st == "active" || st == "trial")
+                                {
+                                    dto.MaxCredits = s.TryGetProperty("ai_credits_limit", out var al) ? al.GetInt32() : 0;
+                                    break;
+                                }
+                            }
+
+                            // Read actual AI usage from tenant_usage_stats
+                            if (dto.MaxCredits > 0 && firm.TryGetProperty("tenant_usage_stats", out var usageStats)
+                                && usageStats.ValueKind == JsonValueKind.Array)
+                            {
+                                foreach (var us in usageStats.EnumerateArray())
+                                {
+                                    dto.UsedCredits += us.TryGetProperty("ai_credits_used", out var au) ? au.GetInt32() : 0;
+                                }
                             }
                         }
                     }

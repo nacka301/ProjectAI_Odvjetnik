@@ -189,12 +189,89 @@ public sealed class CreditService
                 return new List<FirmUsageResponse>();
             }
 
-            return JsonSerializer.Deserialize<List<FirmUsageResponse>>(body, JsonOpts)
+            var rows = JsonSerializer.Deserialize<List<FirmUsageResponse>>(body, JsonOpts)
                 ?? new List<FirmUsageResponse>();
+
+            // If no firm_usage rows exist yet (user never used an AI module),
+            // synthesi a "global" row from tenant_subscriptions + tenant_usage_stats
+            // so the frontend always has credit data to display.
+            if (rows.Count == 0)
+            {
+                rows = await SynthesizeFromSubscriptionAsync(profile.LawFirmId);
+            }
+
+            return rows;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error fetching firm usage for user {UserId}", userId);
+            return new List<FirmUsageResponse>();
+        }
+    }
+
+    /// <summary>
+    /// When no firm_usage rows exist, build a synthetic summary row
+    /// from tenant_subscriptions.ai_credits_limit + tenant_usage_stats.ai_credits_used.
+    /// </summary>
+    private async Task<List<FirmUsageResponse>> SynthesizeFromSubscriptionAsync(string firmId)
+    {
+        try
+        {
+            var safeFirmId = Uri.EscapeDataString(firmId);
+
+            // 1) Subscription → ai_credits_limit
+            var subUrl = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/tenant_subscriptions" +
+                         $"?law_firm_id=eq.{safeFirmId}&status=in.(active,trial)" +
+                         "&select=ai_credits_limit&order=created_at.desc&limit=1";
+            var subReq = CreateRequest(HttpMethod.Get, subUrl);
+            var subRes = await _httpClient.SendAsync(subReq);
+            if (!subRes.IsSuccessStatusCode) return new List<FirmUsageResponse>();
+
+            var subBody = await subRes.Content.ReadAsStringAsync();
+            using var subDoc = JsonDocument.Parse(subBody);
+            int aiLimit = SubscriptionPlans.FreeAiCreditsPerMonth;
+            if (subDoc.RootElement.GetArrayLength() > 0)
+            {
+                var s = subDoc.RootElement[0];
+                aiLimit = s.TryGetProperty("ai_credits_limit", out var a) ? a.GetInt32() : aiLimit;
+            }
+
+            // 2) Usage stats this month → ai_credits_used
+            var period = DateTime.UtcNow.ToString("yyyy-MM-01");
+            var usageUrl = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/tenant_usage_stats" +
+                           $"?law_firm_id=eq.{safeFirmId}&period_start=eq.{period}" +
+                           "&select=ai_credits_used&limit=1";
+            var usageReq = CreateRequest(HttpMethod.Get, usageUrl);
+            var usageRes = await _httpClient.SendAsync(usageReq);
+
+            int aiUsed = 0;
+            if (usageRes.IsSuccessStatusCode)
+            {
+                var usageBody = await usageRes.Content.ReadAsStringAsync();
+                using var usageDoc = JsonDocument.Parse(usageBody);
+                if (usageDoc.RootElement.GetArrayLength() > 0)
+                {
+                    var u = usageDoc.RootElement[0];
+                    aiUsed = u.TryGetProperty("ai_credits_used", out var au) ? au.GetInt32() : 0;
+                }
+            }
+
+            // Return a synthetic "global" row
+            return new List<FirmUsageResponse>
+            {
+                new()
+                {
+                    Id = "00000000-0000-0000-0000-000000000000",
+                    LawFirmId = firmId,
+                    ModuleName = "global",
+                    UsedCredits = aiUsed,
+                    MaxCredits = aiLimit,
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "SynthesizeFromSubscription failed for firm {FirmId}", firmId);
             return new List<FirmUsageResponse>();
         }
     }

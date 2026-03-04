@@ -45,8 +45,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="hr">
+    <html lang="hr" suppressHydrationWarning>
       <body
+        suppressHydrationWarning
         className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} antialiased overflow-x-hidden min-h-screen flex flex-col`}
       >
         <AutoLogoutProvider>
