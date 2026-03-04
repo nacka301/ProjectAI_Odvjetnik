@@ -35,6 +35,9 @@ function safeNum(val: unknown): number {
  * Returns a summary object with totals, per-module rows, loading, and error state.
  * Pass `userId` from Supabase auth — when null/undefined the fetch is skipped.
  * Auth headers (Bearer token) are obtained automatically from useAuth().
+ *
+ * When firm_usage is empty (new user), falls back to the subscription's
+ * ai_credits_limit so the header/dashboard can still show the allocation.
  */
 export function useCredits(userId: string | null): CreditSummary {
   const { authHeaders } = useAuth();
@@ -53,15 +56,39 @@ export function useCredits(userId: string | null): CreditSummary {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(
-          `${API_BASE}/api/settings/credits`,
-          { headers: { ...authHeaders, "Content-Type": "application/json" } }
-        );
+        const hdrs = { ...authHeaders, "Content-Type": "application/json" };
+
+        const res = await fetch(`${API_BASE}/api/settings/credits`, { headers: hdrs });
         if (cancelled) return;
 
         if (res.ok) {
           const data = await res.json();
-          setRows(Array.isArray(data) ? data : []);
+          const arr: CreditRow[] = Array.isArray(data) ? data : [];
+
+          // If firm_usage returned nothing, fall back to subscription ai_credits_limit
+          if (arr.length === 0) {
+            try {
+              const subRes = await fetch(`${API_BASE}/api/settings/subscription`, { headers: hdrs });
+              if (!cancelled && subRes.ok) {
+                const sub = await subRes.json();
+                const limit = safeNum(sub?.ai_credits_limit);
+                if (limit > 0) {
+                  arr.push({
+                    id: "subscription-fallback",
+                    law_firm_id: sub?.law_firm_id ?? "",
+                    module_name: "global",
+                    used_credits: 0,
+                    max_credits: limit,
+                    reset_date: null,
+                  });
+                }
+              }
+            } catch {
+              // Subscription fallback is best-effort; ignore errors
+            }
+          }
+
+          if (!cancelled) setRows(arr);
         } else {
           console.error("Credits fetch failed:", res.status);
           setError(`Greška ${res.status}`);

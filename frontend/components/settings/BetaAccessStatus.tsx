@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Loader2, Zap, AlertTriangle, Mail, RefreshCw } from "lucide-react";
 import { API_BASE } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
+import { useSubscription } from "@/lib/useSubscription";
 
 interface UsageRow {
   id: string;
@@ -20,12 +21,14 @@ interface Props {
 
 // ── Human-readable module labels ──
 const MODULE_LABELS: Record<string, string> = {
+  global: "AI Krediti (ukupno)",
   contract_analysis: "Analiza Ugovora",
   market_eval: "Tržišna Procjena",
   zk_analysis: "ZK Izvadak",
   chronology: "Kronologija Spisa",
   translation: "Sudski Tumač",
   invoice: "e-Račun / Troškovnik",
+  legal_strategy: "Sudska Praksa",
 };
 
 function getModuleLabel(name: string): string {
@@ -41,6 +44,7 @@ function safeNum(val: unknown): number {
 
 export default function BetaAccessStatus({ userId: _propUserId }: Props) {
   const { userId, authHeaders } = useAuth();
+  const { data: subscription } = useSubscription();
   const [usage, setUsage] = useState<UsageRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -77,6 +81,28 @@ export default function BetaAccessStatus({ userId: _propUserId }: Props) {
     fetchCredits();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, authHeaders]);
+
+  // ── Derive effective display rows ──
+  // If firm_usage returned nothing (new user), fall back to subscription ai_credits_limit
+  const effectiveUsage: UsageRow[] =
+    usage.length > 0
+      ? usage
+      : subscription && subscription.ai_credits_limit > 0
+        ? [
+            {
+              id: "subscription-fallback",
+              law_firm_id: subscription.law_firm_id ?? "",
+              module_name: "global",
+              used_credits: 0,
+              max_credits: subscription.ai_credits_limit,
+              reset_date: null,
+            },
+          ]
+        : [];
+
+  // Separate "global" summary row from per-module rows
+  const globalRow = effectiveUsage.find((r) => r.module_name === "global");
+  const moduleRows = effectiveUsage.filter((r) => r.module_name !== "global");
 
   if (loading) {
     return (
@@ -158,31 +184,68 @@ export default function BetaAccessStatus({ userId: _propUserId }: Props) {
         </div>
 
         {/* ── Total Credit Summary ── */}
-        {usage.length > 0 && (
-          <div className="grid grid-cols-3 gap-3">
-            <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 text-center">
-              <div className="text-lg font-bold text-slate-900 tabular-nums">
-                {usage.reduce((sum, r) => sum + safeNum(r.max_credits), 0)}
-              </div>
-              <div className="text-[10px] text-slate-400 uppercase tracking-wider mt-0.5">Ukupno</div>
-            </div>
-            <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 text-center">
-              <div className="text-lg font-bold tabular-nums" style={{ color: "#1B2A4A" }}>
-                {usage.reduce((sum, r) => sum + safeNum(r.used_credits), 0)}
-              </div>
-              <div className="text-[10px] text-slate-400 uppercase tracking-wider mt-0.5">Potrošeno</div>
-            </div>
-            <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-center">
-              <div className="text-lg font-bold text-emerald-700 tabular-nums">
-                {usage.reduce((sum, r) => sum + Math.max(0, safeNum(r.max_credits) - safeNum(r.used_credits)), 0)}
-              </div>
-              <div className="text-[10px] text-emerald-600 uppercase tracking-wider mt-0.5">Preostalo</div>
-            </div>
-          </div>
-        )}
+        {effectiveUsage.length > 0 && (() => {
+          const totalMax = globalRow
+            ? safeNum(globalRow.max_credits)
+            : effectiveUsage.reduce((sum, r) => sum + safeNum(r.max_credits), 0);
+          const totalUsed = globalRow
+            ? safeNum(globalRow.used_credits)
+            : effectiveUsage.reduce((sum, r) => sum + safeNum(r.used_credits), 0);
+          const totalRemaining = Math.max(0, totalMax - totalUsed);
+          const pct = totalMax > 0 ? Math.min(100, Math.round((totalUsed / totalMax) * 100)) : 0;
 
-        {/* ── Usage Progress Bars ── */}
-        {usage.length > 0 ? (
+          return (
+            <div className="space-y-3">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 text-center">
+                  <div className="text-lg font-bold text-slate-900 tabular-nums">{totalMax}</div>
+                  <div className="text-[10px] text-slate-400 uppercase tracking-wider mt-0.5">Ukupno</div>
+                </div>
+                <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 text-center">
+                  <div className="text-lg font-bold tabular-nums" style={{ color: "#1B2A4A" }}>{totalUsed}</div>
+                  <div className="text-[10px] text-slate-400 uppercase tracking-wider mt-0.5">Potrošeno</div>
+                </div>
+                <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-center">
+                  <div className="text-lg font-bold text-emerald-700 tabular-nums">{totalRemaining}</div>
+                  <div className="text-[10px] text-emerald-600 uppercase tracking-wider mt-0.5">Preostalo</div>
+                </div>
+              </div>
+
+              {/* Overall AI credit progress bar (from global row or subscription) */}
+              {globalRow && (
+                <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-slate-800">AI Krediti — mjesečni limit</span>
+                    <span className={`text-xs font-semibold tabular-nums ${
+                      pct >= 100 ? "text-red-600" : pct >= 90 ? "text-amber-600" : "text-slate-500"
+                    }`}>
+                      {totalUsed} / {totalMax} kredita
+                    </span>
+                  </div>
+                  <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        pct >= 100 ? "bg-red-500" : pct >= 90 ? "bg-amber-500" : ""
+                      }`}
+                      style={{
+                        width: `${pct}%`,
+                        ...(pct < 90 ? { background: "#1B2A4A" } : {}),
+                      }}
+                    />
+                  </div>
+                  {totalUsed === 0 && totalMax > 0 && (
+                    <p className="text-xs text-slate-400">
+                      Još niste koristili AI module. Vaš mjesečni limit je {totalMax} kredita.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* ── Per-module Usage Progress Bars ── */}
+        {moduleRows.length > 0 ? (
           <div className="space-y-4">
             <h3
               className="text-xs font-semibold uppercase tracking-wider"
@@ -191,7 +254,7 @@ export default function BetaAccessStatus({ userId: _propUserId }: Props) {
               Potrošnja po modulima
             </h3>
 
-            {usage.map((row) => {
+            {moduleRows.map((row) => {
               const used = safeNum(row.used_credits);
               const max = safeNum(row.max_credits);
               const pct = max > 0
@@ -259,7 +322,7 @@ export default function BetaAccessStatus({ userId: _propUserId }: Props) {
               );
             })}
           </div>
-        ) : !error ? (
+        ) : effectiveUsage.length === 0 && !error ? (
           <div className="rounded-lg border border-slate-200 bg-white p-8 text-center">
             <Zap className="h-8 w-8 text-slate-300 mx-auto mb-3" />
             <p className="text-sm text-slate-500 font-medium">
