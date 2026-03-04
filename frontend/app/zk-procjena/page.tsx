@@ -45,6 +45,7 @@ import ResultActions from "@/components/ResultActions";
 import { useAuth } from "@/lib/useAuth";
 import { useCredits, getModuleQuota } from "@/lib/useCredits";
 import { CreditQuotaBadge, CreditExhaustedWarning } from "@/components/CreditQuotaBadge";
+import { CreditStatusBar } from "@/components/CreditStatusBar";
 import { PrivacyBanner } from "@/components/TrustComponents";
 
 import { API_BASE } from "@/lib/api";
@@ -611,6 +612,11 @@ export default function ZkProcjenaPage() {
           <p className="mt-2 text-gray-500">
             Uploadajte ZK izvadak — sustav provodi dubinsku pravnu analizu, detektira rizike i automatski procjenjuje tržišnu vrijednost
           </p>
+        </div>
+
+        {/* Credit status banner */}
+        <div className="mb-6">
+          <CreditStatusBar label="ZK Analiza" quota={zkQuota} loading={creditsLoading} />
         </div>
 
         {/* Error */}

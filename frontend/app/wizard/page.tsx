@@ -75,6 +75,7 @@ import { API_BASE } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
 import { useCredits, getModuleQuota } from "@/lib/useCredits";
 import { CreditQuotaBadge, CreditExhaustedWarning } from "@/components/CreditQuotaBadge";
+import { CreditStatusBar } from "@/components/CreditStatusBar";
 
 // ═══════════════════════════════════════════
 //  MAIN COMPONENT
@@ -315,6 +316,13 @@ export default function WizardPage() {
         <Link href="/" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mb-6">
           <ArrowLeft className="h-4 w-4" /> Natrag
         </Link>
+
+        {/* Credit status banner */}
+        {viewState === "INPUT" && (
+          <div className="mb-6">
+            <CreditStatusBar label="Procjena Nekretnina" quota={valuationQuota} loading={creditsLoading} />
+          </div>
+        )}
 
         {/* Header + Step indicator — INPUT only */}
         {viewState === "INPUT" && (

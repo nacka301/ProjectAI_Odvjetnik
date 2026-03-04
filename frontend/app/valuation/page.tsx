@@ -28,6 +28,7 @@ import ResultActions from "@/components/ResultActions";
 import { useAuth } from "@/lib/useAuth";
 import { useCredits, getModuleQuota } from "@/lib/useCredits";
 import { CreditQuotaBadge, CreditExhaustedWarning } from "@/components/CreditQuotaBadge";
+import { CreditStatusBar } from "@/components/CreditStatusBar";
 
 import { API_BASE } from "@/lib/api";
 
@@ -407,6 +408,11 @@ export default function ValuationPage() {
             Uploadajte ZK izvadak – sustav automatski pretražuje tržište i
             generira stručno mišljenje
           </p>
+        </div>
+
+        {/* Credit status banner */}
+        <div className="mb-6">
+          <CreditStatusBar label="Procjena Nekretnina" quota={valuationQuota} loading={creditsLoading} />
         </div>
 
         {/* Error */}

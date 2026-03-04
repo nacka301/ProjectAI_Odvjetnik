@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { API_BASE } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
 
@@ -45,66 +45,101 @@ export function useCredits(userId: string | null): CreditSummary {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // FIX: Extract the token string so the useEffect dependency is a primitive
+  // (string) instead of an object reference. This prevents both stale closures
+  // AND infinite re-render loops caused by authHeaders being a new object each
+  // render.
+  const token = authHeaders?.Authorization ?? "";
+
+  // Retry ref: if userId is set but token hasn't arrived yet (Supabase
+  // hydration delay ~50-200ms), we schedule a retry.
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const doFetch = useCallback(async (bearerToken: string, signal?: AbortSignal): Promise<CreditRow[]> => {
+    const hdrs: Record<string, string> = {
+      Authorization: bearerToken,
+      "Content-Type": "application/json",
+    };
+
+    // Also include X-API-Key if configured
+    const apiKey = process.env.NEXT_PUBLIC_API_KEY;
+    if (apiKey) hdrs["X-API-Key"] = apiKey;
+
+    const res = await fetch(`${API_BASE}/api/settings/credits`, { headers: hdrs, signal });
+    if (!res.ok) throw new Error(`Credits fetch failed: ${res.status}`);
+
+    const data = await res.json();
+    const arr: CreditRow[] = Array.isArray(data) ? data : [];
+
+    // If firm_usage returned nothing, fall back to subscription ai_credits_limit
+    if (arr.length === 0) {
+      try {
+        const subRes = await fetch(`${API_BASE}/api/settings/subscription`, { headers: hdrs, signal });
+        if (subRes.ok) {
+          const sub = await subRes.json();
+          const limit = safeNum(sub?.ai_credits_limit);
+          if (limit > 0) {
+            arr.push({
+              id: "subscription-fallback",
+              law_firm_id: sub?.law_firm_id ?? "",
+              module_name: "global",
+              used_credits: 0,
+              max_credits: limit,
+              reset_date: null,
+            });
+          }
+        }
+      } catch {
+        // Subscription fallback is best-effort; ignore errors
+      }
+    }
+
+    return arr;
+  }, []);
+
   useEffect(() => {
-    if (!userId || !authHeaders.Authorization) {
+    // Guard: need userId
+    if (!userId) {
       setLoading(false);
       return;
     }
 
+    // FIX: If the Bearer token hasn't arrived yet, keep loading=true and wait.
+    // The effect will re-fire when `token` changes (once useAuth sets it).
+    if (!token.startsWith("Bearer ")) {
+      setLoading(true);
+      // Safety: schedule a no-op timer to clean up if component unmounts
+      retryTimer.current = setTimeout(() => {}, 300);
+      return () => {
+        if (retryTimer.current) clearTimeout(retryTimer.current);
+      };
+    }
+
+    const abortController = new AbortController();
     let cancelled = false;
+
     (async () => {
       setLoading(true);
       setError(null);
       try {
-        const hdrs = { ...authHeaders, "Content-Type": "application/json" };
-
-        const res = await fetch(`${API_BASE}/api/settings/credits`, { headers: hdrs });
-        if (cancelled) return;
-
-        if (res.ok) {
-          const data = await res.json();
-          const arr: CreditRow[] = Array.isArray(data) ? data : [];
-
-          // If firm_usage returned nothing, fall back to subscription ai_credits_limit
-          if (arr.length === 0) {
-            try {
-              const subRes = await fetch(`${API_BASE}/api/settings/subscription`, { headers: hdrs });
-              if (!cancelled && subRes.ok) {
-                const sub = await subRes.json();
-                const limit = safeNum(sub?.ai_credits_limit);
-                if (limit > 0) {
-                  arr.push({
-                    id: "subscription-fallback",
-                    law_firm_id: sub?.law_firm_id ?? "",
-                    module_name: "global",
-                    used_credits: 0,
-                    max_credits: limit,
-                    reset_date: null,
-                  });
-                }
-              }
-            } catch {
-              // Subscription fallback is best-effort; ignore errors
-            }
-          }
-
-          if (!cancelled) setRows(arr);
-        } else {
-          console.error("Credits fetch failed:", res.status);
-          setError(`Greška ${res.status}`);
-        }
+        const arr = await doFetch(token, abortController.signal);
+        if (!cancelled) setRows(arr);
       } catch (err) {
-        if (!cancelled) {
+        if (!cancelled && !abortController.signal.aborted) {
           console.error("Credits fetch error:", err);
-          setError("Mrežna greška");
+          setError(err instanceof Error ? err.message : "Mrežna greška");
         }
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
 
-    return () => { cancelled = true; };
-  }, [userId, authHeaders]);
+    return () => {
+      cancelled = true;
+      abortController.abort();
+      if (retryTimer.current) clearTimeout(retryTimer.current);
+    };
+  }, [userId, token, doFetch]);
 
   const total = rows.reduce((s, r) => s + safeNum(r.max_credits), 0);
   const used = rows.reduce((s, r) => s + safeNum(r.used_credits), 0);
@@ -130,12 +165,25 @@ export interface ModuleQuota {
 /**
  * Extract quota for a single module from the credit rows.
  * Returns { used, max, remaining, exhausted }.
- * If no row exists for the module, returns max=50 (backend default), used=0.
+ *
+ * Falls back to the "global" pool when no module-specific row exists,
+ * so new users who only have the subscription-synthesised "global" row
+ * still see meaningful data.
  */
 export function getModuleQuota(rows: CreditRow[], moduleName: string): ModuleQuota {
-  const row = rows.find((r) => r.module_name === moduleName);
-  const used = safeNum(row?.used_credits);
-  const max = row ? safeNum(row.max_credits) : 50;
+  // 1. Try exact module match
+  let row = rows.find((r) => r.module_name === moduleName);
+
+  // 2. Fallback to "global" pool (synthesised from subscription)
+  if (!row) row = rows.find((r) => r.module_name === "global");
+
+  // 3. No data at all — return unknowns (not exhausted so fetch can complete)
+  if (!row) {
+    return { used: 0, max: 0, remaining: 0, exhausted: false };
+  }
+
+  const used = safeNum(row.used_credits);
+  const max = safeNum(row.max_credits);
   const remaining = Math.max(0, max - used);
-  return { used, max, remaining, exhausted: remaining <= 0 };
+  return { used, max, remaining, exhausted: remaining <= 0 && max > 0 };
 }

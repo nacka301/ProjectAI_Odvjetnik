@@ -20,7 +20,17 @@ export function CreditQuotaBadge({ quota, loading, className = "" }: CreditQuota
     return (
       <span className={`inline-flex items-center gap-1.5 text-xs text-slate-400 ${className}`}>
         <span className="h-1.5 w-1.5 rounded-full bg-slate-300 animate-pulse" />
-        Učitavanje kvote…
+        Učitavanje kredita…
+      </span>
+    );
+  }
+
+  // No plan data yet — neutral state
+  if (quota.max === 0) {
+    return (
+      <span className={`inline-flex items-center gap-1.5 text-xs text-slate-400 ${className}`}>
+        <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
+        Krediti se aktiviraju pri prvom korištenju
       </span>
     );
   }
@@ -41,14 +51,14 @@ export function CreditQuotaBadge({ quota, loading, className = "" }: CreditQuota
   }
 
   // Normal state — show remaining
-  const pct = quota.remaining / quota.max;
+  const pct = quota.max > 0 ? quota.remaining / quota.max : 0;
   const dotColor = pct > 0.3 ? "bg-emerald-500" : pct > 0.1 ? "bg-amber-500" : "bg-red-500";
   const textColor = pct > 0.3 ? "text-slate-500" : pct > 0.1 ? "text-amber-700" : "text-red-600";
 
   return (
     <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${textColor} ${className}`}>
       <span className={`h-1.5 w-1.5 rounded-full ${dotColor}`} />
-      Preostalo: {quota.remaining}/{quota.max} ovog mjeseca
+      Preostalo kredita: {quota.remaining}/{quota.max}
     </span>
   );
 }
@@ -57,7 +67,7 @@ export function CreditQuotaBadge({ quota, loading, className = "" }: CreditQuota
  * Limit-reached warning block — used below a disabled button.
  */
 export function CreditExhaustedWarning({ quota }: { quota: ModuleQuota }) {
-  if (!quota.exhausted) return null;
+  if (!quota.exhausted || quota.max === 0) return null;
 
   return (
     <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">

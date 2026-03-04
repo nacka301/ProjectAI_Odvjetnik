@@ -35,6 +35,7 @@ import { generateContractPdf } from "@/lib/generateModulePdfs";
 import { useAuth } from "@/lib/useAuth";
 import { useCredits, getModuleQuota } from "@/lib/useCredits";
 import { CreditQuotaBadge, CreditExhaustedWarning } from "@/components/CreditQuotaBadge";
+import { CreditStatusBar } from "@/components/CreditStatusBar";
 import { PrivacyBanner } from "@/components/TrustComponents";
 import { formatNumber } from "@/lib/format";
 
@@ -507,6 +508,13 @@ export default function ContractAnalysisPage() {
       </header>
 
       <main className="max-w-4xl mx-auto px-4 py-8">
+        {/* Credit status banner */}
+        {viewState === "INPUT" && (
+          <div className="mb-6">
+            <CreditStatusBar label="Analiza Ugovora" quota={contractQuota} loading={creditsLoading} />
+          </div>
+        )}
+
         {/* ── Input Section ── */}
         {viewState === "INPUT" && !result && (
           <div className="space-y-6">
