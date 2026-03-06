@@ -33,7 +33,6 @@ import { useCredits, getModuleQuota } from "@/lib/useCredits";
 import { CreditQuotaBadge, CreditExhaustedWarning } from "@/components/CreditQuotaBadge";
 import { formatEur, formatNumber, formatThreshold } from "@/lib/format";
 
-const API = API_BASE;
 const BOD_VALUE = 2.0;
 const PDV_RATE = 0.25;
 
@@ -364,7 +363,7 @@ function TroskovnikContent() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API}/api/troskovnik/katalog`, {
+        const res = await fetch(`${API_BASE}/api/troskovnik/katalog`, {
           headers: authHeaders,
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -382,7 +381,7 @@ function TroskovnikContent() {
   useEffect(() => {
     if (!userId) return;
     setLoadingClients(true);
-    fetch(`${API}/api/client`, { headers: authHeaders })
+    fetch(`${API_BASE}/api/client`, { headers: authHeaders })
       .then((r) => (r.ok ? r.json() : []))
       .then((data: ClientOption[]) => {
         setClients(data);
@@ -659,7 +658,7 @@ function TroskovnikContent() {
         is_oslobodjen_pristojbi: isOslobodjenPristojbi,
       };
 
-      const res = await fetch(`${API}/api/troskovnik/izracunaj`, {
+      const res = await fetch(`${API_BASE}/api/troskovnik/izracunaj`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify(body),
@@ -734,7 +733,7 @@ function TroskovnikContent() {
         client_grad: klijentGrad || undefined,
       };
 
-      const res = await fetch(`${API}/api/troskovnik/spremi`, {
+      const res = await fetch(`${API_BASE}/api/troskovnik/spremi`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify(body),
@@ -754,7 +753,7 @@ function TroskovnikContent() {
         setSelectedClientId(data.createdClientId);
         setClientAutoFilled(true);
         // Refresh client list so new client appears in combobox
-        fetch(`${API}/api/client`, { headers: authHeaders })
+        fetch(`${API_BASE}/api/client`, { headers: authHeaders })
           .then((r) => (r.ok ? r.json() : []))
           .then((freshClients: ClientOption[]) => setClients(freshClients))
           .catch(() => {});

@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import type { ModuleQuota } from "@/lib/useCredits";
 
 interface CreditQuotaBadgeProps {
@@ -15,7 +16,7 @@ interface CreditQuotaBadgeProps {
  * Usage:
  *   <CreditQuotaBadge quota={quota} loading={creditsLoading} />
  */
-export function CreditQuotaBadge({ quota, loading, className = "" }: CreditQuotaBadgeProps) {
+export const CreditQuotaBadge = React.memo(function CreditQuotaBadge({ quota, loading, className = "" }: CreditQuotaBadgeProps) {
   if (loading) {
     return (
       <span className={`inline-flex items-center gap-1.5 text-xs text-slate-400 ${className}`}>
@@ -61,12 +62,12 @@ export function CreditQuotaBadge({ quota, loading, className = "" }: CreditQuota
       Preostalo kredita: {quota.remaining}/{quota.max}
     </span>
   );
-}
+});
 
 /**
  * Limit-reached warning block — used below a disabled button.
  */
-export function CreditExhaustedWarning({ quota }: { quota: ModuleQuota }) {
+export const CreditExhaustedWarning = React.memo(function CreditExhaustedWarning({ quota }: { quota: ModuleQuota }) {
   if (!quota.exhausted || quota.max === 0) return null;
 
   return (
@@ -79,4 +80,4 @@ export function CreditExhaustedWarning({ quota }: { quota: ModuleQuota }) {
       </p>
     </div>
   );
-}
+});

@@ -4,7 +4,6 @@
  */
 
 import { API_BASE } from "@/lib/api";
-const API = API_BASE;
 
 // ── Types ──
 
@@ -56,14 +55,14 @@ export interface TemporalNormResult {
 
 /** Fetch all registered norms */
 export async function fetchAllNorms(): Promise<NormInfo[]> {
-  const res = await fetch(`${API}/api/norm`);
+  const res = await fetch(`${API_BASE}/api/norm`);
   if (!res.ok) throw new Error("Failed to fetch norms");
   return res.json();
 }
 
 /** Fetch a single norm by abbreviation */
 export async function fetchNorm(abbreviation: string): Promise<NormInfo | null> {
-  const res = await fetch(`${API}/api/norm/${encodeURIComponent(abbreviation)}`);
+  const res = await fetch(`${API_BASE}/api/norm/${encodeURIComponent(abbreviation)}`);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`Failed to fetch norm: ${abbreviation}`);
   return res.json();
@@ -74,7 +73,7 @@ export async function fetchNormAtDate(
   abbreviation: string,
   date: string
 ): Promise<TemporalNormResult | null> {
-  const res = await fetch(`${API}/api/norm/${encodeURIComponent(abbreviation)}/at/${date}`);
+  const res = await fetch(`${API_BASE}/api/norm/${encodeURIComponent(abbreviation)}/at/${date}`);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`Temporal lookup failed: ${abbreviation} at ${date}`);
   return res.json();
@@ -85,7 +84,7 @@ export async function fetchTemporalBatch(
   abbreviations: string[],
   eventDate: string
 ): Promise<TemporalNormResult[]> {
-  const res = await fetch(`${API}/api/norm/temporal`, {
+  const res = await fetch(`${API_BASE}/api/norm/temporal`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ event_date: eventDate, abbreviations }),
@@ -102,7 +101,7 @@ export async function formatCitation(
   point?: string,
   eventDate?: string
 ): Promise<CitedNorm> {
-  const res = await fetch(`${API}/api/norm/cite`, {
+  const res = await fetch(`${API_BASE}/api/norm/cite`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

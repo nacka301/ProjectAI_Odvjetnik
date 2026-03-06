@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { Zap } from "lucide-react";
 import type { ModuleQuota } from "@/lib/useCredits";
 
@@ -13,7 +14,7 @@ interface CreditStatusBarProps {
  * Prominent credit status bar shown at the top of AI feature pages.
  * Displays remaining credits with a mini progress bar.
  */
-export function CreditStatusBar({ label, quota, loading }: CreditStatusBarProps) {
+export const CreditStatusBar = React.memo(function CreditStatusBar({ label, quota, loading }: CreditStatusBarProps) {
   if (loading) {
     return (
       <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm animate-pulse">
@@ -88,4 +89,4 @@ export function CreditStatusBar({ label, quota, loading }: CreditStatusBarProps)
       )}
     </div>
   );
-}
+});

@@ -68,7 +68,6 @@ import { API_BASE } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
 import { useCredits, getModuleQuota } from "@/lib/useCredits";
 import { CreditQuotaBadge, CreditExhaustedWarning } from "@/components/CreditQuotaBadge";
-const API = API_BASE;
 
 const MODULE_LABELS: Record<string, string> = {
   valuation: "Procjena nekretnine",
@@ -184,7 +183,7 @@ export default function FiskalizacijaPage() {
         },
       };
 
-      const res = await fetch(`${API}/api/invoice/generate`, {
+      const res = await fetch(`${API_BASE}/api/invoice/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify(body),

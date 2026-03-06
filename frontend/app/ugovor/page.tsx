@@ -179,7 +179,6 @@ const GENERATE_STAGE_MICROCOPY = [
 ];
 
 import { API_BASE } from "@/lib/api";
-const API = API_BASE;
 
 export default function ContractAnalysisPage() {
   const { userId, authHeaders } = useAuth();
@@ -246,7 +245,7 @@ export default function ContractAnalysisPage() {
         }
         const formData = new FormData();
         formData.append("file", selectedFileRef.current);
-        response = await fetch(`${API}/api/contract/analyze-pdf-stream`, {
+        response = await fetch(`${API_BASE}/api/contract/analyze-pdf-stream`, {
           method: "POST",
           body: formData,
           signal: controller.signal,
@@ -259,7 +258,7 @@ export default function ContractAnalysisPage() {
           setViewState("INPUT");
           return;
         }
-        response = await fetch(`${API}/api/contract/analyze-text-stream`, {
+        response = await fetch(`${API_BASE}/api/contract/analyze-text-stream`, {
           method: "POST",
           headers: { "Content-Type": "application/json", ...authHeaders },
           body: JSON.stringify({ text: textInput }),
@@ -367,7 +366,7 @@ export default function ContractAnalysisPage() {
     setShowGenerated(true);
 
     try {
-      const response = await fetch(`${API}/api/contract/generate-stream`, {
+      const response = await fetch(`${API_BASE}/api/contract/generate-stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({

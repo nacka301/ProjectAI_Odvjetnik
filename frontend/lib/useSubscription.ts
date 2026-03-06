@@ -70,12 +70,10 @@ export function useSubscription(): SubscriptionState {
           const json = await res.json();
           setData(json);
         } else {
-          console.error("Subscription fetch failed:", res.status);
           setError(`Greška ${res.status}`);
         }
       } catch (err) {
         if (!cancelled) {
-          console.error("Subscription fetch error:", err);
           setError("Mrežna greška");
         }
       } finally {

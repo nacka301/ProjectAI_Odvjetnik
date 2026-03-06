@@ -34,7 +34,7 @@ interface AppHeaderProps {
   extraStart?: React.ReactNode;
 }
 
-export default function AppHeader({ extraStart }: AppHeaderProps) {
+function AppHeaderInner({ extraStart }: AppHeaderProps) {
   const pathname = usePathname();
   const router = useRouter();
   const userId = useUserId();
@@ -188,3 +188,5 @@ export default function AppHeader({ extraStart }: AppHeaderProps) {
     </header>
   );
 }
+
+export default React.memo(AppHeaderInner);

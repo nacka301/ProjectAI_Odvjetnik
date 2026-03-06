@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { ExternalLink, ChevronDown, Clock, Shield, AlertTriangle, XCircle, Info, Scale } from "lucide-react";
 import { type CitedNorm, type TemporalNormResult, getStatusColor, fetchNorm, type NormInfo } from "@/lib/normApi";
 
@@ -21,7 +21,7 @@ interface NormBadgeProps {
   context?: "red_flag" | "warning" | "neutral";
 }
 
-export function NormBadge({ norm, temporal, variant = "pill", context = "neutral" }: NormBadgeProps) {
+export const NormBadge = React.memo(function NormBadge({ norm, temporal, variant = "pill", context = "neutral" }: NormBadgeProps) {
   const [expanded, setExpanded] = useState(false);
   const [details, setDetails] = useState<NormInfo | null>(null);
   const [loading, setLoading] = useState(false);
@@ -124,7 +124,7 @@ export function NormBadge({ norm, temporal, variant = "pill", context = "neutral
       )}
     </div>
   );
-}
+});
 
 // ── Tooltip Popover ──
 

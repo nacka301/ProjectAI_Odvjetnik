@@ -24,8 +24,6 @@ import { PrivacyBanner } from "@/components/TrustComponents";
 //  Sudski Tumač — Legal Translation & Transliteration
 // ═══════════════════════════════════════════════════════════
 
-const API = API_BASE;
-
 // ── Translation modes matching backend TranslationMode enum ──
 
 type TranslationMode =
@@ -175,7 +173,7 @@ export default function TranslationPage() {
     abortRef.current = controller;
 
     try {
-      const response = await fetch(`${API}/api/translation/stream`, {
+      const response = await fetch(`${API_BASE}/api/translation/stream`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
