@@ -5,6 +5,7 @@ import AutoLogoutProvider from "@/components/AutoLogoutProvider";
 import SessionGuard from "@/components/SessionGuard";
 import { ConditionalSecurityFooter } from "@/components/ConditionalFooter";
 import CommandPalette from "@/components/CommandPalette";
+import { CreditProvider } from "@/contexts/CreditContext";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -52,9 +53,11 @@ export default function RootLayout({
       >
         <AutoLogoutProvider>
           <SessionGuard>
-            <CommandPalette />
-            <main className="flex-1">{children}</main>
-            <ConditionalSecurityFooter />
+            <CreditProvider>
+              <CommandPalette />
+              <main className="flex-1">{children}</main>
+              <ConditionalSecurityFooter />
+            </CreditProvider>
           </SessionGuard>
         </AutoLogoutProvider>
       </body>

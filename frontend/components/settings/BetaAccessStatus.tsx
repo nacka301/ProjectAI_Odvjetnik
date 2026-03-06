@@ -1,19 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Loader2, Zap, AlertTriangle, Mail, RefreshCw } from "lucide-react";
-import { API_BASE } from "@/lib/api";
-import { useAuth } from "@/lib/useAuth";
+import { useCreditContext } from "@/contexts/CreditContext";
+import type { CreditRow } from "@/contexts/CreditContext";
 import { useSubscription } from "@/lib/useSubscription";
-
-interface UsageRow {
-  id: string;
-  law_firm_id: string;
-  module_name: string;
-  used_credits: number;
-  max_credits: number;
-  reset_date: string | null;
-}
 
 interface Props {
   userId: string;
@@ -43,48 +33,12 @@ function safeNum(val: unknown): number {
 }
 
 export default function BetaAccessStatus({ userId: _propUserId }: Props) {
-  const { userId, authHeaders } = useAuth();
+  const { rows: usage, loading, error, refreshCredits } = useCreditContext();
   const { data: subscription } = useSubscription();
-  const [usage, setUsage] = useState<UsageRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchCredits = async () => {
-    if (!userId) {
-      setLoading(false);
-      return;
-    }
-    setError(null);
-    setLoading(true);
-    try {
-      const res = await fetch(
-        `${API_BASE}/api/settings/credits`,
-        { headers: { ...authHeaders, "Content-Type": "application/json" } }
-      );
-      if (res.ok) {
-        const data = await res.json();
-        console.log("Token Data Received:", data);
-        setUsage(Array.isArray(data) ? data : []);
-      } else {
-        console.error("Credits fetch failed:", res.status, res.statusText);
-        setError(`Greška pri dohvaćanju kredita (${res.status}).`);
-      }
-    } catch (err) {
-      console.error("Credits fetch error:", err);
-      setError("Greška pri učitavanju kredita. Provjerite mrežnu vezu.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchCredits();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, authHeaders]);
 
   // ── Derive effective display rows ──
   // If firm_usage returned nothing (new user), fall back to subscription ai_credits_limit
-  const effectiveUsage: UsageRow[] =
+  const effectiveUsage: CreditRow[] =
     usage.length > 0
       ? usage
       : subscription && subscription.ai_credits_limit > 0
@@ -133,7 +87,7 @@ export default function BetaAccessStatus({ userId: _propUserId }: Props) {
         </div>
         {/* Refresh button */}
         <button
-          onClick={fetchCredits}
+          onClick={refreshCredits}
           className="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
           title="Osvježi podatke"
         >
@@ -151,7 +105,7 @@ export default function BetaAccessStatus({ userId: _propUserId }: Props) {
               <p className="text-sm text-red-700">{error}</p>
             </div>
             <button
-              onClick={fetchCredits}
+              onClick={refreshCredits}
               className="mt-2 text-xs font-medium text-red-600 hover:text-red-800 underline"
             >
               Pokušaj ponovo

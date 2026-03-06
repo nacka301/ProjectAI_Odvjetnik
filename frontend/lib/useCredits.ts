@@ -1,25 +1,26 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
-import { API_BASE } from "@/lib/api";
-import { useAuth } from "@/lib/useAuth";
+/**
+ * Backward-compatible credit hook.
+ *
+ * All fetching now lives in CreditContext — this file is a thin re-export wrapper
+ * so existing `import { useCredits, getModuleQuota } from "@/lib/useCredits"`
+ * calls continue to work without any page-level changes.
+ *
+ * The `userId` parameter is still accepted for API compat but is ignored;
+ * CreditProvider derives the user from its own `useAuth()` subscription.
+ */
 
-export interface CreditRow {
-  id: string;
-  law_firm_id: string;
-  module_name: string;
-  used_credits: number;
-  max_credits: number;
-  reset_date: string | null;
-}
+import { useCreditContext } from "@/contexts/CreditContext";
 
-export interface CreditSummary {
-  total: number;
+// Re-export types from the canonical location
+export type { CreditRow, CreditSummary, CreditContextValue } from "@/contexts/CreditContext";
+
+export interface ModuleQuota {
   used: number;
+  max: number;
   remaining: number;
-  rows: CreditRow[];
-  loading: boolean;
-  error: string | null;
+  exhausted: boolean;
 }
 
 /** Safe number accessor — returns 0 for null/undefined/NaN */
@@ -30,137 +31,20 @@ function safeNum(val: unknown): number {
 }
 
 /**
- * Hook that fetches the authenticated user's Beta credit usage.
+ * Hook that returns the authenticated user's credit usage.
  *
- * Returns a summary object with totals, per-module rows, loading, and error state.
- * Pass `userId` from Supabase auth — when null/undefined the fetch is skipped.
- * Auth headers (Bearer token) are obtained automatically from useAuth().
- *
- * When firm_usage is empty (new user), falls back to the subscription's
- * ai_credits_limit so the header/dashboard can still show the allocation.
+ * Data is fetched ONCE by the global `CreditProvider` and shared across all
+ * pages — no redundant API calls. The `_userId` parameter is accepted for
+ * backward compatibility but is not used; the provider derives the user
+ * internally via `useAuth()`.
  */
-export function useCredits(userId: string | null): CreditSummary {
-  const { authHeaders } = useAuth();
-  const [rows, setRows] = useState<CreditRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  // FIX: Extract the token string so the useEffect dependency is a primitive
-  // (string) instead of an object reference. This prevents both stale closures
-  // AND infinite re-render loops caused by authHeaders being a new object each
-  // render.
-  const token = authHeaders?.Authorization ?? "";
-
-  // Retry ref: if userId is set but token hasn't arrived yet (Supabase
-  // hydration delay ~50-200ms), we schedule a retry.
-  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const doFetch = useCallback(async (bearerToken: string, signal?: AbortSignal): Promise<CreditRow[]> => {
-    const hdrs: Record<string, string> = {
-      Authorization: bearerToken,
-      "Content-Type": "application/json",
-    };
-
-    // Also include X-API-Key if configured
-    const apiKey = process.env.NEXT_PUBLIC_API_KEY;
-    if (apiKey) hdrs["X-API-Key"] = apiKey;
-
-    const res = await fetch(`${API_BASE}/api/settings/credits`, { headers: hdrs, signal });
-    if (!res.ok) throw new Error(`Credits fetch failed: ${res.status}`);
-
-    const data = await res.json();
-    const arr: CreditRow[] = Array.isArray(data) ? data : [];
-
-    // If firm_usage returned nothing, fall back to subscription ai_credits_limit
-    if (arr.length === 0) {
-      try {
-        const subRes = await fetch(`${API_BASE}/api/settings/subscription`, { headers: hdrs, signal });
-        if (subRes.ok) {
-          const sub = await subRes.json();
-          const limit = safeNum(sub?.ai_credits_limit);
-          if (limit > 0) {
-            arr.push({
-              id: "subscription-fallback",
-              law_firm_id: sub?.law_firm_id ?? "",
-              module_name: "global",
-              used_credits: 0,
-              max_credits: limit,
-              reset_date: null,
-            });
-          }
-        }
-      } catch {
-        // Subscription fallback is best-effort; ignore errors
-      }
-    }
-
-    return arr;
-  }, []);
-
-  useEffect(() => {
-    // Guard: need userId
-    if (!userId) {
-      setLoading(false);
-      return;
-    }
-
-    // FIX: If the Bearer token hasn't arrived yet, keep loading=true and wait.
-    // The effect will re-fire when `token` changes (once useAuth sets it).
-    if (!token.startsWith("Bearer ")) {
-      setLoading(true);
-      // Safety: schedule a no-op timer to clean up if component unmounts
-      retryTimer.current = setTimeout(() => {}, 300);
-      return () => {
-        if (retryTimer.current) clearTimeout(retryTimer.current);
-      };
-    }
-
-    const abortController = new AbortController();
-    let cancelled = false;
-
-    (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const arr = await doFetch(token, abortController.signal);
-        if (!cancelled) setRows(arr);
-      } catch (err) {
-        if (!cancelled && !abortController.signal.aborted) {
-          console.error("Credits fetch error:", err);
-          setError(err instanceof Error ? err.message : "Mrežna greška");
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      abortController.abort();
-      if (retryTimer.current) clearTimeout(retryTimer.current);
-    };
-  }, [userId, token, doFetch]);
-
-  const total = rows.reduce((s, r) => s + safeNum(r.max_credits), 0);
-  const used = rows.reduce((s, r) => s + safeNum(r.used_credits), 0);
-  const remaining = rows.reduce(
-    (s, r) => s + Math.max(0, safeNum(r.max_credits) - safeNum(r.used_credits)),
-    0
-  );
-
-  return { total, used, remaining, rows, loading, error };
+export function useCredits(_userId?: string | null) {
+  return useCreditContext();
 }
 
 // ═══════════════════════════════════════════
-//  Per-module quota helper
+//  Per-module quota helper (unchanged)
 // ═══════════════════════════════════════════
-
-export interface ModuleQuota {
-  used: number;
-  max: number;
-  remaining: number;
-  exhausted: boolean;
-}
 
 /**
  * Extract quota for a single module from the credit rows.
@@ -170,7 +54,10 @@ export interface ModuleQuota {
  * so new users who only have the subscription-synthesised "global" row
  * still see meaningful data.
  */
-export function getModuleQuota(rows: CreditRow[], moduleName: string): ModuleQuota {
+export function getModuleQuota(
+  rows: { module_name: string; used_credits: number; max_credits: number }[],
+  moduleName: string,
+): ModuleQuota {
   // 1. Try exact module match
   let row = rows.find((r) => r.module_name === moduleName);
 
