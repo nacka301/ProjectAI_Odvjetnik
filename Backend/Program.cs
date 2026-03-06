@@ -59,6 +59,9 @@ var allowedOrigins = frontendUrl
     .Select(u => u.TrimEnd('/'))
     .ToArray();
 
+Console.WriteLine($"[CORS] Allowed origins: {string.Join(", ", allowedOrigins)}");
+Console.WriteLine($"[CORS] Vercel preview deploys also allowed (projectai|odvjetnik|nacka)");
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", policy =>
@@ -91,7 +94,8 @@ builder.Services.AddCors(options =>
                 return false;
             })
             .AllowAnyHeader()
-            .AllowAnyMethod();
+            .AllowAnyMethod()
+            .AllowCredentials();
     });
 });
 
@@ -242,6 +246,7 @@ app.UseMiddleware<AuditLoggingMiddleware>();
 var apiKey = Environment.GetEnvironmentVariable("API_KEY");
 if (!string.IsNullOrWhiteSpace(apiKey))
 {
+    Console.WriteLine("[AUTH] API_KEY middleware is ACTIVE — all requests (except health/OPTIONS) require X-API-Key header");
     app.Use(async (context, next) =>
     {
         var path = context.Request.Path.Value ?? "";
