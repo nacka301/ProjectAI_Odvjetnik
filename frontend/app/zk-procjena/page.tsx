@@ -7,6 +7,7 @@ import {
   type DragEvent,
   type ChangeEvent,
 } from "react";
+import { useThrottledStages } from "@/lib/useThrottledStages";
 import Link from "next/link";
 import {
   Upload,
@@ -345,7 +346,7 @@ export default function ZkProcjenaPage() {
   const [textInput, setTextInput] = useState("");
   const [dragOver, setDragOver] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
-  const [stages, setStages] = useState<StreamStage[]>([]);
+  const { stages, setStages, applyProgress, flushNow } = useThrottledStages<StreamStage>();
   const [isStreaming, setIsStreaming] = useState(false);
   const [zkAnalysis, setZkAnalysis] = useState<ZkParsedResult | null>(null);
   const [unifiedResult, setUnifiedResult] = useState<UnifiedResult | null>(null);
@@ -452,13 +453,7 @@ export default function ZkProcjenaPage() {
 
           if (evt.type === "progress") {
             const { stage, status, label, detail } = evt.data;
-            setStages((prev) =>
-              prev.map((s) =>
-                s.id === stage
-                  ? { ...s, status, label: label || s.label, detail: detail ?? s.detail }
-                  : s
-              )
-            );
+            applyProgress(stage, { status, label, detail });
           } else if (evt.type === "error") {
             const { stage, message } = evt.data;
             setStages((prev) =>
@@ -492,6 +487,7 @@ export default function ZkProcjenaPage() {
       // Flush remaining buffer (last SSE event might lack trailing \n\n)
       if (buffer.trim()) processEvent(buffer.trim());
 
+      flushNow(); // Ensure final stage state is rendered
       setIsStreaming(false);
       if (state.result) setViewState("RESULT");
 

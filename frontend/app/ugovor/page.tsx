@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { useThrottledStages } from "@/lib/useThrottledStages";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -194,13 +195,13 @@ export default function ContractAnalysisPage() {
   // V42: Temporal Law Mode
   const [eventDate, setEventDate] = useState("");
   // V57: SSE streaming state
-  const [stages, setStages] = useState<ContractStage[]>([]);
+  const { stages, setStages, applyProgress, flushNow } = useThrottledStages<ContractStage>();
   const [isStreaming, setIsStreaming] = useState(false);
   const [viewState, setViewState] = useState<"INPUT" | "PROCESSING" | "RESULT">("INPUT");
   const abortRef = useRef<AbortController | null>(null);
   // V58: Generated contract state
   const [generatedContract, setGeneratedContract] = useState<GeneratedContractResult | null>(null);
-  const [generateStages, setGenerateStages] = useState<ProcessingStage[]>([]);
+  const { stages: generateStages, setStages: setGenerateStages, applyProgress: applyGenerateProgress, flushNow: flushGenerateNow } = useThrottledStages<ProcessingStage>();
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [showGenerated, setShowGenerated] = useState(false);
@@ -280,13 +281,7 @@ export default function ContractAnalysisPage() {
           const evt = JSON.parse(line.slice(6));
           if (evt.type === "progress") {
             const { stage, status, label, detail } = evt.data;
-            setStages((prev) =>
-              prev.map((s) =>
-                s.id === stage
-                  ? { ...s, status, label: label || s.label, detail: detail ?? s.detail }
-                  : s
-              )
-            );
+            applyProgress(stage, { status, label, detail });
           } else if (evt.type === "error") {
             const { stage, message } = evt.data;
             setStages((prev) =>
@@ -318,6 +313,7 @@ export default function ContractAnalysisPage() {
       // Flush remaining buffer
       if (buffer.trim()) processEvent(buffer.trim());
 
+      flushNow(); // Ensure final stage state is rendered
       setIsStreaming(false);
       if (state.streamedResult) setViewState("RESULT");
     } catch (e: unknown) {
@@ -389,13 +385,7 @@ export default function ContractAnalysisPage() {
           const evt = JSON.parse(line.slice(6));
           if (evt.type === "progress") {
             const { stage, status, label, detail } = evt.data;
-            setGenerateStages((prev) =>
-              prev.map((s) =>
-                s.id === stage
-                  ? { ...s, status, label: label || s.label, detail: detail ?? s.detail }
-                  : s
-              )
-            );
+            applyGenerateProgress(stage, { status, label, detail });
           } else if (evt.type === "error") {
             setGenerateError(evt.data.message);
           } else if (evt.type === "result") {
@@ -418,6 +408,7 @@ export default function ContractAnalysisPage() {
     } catch (e: unknown) {
       setGenerateError(e instanceof Error ? e.message : "Generiranje nije uspjelo.");
     } finally {
+      flushGenerateNow();
       setIsGenerating(false);
     }
   };

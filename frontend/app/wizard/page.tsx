@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { useThrottledStages } from "@/lib/useThrottledStages";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import {
@@ -119,7 +120,7 @@ export default function WizardPage() {
 
   // Valuation (SSE)
   const abortRef = useRef<AbortController | null>(null);
-  const [stages, setStages] = useState<StreamStage[]>([]);
+  const { stages, setStages, applyProgress, flushNow } = useThrottledStages<StreamStage>();
   const [isStreaming, setIsStreaming] = useState(false);
   const [result, setResult] = useState<ValuationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -218,11 +219,7 @@ export default function WizardPage() {
           const evt = JSON.parse(line.slice(6));
           if (evt.type === "progress") {
             const { stage, status, label, detail } = evt.data;
-            setStages((prev) =>
-              prev.map((s) =>
-                s.id === stage ? { ...s, status, label: label || s.label, detail: detail ?? s.detail } : s
-              )
-            );
+            applyProgress(stage, { status, label, detail });
           } else if (evt.type === "error") {
             const { stage, message } = evt.data;
             setStages((prev) =>
@@ -247,6 +244,7 @@ export default function WizardPage() {
       // Flush remaining buffer (last SSE event might lack trailing \n\n)
       if (buffer.trim()) processEvent(buffer.trim());
 
+      flushNow(); // Ensure final stage state is rendered
       setIsStreaming(false);
       if (state.streamedResult) {
         setViewState("RESULT");

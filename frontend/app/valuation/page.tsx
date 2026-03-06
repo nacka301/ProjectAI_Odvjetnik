@@ -6,6 +6,7 @@ import {
   type DragEvent,
   type ChangeEvent,
 } from "react";
+import { useThrottledStages } from "@/lib/useThrottledStages";
 import Link from "next/link";
 import {
   Upload,
@@ -173,7 +174,7 @@ export default function ValuationPage() {
   const [file, setFile] = useState<File | null>(null);
   const [propertyText, setPropertyText] = useState("");
   const [dragOver, setDragOver] = useState(false);
-  const [stages, setStages] = useState<StreamStage[]>([]);
+  const { stages, setStages, applyProgress, flushNow } = useThrottledStages<StreamStage>();
   const [isStreaming, setIsStreaming] = useState(false);
   const [result, setResult] = useState<AutoValuationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -290,13 +291,7 @@ export default function ValuationPage() {
 
             if (evt.type === "progress") {
               const { stage, status, label, detail } = evt.data;
-              setStages((prev) =>
-                prev.map((s) =>
-                  s.id === stage
-                    ? { ...s, status, label: label || s.label, detail: detail ?? s.detail }
-                    : s
-                )
-              );
+              applyProgress(stage, { status, label, detail });
             } else if (evt.type === "error") {
               const { stage, message } = evt.data;
               setStages((prev) =>
@@ -317,6 +312,7 @@ export default function ValuationPage() {
         }
       }
 
+      flushNow(); // Ensure final stage state is rendered
       setIsStreaming(false);
       if (streamedResult) setViewState("RESULT");
 
