@@ -48,7 +48,7 @@ public class ContractController : ControllerBase
     [HttpPost("analyze-pdf")]
     [EnableRateLimiting("valuation")]
     [RequestSizeLimit(10 * 1024 * 1024)] // 10 MB max
-    public async Task<ActionResult<ContractAnalysisResult>> AnalyzePdf(IFormFile file)
+    public async Task<ActionResult<ContractAnalysisResult>> AnalyzePdf(IFormFile file, CancellationToken ct)
     {
         // Credit enforcement
         var creditCheck = await _creditService.ConsumeCreditAsync(GetUserId() ?? "", "contract_analysis");
@@ -128,7 +128,7 @@ public class ContractController : ControllerBase
     /// </summary>
     [HttpPost("analyze-text")]
     [EnableRateLimiting("valuation")]
-    public async Task<ActionResult<ContractAnalysisResult>> AnalyzeText([FromBody] ContractTextRequest request)
+    public async Task<ActionResult<ContractAnalysisResult>> AnalyzeText([FromBody] ContractTextRequest request, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(request?.Text))
             return BadRequest(new { error = "Molimo unesite tekst ugovora." });
@@ -195,6 +195,7 @@ public class ContractController : ControllerBase
     [RequestSizeLimit(10 * 1024 * 1024)]
     public async Task AnalyzePdfStream(IFormFile file)
     {
+        var ct = HttpContext.RequestAborted;
         SseHelpers.SetupSSEHeaders(Response);
 
         if (file == null || file.Length == 0)
@@ -247,6 +248,7 @@ public class ContractController : ControllerBase
     [EnableRateLimiting("valuation")]
     public async Task AnalyzeTextStream([FromBody] ContractTextRequest request)
     {
+        var ct = HttpContext.RequestAborted;
         SseHelpers.SetupSSEHeaders(Response);
 
         if (string.IsNullOrWhiteSpace(request?.Text))
@@ -345,6 +347,7 @@ public class ContractController : ControllerBase
     [EnableRateLimiting("valuation")]
     public async Task GenerateContractStream([FromBody] GenerateContractRequest request)
     {
+        var ct = HttpContext.RequestAborted;
         SseHelpers.SetupSSEHeaders(Response);
 
         if (string.IsNullOrWhiteSpace(request?.OriginalText))

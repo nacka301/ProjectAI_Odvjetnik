@@ -410,16 +410,46 @@ public sealed class ClientCaseService
 
     /// <summary>
     /// Mark events as billed (after Troškovnik is generated from them).
+    /// Uses a single PostgREST PATCH with id=in.(...) filter instead of N sequential calls.
     /// </summary>
     public async Task<int> MarkEventsAsBilledAsync(IEnumerable<string> eventIds)
     {
-        var count = 0;
-        foreach (var id in eventIds)
+        var ids = eventIds.Where(id => UuidRegex.IsMatch(id)).ToList();
+        if (ids.Count == 0 || !_isConfigured) return 0;
+
+        // Single batch PATCH: PATCH /case_events?id=in.(id1,id2,...)
+        var csvIds = string.Join(",", ids.Select(Uri.EscapeDataString));
+        var url = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/case_events?id=in.({csvIds})";
+        var payload = JsonSerializer.Serialize(new { billing_status = "billed" }, JsonOpts);
+        var request = CreateRequest(HttpMethod.Patch, url, payload);
+
+        var response = await _httpClient.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+
+        if (!response.IsSuccessStatusCode)
         {
-            var result = await UpdateAsync<CaseEventReadRecord>("case_events", id,
-                new { billing_status = "billed" });
-            if (result != null) count++;
+            _logger.LogError("Batch MarkAsBilled failed ({Status}): {Body}", response.StatusCode, body);
+            return 0;
         }
-        return count;
+
+        var rows = JsonSerializer.Deserialize<List<CaseEventReadRecord>>(body, JsonOpts);
+        return rows?.Count ?? 0;
+    }
+
+    /// <summary>
+    /// Batch-fetch multiple case events by their IDs in a single PostgREST query.
+    /// Replaces N sequential GetCaseEventByIdAsync calls.
+    /// </summary>
+    public async Task<List<CaseEventReadRecord>> GetCaseEventsByIdsAsync(IEnumerable<string> eventIds)
+    {
+        var ids = eventIds.Where(id => UuidRegex.IsMatch(id)).ToList();
+        if (ids.Count == 0 || !_isConfigured) return [];
+
+        var csvIds = string.Join(",", ids.Select(Uri.EscapeDataString));
+        return await SelectAsync<CaseEventReadRecord>(
+            "case_events",
+            $"id=in.({csvIds})",
+            "created_at.desc",
+            ids.Count);
     }
 }

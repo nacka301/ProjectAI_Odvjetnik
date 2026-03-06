@@ -208,13 +208,18 @@ public class CaseEventController : ControllerBase
         if (request.EventIds == null || request.EventIds.Length == 0)
             return BadRequest(new { error = "Nema ID-ova događaja za označiti." });
 
-        // Verify all events belong to the user
+        // P0 fix: batch-fetch all events in a single query instead of N sequential calls
+        var events = await _service.GetCaseEventsByIdsAsync(request.EventIds);
+
+        // Verify all requested events were found and belong to this user
+        var foundIds = events.Select(e => e.Id).ToHashSet();
         foreach (var eventId in request.EventIds)
         {
-            var ev = await _service.GetCaseEventByIdAsync(eventId);
-            if (ev == null || ev.UserId != userId)
+            if (!foundIds.Contains(eventId))
                 return BadRequest(new { error = $"Događaj {eventId} nije pronađen ili ne pripada ovom korisniku." });
         }
+        if (events.Any(e => e.UserId != userId))
+            return BadRequest(new { error = "Neki događaji ne pripadaju ovom korisniku." });
 
         var count = await _service.MarkEventsAsBilledAsync(request.EventIds);
         return Ok(new { marked = count });
