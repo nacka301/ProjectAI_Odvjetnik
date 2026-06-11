@@ -10,7 +10,7 @@ namespace Backend.Services;
 /// Results are cached per-tenant for 60 s to minimise PostgREST round-trips.
 /// </summary>
 public sealed class UsageService
-{
+:IUsageService {
     private readonly HttpClient _httpClient;
     private readonly string? _supabaseUrl;
     private readonly string? _serviceKey;

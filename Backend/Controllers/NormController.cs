@@ -14,9 +14,9 @@ namespace Backend.Controllers;
 [EnableRateLimiting("general")]
 public class NormController : ControllerBase
 {
-    private readonly NormValidityService _normService;
+    private readonly INormValidityService _normService;
 
-    public NormController(NormValidityService normService)
+    public NormController(INormValidityService normService)
     {
         _normService = normService;
     }

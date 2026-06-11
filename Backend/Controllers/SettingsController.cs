@@ -21,11 +21,11 @@ namespace Backend.Controllers;
 [Route("api/settings")]
 public class SettingsController : ControllerBase
 {
-    private readonly SettingsService _service;
-    private readonly CreditService _creditService;
+    private readonly ISettingsService _service;
+    private readonly ICreditService _creditService;
     private readonly ILogger<SettingsController> _logger;
 
-    public SettingsController(SettingsService service, CreditService creditService, ILogger<SettingsController> logger)
+    public SettingsController(ISettingsService service, ICreditService creditService, ILogger<SettingsController> logger)
     {
         _service = service;
         _creditService = creditService;

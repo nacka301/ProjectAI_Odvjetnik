@@ -19,7 +19,7 @@ namespace Backend.Controllers;
 [Route("api/[controller]")]
 public class LegalController : ControllerBase
 {
-    private readonly LegalIntelligenceService _legalService;
+    private readonly ILegalIntelligenceService _legalService;
     private readonly PdfService _pdfService;
     private readonly SupabaseService _supabaseService;
     private readonly ChatClientProvider _clients;

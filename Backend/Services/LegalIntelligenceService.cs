@@ -14,7 +14,7 @@ namespace Backend.Services;
 /// V36: Academic persona, proper legal methodology, continental law framework.
 /// </summary>
 public class LegalIntelligenceService
-{
+:ILegalIntelligenceService {
     private readonly ChatClient _fastClient;   // Fast model — feed summaries
     private readonly ChatClient _heavyClient;  // Heavy model — strategy + precedents
     private readonly ILogger<LegalIntelligenceService> _logger;

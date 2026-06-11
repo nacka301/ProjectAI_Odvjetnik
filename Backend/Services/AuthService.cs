@@ -17,7 +17,7 @@ namespace Backend.Services;
 ///   • Rate-limited at controller level
 ///   • All passwords hashed by Supabase (bcrypt) — never stored in our DB
 /// </summary>
-public sealed class AuthService
+public sealed class AuthService : IAuthService
 {
     private readonly HttpClient _httpClient;
     private readonly IAuthEmailService _emailService;

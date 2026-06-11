@@ -11,7 +11,7 @@ namespace Backend.Services;
 /// Agents often fill Njuškalo forms incorrectly — the truth is always in the text.
 /// </summary>
 public class TextAnalysisService
-{
+:ITextAnalysisService {
     private readonly ChatClient _chatClient;  // Fast model — extraction only
     private readonly ILogger<TextAnalysisService> _logger;
 

@@ -15,7 +15,7 @@ namespace Backend.Controllers;
 [Route("api/[controller]")]
 public class TranslationController : ControllerBase
 {
-    private readonly TranslationService _translationService;
+    private readonly ITranslationService _translationService;
     private readonly SupabaseService _supabaseService;
     private readonly ChatClientProvider _clients;
     private readonly CreditService _creditService;

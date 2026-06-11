@@ -19,8 +19,8 @@ namespace Backend.Controllers;
 [Route("api/zk")]
 public class ZkUnifiedController : ControllerBase
 {
-    private readonly ZkParsingService _zkParsingService;
-    private readonly ValuationService _valuationService;
+    private readonly IZkParsingService _zkParsingService;
+    private readonly IValuationService _valuationService;
     private readonly PdfService _pdfService;
     private readonly MarketResearchService _marketResearchService;
     private readonly ValuationEngine _valuationEngine;
@@ -32,7 +32,7 @@ public class ZkUnifiedController : ControllerBase
 
     public ZkUnifiedController(
         ZkParsingService zkParsingService,
-        ValuationService valuationService,
+        IValuationService valuationService,
         PdfService pdfService,
         MarketResearchService marketResearchService,
         ValuationEngine valuationEngine,

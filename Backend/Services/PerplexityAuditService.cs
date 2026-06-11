@@ -14,7 +14,7 @@ namespace Backend.Services;
 /// against real-time market data, news, and public listings.
 /// </summary>
 public class PerplexityAuditService
-{
+:IPerplexityAuditService {
     private readonly HttpClient _httpClient;
     private readonly ILogger<PerplexityAuditService> _logger;
     private readonly string? _apiKey;

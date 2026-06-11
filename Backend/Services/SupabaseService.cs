@@ -10,7 +10,7 @@ namespace Backend.Services;
 /// Tables: evaluations, contract_analyses, chronologies, legal_strategies
 /// </summary>
 public class SupabaseService
-{
+:ISupabaseService {
     private readonly HttpClient _httpClient;
     private readonly string? _supabaseUrl;
     private readonly string? _serviceKey;

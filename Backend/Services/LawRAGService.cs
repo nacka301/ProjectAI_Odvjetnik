@@ -17,8 +17,8 @@ namespace Backend.Services;
 /// cites real Croatian law text instead of relying on training data.
 /// </summary>
 public class LawRAGService
-{
-    private readonly EmbeddingService _embedding;
+:ILawRAGService {
+    private readonly IEmbeddingService _embedding;
     private readonly HttpClient _httpClient;
     private readonly ILogger<LawRAGService> _logger;
     private readonly string? _supabaseUrl;

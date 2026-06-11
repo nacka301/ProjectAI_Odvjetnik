@@ -15,7 +15,7 @@ namespace Backend.Services;
 /// engine output — then asks Perplexity to judge whether the result is realistic.
 /// </summary>
 public class PerplexityTestValidationService
-{
+:IPerplexityTestValidationService {
     private readonly HttpClient _httpClient;
     private readonly ILogger<PerplexityTestValidationService> _logger;
     private readonly string? _apiKey;

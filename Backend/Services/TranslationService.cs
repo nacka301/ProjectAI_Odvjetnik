@@ -10,7 +10,7 @@ namespace Backend.Services;
 /// to produce legally precise translations of contracts, rulings, etc.
 /// </summary>
 public class TranslationService
-{
+:ITranslationService {
     private readonly ChatClient _client;
     private readonly ILogger<TranslationService> _logger;
 

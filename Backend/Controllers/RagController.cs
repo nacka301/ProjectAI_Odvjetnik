@@ -14,10 +14,10 @@ namespace Backend.Controllers;
 [Route("api/[controller]")]
 public class RagController : ControllerBase
 {
-    private readonly LawRAGService _ragService;
+    private readonly ILawRAGService _ragService;
     private readonly ILogger<RagController> _logger;
 
-    public RagController(LawRAGService ragService, ILogger<RagController> logger)
+    public RagController(ILawRAGService ragService, ILogger<RagController> logger)
     {
         _ragService = ragService;
         _logger = logger;

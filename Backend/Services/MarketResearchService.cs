@@ -12,7 +12,7 @@ namespace Backend.Services;
 /// Every result must pass the Price-First gate before entering the pipeline.
 /// </summary>
 public class MarketResearchService
-{
+:IMarketResearchService {
     private readonly HttpClient _httpClient;
     private readonly string _apiKey;
     private readonly string? _brightDataWsEndpoint;

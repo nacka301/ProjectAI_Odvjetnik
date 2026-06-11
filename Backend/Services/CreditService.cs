@@ -16,14 +16,14 @@ namespace Backend.Services;
 ///   // ... proceed with AI logic
 /// </summary>
 public sealed class CreditService
-{
+:ICreditService {
     private readonly HttpClient _httpClient;
     private readonly string? _supabaseUrl;
     private readonly string? _serviceKey;
     private readonly ILogger<CreditService> _logger;
     private readonly bool _isConfigured;
-    private readonly SettingsService _settingsService;
-    private readonly UsageService _usageService;
+    private readonly ISettingsService _settingsService;
+    private readonly IUsageService _usageService;
 
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
@@ -39,8 +39,8 @@ public sealed class CreditService
         HttpClient httpClient,
         IConfiguration config,
         ILogger<CreditService> logger,
-        SettingsService settingsService,
-        UsageService usageService)
+        ISettingsService settingsService,
+        IUsageService usageService)
     {
         _httpClient = httpClient;
         _logger = logger;

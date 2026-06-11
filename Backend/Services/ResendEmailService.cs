@@ -14,8 +14,7 @@ namespace Backend.Services;
 /// Environment-variable overrides (Render / Docker):
 ///   RESEND_API_KEY, RESEND_SENDER_EMAIL
 /// </summary>
-public sealed class ResendEmailService : IEmailService
-{
+public sealed class ResendEmailService : IResendEmailService,IEmailService {
     private const string SmtpHost = "smtp.resend.com";
     private const int SmtpPort = 465;
     private const string SmtpUsername = "resend";           // Resend requires literal "resend"

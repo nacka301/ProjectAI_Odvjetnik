@@ -12,7 +12,7 @@ namespace Backend.Services;
 /// Handles tables, columns, Croatian diacritics, and scanned-PDF detection.
 /// </summary>
 public class PdfService
-{
+:IPdfService {
     private readonly ILogger<PdfService> _logger;
 
     public PdfService(ILogger<PdfService> logger) => _logger = logger;

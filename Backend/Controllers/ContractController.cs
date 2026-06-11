@@ -16,7 +16,7 @@ namespace Backend.Controllers;
 [Route("api/[controller]")]
 public class ContractController : ControllerBase
 {
-    private readonly ContractAnalysisService _contractService;
+    private readonly IContractAnalysisService _contractService;
     private readonly PdfService _pdfService;
     private readonly SupabaseService _supabaseService;
     private readonly ChatClientProvider _clients;

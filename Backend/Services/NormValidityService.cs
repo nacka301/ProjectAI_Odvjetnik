@@ -16,7 +16,7 @@ namespace Backend.Services;
 /// Data sources: Croatian official gazette (Narodne novine), zakon.hr
 /// </summary>
 public class NormValidityService
-{
+:INormValidityService {
     private static readonly Dictionary<string, NormInfo> Registry = BuildRegistry();
 
     // ── Public API ──

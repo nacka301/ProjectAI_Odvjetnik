@@ -5,7 +5,7 @@ using OpenAI.Chat;
 namespace Backend.Services;
 
 public class ValuationService
-{
+:IValuationService {
     private readonly ChatClient _fastClient;   // Fast model — extraction tasks
     private readonly ChatClient _heavyClient;  // Heavy model — final narrative
     private readonly ILogger<ValuationService> _logger;

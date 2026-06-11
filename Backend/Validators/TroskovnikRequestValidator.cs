@@ -29,14 +29,14 @@ public sealed class TroskovnikRequestValidator : AbstractValidator<TroskovnikReq
         // Odvjetnik: if present, require at least naziv
         When(x => x.Odvjetnik != null, () =>
         {
-            RuleFor(x => x.Odvjetnik.Naziv).NotEmpty().WithMessage("Odvjetnik.naziv je obavezan ako je polje 'odvjetnik' poslan.");
+            RuleFor(x => x.Odvjetnik!.Naziv).NotEmpty().WithMessage("Odvjetnik.naziv je obavezan ako je polje 'odvjetnik' poslan.");
         });
 
         // Predmet: if present, require at least one identifier: sud or poslovni_broj or CaseId
         When(x => x.Predmet != null, () =>
         {
             RuleFor(x => x.Predmet)
-                .Must((req, predmet) => !string.IsNullOrWhiteSpace(predmet?.Sud) || !string.IsNullOrWhiteSpace(predmet?.PoslovniBroj) || !string.IsNullOrWhiteSpace(req.CaseId))
+                .Must((req, predmet) => !string.IsNullOrWhiteSpace(predmet!.Sud) || !string.IsNullOrWhiteSpace(predmet!.PoslovniBroj) || !string.IsNullOrWhiteSpace(req.CaseId))
                 .WithMessage("Ako pošaljete 'predmet', morate navesti najmanje 'sud' ili 'poslovni_broj', ili poslati 'case_id'.");
         });
 
@@ -45,29 +45,30 @@ public sealed class TroskovnikRequestValidator : AbstractValidator<TroskovnikReq
         {
             When(x => x.Stranke.ZastupanaStranka != null, () =>
             {
-                RuleFor(x => x.Stranke.ZastupanaStranka.Naziv).NotEmpty().WithMessage("ZastupanaStranka.naziv je obavezan ako je polje 'zastupana_stranka' poslan.");
+                RuleFor(x => x.Stranke!.ZastupanaStranka!.Naziv).NotEmpty().WithMessage("ZastupanaStranka.naziv je obavezan ako je polje 'zastupana_stranka' poslan.");
             });
 
             When(x => x.Stranke.Protustranka != null, () =>
             {
-                RuleFor(x => x.Stranke.Protustranka.Naziv).NotEmpty().WithMessage("Protustranka.naziv je obavezan ako je polje 'protustranka' poslan.");
+                RuleFor(x => x.Stranke!.Protustranka!.Naziv).NotEmpty().WithMessage("Protustranka.naziv je obavezan ako je polje 'protustranka' poslan.");
             });
         });
 
         // Optional: validate OIB format (11 digits) when provided
         When(x => !string.IsNullOrWhiteSpace(x.Odvjetnik?.Oib), () =>
         {
-            RuleFor(x => x.Odvjetnik.Oib).Matches("^\\d{11}$").WithMessage("Odvjetnik.oib mora sadržavati 11 znamenki.");
+            RuleFor(x => x.Odvjetnik!.Oib).Matches("^\\d{11}$").WithMessage("Odvjetnik.oib mora sadržavati 11 znamenki.");
         });
 
         When(x => !string.IsNullOrWhiteSpace(x.Stranke?.ZastupanaStranka?.Oib), () =>
         {
-            RuleFor(x => x.Stranke.ZastupanaStranka.Oib).Matches("^\\d{11}$").WithMessage("ZastupanaStranka.oib mora sadržavati 11 znamenki.");
+            RuleFor(x => x.Stranke!.ZastupanaStranka!.Oib).Matches("^\\d{11}$").WithMessage("ZastupanaStranka.oib mora sadržavati 11 znamenki.");
         });
 
         When(x => !string.IsNullOrWhiteSpace(x.Stranke?.Protustranka?.Oib), () =>
         {
-            RuleFor(x => x.Stranke.Protustranka.Oib).Matches("^\\d{11}$").WithMessage("Protustranka.oib mora sadržavati 11 znamenki.");
+            RuleFor(x => x.Stranke!.Protustranka!.Oib).Matches("^\\d{11}$").WithMessage("Protustranka.oib mora sadržavati 11 znamenki.");
         });
     }
 }
+

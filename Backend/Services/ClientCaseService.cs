@@ -10,7 +10,7 @@ namespace Backend.Services;
 /// Uses Supabase PostgREST API with service_role key.
 /// </summary>
 public sealed class ClientCaseService
-{
+:IClientCaseService {
     private readonly HttpClient _httpClient;
     private readonly string? _supabaseUrl;
     private readonly string? _serviceKey;

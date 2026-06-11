@@ -17,7 +17,7 @@ namespace Backend.Services;
 ///   • All operations use constant-time comparison to prevent timing attacks
 /// </summary>
 public class TwoFactorService
-{
+:ITwoFactorService {
     private readonly HttpClient _httpClient;
     private readonly string? _supabaseUrl;
     private readonly string? _serviceKey;

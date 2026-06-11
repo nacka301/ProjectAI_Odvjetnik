@@ -21,10 +21,10 @@ namespace Backend.Controllers;
 [Route("api/2fa")]
 public class TwoFactorController : ControllerBase
 {
-    private readonly TwoFactorService _service;
+    private readonly ITwoFactorService _service;
     private readonly ILogger<TwoFactorController> _logger;
 
-    public TwoFactorController(TwoFactorService service, ILogger<TwoFactorController> logger)
+    public TwoFactorController(ITwoFactorService service, ILogger<TwoFactorController> logger)
     {
         _service = service;
         _logger = logger;

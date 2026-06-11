@@ -10,12 +10,13 @@ namespace Backend.Controllers;
 [EnableRateLimiting("general")]
 public class TroskovnikController : ControllerBase
 {
-    private readonly TroskovnikService _service = new();
-    private readonly ClientCaseService _clientCaseService;
+    private readonly ITroskovnikService _service;
+    private readonly IClientCaseService _clientCaseService;
 
-    public TroskovnikController(ClientCaseService clientCaseService)
+    public TroskovnikController(IClientCaseService clientCaseService, ITroskovnikService service)
     {
         _clientCaseService = clientCaseService;
+        _service = service;
     }
 
     // SECURITY: Verified user_id extracted from Supabase JWT by SupabaseJwtMiddleware
@@ -210,3 +211,5 @@ public class TroskovnikController : ControllerBase
         return Ok(list);
     }
 }
+
+

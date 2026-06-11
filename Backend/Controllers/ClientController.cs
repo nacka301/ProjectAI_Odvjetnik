@@ -15,9 +15,9 @@ namespace Backend.Controllers;
 [EnableRateLimiting("general")]
 public class ClientController : ControllerBase
 {
-    private readonly ClientCaseService _service;
+    private readonly IClientCaseService _service;
 
-    public ClientController(ClientCaseService service)
+    public ClientController(IClientCaseService service)
     {
         _service = service;
     }

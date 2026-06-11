@@ -14,10 +14,10 @@ namespace Backend.Controllers;
 [Route("api/[controller]")]
 public class AuditController : ControllerBase
 {
-    private readonly PerplexityAuditService _auditService;
-    private readonly PerplexityTestValidationService _testValidationService;
-    private readonly ValuationEngine _valuationEngine;
-    private readonly SupabaseService _supabaseService;
+    private readonly IPerplexityAuditService _auditService;
+    private readonly IPerplexityTestValidationService _testValidationService;
+    private readonly IValuationEngine _valuationEngine;
+    private readonly ISupabaseService _supabaseService;
     private readonly ILogger<AuditController> _logger;
 
     private static readonly JsonSerializerOptions JsonOpts = new()
@@ -28,9 +28,9 @@ public class AuditController : ControllerBase
 
     public AuditController(
         PerplexityAuditService auditService,
-        PerplexityTestValidationService testValidationService,
-        ValuationEngine valuationEngine,
-        SupabaseService supabaseService,
+        IPerplexityTestValidationService testValidationService,
+        IValuationEngine valuationEngine,
+        ISupabaseService supabaseService,
         ILogger<AuditController> logger)
     {
         _auditService = auditService;

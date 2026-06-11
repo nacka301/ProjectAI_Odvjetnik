@@ -16,10 +16,10 @@ namespace Backend.Controllers;
 [EnableRateLimiting("general")]
 public class CaseEventController : ControllerBase
 {
-    private readonly ClientCaseService _service;
+    private readonly IClientCaseService _service;
     private readonly ILogger<CaseEventController> _logger;
 
-    public CaseEventController(ClientCaseService service, ILogger<CaseEventController> logger)
+    public CaseEventController(IClientCaseService service, ILogger<CaseEventController> logger)
     {
         _service = service;
         _logger = logger;

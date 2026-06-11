@@ -10,7 +10,7 @@ namespace Backend.Services;
 /// Also provides property info suitable for the valuation pipeline.
 /// </summary>
 public class ZkParsingService
-{
+:IZkParsingService {
     private readonly ChatClient _chatClient;
     private readonly PdfService _pdfService;
     private readonly ILogger<ZkParsingService> _logger;

@@ -13,7 +13,7 @@ namespace Backend.Services;
 ///   Pass 3 (Engine): Deterministic risk scoring from all findings
 /// </summary>
 public class ContractAnalysisService
-{
+:IContractAnalysisService {
     private readonly ChatClient _client;  // V65: Single DeepSeek V3.2 for everything
     private readonly LawRAGService _ragService;  // V69: Semantic RAG for law article retrieval
     private readonly ILogger<ContractAnalysisService> _logger;

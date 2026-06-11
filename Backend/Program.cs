@@ -156,17 +156,17 @@ var heavyModel = builder.Configuration["OpenRouter:HeavyModel"] ?? "deepseek/dee
 var reasoningModel = builder.Configuration["OpenRouter:ReasoningModel"] ?? "deepseek/deepseek-chat-v3-0324";
 builder.Services.AddSingleton(new ChatClientProvider(openRouterKey, baseUrl, fastModel, heavyModel, reasoningModel));
 builder.Services.AddScoped<PdfService>();
-builder.Services.AddScoped<ValuationService>();
-builder.Services.AddScoped<TextAnalysisService>();
-builder.Services.AddScoped<ValuationAgentService>();
-builder.Services.AddScoped<ContractAnalysisService>();
+builder.Services.AddScoped<IValuationService, ValuationService>();
+builder.Services.AddScoped<ITextAnalysisService, TextAnalysisService>();
+builder.Services.AddScoped<IValuationAgentService, ValuationAgentService>();
+builder.Services.AddScoped<IContractAnalysisService, ContractAnalysisService>();
 builder.Services.AddScoped<ChronologyService>();
 builder.Services.AddScoped<ValuationEngine>();
-builder.Services.AddScoped<ZkParsingService>();
-builder.Services.AddScoped<LegalIntelligenceService>();
+builder.Services.AddScoped<IZkParsingService, ZkParsingService>();
+builder.Services.AddScoped<ILegalIntelligenceService, LegalIntelligenceService>();
 builder.Services.AddSingleton<NormValidityService>();
 builder.Services.AddScoped<InvoiceService>();
-builder.Services.AddScoped<TranslationService>();
+builder.Services.AddScoped<ITranslationService, TranslationService>();
 builder.Services.AddHttpClient<EmailService>();
 
 // ── Resend transactional email (MailKit SMTP → smtp.resend.com:465) ──
@@ -295,3 +295,4 @@ else
 {
     app.Run();
 }
+

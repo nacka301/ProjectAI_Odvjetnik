@@ -13,7 +13,7 @@ namespace Backend.Services;
 /// The service produces HTML which can be converted to PDF/Word by external tools.
 /// </summary>
 public sealed class TroskovnikDocumentService
-{
+:ITroskovnikDocumentService {
     private readonly ILogger<TroskovnikDocumentService> _logger;
     private readonly CultureInfo _hr = new("hr-HR");
 

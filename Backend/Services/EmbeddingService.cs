@@ -15,7 +15,7 @@ namespace Backend.Services;
 ///   2. Querying: embed contract text for vector similarity search
 /// </summary>
 public class EmbeddingService
-{
+:IEmbeddingService {
     private readonly HttpClient _httpClient;
     private readonly ILogger<EmbeddingService> _logger;
     private readonly string _apiKey;

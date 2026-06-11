@@ -14,7 +14,7 @@ namespace Backend.Services;
 /// Returns adjustments that complement the deterministic engine.
 /// </summary>
 public class ValuationAgentService
-{
+:IValuationAgentService {
     private readonly ChatClient _chatClient;  // Heavy model — complex reasoning
     private readonly ILogger<ValuationAgentService> _logger;
 

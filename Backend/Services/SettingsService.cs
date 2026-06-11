@@ -10,7 +10,7 @@ namespace Backend.Services;
 /// Uses Supabase PostgREST API with service_role key (bypasses RLS).
 /// </summary>
 public sealed class SettingsService
-{
+:ISettingsService {
     private readonly HttpClient _httpClient;
     private readonly string? _supabaseUrl;
     private readonly string? _serviceKey;

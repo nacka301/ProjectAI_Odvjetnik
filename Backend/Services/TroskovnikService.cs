@@ -8,7 +8,7 @@ namespace Backend.Services;
 /// Tbr. 54: Vrijednost boda = 2,00 EUR.
 /// </summary>
 public sealed class TroskovnikService
-{
+:ITroskovnikService {
     // ── Tbr. 7, toč. 1 — base point lookup ───────────────────────
 
     /// <summary>

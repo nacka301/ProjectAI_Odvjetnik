@@ -15,14 +15,14 @@ namespace Backend.Controllers;
 [Route("api/[controller]")]
 public class EvaluateController : ControllerBase
 {
-    private readonly ValuationService _valuationService;
+    private readonly IValuationService _valuationService;
     private readonly PdfService _pdfService;
     private readonly MarketResearchService _marketResearchService;
     private readonly ValuationEngine _valuationEngine;
     private readonly SupabaseService _supabaseService;
     private readonly EmailService _emailService;
-    private readonly TextAnalysisService _textAnalysisService;
-    private readonly ValuationAgentService _valuationAgentService;
+    private readonly ITextAnalysisService _textAnalysisService;
+    private readonly IValuationAgentService _valuationAgentService;
     private readonly ChatClientProvider _clients;
     private readonly CreditService _creditService;
     private readonly ILogger<EvaluateController> _logger;
@@ -34,8 +34,8 @@ public class EvaluateController : ControllerBase
         ValuationEngine valuationEngine,
         SupabaseService supabaseService,
         EmailService emailService,
-        TextAnalysisService textAnalysisService,
-        ValuationAgentService valuationAgentService,
+        ITextAnalysisService textAnalysisService,
+        IValuationAgentService valuationAgentService,
         ChatClientProvider clients,
         CreditService creditService,
         ILogger<EvaluateController> logger)

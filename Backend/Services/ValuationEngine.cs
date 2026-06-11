@@ -18,7 +18,7 @@ namespace Backend.Services;
 /// AI provides similarity scores; math engine handles everything else deterministically.
 /// </summary>
 public class ValuationEngine
-{
+:IValuationEngine {
     private readonly ILogger<ValuationEngine> _logger;
 
     // ══════════════════════════════════════════════════════════
