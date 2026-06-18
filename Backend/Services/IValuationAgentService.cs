@@ -1,6 +1,8 @@
 using System.Text.Json;
 using OpenAI.Chat;
 
+using Backend.Models;
+
 namespace Backend.Services;
 
 /// <summary>

@@ -1,6 +1,8 @@
 using System.Text.Json;
 using OpenAI.Chat;
 
+using Backend.Models;
+
 namespace Backend.Services;
 
 /// <summary>
@@ -284,3 +286,4 @@ public class AgentAdjustment
     /// <summary>Professional reasoning citing evidence from the description text</summary>
     public string Reasoning { get; set; } = "";
 }
+

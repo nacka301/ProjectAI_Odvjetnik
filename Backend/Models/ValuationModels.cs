@@ -174,8 +174,8 @@ public class FullEvaluationResult
     public List<string> OutlierLog { get; set; } = [];
     public double TotalAdjustmentPercent { get; set; }
     public string RealizationGapReasoning { get; set; } = "";
-    public List<Backend.Services.UsedComparable> UsedComparables { get; set; } = [];
-    public List<Backend.Services.ValuationAdjustment> Adjustments { get; set; } = [];
+    public List<UsedComparable> UsedComparables { get; set; } = [];
+    public List<ValuationAdjustment> Adjustments { get; set; } = [];
     public List<string> Pipeline { get; set; } = [];
 
     // ── V4 Math Confidence (replaces V3 market-only confidence) ──
@@ -208,3 +208,4 @@ public class FullEvaluationResult
     /// <summary>Valuation method used: "Poredbena" / "Troškovna" / "Kombinirana"</summary>
     public string ValuationMethod { get; set; } = "Poredbena";
 }
+

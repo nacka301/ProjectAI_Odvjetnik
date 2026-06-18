@@ -2,6 +2,8 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
+using Backend.Models;
+
 namespace Backend.Services;
 
 /// <summary>

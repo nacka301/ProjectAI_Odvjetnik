@@ -3,6 +3,8 @@ using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 
+using Backend.Models;
+
 namespace Backend.Services;
 
 /// <summary>
