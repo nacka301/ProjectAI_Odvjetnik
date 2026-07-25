@@ -38,12 +38,23 @@ builder.Configuration
 
 // --- Services ---
 
+// Controllers are registered as services so ValidateOnBuild (below) also inspects
+// their constructors — a missing DI registration then fails at startup instead of
+// surfacing as a 500 on the first request that hits the endpoint.
 builder.Services.AddControllers()
+    .AddControllersAsServices()
     .AddJsonOptions(opts =>
     {
         opts.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower;
         opts.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
     });
+
+// Fail fast on an incomplete DI graph, in every environment (not just Development).
+builder.Host.UseDefaultServiceProvider(opts =>
+{
+    opts.ValidateOnBuild = true;
+    opts.ValidateScopes = true;
+});
 
 // FluentValidation — auto-register all validators from this assembly
 builder.Services.AddValidatorsFromAssemblyContaining<PropertyInputBaseValidator>();
@@ -154,28 +165,70 @@ var baseUrl = builder.Configuration["OpenRouter:BaseUrl"] ?? "https://openrouter
 var fastModel = builder.Configuration["OpenRouter:FastModel"] ?? "openai/gpt-4o-mini";
 var heavyModel = builder.Configuration["OpenRouter:HeavyModel"] ?? "deepseek/deepseek-chat-v3-0324";
 var reasoningModel = builder.Configuration["OpenRouter:ReasoningModel"] ?? "deepseek/deepseek-chat-v3-0324";
+// NOTE ON REGISTRATION STYLE
+// Every service is registered twice: once by its concrete type, once by its interface,
+// with the interface forwarding to the same registration via GetRequiredService.
+// Consumers currently inject a mix of both (controllers mostly take concrete types,
+// services mostly take interfaces), so registering only one side leaves the other
+// unresolvable. The forwarding lambda guarantees both names reach one instance.
 builder.Services.AddSingleton(new ChatClientProvider(openRouterKey, baseUrl, fastModel, heavyModel, reasoningModel));
+
 builder.Services.AddScoped<PdfService>();
-builder.Services.AddScoped<IValuationService, ValuationService>();
-builder.Services.AddScoped<ITextAnalysisService, TextAnalysisService>();
-builder.Services.AddScoped<IValuationAgentService, ValuationAgentService>();
-builder.Services.AddScoped<IContractAnalysisService, ContractAnalysisService>();
+builder.Services.AddScoped<IPdfService>(sp => sp.GetRequiredService<PdfService>());
+
+builder.Services.AddScoped<ValuationService>();
+builder.Services.AddScoped<IValuationService>(sp => sp.GetRequiredService<ValuationService>());
+
+builder.Services.AddScoped<TextAnalysisService>();
+builder.Services.AddScoped<ITextAnalysisService>(sp => sp.GetRequiredService<TextAnalysisService>());
+
+builder.Services.AddScoped<ValuationAgentService>();
+builder.Services.AddScoped<IValuationAgentService>(sp => sp.GetRequiredService<ValuationAgentService>());
+
+builder.Services.AddScoped<ContractAnalysisService>();
+builder.Services.AddScoped<IContractAnalysisService>(sp => sp.GetRequiredService<ContractAnalysisService>());
+
+// ChronologyService does not implement IChronologyService (the interface is declared but
+// unimplemented and currently has no consumers) — concrete registration only.
 builder.Services.AddScoped<ChronologyService>();
+
 builder.Services.AddScoped<ValuationEngine>();
-builder.Services.AddScoped<IZkParsingService, ZkParsingService>();
-builder.Services.AddScoped<ILegalIntelligenceService, LegalIntelligenceService>();
+builder.Services.AddScoped<IValuationEngine>(sp => sp.GetRequiredService<ValuationEngine>());
+
+builder.Services.AddScoped<ZkParsingService>();
+builder.Services.AddScoped<IZkParsingService>(sp => sp.GetRequiredService<ZkParsingService>());
+
+builder.Services.AddScoped<LegalIntelligenceService>();
+builder.Services.AddScoped<ILegalIntelligenceService>(sp => sp.GetRequiredService<LegalIntelligenceService>());
+
 builder.Services.AddSingleton<NormValidityService>();
+builder.Services.AddSingleton<INormValidityService>(sp => sp.GetRequiredService<NormValidityService>());
+
 builder.Services.AddScoped<InvoiceService>();
-builder.Services.AddScoped<ITranslationService, TranslationService>();
+
+builder.Services.AddScoped<TranslationService>();
+builder.Services.AddScoped<ITranslationService>(sp => sp.GetRequiredService<TranslationService>());
+
+// ── Odvjetnička tarifa (stateless calculators) ──
+builder.Services.AddSingleton<TroskovnikService>();
+builder.Services.AddSingleton<ITroskovnikService>(sp => sp.GetRequiredService<TroskovnikService>());
+builder.Services.AddScoped<TroskovnikDocumentService>();
+builder.Services.AddScoped<ITroskovnikDocumentService>(sp => sp.GetRequiredService<TroskovnikDocumentService>());
+
 builder.Services.AddHttpClient<EmailService>();
 
 // ── Resend transactional email (MailKit SMTP → smtp.resend.com:465) ──
-builder.Services.AddSingleton<IEmailService, ResendEmailService>();
+// Implements two interfaces — both must forward to the single singleton instance.
+builder.Services.AddSingleton<ResendEmailService>();
+builder.Services.AddSingleton<IResendEmailService>(sp => sp.GetRequiredService<ResendEmailService>());
+builder.Services.AddSingleton<IEmailService>(sp => sp.GetRequiredService<ResendEmailService>());
 
 // ── Auth registration (MailKit email + Supabase Admin API) ──
 builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection(SmtpSettings.SectionName));
-builder.Services.AddSingleton<IAuthEmailService, AuthEmailService>();
+builder.Services.AddSingleton<AuthEmailService>();
+builder.Services.AddSingleton<IAuthEmailService>(sp => sp.GetRequiredService<AuthEmailService>());
 builder.Services.AddHttpClient<AuthService>();
+builder.Services.AddScoped<IAuthService>(sp => sp.GetRequiredService<AuthService>());
 
 // ── Audit logging (GDPR-safe, fire-and-forget) ──
 builder.Services.AddHttpClient<AuditLogService>();
@@ -188,21 +241,38 @@ builder.Services.AddHttpClient<EmbeddingService>(client =>
 {
     client.Timeout = TimeSpan.FromMinutes(2);
 });
+builder.Services.AddScoped<IEmbeddingService>(sp => sp.GetRequiredService<EmbeddingService>());
+
 builder.Services.AddHttpClient<LawRAGService>(client =>
 {
     client.Timeout = TimeSpan.FromMinutes(3);
 });
+builder.Services.AddScoped<ILawRAGService>(sp => sp.GetRequiredService<LawRAGService>());
+
 builder.Services.AddHttpClient<MarketResearchService>(client =>
 {
     // V20d: Increased timeout — deep dive of 20+ listings can take 60-120s total
     client.Timeout = TimeSpan.FromMinutes(5);
 });
+builder.Services.AddScoped<IMarketResearchService>(sp => sp.GetRequiredService<MarketResearchService>());
+
 builder.Services.AddHttpClient<SupabaseService>();
+builder.Services.AddScoped<ISupabaseService>(sp => sp.GetRequiredService<SupabaseService>());
+
 builder.Services.AddHttpClient<TwoFactorService>();
+builder.Services.AddScoped<ITwoFactorService>(sp => sp.GetRequiredService<TwoFactorService>());
+
 builder.Services.AddHttpClient<SettingsService>();
+builder.Services.AddScoped<ISettingsService>(sp => sp.GetRequiredService<SettingsService>());
+
 builder.Services.AddHttpClient<CreditService>();
+builder.Services.AddScoped<ICreditService>(sp => sp.GetRequiredService<CreditService>());
+
 builder.Services.AddHttpClient<UsageService>();
+builder.Services.AddScoped<IUsageService>(sp => sp.GetRequiredService<UsageService>());
+
 builder.Services.AddHttpClient<ClientCaseService>();
+builder.Services.AddScoped<IClientCaseService>(sp => sp.GetRequiredService<ClientCaseService>());
 
 // ── DataSeeder (admin-only, uses ClientCaseService) ──
 builder.Services.AddScoped<DataSeederService>();
@@ -210,10 +280,13 @@ builder.Services.AddHttpClient<PerplexityAuditService>(client =>
 {
     client.Timeout = TimeSpan.FromMinutes(2);
 });
+builder.Services.AddScoped<IPerplexityAuditService>(sp => sp.GetRequiredService<PerplexityAuditService>());
+
 builder.Services.AddHttpClient<PerplexityTestValidationService>(client =>
 {
     client.Timeout = TimeSpan.FromMinutes(3);
 });
+builder.Services.AddScoped<IPerplexityTestValidationService>(sp => sp.GetRequiredService<PerplexityTestValidationService>());
 
 var app = builder.Build();
 
