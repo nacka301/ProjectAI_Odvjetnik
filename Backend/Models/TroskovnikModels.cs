@@ -8,16 +8,41 @@ namespace Backend.Models;
 /// </summary>
 public static class TarifaConstants
 {
+    /// <summary>Tbr. 54 — vrijednost boda.</summary>
     public const decimal BodValue = 2.00m;
-    public const decimal PdvRate = 0.25m; // 25% PDV
-    // AUDIT NOTE: Tbr. 4.7 u Tarifi kaže "određuje se Pravilnikom ministarstva nadležnog za
-    // poslove pravosuđa" — 50% stopa dolazi iz tog Pravilnika, NE iz same Tarife.
-    public const decimal KazneniReductionRate = 0.50m;   // Branitelj po službenoj dužnosti / na teret proračuna (izvor: Pravilnik, ne Tarifa Tbr. 4.7)
-    public const decimal Tbr4t8Rate = 0.50m;             // Tbr. 4.8 — zastupanje oštećenika = 50% Tbr. 4 ✓ (potvrđeno u PDF-u)
-    // AUDIT NOTE: ZastupnikDjetetaRate od 0.70 NIJE pronađen ni u Tarifi ni u Uredbi o pristojbama.
-    // Izvor ove stope treba potvrditi iz Zakona o zaštiti djece žrtava kaznenih djela ili sl.
-    public const decimal ZastupnikDjetetaRate = 0.70m;   // Opunomoćenik djeteta žrtve = 70% od Tbr. 4.8 — IZVOR NEPOZNAT U PRILOŽENIM PDF-ovima
-    // Efektivni postotak za dijete žrtve: Tbr4t8Rate × ZastupnikDjetetaRate = 35%
+
+    /// <summary>Zakon o PDV-u — opća stopa.</summary>
+    public const decimal PdvRate = 0.25m;
+
+    /// <summary>
+    /// Branitelj po službenoj dužnosti ili na teret proračunskih sredstava — 50% tarife.
+    ///
+    /// Tbr. 4. toč. 7 sam ne određuje iznos nego upućuje dalje: "Nagrada za rad odvjetnika
+    /// koji je određen za branitelja po službenoj dužnosti, sukladno odredbama Zakona o
+    /// odvjetništvu, određuje se Pravilnikom ministarstva nadležnog za poslove pravosuđa."
+    ///
+    /// Izvor stope: Pravilnik, Narodne novine 22/2022, br. 271.
+    /// https://narodne-novine.nn.hr/clanci/sluzbeni/2022_02_22_271.html
+    /// </summary>
+    public const decimal KazneniReductionRate = 0.50m;
+
+    /// <summary>
+    /// Tbr. 4. toč. 8: "Odvjetniku koji zastupa oštećenika u postupku koji se vodi pred
+    /// policijom, državnim odvjetništvom (...) te na raspravi pred sudom, pripada 50%
+    /// nagrade iz ovog tarifnog broja."
+    /// </summary>
+    public const decimal Tbr4t8Rate = 0.50m;
+
+    /// <summary>
+    /// Opunomoćenik djeteta žrtve kaznenog djela — 70% od nagrade iz Tbr. 4. toč. 8.
+    ///
+    /// Izvor stope: Pravilnik, Narodne novine 22/2022, br. 271.
+    /// https://narodne-novine.nn.hr/clanci/sluzbeni/2022_02_22_271.html
+    ///
+    /// Budući da je Tbr. 4. toč. 8 već 50% nagrade iz Tbr. 4, efektivna stopa je
+    /// 0,50 × 0,70 = 35% pune tarife — ne 70%. Vidi TarifaUmanjenjaTests.
+    /// </summary>
+    public const decimal ZastupnikDjetetaRate = 0.70m;
 }
 
 /// <summary>Zapriječena kazna → bodovi (Tbr. 4)</summary>

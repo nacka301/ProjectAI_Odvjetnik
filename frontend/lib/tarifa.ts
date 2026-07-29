@@ -20,6 +20,31 @@ export const BOD_VALUE = 2.0;
 /** Zakon o PDV-u — opća stopa. */
 export const PDV_RATE = 0.25;
 
+/**
+ * Branitelj po službenoj dužnosti ili na teret proračunskih sredstava — 50% tarife.
+ *
+ * Tbr. 4. toč. 7 ne određuje iznos nego upućuje na "Pravilnik ministarstva nadležnog
+ * za poslove pravosuđa".
+ * Izvor stope: Pravilnik, Narodne novine 22/2022, br. 271.
+ * https://narodne-novine.nn.hr/clanci/sluzbeni/2022_02_22_271.html
+ */
+export const KAZNENO_UMANJENJE_STOPA = 0.5;
+
+/**
+ * Tbr. 4. toč. 8: odvjetniku koji zastupa oštećenika pripada 50% nagrade iz Tbr. 4.
+ */
+export const TBR_4_8_STOPA = 0.5;
+
+/**
+ * Opunomoćenik djeteta žrtve kaznenog djela — 70% od nagrade iz Tbr. 4. toč. 8.
+ *
+ * Izvor stope: Pravilnik, Narodne novine 22/2022, br. 271.
+ * https://narodne-novine.nn.hr/clanci/sluzbeni/2022_02_22_271.html
+ *
+ * Efektivno je to 0,50 × 0,70 = 35% pune tarife, ne 70%.
+ */
+export const ZASTUPNIK_DJETETA_STOPA = 0.7;
+
 // ── Tipovi (zrcale backend modele) ───────────────────────────────
 
 export interface TarifnaStavka {
@@ -178,14 +203,15 @@ export function izracunajKazneneBodove(
     bodovi *= 1 + povecanje;
   }
 
-  // Opunomoćenik djeteta žrtve: 70% od Tbr. 4. toč. 8, a toč. 8 je 50% Tbr. 4 → 35%.
+  // Opunomoćenik djeteta žrtve kaznenog djela: 70% od nagrade iz Tbr. 4. toč. 8,
+  // a toč. 8 je već 50% nagrade iz Tbr. 4 → efektivno 35% pune tarife, ne 70%.
   if (isZastupnikDjeteta) {
-    bodovi *= 0.5 * 0.7;
+    bodovi *= TBR_4_8_STOPA * ZASTUPNIK_DJETETA_STOPA;
   }
 
-  // Branitelj po službenoj dužnosti / na teret proračuna → 50%.
+  // Branitelj po službenoj dužnosti / na teret proračunskih sredstava → 50%.
   if (isPoSluzbenojDuznosti || isNaTeretProracuna) {
-    bodovi *= 0.5;
+    bodovi *= KAZNENO_UMANJENJE_STOPA;
   }
 
   return clampBodovi(bodovi, def);
