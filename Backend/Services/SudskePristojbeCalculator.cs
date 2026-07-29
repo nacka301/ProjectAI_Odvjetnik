@@ -67,6 +67,12 @@ public static class SudskePristojbeCalculator
 
         var iznos = IzracunajNezaokruzeno(vrijednostSpora);
 
+        // Tar. br. 1 st. 2 — "(...) plaća se polovica pristojbe iz stavka 1. ovoga Tar. br."
+        if (osnova == PristojbaOsnova.Polovica)
+            iznos *= 0.5m;
+
+        // Jedno zaokruživanje, na samom kraju. AwayFromZero, ne bankarsko:
+        // polovica od 76,4516 je 38,2258 → 38,23; ToEven bi na 38,225 dao 38,22.
         return Math.Round(iznos, 2, MidpointRounding.AwayFromZero);
     }
 

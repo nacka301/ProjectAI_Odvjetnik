@@ -223,41 +223,57 @@ export function objasnjenjePristojbe(osnova: PristojbaOsnova): string {
   }
 }
 
-/** Vrsta postupka → osnova za pristojbu. */
+/** Naziv kategorije parničnog postupka u katalogu. */
+export const KATEGORIJA_PARNICNI = "Parnični postupak";
+
+/** Naziv kategorije ovršnog postupka u katalogu. */
+export const KATEGORIJA_OVRSNI = "Ovršni postupak";
+
+/**
+ * Vrsta postupka → osnova za pristojbu. Zrcali
+ * `TroskovnikService.OdrediPristojbuOsnovu`.
+ */
 export function odrediPristojbuOsnovu(odabraneStavke: TarifnaStavka[]): PristojbaOsnova {
+  if (odabraneStavke.length === 0) return "Puna";
   if (jeSamoKazneni(odabraneStavke)) return "Nema";
+
+  const imaOvrsnih = odabraneStavke.some((s) => s.kategorija === KATEGORIJA_OVRSNI);
+  const imaParnicnih = odabraneStavke.some((s) => s.kategorija === KATEGORIJA_PARNICNI);
+
+  if (imaOvrsnih && !imaParnicnih) return "Polovica";
   return "Puna";
 }
 
+// Tar. br. 1 st. 1 — pet fiksnih razreda, doslovno iz tablice u NN 37/2023:
+//
+//   iznad        do eura      eura
+//   0,00         398,17       13,27
+//   398,18       796,34       26,54
+//   796,35       1.194,51     39,82
+//   1.194,52     1.592,67     53,09
+//   1.592,68     1.990,84     66,36
 const PRISTOJBA_BRACKETS: [number, number][] = [
   [398.17, 13.27],
   [796.34, 26.54],
-  [1_327.23, 39.82],
-  [1_990.84, 53.09],
-  [3_318.07, 79.63],
-  [5_308.91, 119.45],
-  [7_963.37, 172.54],
-  [13_272.28, 265.45],
-  [26_544.56, 398.17],
-  [39_816.84, 530.89],
-  [53_089.12, 663.61],
-  [66_361.4, 796.34],
-  [99_542.1, 929.06],
-  [132_722.81, 1_061.78],
-  [165_903.51, 1_194.51],
-  [199_084.21, 1_327.23],
-  [265_445.61, 1_592.67],
-  [331_807.02, 1_858.12],
-  [398_168.42, 2_123.56],
-  [464_529.82, 2_389.01],
-  [530_891.22, 2_654.46],
-  [663_614.03, 2_919.9],
-  [796_336.83, 3_185.35],
-  [929_059.64, 3_450.79],
-  [1_061_782.44, 3_716.24],
-  [1_327_228.05, 3_981.68],
+  [1_194.51, 39.82],
+  [1_592.67, 53.09],
+  [1_990.84, 66.36],
 ];
-const PRISTOJBA_MAX = 3_981.68;
+
+// "Preko 1.990,84 eura plaća se pristojba u iznosu od 66,36 eura i još 1% na
+//  razliku iznad 1.990,84 eura, ali ne više od 663,61 euro."
+const PRISTOJBA_PRAG = 1_990.84;
+const PRISTOJBA_BAZA = 66.36;
+const PRISTOJBA_STOPA = 0.01;
+const PRISTOJBA_MAX = 663.61;
+
+/** Nezaokruženi iznos po Tar. br. 1 st. 1 — da se zaokružuje samo jednom, na kraju. */
+function pristojbaNezaokruzeno(vps: number): number {
+  for (const [maxVps, fee] of PRISTOJBA_BRACKETS) {
+    if (vps <= maxVps) return fee;
+  }
+  return Math.min(PRISTOJBA_BAZA + PRISTOJBA_STOPA * (vps - PRISTOJBA_PRAG), PRISTOJBA_MAX);
+}
 
 export function izracunajSudskuPristojbu(
   vps: number,
@@ -265,8 +281,12 @@ export function izracunajSudskuPristojbu(
 ): number {
   if (osnova === "Nema") return 0;
   if (vps <= 0) return 0;
-  for (const [maxVps, fee] of PRISTOJBA_BRACKETS) {
-    if (vps <= maxVps) return fee;
-  }
-  return PRISTOJBA_MAX;
+
+  let iznos = pristojbaNezaokruzeno(vps);
+
+  // Tar. br. 1 st. 2 — polovica pristojbe iz st. 1.
+  if (osnova === "Polovica") iznos *= 0.5;
+
+  // Zaokruživanje "od nule", ne bankarsko: 38,2258 → 38,23.
+  return Math.round((iznos + Number.EPSILON) * 100) / 100;
 }

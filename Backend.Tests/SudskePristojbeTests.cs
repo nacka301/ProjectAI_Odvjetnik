@@ -79,6 +79,54 @@ public class SudskePristojbeTests
         Assert.False(kazneni.IsOslobodjenPristojbi);
     }
 
+    // ── Tar. br. 1 st. 2 — polovica pristojbe u ovrsi ──
+
+    /// <summary>
+    /// Uredba NN 37/23, Tar. br. 1 st. 2: "Za tužbu s prijedlogom za izdavanje platnog
+    /// naloga, prijedlog za ovrhu, protuovrhu i osiguranje, rješenje o ovrsi, protuovrsi
+    /// i osiguranju, prijedlog za povrat u prijašnje stanje, prijedlog za osiguranje
+    /// dokaza i odgovor na prijedlog za ponavljanje postupka, tužbu, žalbu, prijedlog za
+    /// dopuštenje revizije i reviziju plaća se POLOVICA pristojbe iz stavka 1."
+    /// </summary>
+    [Theory]
+    [InlineData(3_000, 38.23)]    // st. 1 = 76,4516 → polovica 38,2258 → 38,23
+    [InlineData(300, 6.64)]       // st. 1 = 13,27 → polovica 6,635 → 6,64 (ne 6,63)
+    [InlineData(50_000, 273.23)]  // st. 1 = 546,4516 → polovica 273,2258
+    [InlineData(500_000, 331.81)] // st. 1 = kapa 663,61 → polovica 331,805 → 331,81
+    public void OvrsniPostupak_PolovicaPristojbe(decimal vps, decimal ocekivano)
+    {
+        var rezultat = Izracunaj(vps, "ovr_prijedlog");
+
+        Assert.Equal(PristojbaOsnova.Polovica, rezultat.PristojbaOsnova);
+        Assert.Equal(ocekivano, rezultat.SudskaPristojba);
+    }
+
+    /// <summary>
+    /// Kontrolni izračun testa iz audita, korak po korak:
+    /// 66,36 + 1% × (3.000 − 1.990,84) = 66,36 + 10,0916 = 76,4516;
+    /// polovica = 38,2258; zaokruženo standardno = 38,23.
+    /// Bankarsko zaokruživanje (MidpointRounding.ToEven) dalo bi 38,22 — zato AwayFromZero.
+    /// </summary>
+    [Fact]
+    public void Ovrha3000Eura_JeTocno3823()
+    {
+        Assert.Equal(76.45m, SudskePristojbeCalculator.Izracunaj(3_000m, PristojbaOsnova.Puna));
+        Assert.Equal(38.23m, SudskePristojbeCalculator.Izracunaj(3_000m, PristojbaOsnova.Polovica));
+    }
+
+    /// <summary>
+    /// Ovrha uz parničnu stavku u istom troškovniku nije čisti ovršni postupak —
+    /// pristojba se tada obračunava po st. 1.
+    /// </summary>
+    [Fact]
+    public void OvrhaSParnicnomStavkom_PlacaPunuPristojbu()
+    {
+        var rezultat = Izracunaj(3_000m, "ovr_prijedlog", "par_tuzba");
+
+        Assert.Equal(PristojbaOsnova.Puna, rezultat.PristojbaOsnova);
+        Assert.Equal(76.45m, rezultat.SudskaPristojba);
+    }
+
     [Fact]
     public void MjesovitiPredmet_ImaPristojbu()
     {

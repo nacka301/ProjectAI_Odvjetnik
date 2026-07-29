@@ -672,11 +672,11 @@ function TroskovnikContent() {
       const pdvAmt = result ? result.pdv : liveCalc.pdv;
       const grand = result ? result.ukupno_eur_s_pdv : liveCalc.ukupnoSPdv;
       const bodova = result ? result.ukupno_bodova : liveCalc.ukupnoBodova;
-      totals = `\n\n;;;;;Ukupno bodova;${bodova}\n;;;;;Osnovica (bez PDV);${formatNumber(base)}\n;;;;;PDV (25%);${formatNumber(pdvAmt)}\n;;;;;Odvjetnički trošak s PDV-om;${formatNumber(grand)}\n;;;;;Sudska pristojba (Tbr. 1);${formatNumber(csvPristojba)}\n;;;;;SVEUKUPNI TROŠAK;${formatNumber(csvSveukupni)}`;
+      totals = `\n\n;;;;;Ukupno bodova;${bodova}\n;;;;;Osnovica (bez PDV);${formatNumber(base)}\n;;;;;PDV (25%);${formatNumber(pdvAmt)}\n;;;;;Odvjetnički trošak s PDV-om;${formatNumber(grand)}\n;;;;;Sudska pristojba (Tar. br. 1);${formatNumber(csvPristojba)}\n;;;;;SVEUKUPNI TROŠAK;${formatNumber(csvSveukupni)}`;
     } else {
       const base = result ? result.ukupno_eur_bez_pdv : liveCalc.ukupnoEur;
       const bodova = result ? result.ukupno_bodova : liveCalc.ukupnoBodova;
-      totals = `\n\n;;;;;Ukupno bodova;${bodova}\n;;;;;Odvjetnički trošak;${formatNumber(base)}\n;;;;;Sudska pristojba (Tbr. 1);${formatNumber(csvPristojba)}\n;;;;;SVEUKUPNI TROŠAK;${formatNumber(csvSveukupni)}`;
+      totals = `\n\n;;;;;Ukupno bodova;${bodova}\n;;;;;Odvjetnički trošak;${formatNumber(base)}\n;;;;;Sudska pristojba (Tar. br. 1);${formatNumber(csvPristojba)}\n;;;;;SVEUKUPNI TROŠAK;${formatNumber(csvSveukupni)}`;
     }
 
     const bom = "\uFEFF";
@@ -1761,7 +1761,7 @@ function TroskovnikContent() {
 
               {/* Footer */}
               <div className="mt-4 pt-3 border-t border-slate-200 text-[10px] text-slate-400 leading-relaxed">
-                <p>Izračun je napravljen prema Tarifi o nagradama i naknadi troškova za rad odvjetnika (NN 2023). Vrijednost boda: {fmtEur(BOD_VALUE)}. Sudske pristojbe prema Uredbi o tarifi sudskih pristojbi (NN 95/2015, EUR konverzija NN 156/2022).</p>
+                <p>Izračun je napravljen prema Tarifi o nagradama i naknadi troškova za rad odvjetnika (Hrvatska odvjetnička komora, 14. listopada 2023.). Vrijednost boda: {fmtEur(BOD_VALUE)} (Tbr. 54). Sudske pristojbe prema Uredbi o tarifi sudskih pristojbi (NN 37/2023), Tar. br. 1.</p>
                 <p className="mt-1">Ovaj troškovnik služi kao orijentacijski izračun i ne predstavlja pravno obvezujući dokument.</p>
               </div>
             </div>

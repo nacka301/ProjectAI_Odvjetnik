@@ -283,6 +283,41 @@ public sealed class TroskovnikService
     /// <summary>Naziv kategorije kaznenog i prekršajnog postupka u katalogu.</summary>
     public const string KategorijaKazneni = "Kazneni postupak";
 
+    /// <summary>Naziv kategorije parničnog postupka u katalogu.</summary>
+    public const string KategorijaParnicni = "Parnični postupak";
+
+    /// <summary>Naziv kategorije ovršnog postupka u katalogu.</summary>
+    public const string KategorijaOvrsni = "Ovršni postupak";
+
+    /// <summary>
+    /// Određuje osnovu za obračun sudske pristojbe iz kategorija odabranih stavki.
+    ///
+    /// Uredba o tarifi sudskih pristojbi (NN 37/2023), Prilog, POGLAVLJE I.
+    /// "PARNIČNI I OVRŠNI POSTUPAK":
+    ///  - Tar. br. 1 st. 1 — puna pristojba na tužbu,
+    ///  - Tar. br. 1 st. 2 — "prijedlog za ovrhu, protuovrhu i osiguranje (...) žalbu,
+    ///    prijedlog za dopuštenje revizije i reviziju plaća se polovica pristojbe iz
+    ///    stavka 1. ovoga Tar. br.",
+    ///  - kazneni postupak u Uredbi ne postoji → nema pristojbe.
+    /// </summary>
+    private static PristojbaOsnova OdrediPristojbuOsnovu(List<TarifnaStavka> odabrane)
+    {
+        if (odabrane.Count == 0)
+            return PristojbaOsnova.Puna;
+
+        if (odabrane.TrueForAll(d => d.Kategorija == KategorijaKazneni))
+            return PristojbaOsnova.Nema;
+
+        // Čisti ovršni postupak: ima ovršnih stavki, a nijedne parnične.
+        var imaOvrsnih = odabrane.Exists(d => d.Kategorija == KategorijaOvrsni);
+        var imaParnicnih = odabrane.Exists(d => d.Kategorija == KategorijaParnicni);
+
+        if (imaOvrsnih && !imaParnicnih)
+            return PristojbaOsnova.Polovica;
+
+        return PristojbaOsnova.Puna;
+    }
+
     public TroskovnikResponse Izracunaj(TroskovnikRequest request)
     {
         var catalogMap = _katalog.ToDictionary(s => s.Id);
@@ -371,10 +406,7 @@ public sealed class TroskovnikService
 
         // ── Sudska pristojba (Uredba o tarifi sudskih pristojbi, NN 37/2023) ──
         //
-        // Prilog "TARIFA SUDSKIH PRISTOJBI", POGLAVLJE I. nosi naslov
-        // "PARNIČNI I OVRŠNI POSTUPAK". Kazneni postupak u Uredbi ne postoji, pa se
-        // pristojba po Tar. br. 1 u kaznenom predmetu uopće ne obračunava.
-        var pristojbaOsnova = isSamoKazneni ? PristojbaOsnova.Nema : PristojbaOsnova.Puna;
+        var pristojbaOsnova = OdrediPristojbuOsnovu(odabraneDefinicije);
 
         var sudskaPristojba = request.IsOslobodjenPristojbi
             ? 0m
