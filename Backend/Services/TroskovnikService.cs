@@ -222,11 +222,27 @@ public sealed class TroskovnikService
         // ═══════════════════════════════════════════════════════════
         // VIII. UPRAVNI SPOR
         // ═══════════════════════════════════════════════════════════
-        new() { Id = "usp_tuzba_proc", Kategorija = "Upravni spor", Opis = "Tužba u upravnom sporu – procjenjiv (Tbr. 27.1)", TarifniBroj = "Tbr. 27.1", Tbr71Postotak = 1.0m, SortOrder = 800, Jedinica = "komad" },
-        new() { Id = "usp_tuzba_neproc", Kategorija = "Upravni spor", Opis = "Tužba u upravnom sporu – neprocjenjiv (Tbr. 27.1)", TarifniBroj = "Tbr. 27.1", FiksniBody = 500, SortOrder = 801, Jedinica = "komad" },
-        new() { Id = "usp_rasprava", Kategorija = "Upravni spor", Opis = "Zastupanje na raspravi (Tbr. 27.2)", TarifniBroj = "Tbr. 27.2", Tbr71Postotak = 1.0m, SortOrder = 802, Jedinica = "komad" },
-        new() { Id = "usp_zalba", Kategorija = "Upravni spor", Opis = "Žalba / zahtjev VUS (Tbr. 27.3) – Tbr. 27.1 + 25%", TarifniBroj = "Tbr. 27.3", Tbr71Postotak = 1.0m, Tbr71Povecanje = 0.25m, SortOrder = 805, Jedinica = "komad" },
-        new() { Id = "usp_izvrsenje", Kategorija = "Upravni spor", Opis = "Zahtjev za izvršenje presude (Tbr. 27.4) – 50% Tbr. 27.1", TarifniBroj = "Tbr. 27.4", Tbr71Postotak = 0.5m, SortOrder = 806, Jedinica = "komad" },
+        // Tbr. 27. toč. 1: "— u procjenjivim predmetima odvjetniku pripada nagrada iz
+        // Tbr. 7. toč. 1., — u neprocjenjivim predmetima odvjetniku pripada nagrada od
+        // 500 bodova." Toč. 2, 3 i 4 sve upućuju na toč. 1, pa svaka od njih ima
+        // procjenjivu i neprocjenjivu varijantu.
+        new() { Id = "usp_tuzba_proc", Kategorija = "Upravni spor", Opis = "Tužba / odgovor na tužbu / obrazloženi podnesak – procjenjiv (Tbr. 27.1)", TarifniBroj = "Tbr. 27.1", Tbr71Postotak = 1.0m, SortOrder = 800, Jedinica = "komad" },
+        new() { Id = "usp_tuzba_neproc", Kategorija = "Upravni spor", Opis = "Tužba / odgovor na tužbu / obrazloženi podnesak – neprocjenjiv (Tbr. 27.1) – 500 bodova", TarifniBroj = "Tbr. 27.1", FiksniBody = 500, SortOrder = 801, Jedinica = "komad" },
+
+        // Tbr. 27. toč. 2: "Za zastupanje na raspravi odvjetniku pripada nagrada iz
+        // toč. 1. ovog tarifnog broja."
+        new() { Id = "usp_rasprava", Kategorija = "Upravni spor", Opis = "Zastupanje na raspravi – procjenjiv (Tbr. 27.2)", TarifniBroj = "Tbr. 27.2", Tbr71Postotak = 1.0m, SortOrder = 802, Jedinica = "komad" },
+        new() { Id = "usp_rasprava_neproc", Kategorija = "Upravni spor", Opis = "Zastupanje na raspravi – neprocjenjiv (Tbr. 27.2 → 27.1) – 500 bodova", TarifniBroj = "Tbr. 27.2", FiksniBody = 500, SortOrder = 803, Jedinica = "komad" },
+
+        // Tbr. 27. toč. 3: "(...) pripada nagrada iz toč. 1. ovog tarifnog broja
+        // uvećana za 25%."  Neprocjenjivo: 500 × 1,25 = 625 bodova.
+        new() { Id = "usp_zalba", Kategorija = "Upravni spor", Opis = "Žalba / zahtjev VUS – procjenjiv (Tbr. 27.3) – Tbr. 27.1 + 25%", TarifniBroj = "Tbr. 27.3", Tbr71Postotak = 1.0m, Tbr71Povecanje = 0.25m, SortOrder = 805, Jedinica = "komad" },
+        new() { Id = "usp_zalba_neproc", Kategorija = "Upravni spor", Opis = "Žalba / zahtjev VUS – neprocjenjiv (Tbr. 27.3) – 500 + 25% = 625 bodova", TarifniBroj = "Tbr. 27.3", FiksniBody = 625, SortOrder = 806, Jedinica = "komad" },
+
+        // Tbr. 27. toč. 4: "(...) pripada 50% nagrade iz toč. 1. ovog tarifnog broja."
+        // Neprocjenjivo: 50% od 500 = 250 bodova.
+        new() { Id = "usp_izvrsenje", Kategorija = "Upravni spor", Opis = "Zahtjev za izvršenje presude – procjenjiv (Tbr. 27.4) – 50% Tbr. 27.1", TarifniBroj = "Tbr. 27.4", Tbr71Postotak = 0.5m, SortOrder = 807, Jedinica = "komad" },
+        new() { Id = "usp_izvrsenje_neproc", Kategorija = "Upravni spor", Opis = "Zahtjev za izvršenje presude – neprocjenjiv (Tbr. 27.4) – 50% od 500 = 250 bodova", TarifniBroj = "Tbr. 27.4", FiksniBody = 250, SortOrder = 808, Jedinica = "komad" },
 
         // ═══════════════════════════════════════════════════════════
         // IX. REGISTARSKI POSTUPAK
