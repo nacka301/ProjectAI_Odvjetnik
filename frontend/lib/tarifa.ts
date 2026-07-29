@@ -130,17 +130,21 @@ function clampBodovi(bodovi: number, def: TarifnaStavka): number {
   return bodovi;
 }
 
+/**
+ * Lanac se računa bez zaokruživanja između koraka. Tarifa zaokruživanje bodova
+ * nigdje ne propisuje, a Math.ceil na svakom koraku sustavno je podizao iznose:
+ * 75 × 0,5 = 37,5 → 38, pa 38 × 1,25 = 47,5 → 48, iako je točno 46,875.
+ */
 export function izracunajBodove(def: TarifnaStavka, baseBodovi: number): number {
   let bodovi: number;
 
   if (def.fiksni_body !== null && def.fiksni_body !== undefined) {
     bodovi = def.fiksni_body;
   } else if (def.tbr71_postotak !== null && def.tbr71_postotak !== undefined) {
-    let raw = Math.ceil(baseBodovi * def.tbr71_postotak);
+    bodovi = baseBodovi * def.tbr71_postotak;
     if (def.tbr71_povecanje !== null && def.tbr71_povecanje !== undefined) {
-      raw = Math.ceil(raw * (1 + def.tbr71_povecanje));
+      bodovi *= 1 + def.tbr71_povecanje;
     }
-    bodovi = raw;
   } else {
     bodovi = baseBodovi;
   }
@@ -171,20 +175,38 @@ export function izracunajKazneneBodove(
       : def.kazneni_povecanje;
 
   if (povecanje !== null && povecanje !== undefined) {
-    bodovi = Math.ceil(bodovi * (1 + povecanje));
+    bodovi *= 1 + povecanje;
   }
 
   // Opunomoćenik djeteta žrtve: 70% od Tbr. 4. toč. 8, a toč. 8 je 50% Tbr. 4 → 35%.
   if (isZastupnikDjeteta) {
-    bodovi = Math.ceil(bodovi * 0.5 * 0.7);
+    bodovi *= 0.5 * 0.7;
   }
 
   // Branitelj po službenoj dužnosti / na teret proračuna → 50%.
   if (isPoSluzbenojDuznosti || isNaTeretProracuna) {
-    bodovi = Math.ceil(bodovi * 0.5);
+    bodovi *= 0.5;
   }
 
   return clampBodovi(bodovi, def);
+}
+
+// ── Novac ────────────────────────────────────────────────────────
+
+/**
+ * Jedino zaokruživanje u izračunu: novac, dvije decimale, standardno (od nule).
+ * Bodovi ostaju decimalni.
+ */
+export function zaokruziNovac(iznos: number): number {
+  return Math.round((iznos + Number.EPSILON) * 100) / 100;
+}
+
+/**
+ * Prikaz bodova: cijeli broj bez decimala, decimalni s najviše tri
+ * (100 → "100", 46,875 → "46,875").
+ */
+export function formatirajBodove(bodovi: number): string {
+  return bodovi.toLocaleString("hr-HR", { maximumFractionDigits: 3 });
 }
 
 // ── Tbr. 40. toč. 1 — zastupanje više osoba ──────────────────────

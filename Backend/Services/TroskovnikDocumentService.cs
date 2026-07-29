@@ -23,6 +23,12 @@ public sealed class TroskovnikDocumentService
     private string FormatThreshold(decimal value) => value.ToString("N2", _hr);
 
     /// <summary>
+    /// Bodovi su decimalni (Tarifa ne propisuje zaokruživanje), ali cijeli broj bodova
+    /// ne treba pisati s decimalama: 100 ostaje "100", 46,875 ostaje "46,875".
+    /// </summary>
+    private string FormatBodovi(decimal value) => value.ToString("0.###", _hr);
+
+    /// <summary>
     /// Render HTML for a troškovnik from a read record. If the record contains
     /// the full response JSON in `RawJsonOutput`, the method will attempt to
     /// deserialize it and include line items; otherwise a minimal document is returned.
@@ -119,7 +125,7 @@ public sealed class TroskovnikDocumentService
 
         foreach (var l in resp.Stavke ?? new List<TroskovnikLineItem>())
         {
-            sb.AppendLine($"<tr><td>{l.Rbr}</td><td>{System.Net.WebUtility.HtmlEncode(l.Opis)}</td><td>{System.Net.WebUtility.HtmlEncode(l.TarifniBroj)}</td><td>{l.Kolicina}</td><td>{l.BodovaPoJedinici}</td><td>{l.UkupnoBodova}</td><td style=\"text-align:right\">{FormatCurrency(l.IznosEur)}</td></tr>");
+            sb.AppendLine($"<tr><td>{l.Rbr}</td><td>{System.Net.WebUtility.HtmlEncode(l.Opis)}</td><td>{System.Net.WebUtility.HtmlEncode(l.TarifniBroj)}</td><td>{l.Kolicina}</td><td>{FormatBodovi(l.BodovaPoJedinici)}</td><td>{FormatBodovi(l.UkupnoBodova)}</td><td style=\"text-align:right\">{FormatCurrency(l.IznosEur)}</td></tr>");
         }
 
         sb.AppendLine("</table>");

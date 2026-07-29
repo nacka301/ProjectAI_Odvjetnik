@@ -375,18 +375,19 @@ public sealed class TroskovnikService
             if (stavka.Kolicina <= 0)
                 continue;
 
-            int bodovi;
+            decimal bodovi;
             if (def.PrekrsajOduzimanje)
             {
-                // Prekršaj s oduzimanjem — uses Tbr. 7.1 on VrijednostOduzimanja instead of tier
+                // Tbr. 4. toč. 1 al. 8 — prekršaj s oduzimanjem ide po Tbr. 7. toč. 1
+                // prema vrijednosti oduzetog predmeta odnosno imovinske koristi.
                 if (request.IsOduzimanjePrekrsaj && request.VrijednostOduzimanja > 0)
                 {
                     bodovi = Tbr71Bodovi(request.VrijednostOduzimanja);
                 }
                 else
                 {
-                    // If toggle not active, fall back to standard prekršaj = 100
-                    bodovi = 100;
+                    // Tbr. 4. toč. 1 al. 7 — "za obranu u prekršajnom postupku 100 bodova".
+                    bodovi = 100m;
                 }
             }
             else if (def.KazneniBase)
@@ -411,23 +412,30 @@ public sealed class TroskovnikService
                 Kolicina = stavka.Kolicina,
                 BodovaPoJedinici = bodovi,
                 UkupnoBodova = ukupnoStavke,
-                IznosEur = ukupnoStavke * TarifaConstants.BodValue,
+                // Redak se prikazuje u eurima, pa se ovdje zaokružuje. Zbrojevi niže
+                // računaju se iz nezaokruženih bodova, da se greška ne akumulira.
+                IznosEur = ZaokruziNovac(ukupnoStavke * TarifaConstants.BodValue),
                 IsJednokratna = def.JednokratnaNagrada
             });
         }
 
-        var osnovicaBodova = (decimal)lines.Sum(l => l.UkupnoBodova);
+        var osnovicaBodova = lines.Sum(l => l.UkupnoBodova);
 
         // ── Tbr. 40. toč. 1 — zastupanje više osoba ──
         var povisenjePostotak = PovisenjeViseOsobaPostotak(request.BrojZastupanihOsoba);
         var povisenjeBodovi = osnovicaBodova * povisenjePostotak;
 
         var ukupnoBodova = osnovicaBodova + povisenjeBodovi;
-        var ukupnoEur = ukupnoBodova * TarifaConstants.BodValue;
+
+        // ── Novac ──
+        // Bodovi su do ovdje ostali decimalni, bez ijednog zaokruživanja. Tek se
+        // gotov iznos zaokružuje, jednom, na dvije decimale.
+        var ukupnoEur = ZaokruziNovac(ukupnoBodova * TarifaConstants.BodValue);
+
         decimal pdv = 0;
         var useVat = request.IsPdvUkljucen ?? request.HasVat;
         if (useVat)
-            pdv = Math.Round(ukupnoEur * TarifaConstants.PdvRate, 2);
+            pdv = ZaokruziNovac(ukupnoEur * TarifaConstants.PdvRate);
 
         // ── Sudska pristojba (Uredba o tarifi sudskih pristojbi, NN 37/2023) ──
         //
@@ -484,6 +492,20 @@ public sealed class TroskovnikService
         };
     }
 
+    // ── Zaokruživanje ─────────────────────────────────────────────
+
+    /// <summary>
+    /// Jedino zaokruživanje u cijelom izračunu: novac, na dvije decimale, standardno.
+    ///
+    /// Bodovi se ne zaokružuju — Tarifa to nigdje ne propisuje, a lančano zaokruživanje
+    /// prema gore sustavno je podizalo iznose (75 × 0,5 × 1,25 = 46,875, a stari je
+    /// lanac davao 48).
+    ///
+    /// AwayFromZero, ne bankarsko: 23,4375 → 23,44, kako se novac u praksi zaokružuje.
+    /// </summary>
+    private static decimal ZaokruziNovac(decimal iznos)
+        => Math.Round(iznos, 2, MidpointRounding.AwayFromZero);
+
     // ── Tbr. 40. toč. 1 — zastupanje više osoba ───────────────────
 
     /// <summary>10% za drugu i svaku sljedeću osobu, najviše 50%.</summary>
@@ -517,7 +539,7 @@ public sealed class TroskovnikService
     /// propisuje naknadu za daljnje radnje ("Za svaku daljnju radnju... 50 bodova"),
     /// dodaje se samo za radnje preko uključenog broja.
     /// </summary>
-    private static int UkupnoBodovaZaStavku(TarifnaStavka def, int bodovi, int kolicina)
+    private static decimal UkupnoBodovaZaStavku(TarifnaStavka def, decimal bodovi, int kolicina)
     {
         if (!def.JednokratnaNagrada)
             return bodovi * kolicina;
@@ -533,11 +555,16 @@ public sealed class TroskovnikService
         return ukupno;
     }
 
-    // ── Point calculation for a single item ───────────────────────
+    // ── Izračun bodova za jednu stavku ────────────────────────────
 
-    private static int IzracunajBodove(TarifnaStavka def, int baseBodovi)
+    /// <summary>
+    /// Lanac se računa u decimalu, bez zaokruživanja između koraka. Tarifa
+    /// zaokruživanje bodova nigdje ne propisuje, a Math.Ceiling na svakom koraku
+    /// sustavno je podizao iznose.
+    /// </summary>
+    private static decimal IzracunajBodove(TarifnaStavka def, int baseBodovi)
     {
-        int bodovi;
+        decimal bodovi;
 
         if (def.FiksniBody.HasValue)
         {
@@ -545,10 +572,9 @@ public sealed class TroskovnikService
         }
         else if (def.Tbr71Postotak.HasValue)
         {
-            var raw = (int)Math.Ceiling(baseBodovi * def.Tbr71Postotak.Value);
+            bodovi = baseBodovi * def.Tbr71Postotak.Value;
             if (def.Tbr71Povecanje.HasValue)
-                raw = (int)Math.Ceiling(raw * (1 + def.Tbr71Povecanje.Value));
-            bodovi = raw;
+                bodovi *= 1 + def.Tbr71Povecanje.Value;
         }
         else
         {
@@ -567,9 +593,9 @@ public sealed class TroskovnikService
     ///   - IsZastupnikDjeteta → 70% od Tbr. 4.8 (= 70% × 50% = 35% baze)
     ///   - IsPoSluzbenojDuznosti / IsNaTeretProracuna → 50% umanjenje
     /// </summary>
-    private static int IzracunajKazneneBodove(TarifnaStavka def, int tierBodovi, TroskovnikRequest req)
+    private static decimal IzracunajKazneneBodove(TarifnaStavka def, int tierBodovi, TroskovnikRequest req)
     {
-        int bodovi = tierBodovi;
+        decimal bodovi = tierBodovi;
 
         // Povišenje vezano uz tarifni broj (npr. +50% za žalbu protiv presude, Tbr. 5.1).
         //
@@ -582,24 +608,24 @@ public sealed class TroskovnikService
             : def.KazneniPovecanje;
 
         if (povecanje.HasValue)
-            bodovi = (int)Math.Ceiling(bodovi * (1 + povecanje.Value));
+            bodovi *= 1 + povecanje.Value;
 
         // Opunomoćenik djeteta žrtve kaznenog djela →
         //   Tbr. 4.8: zastupanje oštećenika = 50% od Tbr. 4
         //   Dijete žrtve = 70% od Tbr. 4.8  ⇒ efektivno 35%
         if (req.IsZastupnikDjeteta)
-            bodovi = (int)Math.Ceiling(bodovi * TarifaConstants.Tbr4t8Rate * TarifaConstants.ZastupnikDjetetaRate);
+            bodovi *= TarifaConstants.Tbr4t8Rate * TarifaConstants.ZastupnikDjetetaRate;
 
         // Branitelj po službenoj dužnosti ili na teret proračunskih sredstava → 50%
         if (req.IsPoSluzbenojDuznosti || req.IsNaTeretProracuna)
-            bodovi = (int)Math.Ceiling(bodovi * TarifaConstants.KazneniReductionRate);
+            bodovi *= TarifaConstants.KazneniReductionRate;
 
         return ClampBodovi(bodovi, def);
     }
 
     // ── Clamp helper ──────────────────────────────────────────────
 
-    private static int ClampBodovi(int bodovi, TarifnaStavka def)
+    private static decimal ClampBodovi(decimal bodovi, TarifnaStavka def)
     {
         if (def.MaxBodova.HasValue && bodovi > def.MaxBodova.Value)
             bodovi = def.MaxBodova.Value;

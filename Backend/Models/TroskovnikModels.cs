@@ -390,11 +390,12 @@ public sealed class TroskovnikLineItem
     [JsonPropertyName("kolicina")]
     public int Kolicina { get; set; }
 
+    /// <summary>Bodovi po jedinici. Decimalno — Tarifa ne propisuje zaokruživanje bodova.</summary>
     [JsonPropertyName("bodova_po_jedinici")]
-    public int BodovaPoJedinici { get; set; }
+    public decimal BodovaPoJedinici { get; set; }
 
     [JsonPropertyName("ukupno_bodova")]
-    public int UkupnoBodova { get; set; }
+    public decimal UkupnoBodova { get; set; }
 
     [JsonPropertyName("iznos_eur")]
     public decimal IznosEur { get; set; }

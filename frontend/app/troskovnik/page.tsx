@@ -37,6 +37,7 @@ import {
   KATEGORIJA_KAZNENI,
   PDV_RATE,
   ZAPRIJECENA_KAZNA_TIERS,
+  formatirajBodove,
   izracunajBodove,
   jeSamoKazneni,
   izracunajKazneneBodove,
@@ -46,6 +47,7 @@ import {
   povisenjeViseOsobaPostotak,
   tbr71Bodovi,
   ukupnoBodovaZaStavku,
+  zaokruziNovac,
   type PristojbaOsnova,
   type TarifnaStavka,
 } from "@/lib/tarifa";
@@ -123,8 +125,9 @@ function fmtEur(n: number) {
   return n.toLocaleString("hr-HR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
 }
 
+/** Prikaz bodova — decimalni, jer se bodovi po Tarifi ne zaokružuju. */
 function fmtNum(n: number) {
-  return n.toLocaleString("hr-HR");
+  return formatirajBodove(n);
 }
 
 // ── Category icons / colors ──
@@ -436,7 +439,7 @@ function TroskovnikContent() {
         kolicina: kol,
         bodova_po_jedinici: bodovi,
         ukupno_bodova: ukupnoStavke,
-        iznos_eur: ukupnoStavke * BOD_VALUE,
+        iznos_eur: zaokruziNovac(ukupnoStavke * BOD_VALUE),
         jedinica: def.jedinica,
         is_jednokratna: def.jednokratna_nagrada === true,
       });
@@ -449,9 +452,10 @@ function TroskovnikContent() {
     const povisenjeBodovi = osnovicaBodova * povisenjePostotak;
 
     const ukupnoBodova = osnovicaBodova + povisenjeBodovi;
-    const ukupnoEur = ukupnoBodova * BOD_VALUE;
-    const rawPdv = Math.round(ukupnoEur * PDV_RATE * 100) / 100;
-    const pdv = isPdvUkljucen ? rawPdv : 0;
+
+    // Bodovi su do ovdje ostali decimalni; tek se gotov iznos zaokružuje, jednom.
+    const ukupnoEur = zaokruziNovac(ukupnoBodova * BOD_VALUE);
+    const pdv = isPdvUkljucen ? zaokruziNovac(ukupnoEur * PDV_RATE) : 0;
     const odvjetnickiTrosak = ukupnoEur + pdv;
 
     // Sudske pristojbe (Uredba NN 37/2023, Tar. br. 1)
