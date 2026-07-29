@@ -28,6 +28,9 @@ public static class TarifaConstants
 /// </summary>
 public static class ZaprijecenaKaznaTiers
 {
+    /// <summary>Ključ tiera za kaznu dugotrajnog zatvora (Tbr. 4. toč. 1 al. 5).</summary>
+    public const string DugotrajniZatvor = "dugotrajni";
+
     public static readonly Dictionary<string, int> Bodovi = new()
     {
         ["novcana_do3"] = 100,   // novčana kazna ili kazna do 3 godine zatvora
@@ -456,6 +459,17 @@ public sealed class TarifnaStavka
     /// <summary>Dodatno povećanje na kazneni base bodove (npr. 0.5 = +50% za žalbu).</summary>
     [JsonPropertyName("kazneni_povecanje")]
     public decimal? KazneniPovecanje { get; set; }
+
+    /// <summary>
+    /// Povećanje koje se primjenjuje umjesto <see cref="KazneniPovecanje"/> kad je
+    /// zapriječena kazna dugotrajni zatvor.
+    ///
+    /// Tbr. 4. toč. 2 al. 3: "(...) s povišenjem od 25%, a na raspravi pred sudom
+    /// drugog i trećeg stupnja za kaznena djela za koja je predviđena kazna
+    /// dugotrajnog zatvora s povišenjem od 50%."
+    /// </summary>
+    [JsonPropertyName("kazneni_povecanje_dugotrajni")]
+    public decimal? KazneniPovecanjeDugotrajni { get; set; }
 
     /// <summary>True = prekršajni stavka s mogućnošću oduzimanja; kad je oduzimanje aktivno, koristi Tbr. 7.1 po vrijednosti.</summary>
     [JsonPropertyName("prekrsaj_oduzimanje")]

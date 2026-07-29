@@ -85,9 +85,11 @@ public sealed class TroskovnikService
         new() { Id = "kaz_dodatni_sat", Kategorija = "Kazneni postupak", Opis = "Svaki sljedeći započeti sat rasprave (Tbr. 4.1)", TarifniBroj = "Tbr. 4.1", FiksniBody = 50, SortOrder = 132, Jedinica = "sat" },
         new() { Id = "kaz_objava_presude", Kategorija = "Kazneni postupak", Opis = "Ročište za objavu presude (Tbr. 4.2)", TarifniBroj = "Tbr. 4.2", FiksniBody = 50, SortOrder = 133, Jedinica = "komad" },
         new() { Id = "kaz_sjednica_drugostupanjska", Kategorija = "Kazneni postupak", Opis = "Sjednica vijeća drugog stupnja (Tbr. 4.2) – po Tbr. 4.1", TarifniBroj = "Tbr. 4.2", KazneniBase = true, SortOrder = 134, Jedinica = "komad" },
-        new() { Id = "kaz_rasprava_drugostupanjska", Kategorija = "Kazneni postupak", Opis = "Rasprava pred sudom drugog stupnja (Tbr. 4.2) – Tbr. 4.1 + 25%", TarifniBroj = "Tbr. 4.2", KazneniBase = true, KazneniPovecanje = 0.25m, SortOrder = 135, Jedinica = "komad" },
-        // AUDIT NOTE: Za kaznena djela s kaznom dugotrajnog zatvora, Tbr. 4.2 propisuje povišenje
-        // od 50% (ne 25%) pred drugostupanjskim sudom. Trenutno se koristi 25% za sve — rubni slučaj.
+        // Tbr. 4. toč. 2 al. 3: "— na raspravi pred sudom drugog stupnja odvjetniku pripada
+        // nagrada kao za obranu pred sudom prvog stupnja s povišenjem od 25%, a na raspravi
+        // pred sudom drugog i trećeg stupnja za kaznena djela za koja je predviđena kazna
+        // dugotrajnog zatvora s povišenjem od 50%."
+        new() { Id = "kaz_rasprava_drugostupanjska", Kategorija = "Kazneni postupak", Opis = "Rasprava pred sudom drugog (i trećeg) stupnja (Tbr. 4.2) – Tbr. 4.1 + 25%, a kod dugotrajnog zatvora + 50%", TarifniBroj = "Tbr. 4.2", KazneniBase = true, KazneniPovecanje = 0.25m, KazneniPovecanjeDugotrajni = 0.50m, SortOrder = 135, Jedinica = "komad" },
         new() { Id = "kaz_razgovor_pritvor", Kategorija = "Kazneni postupak", Opis = "Razgovor s okrivljenikom u pritvoru (Tbr. 4.5)", TarifniBroj = "Tbr. 4.5", FiksniBody = 50, SortOrder = 136, Jedinica = "komad" },
 
         // ── Tbr. 4.1 — Prekršaj s oduzimanjem predmeta ──
@@ -569,9 +571,18 @@ public sealed class TroskovnikService
     {
         int bodovi = tierBodovi;
 
-        // Kazneni povećanje (e.g. +50% za žalbu protiv presude, Tbr. 5.1)
-        if (def.KazneniPovecanje.HasValue)
-            bodovi = (int)Math.Ceiling(bodovi * (1 + def.KazneniPovecanje.Value));
+        // Povišenje vezano uz tarifni broj (npr. +50% za žalbu protiv presude, Tbr. 5.1).
+        //
+        // Tbr. 4. toč. 2 al. 3 propisuje drukčiji postotak za raspravu pred drugim i
+        // trećim stupnjem kad je zapriječena kazna dugotrajni zatvor — tada se koristi
+        // KazneniPovecanjeDugotrajni umjesto redovnog povišenja.
+        var jeDugotrajni = req.ZaprijecenaKazna == ZaprijecenaKaznaTiers.DugotrajniZatvor;
+        var povecanje = jeDugotrajni && def.KazneniPovecanjeDugotrajni.HasValue
+            ? def.KazneniPovecanjeDugotrajni
+            : def.KazneniPovecanje;
+
+        if (povecanje.HasValue)
+            bodovi = (int)Math.Ceiling(bodovi * (1 + povecanje.Value));
 
         // Opunomoćenik djeteta žrtve kaznenog djela →
         //   Tbr. 4.8: zastupanje oštećenika = 50% od Tbr. 4

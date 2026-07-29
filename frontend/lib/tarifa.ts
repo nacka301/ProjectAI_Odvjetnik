@@ -36,6 +36,8 @@ export interface TarifnaStavka {
   sort_order: number;
   kazneni_base: boolean;
   kazneni_povecanje: number | null;
+  /** Tbr. 4. toč. 2 al. 3 — povišenje koje vrijedi umjesto redovnog kod dugotrajnog zatvora. */
+  kazneni_povecanje_dugotrajni?: number | null;
   prekrsaj_oduzimanje: boolean;
   /** Tbr. 7. toč. 2 i 3, Tbr. 8. toč. 1 — jedna nagrada za cijeli postupak. */
   jednokratna_nagrada?: boolean;
@@ -107,6 +109,9 @@ export function tbr71Bodovi(vrijednost: number): number {
  * Tbr. 4. toč. 1 — bodovi za prvi sat prema zapriječenoj kazni.
  * Sve alineje doslovno iz Tarife.
  */
+/** Ključ tiera za kaznu dugotrajnog zatvora (Tbr. 4. toč. 1 al. 5). */
+export const KAZNA_DUGOTRAJNI_ZATVOR = "dugotrajni";
+
 export const ZAPRIJECENA_KAZNA_TIERS: Record<string, { label: string; bodovi: number }> = {
   novcana_do3: { label: "Novčana kazna ili kazna do 3 godine zatvora", bodovi: 100 },
   do_5: { label: "Do 5 godina zatvora", bodovi: 200 },
@@ -149,12 +154,24 @@ export function izracunajKazneneBodove(
   isZastupnikDjeteta: boolean,
   isPoSluzbenojDuznosti: boolean,
   isNaTeretProracuna: boolean,
+  zaprijecenaKazna?: string,
 ): number {
   let bodovi = tierBodovi;
 
   // Povišenje/umanjenje vezano uz konkretni tarifni broj (npr. žalba +50%).
-  if (def.kazneni_povecanje !== null && def.kazneni_povecanje !== undefined) {
-    bodovi = Math.ceil(bodovi * (1 + def.kazneni_povecanje));
+  //
+  // Tbr. 4. toč. 2 al. 3 propisuje drukčiji postotak za raspravu pred drugim i
+  // trećim stupnjem kad je zapriječena kazna dugotrajni zatvor (50% umjesto 25%).
+  const jeDugotrajni = zaprijecenaKazna === KAZNA_DUGOTRAJNI_ZATVOR;
+  const povecanje =
+    jeDugotrajni &&
+    def.kazneni_povecanje_dugotrajni !== null &&
+    def.kazneni_povecanje_dugotrajni !== undefined
+      ? def.kazneni_povecanje_dugotrajni
+      : def.kazneni_povecanje;
+
+  if (povecanje !== null && povecanje !== undefined) {
+    bodovi = Math.ceil(bodovi * (1 + povecanje));
   }
 
   // Opunomoćenik djeteta žrtve: 70% od Tbr. 4. toč. 8, a toč. 8 je 50% Tbr. 4 → 35%.

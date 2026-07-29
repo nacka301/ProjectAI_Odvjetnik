@@ -423,7 +423,7 @@ function TroskovnikContent() {
           bodovi = 100; // fallback: standard prekršaj 100 bodova
         }
       } else if (def.kazneni_base) {
-        bodovi = izracunajKazneneBodove(def, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna);
+        bodovi = izracunajKazneneBodove(def, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, zaprijecenaKazna);
       } else {
         bodovi = izracunajBodove(def, baseBodovi);
       }
@@ -461,7 +461,7 @@ function TroskovnikContent() {
     const sveukupniTrosak = odvjetnickiTrosak + sudskaPristojba;
 
     return { lines, osnovicaBodova, povisenjePostotak, povisenjeBodovi, ukupnoBodova, ukupnoEur, pdv, ukupnoSPdv: ukupnoEur + pdv, sudskaPristojba, sveukupniTrosak };
-  }, [selectedItems, katalog, baseBodovi, isPdvUkljucen, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, isOduzimanjePrekrsaj, parsedVrijednostOduzimanja, isOslobodjenPristojbi, vrijednostNum, pristojbaOsnova, brojZastupanihOsoba]);
+  }, [selectedItems, katalog, baseBodovi, isPdvUkljucen, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, isOduzimanjePrekrsaj, parsedVrijednostOduzimanja, isOslobodjenPristojbi, vrijednostNum, pristojbaOsnova, brojZastupanihOsoba, zaprijecenaKazna]);
 
   // ── Handlers ──
   const toggleCategory = useCallback((cat: string) => {
@@ -1002,7 +1002,7 @@ function TroskovnikContent() {
                               ? tbr71Bodovi(parsedVrijednostOduzimanja)
                               : 100)
                           : item.kazneni_base
-                          ? izracunajKazneneBodove(item, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna)
+                          ? izracunajKazneneBodove(item, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, zaprijecenaKazna)
                           : izracunajBodove(item, baseBodovi);
                         const iznosPerUnit = bodovi * BOD_VALUE;
 
