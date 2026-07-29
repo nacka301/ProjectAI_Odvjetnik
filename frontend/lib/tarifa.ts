@@ -130,6 +130,36 @@ export function tbr71Bodovi(vrijednost: number): number {
   return Math.min(7496 + extra, 10000);
 }
 
+// ── Tbr. 7. toč. 1 — tablica za prikaz ───────────────────────────
+
+export interface RazredZaPrikaz {
+  /** Donja granica razreda; null za "iznad …". */
+  od: number | null;
+  /** Gornja granica razreda; null za posljednji, neograničeni razred. */
+  do: number | null;
+  /** Bodovi ili opis progresivnog obračuna, doslovno po tekstu Tarife. */
+  bodovi: string;
+}
+
+/**
+ * Tablica iz Tbr. 7. toč. 1 onako kako stoji u Tarifi — s decimalama i bez
+ * preklapanja granica: 0–332,00 pa 332,01–664,00.
+ *
+ * Progresivni razredi nemaju jedan broj nego formulu, pa se ispisuju tekstom
+ * kojim ih Tarifa i opisuje.
+ */
+export const TBR_7_1_RAZREDI: RazredZaPrikaz[] = [
+  { od: 0, do: 332.0, bodovi: "25" },
+  { od: 332.01, do: 664.0, bodovi: "50" },
+  { od: 664.01, do: 1_327.0, bodovi: "75" },
+  { od: 1_327.01, do: 13_272.0, bodovi: "100" },
+  { od: 13_272.01, do: 33_181.0, bodovi: "250" },
+  { od: 33_181.01, do: 66_361.0, bodovi: "500" },
+  { od: 66_361.01, do: 663_614.0, bodovi: "500 + 1 bod / započetih 133,00 €" },
+  { od: 663_614.01, do: 1_327_228.0, bodovi: "4.991 + 1 bod / započetih 265,00 €" },
+  { od: 1_327_228.01, do: null, bodovi: "7.496 + 1 bod / započetih 664,00 €, najviše 10.000" },
+];
+
 // ── Kazneni tier (Tbr. 4. toč. 1) ────────────────────────────────
 
 /**
