@@ -45,6 +45,26 @@ export interface TarifnaStavka {
   daljnja_radnja_bodovi?: number | null;
 }
 
+// ── Vrsta postupka ───────────────────────────────────────────────
+
+/** Naziv kategorije kaznenog i prekršajnog postupka u katalogu. */
+export const KATEGORIJA_KAZNENI = "Kazneni postupak";
+
+/**
+ * True kad su odabrane isključivo kaznene/prekršajne stavke.
+ *
+ * U kaznenom se postupku sve veže na zapriječenu kaznu (Tbr. 4. toč. 1), nikad
+ * na vrijednost predmeta spora, pa se VPS izbacuje iz izračuna. Uredba o tarifi
+ * sudskih pristojbi (NN 37/2023) u Poglavlju I. pokriva samo parnični i ovršni
+ * postupak, pa se ni pristojba ne obračunava.
+ */
+export function jeSamoKazneni(odabraneStavke: TarifnaStavka[]): boolean {
+  return (
+    odabraneStavke.length > 0 &&
+    odabraneStavke.every((s) => s.kategorija === KATEGORIJA_KAZNENI)
+  );
+}
+
 // ── Tbr. 7. toč. 1 — osnovna tablica bodova po VPS-u ─────────────
 
 /**

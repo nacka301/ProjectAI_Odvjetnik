@@ -34,9 +34,11 @@ import { CreditQuotaBadge, CreditExhaustedWarning } from "@/components/CreditQuo
 import { formatEur, formatNumber, formatThreshold } from "@/lib/format";
 import {
   BOD_VALUE,
+  KATEGORIJA_KAZNENI,
   PDV_RATE,
   ZAPRIJECENA_KAZNA_TIERS,
   izracunajBodove,
+  jeSamoKazneni,
   izracunajKazneneBodove,
   izracunajSudskuPristojbu,
   tbr71Bodovi,
@@ -67,6 +69,10 @@ interface TroskovnikLineItem {
 interface TroskovnikResponse {
   stavke: TroskovnikLineItem[];
   ukupno_bodova: number;
+  /** 0 u kaznenom postupku — VPS se tamo ne koristi. */
+  vrijednost_spora?: number;
+  /** True kad su odabrane isključivo kaznene/prekršajne stavke. */
+  is_samo_kazneni?: boolean;
   ukupno_eur_bez_pdv: number;
   pdv: number;
   ukupno_eur_s_pdv: number;
@@ -321,29 +327,25 @@ function TroskovnikContent() {
   );
 
   // ── Derived values ──
-  const vrijednostNum = parseFloat(vrijednostSpora.replace(/\./g, "").replace(",", ".")) || 0;
+
+  // Odabrane definicije iz kataloga — osnova za određivanje vrste postupka.
+  const odabraneDefinicije = useMemo(() => {
+    const catalogMap = new Map(katalog.map((s) => [s.id, s]));
+    return Array.from(selectedItems.keys())
+      .map((id) => catalogMap.get(id))
+      .filter((d): d is TarifnaStavka => d !== undefined);
+  }, [selectedItems, katalog]);
+
+  // Bilo koja kaznena stavka → prikaži panel s parametrima kaznenog postupka.
+  const isKazneniMode = odabraneDefinicije.some((d) => d.kategorija === KATEGORIJA_KAZNENI);
+
+  // Isključivo kaznene stavke → VPS se ne koristi ni za bodove ni za pristojbu.
+  const isOnlyKazneni = jeSamoKazneni(odabraneDefinicije);
+
+  const unesenVps = parseFloat(vrijednostSpora.replace(/\./g, "").replace(",", ".")) || 0;
+  // U kaznenom postupku sve ide po zapriječenoj kazni (Tbr. 4. toč. 1) — VPS otpada.
+  const vrijednostNum = isOnlyKazneni ? 0 : unesenVps;
   const baseBodovi = tbr71Bodovi(vrijednostNum);
-
-  // Detect kazneni mode: any selected item belongs to "Kazneni postupak" category
-  const isKazneniMode = useMemo(() => {
-    const catalogMap = new Map(katalog.map((s) => [s.id, s]));
-    for (const itemId of selectedItems.keys()) {
-      const def = catalogMap.get(itemId);
-      if (def && def.kategorija === "Kazneni postupak") return true;
-    }
-    return false;
-  }, [selectedItems, katalog]);
-
-  // Check if ONLY kazneni items are selected (hide VPS)
-  const isOnlyKazneni = useMemo(() => {
-    if (selectedItems.size === 0) return false;
-    const catalogMap = new Map(katalog.map((s) => [s.id, s]));
-    for (const itemId of selectedItems.keys()) {
-      const def = catalogMap.get(itemId);
-      if (def && def.kategorija !== "Kazneni postupak") return false;
-    }
-    return true;
-  }, [selectedItems, katalog]);
 
   // Resolved kazneni tier points
   const kazneniTierBodovi = zaprijecenaKazna
@@ -1521,7 +1523,11 @@ function TroskovnikContent() {
                 <div>
                   <h2 className="text-white font-bold text-lg">Troškovnik</h2>
                   <p className="text-indigo-200 text-xs">
-                    {new Date(result.datum_izrade).toLocaleDateString("hr-HR")} · Vrijednost spora: {fmtEur(vrijednostNum)} · Tarifa NN 2023
+                    {new Date(result.datum_izrade).toLocaleDateString("hr-HR")}
+                    {result.is_samo_kazneni
+                      ? " · Kazneni postupak (nagrada po zapriječenoj kazni, Tbr. 4.1)"
+                      : ` · Vrijednost spora: ${fmtEur(result.vrijednost_spora ?? vrijednostNum)}`}
+                    {" · Tarifa HOK 2023"}
                   </p>
                 </div>
               </div>

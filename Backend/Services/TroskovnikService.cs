@@ -280,12 +280,31 @@ public sealed class TroskovnikService
 
     // ── Calculate a troškovnik ────────────────────────────────────
 
+    /// <summary>Naziv kategorije kaznenog i prekršajnog postupka u katalogu.</summary>
+    public const string KategorijaKazneni = "Kazneni postupak";
+
     public TroskovnikResponse Izracunaj(TroskovnikRequest request)
     {
-        var baseBodovi = Tbr71Bodovi(request.VrijednostSpora);
         var catalogMap = _katalog.ToDictionary(s => s.Id);
         var lines = new List<TroskovnikLineItem>();
         var rbr = 0;
+
+        // ── Vrsta postupka ──────────────────────────────────────────
+        // U kaznenom se postupku sve veže na zapriječenu kaznu (Tbr. 4. toč. 1),
+        // nikad na vrijednost predmeta spora. VPS je institut parničnog postupka,
+        // pa se u kaznenom toku ne koristi ni za bodove ni za sudsku pristojbu.
+        var odabraneDefinicije = request.Stavke
+            .Select(s => catalogMap.TryGetValue(s.ItemId, out var def) ? def : null)
+            .OfType<TarifnaStavka>()
+            .ToList();
+
+        var isSamoKazneni = odabraneDefinicije.Count > 0
+            && odabraneDefinicije.TrueForAll(d => d.Kategorija == KategorijaKazneni);
+
+        // Jedina iznimka je Tbr. 4. toč. 1 al. 8 (prekršaj s oduzimanjem), koji ide po
+        // Tbr. 7. toč. 1 prema vrijednosti ODUZETOG PREDMETA — to se računa zasebno niže.
+        var vrijednostSpora = isSamoKazneni ? 0m : request.VrijednostSpora;
+        var baseBodovi = Tbr71Bodovi(vrijednostSpora);
 
         // Resolve kazneni tier points (0 if not set or invalid)
         int kazneniTierBodovi = 0;
@@ -350,10 +369,10 @@ public sealed class TroskovnikService
         if (useVat)
             pdv = Math.Round(ukupnoEur * TarifaConstants.PdvRate, 2);
 
-        // Sudske pristojbe (Tbr. 1 — Uredba o tarifi sudskih pristojbi)
+        // Sudske pristojbe (Tar. br. 1 — Uredba o tarifi sudskih pristojbi, NN 37/2023)
         var sudskaPristojba = request.IsOslobodjenPristojbi
             ? 0m
-            : SudskePristojbeCalculator.Izracunaj(request.VrijednostSpora);
+            : SudskePristojbeCalculator.Izracunaj(vrijednostSpora);
         var odvjetnickiTrosak = ukupnoEur + pdv;
         var sveukupniTrosak = odvjetnickiTrosak + sudskaPristojba;
 
@@ -361,6 +380,8 @@ public sealed class TroskovnikService
         {
             Stavke = lines,
             UkupnoBodova = ukupnoBodova,
+            VrijednostSpora = vrijednostSpora,
+            IsSamoKazneni = isSamoKazneni,
             UkupnoEurBezPdv = ukupnoEur,
             Pdv = pdv,
             UkupnoEurSPdv = ukupnoEur + pdv,

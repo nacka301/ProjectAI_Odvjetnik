@@ -221,6 +221,20 @@ public sealed class TroskovnikResponse
     [JsonPropertyName("ukupno_bodova")]
     public int UkupnoBodova { get; set; }
 
+    /// <summary>
+    /// Vrijednost predmeta spora korištena u izračunu. U kaznenom postupku uvijek 0 —
+    /// VPS je institut parničnog postupka i tamo nema što tražiti (vidi <see cref="IsSamoKazneni"/>).
+    /// </summary>
+    [JsonPropertyName("vrijednost_spora")]
+    public decimal VrijednostSpora { get; set; }
+
+    /// <summary>
+    /// True kad su odabrane isključivo stavke iz kaznenog/prekršajnog postupka.
+    /// Tada se ne koristi VPS niti se obračunava sudska pristojba.
+    /// </summary>
+    [JsonPropertyName("is_samo_kazneni")]
+    public bool IsSamoKazneni { get; set; }
+
     [JsonPropertyName("ukupno_eur_bez_pdv")]
     public decimal UkupnoEurBezPdv { get; set; }
 

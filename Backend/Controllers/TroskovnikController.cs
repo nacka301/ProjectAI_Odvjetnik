@@ -139,7 +139,9 @@ public class TroskovnikController : ControllerBase
             ClientId = resolvedClientId,
             CaseId = request.CaseId,
             OpisPredmeta = request.OpisPredmeta,
-            VrijednostSpora = request.VrijednostSpora,
+            // Iz rezultata, ne iz zahtjeva: u kaznenom predmetu VPS je izbačen iz izračuna
+            // pa ne smije završiti ni u spremljenom troškovniku (vidi TroskovnikService).
+            VrijednostSpora = result.VrijednostSpora,
             UkupnoBodova = result.UkupnoBodova,
             UkupnoEurBezPdv = result.UkupnoEurBezPdv,
             Pdv = result.Pdv,
