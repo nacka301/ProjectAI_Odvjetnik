@@ -11,6 +11,140 @@ public sealed class TroskovnikService
 :ITroskovnikService {
     // ── Tbr. 7, toč. 1 — base point lookup ───────────────────────
 
+    // ── Osnovica: "Tbr. 7. toč. 1., 4., 7. i 8." ──────────────────
+
+    /// <summary>
+    /// Razrješava osnovicu na koju se primjenjuju postoci iz Tbr. 8. i Tbr. 9.
+    ///
+    /// Tarifa na devet mjesta upućuje na „Tbr. 7. toč. 1., 4., 7. i 8." (Tbr. 8. toč. 1, 3, 4;
+    /// Tbr. 9. toč. 1, 2, 3, 5, 6; Tbr. 10.). To nisu četiri različita iznosa nego četiri
+    /// varijante ISTE osnovice — koja se primjenjuje ovisi o vrsti postupka.
+    ///
+    /// Prije uvođenja ove metode osnovica je uvijek bila toč. 1, pa Tbr. 8. toč. 1 nije
+    /// radio za autorskopravne sporove, arbitražu ni mirenje, a neprocjenjivi predmeti
+    /// padali su na 25 bodova umjesto na 100/200/500 iz Tbr. 45.
+    /// </summary>
+    public static OsnovicaRezultat IzracunajOsnovicu(TroskovnikRequest request)
+    {
+        var vps = EfektivniVps(request);
+
+        switch (request.OsnovicaTbr7)
+        {
+            // Tbr. 7. toč. 4 al. 1: "nagrada po Tbr. 7. toč. 1., ali ne manje od 100 bodova"
+            case OsnovicaTbr7.Toc4Autorsko:
+                return new OsnovicaRezultat(
+                    Math.Max(Tbr71Bodovi(vps), 100),
+                    $"{TarifaConstants.NazivTarife}, Tbr. 7. toč. 4 al. 1 — nagrada po Tbr. 7. toč. 1, ali ne manje od 100 bodova",
+                    false);
+
+            // Tbr. 7. toč. 4 al. 2: osnovica je ista kao toč. 1, ali VPS je petogodišnji iznos.
+            case OsnovicaTbr7.Toc4Renta:
+                return new OsnovicaRezultat(
+                    Tbr71Bodovi(vps),
+                    $"{TarifaConstants.NazivTarife}, Tbr. 7. toč. 4 al. 2 — kao vrijednost spora uzima se petogodišnji iznos rente, zakupa ili najma",
+                    false);
+
+            // Tbr. 7. toč. 7 st. 1: "Tužbe i obrazloženi podnesci pred domaćom arbitražom po Tbr. 7. toč. 1."
+            case OsnovicaTbr7.Toc7DomacaArbitraza:
+                return new OsnovicaRezultat(
+                    Tbr71Bodovi(vps),
+                    $"{TarifaConstants.NazivTarife}, Tbr. 7. toč. 7 st. 1 — nagrada po Tbr. 7. toč. 1",
+                    false);
+
+            // Tbr. 7. toč. 7 st. 2: "...pred međunarodnom arbitražom (...) po Tbr. 7. toč. 1. s povišenjem od 100%."
+            case OsnovicaTbr7.Toc7MedunarodnaArbitraza:
+                return new OsnovicaRezultat(
+                    Tbr71Bodovi(vps) * 2m,
+                    $"{TarifaConstants.NazivTarife}, Tbr. 7. toč. 7 st. 2 — Tbr. 7. toč. 1 s povišenjem od 100%",
+                    false);
+
+            // Tbr. 7. toč. 8: "Za zastupanje u postupcima mirnog rješavanja sporova (...) po Tbr. 7. toč. 1."
+            case OsnovicaTbr7.Toc8Mirenje:
+                return new OsnovicaRezultat(
+                    Tbr71Bodovi(vps),
+                    $"{TarifaConstants.NazivTarife}, Tbr. 7. toč. 8 — nagrada po Tbr. 7. toč. 1",
+                    false);
+
+            // Tbr. 45. toč. 1–3 — neprocjenjivi predmeti, bodovi po razini suda.
+            case OsnovicaTbr7.Tbr45Neprocjenjiv:
+            {
+                if (request.RazinaSuda is null ||
+                    !Models.RazinaSuda.Bodovi.TryGetValue(request.RazinaSuda, out var bodovi))
+                {
+                    // Ne postoji "razumna zadana" razina suda — razlika je do peterostruke.
+                    throw new TroskovnikValidationException(
+                        "Tbr. 45 zahtijeva odabranu razinu suda (općinski / županijski i trgovački / Vrhovni). " +
+                        "Bez nje se bodovi ne mogu odrediti — razlika je do peterostruke.");
+                }
+
+                if (request.Tbr45Nacin is null || !Models.Tbr45Nacin.Sve.Contains(request.Tbr45Nacin))
+                {
+                    throw new TroskovnikValidationException(
+                        "Tbr. 45 zahtijeva odabrani način obračuna. Tarifa ne kaže primjenjuju li se " +
+                        "postoci iz Tbr. 8 i Tbr. 9 na iznos iz Tbr. 45, pa sustav ne smije pretpostaviti.");
+                }
+
+                var tocka = request.RazinaSuda switch
+                {
+                    Models.RazinaSuda.Opcinski            => "Tbr. 45. toč. 1 — pred općinskim sudom i tijelima iste razine 100 bodova",
+                    Models.RazinaSuda.ZupanijskiTrgovacki => "Tbr. 45. toč. 2 — pred županijskim i trgovačkim sudovima te tijelima iste razine 200 bodova",
+                    _                                     => "Tbr. 45. toč. 3 — pred Vrhovnim sudom RH i tijelima iste razine 500 bodova"
+                };
+
+                return new OsnovicaRezultat(
+                    bodovi,
+                    $"{TarifaConstants.NazivTarife}, {tocka}",
+                    request.Tbr45Nacin == Models.Tbr45Nacin.FiksnoPoRadnji);
+            }
+
+            case OsnovicaTbr7.Toc1:
+                return new OsnovicaRezultat(
+                    Tbr71Bodovi(vps),
+                    $"{TarifaConstants.NazivTarife}, Tbr. 7. toč. 1 — nagrada prema vrijednosti predmeta spora",
+                    false);
+
+            default:
+                throw new TroskovnikValidationException(
+                    $"Nepoznata osnovica \"{request.OsnovicaTbr7}\". " +
+                    $"Dopušteno: {string.Join(", ", OsnovicaTbr7.Sve)}.");
+        }
+    }
+
+    /// <summary>
+    /// Vrijednost predmeta spora koja se stvarno koristi za Tbr. 7. toč. 1 lookup.
+    ///
+    /// Tbr. 7. toč. 4 al. 2: „za utvrđivanje rente, zakupa, najma i u drugim sličnim
+    /// postupcima kao vrijednost spora uzima se petogodišnji iznos rente, zakupa, najma
+    /// i drugih sličnih davanja."
+    ///
+    /// Preračun se radi SAMO uz osnovicu `toc4_renta` i uz izričito odabrano razdoblje —
+    /// ništa se ne izvodi tiho.
+    /// </summary>
+    public static decimal EfektivniVps(TroskovnikRequest request)
+    {
+        if (request.OsnovicaTbr7 != OsnovicaTbr7.Toc4Renta || request.RentaIznos <= 0)
+            return request.VrijednostSpora;
+
+        return request.RentaRazdoblje switch
+        {
+            RentaRazdoblje.Mjesecno => request.RentaIznos * 60m,  // 5 godina × 12 mjeseci
+            RentaRazdoblje.Godisnje => request.RentaIznos * 5m,   // 5 godina
+            _                       => request.VrijednostSpora    // razdoblje nije odabrano → bez preračuna
+        };
+    }
+
+    /// <summary>
+    /// Tbr. 41. toč. 1 — povišenje do 100 % za posebno stručno i specijalističko znanje.
+    /// Tbr. 41. toč. 2 — sniženje do 50 %.
+    /// Vraća neto udio (0,25 = +25 %; −0,10 = −10 %). Oba su zadano 0.
+    /// </summary>
+    public static decimal Tbr41Udio(TroskovnikRequest request)
+    {
+        var povisenje = Math.Clamp(request.Tbr41PovisenjePostotak, 0m, 100m) / 100m;
+        var snizenje = Math.Clamp(request.Tbr41SnizenjePostotak, 0m, 50m) / 100m;
+        return povisenje - snizenje;
+    }
+
     /// <summary>
     /// Izračunava broj bodova prema Tbr. 7. toč. 1. na temelju
     /// vrijednosti predmeta spora u EUR.
@@ -192,8 +326,31 @@ public sealed class TroskovnikService
         //  Za svaku daljnju radnju (...) nagrada u visini od 50 bodova."
         new() { Id = "par_tuzba_obiteljski", Kategorija = "Parnični postupak", Opis = "Tužba – razvod / poništenje braka / očinstvo / s kime žive djeca / uzdržavanje (Tbr. 7.3) – jednokratno 200 bod. za do 4 radnje", TarifniBroj = "Tbr. 7.3", FiksniBody = 200, JednokratnaNagrada = true, UkljuceneRadnje = 4, DaljnjaRadnjaBodovi = 50, SortOrder = 202, Jedinica = "radnja" },
         new() { Id = "par_tuzba_platni_nalog", Kategorija = "Parnični postupak", Opis = "Tužba za platni nalog (Tbr. 7.5) – 50% Tbr. 7.1, max 100", TarifniBroj = "Tbr. 7.5", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 7. toč. 5 — 50% nagrade iz Tbr. 7. toč. 1, najviše 100 bodova", Tbr71Postotak = 0.5m, MaxBodova = 100, SortOrder = 205, Jedinica = "komad" },
+
+        // ── Tbr. 7. toč. 6 — mjenični, čekovni i drugi vrijednosni papiri ──
+        // "Za tužbu na izdavanje mjeničnih, čekovnih i platnih naloga na osnovi drugih
+        //  vrijednosnih papira, javnih i privatnih isprava, osim onih koji su navedeni u
+        //  toč. 5. ovog tarifnog broja, odvjetniku pripada nagrada iz toč. 1. ovog
+        //  tarifnog broja."
+        // PUNA nagrada — bez stropa od 100 bodova koji vrijedi za toč. 5.
+        new() { Id = "par_tuzba_vrijednosni_papiri", Kategorija = "Parnični postupak", Opis = "Tužba za mjenični / čekovni platni nalog i naloge na osnovi drugih vrijednosnih papira i isprava (Tbr. 7.6) – puna nagrada iz Tbr. 7.1", TarifniBroj = "Tbr. 7.6", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 7. toč. 6 — nagrada iz Tbr. 7. toč. 1, bez ograničenja iz toč. 5", Tbr71Postotak = 1.0m, SortOrder = 206, Jedinica = "komad" },
+
         new() { Id = "par_tuzba_arbitraza", Kategorija = "Parnični postupak", Opis = "Tužba pred domaćom arbitražom (Tbr. 7.7)", TarifniBroj = "Tbr. 7.7", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 7. toč. 7 — nagrada po Tbr. 7. toč. 1", Tbr71Postotak = 1.0m, SortOrder = 207, Jedinica = "komad" },
         new() { Id = "par_tuzba_med_arbitraza", Kategorija = "Parnični postupak", Opis = "Tužba pred međunarodnom arbitražom (Tbr. 7.7) – +100%", TarifniBroj = "Tbr. 7.7", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 7. toč. 7 — Tbr. 7. toč. 1 s povišenjem od 100%", Tbr71Postotak = 1.0m, Tbr71Povecanje = 1.0m, SortOrder = 208, Jedinica = "komad" },
+
+        // ── Tbr. 7. toč. 9 — parnica vrijednosti manje od 100,00 EUR ──
+        // "Za zastupanje u parničnom postupku u kojem je vrijednost predmeta spora manja
+        //  od 100,00 eura, neovisno o odredbi Tbr. 7. toč. 1., ukoliko točkama od 2. do 8.
+        //  ovog Tbr. za pojedine postupke i sporove nije drugačije određeno, odvjetniku
+        //  pripada jednokratna nagrada za cijeli prvostupanjski postupak u visini od 50 bodova."
+        // Jednokratno za CIJELI prvostupanjski postupak — ne po radnji.
+        new() { Id = "par_mali_spor", Kategorija = "Parnični postupak", Opis = "Zastupanje u prvostupanjskom postupku – VPS manji od 100,00 EUR (Tbr. 7.9) – jednokratno 50 bodova za cijeli postupak", TarifniBroj = "Tbr. 7.9", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 7. toč. 9 — jednokratna nagrada od 50 bodova za cijeli prvostupanjski postupak", FiksniBody = 50, JednokratnaNagrada = true, SortOrder = 209, Jedinica = "postupak" },
+
+        // ── Tbr. 7. toč. 10 — obiteljski sporovi s međunarodnim elementom ──
+        // "Zahtjevi kojima se pokreće postupak po Haškoj konvenciji (...) kao i svim drugim
+        //  parničnim i izvanparničnim postupcima koji se odnose na obiteljske sporove s
+        //  međunarodnim elementom odvjetniku pripada nagrada od 250 bodova."
+        new() { Id = "par_zahtjev_haska", Kategorija = "Parnični postupak", Opis = "Zahtjev kojim se pokreće postupak po Haškoj konvenciji / Uredbama Vijeća – obiteljski spor s međunarodnim elementom (Tbr. 7.10) – 250 bodova", TarifniBroj = "Tbr. 7.10", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 7. toč. 10 — nagrada od 250 bodova", FiksniBody = 250, SortOrder = 210, Jedinica = "komad" },
         // ── Tbr. 8. toč. 1 — odgovor na tužbu + prigovor + četiri podneska ──
         // "Za sastavljanje odgovora na tužbu, prigovora protiv platnog naloga i četiri
         //  obrazložena podneska u prvostupanjskom postupku odvjetniku pripada nagrada
@@ -207,15 +364,61 @@ public sealed class TroskovnikService
         //  pripada 50 % nagrade iz Tbr. 7. toč. 1., 4., 7. i 8., ali ne više od 100 bodova."
         new() { Id = "par_obrazlozeni_podnesak", Kategorija = "Parnični postupak", Opis = "Obrazloženi podnesci izvan Tbr. 8.1 (Tbr. 8.3) – 50% Tbr. 7.1, max 100", TarifniBroj = "Tbr. 8.3", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 8. toč. 3 — 50% nagrade iz Tbr. 7. toč. 1, najviše 100 bodova", Tbr71Postotak = 0.5m, MaxBodova = 100, SortOrder = 210, Jedinica = "komad" },
         new() { Id = "par_ostali_podnesci", Kategorija = "Parnični postupak", Opis = "Ostali podnesci (Tbr. 8.4) – 25% Tbr. 7.1, max 25", TarifniBroj = "Tbr. 8.4", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 8. toč. 4 — 25% nagrade iz Tbr. 7. toč. 1, najviše 25 bodova", Tbr71Postotak = 0.25m, MaxBodova = 25, SortOrder = 211, Jedinica = "komad" },
+
+        // ── Tbr. 8. toč. 2 — povrat u prijašnje stanje ──
+        // "Za sastavljanje prijedloga za povrat u prijašnje stanje odvjetniku pripada 50%
+        //  nagrade iz toč. 1. ovog tarifnog broja, ali ne više od 100 bodova."
+        new() { Id = "par_povrat_u_prijasnje_stanje", Kategorija = "Parnični postupak", Opis = "Prijedlog za povrat u prijašnje stanje (Tbr. 8.2) – 50% nagrade iz Tbr. 8.1, max 100", TarifniBroj = "Tbr. 8.2", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 8. toč. 2 — 50% nagrade iz Tbr. 8. toč. 1, najviše 100 bodova", Tbr71Postotak = 0.5m, MaxBodova = 100, SortOrder = 212, Jedinica = "komad" },
+
+        // ── Tbr. 8. toč. 5 — obiteljski sporovi s međunarodnim elementom ──
+        // "(...) odvjetniku pripada nagrada od 250 bodova, a za ostale podneske tijekom
+        //  postupka nagrada od 125 bodova."
+        // Apsolutni iznosi — ne ovise o vrijednosti predmeta spora.
+        new() { Id = "par_podnesak_haska", Kategorija = "Parnični postupak", Opis = "Obrazloženi podnesak u postupku po Haškoj konvenciji / Uredbama Vijeća (Tbr. 8.5) – 250 bodova", TarifniBroj = "Tbr. 8.5", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 8. toč. 5 — 250 bodova za obrazloženi podnesak", FiksniBody = 250, SortOrder = 213, Jedinica = "komad" },
+        new() { Id = "par_ostali_podnesak_haska", Kategorija = "Parnični postupak", Opis = "Ostali podnesak tijekom postupka po Haškoj konvenciji / Uredbama Vijeća (Tbr. 8.5) – 125 bodova", TarifniBroj = "Tbr. 8.5", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 8. toč. 5 — 125 bodova za ostale podneske tijekom postupka", FiksniBody = 125, SortOrder = 214, Jedinica = "komad" },
+
         new() { Id = "par_rociste_glavno", Kategorija = "Parnični postupak", Opis = "Ročište – glavna stvar / dokazi / nagodba (Tbr. 9.1)", TarifniBroj = "Tbr. 9.1", Tbr71Postotak = 1.0m, SortOrder = 220, Jedinica = "komad" },
         new() { Id = "par_rociste_procesno", Kategorija = "Parnični postupak", Opis = "Ročište – procesna pitanja (Tbr. 9.2) – 50% Tbr. 7.1", TarifniBroj = "Tbr. 9.2", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 9. toč. 2 — 50% nagrade iz Tbr. 7. toč. 1", Tbr71Postotak = 0.5m, SortOrder = 221, Jedinica = "komad" },
         new() { Id = "par_rociste_presuda", Kategorija = "Parnični postupak", Opis = "Ročište – objava presude (Tbr. 9.3) – 50% Tbr. 7.1, max 50", TarifniBroj = "Tbr. 9.3", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 9. toč. 3 — 50% nagrade iz Tbr. 7. toč. 1, najviše 50 bodova", Tbr71Postotak = 0.5m, MaxBodova = 50, SortOrder = 222, Jedinica = "komad" },
         new() { Id = "par_pristup_odgodjen", Kategorija = "Parnični postupak", Opis = "Pristup odgođenom ročištu (Tbr. 9.5) – 25% Tbr. 7.1, max 50", TarifniBroj = "Tbr. 9.5", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 9. toč. 5 — 25% nagrade iz Tbr. 7. toč. 1, najviše 50 bodova", Tbr71Postotak = 0.25m, MaxBodova = 50, SortOrder = 223, Jedinica = "komad" },
-        new() { Id = "par_ocevid", Kategorija = "Parnični postupak", Opis = "Nazočnost očevidu (Tbr. 9.7)", TarifniBroj = "Tbr. 9.7", Tbr71Postotak = 1.0m, SortOrder = 224, Jedinica = "komad" },
+        // ── Tbr. 9. toč. 4 — ročišta pred arbitražom ──
+        // "Za svako ročište pred arbitražom na kojem se raspravljalo o glavnoj stvari ili
+        //  su se izvodili dokazi odvjetniku pripada nagrada iz Tbr. 7. toč. 7., a sva
+        //  ostala ročišta 50% nagrade iz Tbr. 7. toč. 7."
+        new() { Id = "par_rociste_arbitraza", Kategorija = "Parnični postupak", Opis = "Ročište pred arbitražom – glavna stvar / izvođenje dokaza (Tbr. 9.4)", TarifniBroj = "Tbr. 9.4", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 9. toč. 4 — nagrada iz Tbr. 7. toč. 7", Tbr71Postotak = 1.0m, SortOrder = 225, Jedinica = "komad" },
+        new() { Id = "par_rociste_arbitraza_ostalo", Kategorija = "Parnični postupak", Opis = "Ostala ročišta pred arbitražom (Tbr. 9.4) – 50% nagrade iz Tbr. 7.7", TarifniBroj = "Tbr. 9.4", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 9. toč. 4 — 50% nagrade iz Tbr. 7. toč. 7", Tbr71Postotak = 0.5m, SortOrder = 226, Jedinica = "komad" },
+
+        // ── Tbr. 9. toč. 6 — rasprava pred sudom drugog stupnja ──
+        // "Za raspravu pred sudom drugog stupnja odvjetniku pripada nagrada po
+        //  Tbr. 7. toč. 1., 4., 7. i 8."
+        new() { Id = "par_rasprava_drugostupanjska", Kategorija = "Parnični postupak", Opis = "Rasprava pred sudom drugog stupnja (Tbr. 9.6) – puna nagrada iz Tbr. 7.1", TarifniBroj = "Tbr. 9.6", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 9. toč. 6 — nagrada po Tbr. 7. toč. 1., 4., 7. i 8.", Tbr71Postotak = 1.0m, SortOrder = 227, Jedinica = "komad" },
+
+        new() { Id = "par_ocevid", Kategorija = "Parnični postupak", Opis = "Nazočnost očevidu (Tbr. 9.7)", TarifniBroj = "Tbr. 9.7", Tbr71Postotak = 1.0m, SortOrder = 228, Jedinica = "komad" },
+
+        // ── Tbr. 9. toč. 8 — zastupanje u postupcima s međunarodnim elementom ──
+        // "(...) odvjetniku pripada nagrada od 250 bodova." Apsolutni iznos.
+        new() { Id = "par_zastupanje_haska", Kategorija = "Parnični postupak", Opis = "Zastupanje u postupku po Haškoj konvenciji / Uredbama Vijeća (Tbr. 9.8) – 250 bodova", TarifniBroj = "Tbr. 9.8", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 9. toč. 8 — 250 bodova", FiksniBody = 250, SortOrder = 229, Jedinica = "komad" },
         new() { Id = "par_zalba_presuda", Kategorija = "Parnični postupak", Opis = "Žalba protiv presude (Tbr. 10.1) – Tbr. 7.1 + 25%", TarifniBroj = "Tbr. 10.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 10. toč. 1 — Tbr. 7. toč. 1 s povišenjem od 25%", Tbr71Postotak = 1.0m, Tbr71Povecanje = 0.25m, SortOrder = 230, Jedinica = "komad" },
-        new() { Id = "par_zalba_rjesenje", Kategorija = "Parnični postupak", Opis = "Žalba protiv rješenja (Tbr. 10.4) – 50% Tbr. 7.1", TarifniBroj = "Tbr. 10.4", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 10. toč. 4 — 50% nagrade iz Tbr. 7. toč. 1", Tbr71Postotak = 0.5m, SortOrder = 231, Jedinica = "komad" },
-        new() { Id = "par_revizija", Kategorija = "Parnični postupak", Opis = "Revizija / izvanredni pravni lijek (Tbr. 10.5) – Tbr. 7.1 + 50%", TarifniBroj = "Tbr. 10.5", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 10. toč. 5 — Tbr. 7. toč. 1 s povišenjem od 50%", Tbr71Postotak = 1.0m, Tbr71Povecanje = 0.5m, SortOrder = 232, Jedinica = "komad" },
-        new() { Id = "par_odgovor_zalba", Kategorija = "Parnični postupak", Opis = "Odgovor na žalbu / reviziju (Tbr. 10.6)", TarifniBroj = "Tbr. 10.6", Tbr71Postotak = 1.0m, SortOrder = 233, Jedinica = "komad" },
+        // ── Tbr. 10. toč. 2 i 3 — pravni lijekovi u parnicama iz Tbr. 7. toč. 2, 3 i 9 ──
+        // Toč. 2: "(...) u parnicama iz Tbr. 7. toč. 2. i 3. odvjetniku pripada jednokratna
+        //          nagrada u visini od 100 bodova."
+        // Toč. 3: "(...) u parnicama iz Tbr. 7. toč. 9. odvjetniku pripada jednokratna
+        //          nagrada u visini od 30 bodova."
+        new() { Id = "par_zalba_jednokratna", Kategorija = "Parnični postupak", Opis = "Redovni pravni lijek u parnicama iz Tbr. 7.2 i 7.3 (Tbr. 10.2) – jednokratno 100 bodova", TarifniBroj = "Tbr. 10.2", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 10. toč. 2 — jednokratna nagrada od 100 bodova", FiksniBody = 100, JednokratnaNagrada = true, SortOrder = 231, Jedinica = "postupak" },
+        new() { Id = "par_zalba_mali_spor", Kategorija = "Parnični postupak", Opis = "Redovni pravni lijek u parnicama iz Tbr. 7.9 – VPS ispod 100 EUR (Tbr. 10.3) – jednokratno 30 bodova", TarifniBroj = "Tbr. 10.3", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 10. toč. 3 — jednokratna nagrada od 30 bodova", FiksniBody = 30, JednokratnaNagrada = true, SortOrder = 232, Jedinica = "postupak" },
+
+        new() { Id = "par_zalba_rjesenje", Kategorija = "Parnični postupak", Opis = "Žalba protiv rješenja (Tbr. 10.4) – 50% Tbr. 7.1", TarifniBroj = "Tbr. 10.4", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 10. toč. 4 — 50% nagrade iz Tbr. 7. toč. 1", Tbr71Postotak = 0.5m, SortOrder = 233, Jedinica = "komad" },
+        new() { Id = "par_revizija", Kategorija = "Parnični postupak", Opis = "Prijedlog za dopuštenje revizije / izvanredni pravni lijek (Tbr. 10.5) – Tbr. 7.1 + 50%", TarifniBroj = "Tbr. 10.5", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 10. toč. 5 — Tbr. 7. toč. 1 s povišenjem od 50%", Tbr71Postotak = 1.0m, Tbr71Povecanje = 0.5m, SortOrder = 234, Jedinica = "komad" },
+
+        // Tbr. 10. toč. 5 st. 2 — u predmetima iz Tbr. 7. toč. 2 i 3 nagrada je 150 bodova,
+        // a u predmetima iz Tbr. 7. toč. 9 nagrada je 100 bodova.
+        new() { Id = "par_revizija_jednokratna", Kategorija = "Parnični postupak", Opis = "Prijedlog za dopuštenje revizije u predmetima iz Tbr. 7.2 i 7.3 (Tbr. 10.5 st. 2) – 150 bodova", TarifniBroj = "Tbr. 10.5", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 10. toč. 5 st. 2 — 150 bodova u predmetima iz Tbr. 7. toč. 2 i 3", FiksniBody = 150, SortOrder = 235, Jedinica = "komad" },
+        new() { Id = "par_revizija_mali_spor", Kategorija = "Parnični postupak", Opis = "Prijedlog za dopuštenje revizije u predmetima iz Tbr. 7.9 (Tbr. 10.5 st. 2) – 100 bodova", TarifniBroj = "Tbr. 10.5", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 10. toč. 5 st. 2 — 100 bodova u predmetima iz Tbr. 7. toč. 9", FiksniBody = 100, SortOrder = 236, Jedinica = "komad" },
+
+        new() { Id = "par_odgovor_zalba", Kategorija = "Parnični postupak", Opis = "Odgovor na žalbu / prijedlog za dopuštenje revizije / izvanredni pravni lijek (Tbr. 10.6)", TarifniBroj = "Tbr. 10.6", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 10. toč. 6 — nagrada po Tbr. 7. toč. 1., 4. i 7.", Tbr71Postotak = 1.0m, SortOrder = 237, Jedinica = "komad" },
+
+        // Tbr. 10. toč. 6 st. 2 — u predmetima iz Tbr. 7. toč. 2, 3 i 9 nagrada je 30 bodova.
+        new() { Id = "par_odgovor_zalba_jednokratno", Kategorija = "Parnični postupak", Opis = "Odgovor na žalbu u predmetima iz Tbr. 7.2, 7.3 i 7.9 (Tbr. 10.6 st. 2) – 30 bodova", TarifniBroj = "Tbr. 10.6", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 10. toč. 6 st. 2 — 30 bodova u predmetima iz Tbr. 7. toč. 2, 3 i 9", FiksniBody = 30, SortOrder = 238, Jedinica = "komad" },
 
         // ═══════════════════════════════════════════════════════════
         // III. OVRŠNI POSTUPAK
@@ -421,8 +624,14 @@ public sealed class TroskovnikService
 
         // Jedina iznimka je Tbr. 4. toč. 1 al. 8 (prekršaj s oduzimanjem), koji ide po
         // Tbr. 7. toč. 1 prema vrijednosti ODUZETOG PREDMETA — to se računa zasebno niže.
-        var vrijednostSpora = isSamoKazneni ? 0m : request.VrijednostSpora;
-        var baseBodovi = Tbr71Bodovi(vrijednostSpora);
+        var vrijednostSpora = isSamoKazneni ? 0m : EfektivniVps(request);
+
+        // Osnovica na koju upućuju Tbr. 8. toč. 1, 3, 4 i Tbr. 9. toč. 1–6:
+        // "Tbr. 7. toč. 1., 4., 7. i 8." — četiri varijante iste osnovice, ne četiri iznosa.
+        // U kaznenom postupku vrijednost predmeta spora ne postoji, pa se osnovica ne razrješava.
+        var osnovica = isSamoKazneni
+            ? new OsnovicaRezultat(Tbr71Bodovi(0m), "", false)
+            : IzracunajOsnovicu(request);
 
         // ── Zapriječena kazna (Tbr. 4. toč. 1) ──
         // Kaznene stavke nemaju osnovicu bez nje, pa se traži samo kad je stvarno treba.
@@ -475,7 +684,7 @@ public sealed class TroskovnikService
             }
             else
             {
-                bodovi = IzracunajBodove(def, baseBodovi);
+                bodovi = IzracunajBodove(def, osnovica);
             }
 
             // Zaštitna mreža: nijedna stavka ne smije završiti na nula bodova.
@@ -512,7 +721,16 @@ public sealed class TroskovnikService
         var povisenjePostotak = PovisenjeViseOsobaPostotak(request.BrojZastupanihOsoba);
         var povisenjeBodovi = osnovicaBodova * povisenjePostotak;
 
-        var ukupnoBodova = osnovicaBodova + povisenjeBodovi;
+        // ── Tbr. 41 — povisivanje i snižavanje tarifnih stavaka ──
+        // Toč. 1: "tarifne stavke mogu se povisiti za 100%" (posebna stručnost).
+        // Toč. 2: "pojedine tarifne stavke odvjetnik može sniziti za 50%".
+        // Oba su zadano 0 — bez korisnikova zahvata iznos je nepromijenjen.
+        // Djeluje na zbroj stavaka, kao i Tbr. 40; sudska pristojba se ne uvećava
+        // jer nije odvjetnička nagrada.
+        var tbr41Udio = Tbr41Udio(request);
+        var tbr41Bodovi = osnovicaBodova * tbr41Udio;
+
+        var ukupnoBodova = osnovicaBodova + povisenjeBodovi + tbr41Bodovi;
 
         // ── Novac ──
         // Bodovi su do ovdje ostali decimalni, bez ijednog zaokruživanja. Tek se
@@ -540,6 +758,14 @@ public sealed class TroskovnikService
             UkupnoBodova = ukupnoBodova,
             BrojZastupanihOsoba = Math.Max(1, request.BrojZastupanihOsoba),
             PovisenjeViseOsobaPostotak = povisenjePostotak,
+            OsnovicaTbr7 = request.OsnovicaTbr7,
+            OsnovicaBodovi = osnovica.Bodovi,
+            OsnovicaPravniIzvor = osnovica.PravniIzvor,
+            RazinaSuda = request.RazinaSuda,
+            Tbr45Nacin = request.Tbr45Nacin,
+            Tbr41PovisenjePostotak = Math.Clamp(request.Tbr41PovisenjePostotak, 0m, 100m),
+            Tbr41SnizenjePostotak = Math.Clamp(request.Tbr41SnizenjePostotak, 0m, 50m),
+            Tbr41Bodovi = tbr41Bodovi,
             PovisenjeViseOsobaBodovi = povisenjeBodovi,
             VrijednostSpora = vrijednostSpora,
             IsSamoKazneni = isSamoKazneni,
@@ -665,23 +891,32 @@ public sealed class TroskovnikService
     /// zaokruživanje bodova nigdje ne propisuje, a Math.Ceiling na svakom koraku
     /// sustavno je podizao iznose.
     /// </summary>
-    private static decimal IzracunajBodove(TarifnaStavka def, int baseBodovi)
+    private static decimal IzracunajBodove(TarifnaStavka def, OsnovicaRezultat osnovica)
     {
         decimal bodovi;
 
         if (def.FiksniBody.HasValue)
         {
+            // Iznos koji Tarifa određuje apsolutno (npr. Tbr. 7. toč. 10 = 250 bodova) —
+            // ne ovisi ni o vrijednosti spora ni o osnovici.
             bodovi = def.FiksniBody.Value;
+        }
+        else if (osnovica.FiksnoPoRadnji)
+        {
+            // Tbr. 45 uz način "fiksno po radnji": svaka poduzeta radnja nosi puni iznos
+            // iz Tbr. 45. toč. 1–3. Postoci i stropovi iz Tbr. 8./9. se NE primjenjuju —
+            // to je upravo ono po čemu se to čitanje razlikuje od "kao osnovica".
+            return osnovica.Bodovi;
         }
         else if (def.Tbr71Postotak.HasValue)
         {
-            bodovi = baseBodovi * def.Tbr71Postotak.Value;
+            bodovi = osnovica.Bodovi * def.Tbr71Postotak.Value;
             if (def.Tbr71Povecanje.HasValue)
                 bodovi *= 1 + def.Tbr71Povecanje.Value;
         }
         else
         {
-            bodovi = baseBodovi;
+            bodovi = osnovica.Bodovi;
         }
 
         return ClampBodovi(bodovi, def);

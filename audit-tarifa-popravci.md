@@ -585,3 +585,129 @@ U pokrenutoj aplikaciji, na `/troskovnik`:
 10. "Zastupanje oštećenika", kazna preko 10 godina → **200 bodova**
 11. uključi "Stjecaj / produljeno kazneno djelo" → iznos se ne mijenja, ali na
     troškovniku se pojavi obrazloženje odabranog razreda
+
+---
+
+# Dopuna — parnični dio zatvoren (Tbr. 7. toč. 4, 6, 9, 10; Tbr. 8, 9, 10; Tbr. 41, 45)
+
+Nastavak rada na parničnom dijelu. Testovi: **1487 prošlo, 0 palo** (1433 zatečeno + 54 nova).
+
+## Korijenski uzrok: osnovica „Tbr. 7. toč. 1., 4., 7. i 8."
+
+Tarifa na **devet mjesta** upućuje na taj skup točaka — Tbr. 8. toč. 1, 3, 4;
+Tbr. 9. toč. 1, 2, 3, 5, 6; Tbr. 10. To **nisu četiri različita iznosa** nego
+**četiri varijante iste osnovice**; koja se primjenjuje ovisi o vrsti postupka.
+
+Kod je osnovicu fiksirao na `Tbr71Bodovi(VrijednostSpora)` — uvijek toč. 1. Posljedica:
+Tbr. 8. toč. 1 (dodan commitom `fff650f`) davao je ispravan iznos samo za običnu parnicu,
+a Tbr. 8. toč. 3 i 4 bili su krivi u arbitraži i autorskopravnim sporovima.
+
+Uvedena je `TroskovnikService.IzracunajOsnovicu(request)`:
+
+| `osnovica_tbr7` | Izračun | Odredba |
+|---|---|---|
+| `toc1` *(zadano)* | `Tbr71Bodovi(VPS)` | Tbr. 7. toč. 1 |
+| `toc4_autorsko` | `max(Tbr71Bodovi(VPS), 100)` | Tbr. 7. toč. 4 al. 1 |
+| `toc4_renta` | `Tbr71Bodovi(petogodišnji iznos)` | Tbr. 7. toč. 4 al. 2 |
+| `toc7_domaca_arbitraza` | `Tbr71Bodovi(VPS)` | Tbr. 7. toč. 7 st. 1 |
+| `toc7_medunarodna_arbitraza` | `Tbr71Bodovi(VPS) × 2` | Tbr. 7. toč. 7 st. 2 |
+| `toc8_mirenje` | `Tbr71Bodovi(VPS)` | Tbr. 7. toč. 8 |
+| `tbr45_neprocjenjiv` | 100 / 200 / 500 po razini suda | Tbr. 45. toč. 1–3 |
+
+**Provjera Tbr. 8. toč. 1 na sve četiri upućene točke** (VPS 20.000 € → toč. 1 daje 250 bod.):
+
+| Slučaj | Osnovica | Tbr. 8.1 |
+|---|---|---|
+| toč. 1 | 250 | 250 bod. |
+| toč. 4, VPS 20.000 (prag ne djeluje) | max(250, 100) = 250 | 250 bod. |
+| **toč. 4, VPS 1.000 (prag djeluje)** | **max(75, 100) = 100** | **100 bod.** |
+| toč. 7 domaća | 250 | 250 bod. |
+| **toč. 7 međunarodna** | **250 × 2 = 500** | **500 bod.** |
+| toč. 8 mirenje | 250 | 250 bod. |
+
+## Novi tarifni brojevi
+
+| Tbr. | Stavka | Iznos |
+|---|---|---|
+| 7. toč. 6 | mjenični / čekovni nalozi i drugi vrijednosni papiri | puna nagrada iz toč. 1 (bez stropa iz toč. 5) |
+| 7. toč. 9 | parnica vrijednosti < 100,00 € | jednokratno 50 bod. za cijeli prvostupanjski postupak |
+| 7. toč. 10 | zahtjev po Haškoj konvenciji / Uredbama Vijeća | 250 bod. |
+| 8. toč. 2 | povrat u prijašnje stanje | 50 % iz Tbr. 8.1, max 100 |
+| 8. toč. 5 | podnesak u haškom postupku | 250 bod. / ostali 125 bod. |
+| 9. toč. 4 | ročište pred arbitražom | puna / 50 % nagrade iz Tbr. 7. toč. 7 |
+| 9. toč. 6 | rasprava pred sudom drugog stupnja | puna nagrada iz toč. 1 |
+| 9. toč. 8 | zastupanje u haškom postupku | 250 bod. |
+| 10. toč. 2 | pravni lijek u parnicama iz Tbr. 7.2 i 7.3 | jednokratno 100 bod. |
+| 10. toč. 3 | pravni lijek u parnicama iz Tbr. 7.9 | jednokratno 30 bod. |
+| 10. toč. 5 st. 2 | prijedlog za reviziju u tim predmetima | 150 odn. 100 bod. |
+| 10. toč. 6 st. 2 | odgovor na žalbu u tim predmetima | 30 bod. |
+
+Parnični dio (Tbr. 7.–10.) time je pokriven u cijelosti: **28 / 28 točaka**.
+
+## Tbr. 45 — neprocjenjivi predmeti
+
+Prije: neprocjenjiv predmet (VPS = 0) padao je na `Tbr71Bodovi(0)` = **25 bodova**.
+Pred Vrhovnim sudom Tarifa propisuje **500** — greška do dvadeseterostruke.
+
+Sada `razina_suda`: općinski 100 / županijski i trgovački 200 / Vrhovni 500.
+Bez odabrane razine izračun baca `TroskovnikValidationException` — ne postoji razumna
+zadana vrijednost kad je raspon 1:5.
+
+### NEJASNO U TARIFI
+
+Tbr. 45 daje iznos „za svaku poduzetu radnju", ali **ne kaže** primjenjuju li se na njega
+postoci iz Tbr. 8 (50 % / 25 %) i Tbr. 9. Oba čitanja su obranjiva, pa korisnik bira
+(`tbr45_nacin`), a sustav ne pretpostavlja:
+
+| Način | Ponašanje | Primjer: Tbr. 8.3, općinski sud |
+|---|---|---|
+| `kao_osnovica` | 100/200/500 je osnovica, postoci se primjenjuju | 50 bodova |
+| `fiksno_po_radnji` | svaka radnja = puni iznos, bez postotaka i stropova | 100 bodova |
+
+Odabir je obavezan; bez njega izračun baca grešku.
+
+## Tbr. 41 — povisivanje i snižavanje
+
+- Toč. 1 — povišenje za posebnu stručnost, **0–100 %**, zadano **0**
+- Toč. 2 — sniženje, **0–50 %**, zadano **0**
+
+Djeluje na zbroj stavaka, kao i Tbr. 40, i **zbraja se** s njim:
+`250 × (1 + 0,20 + 1,00 − 0,50) = 425 bodova`. Sudska pristojba se ne uvećava —
+nije odvjetnička nagrada. Bez korisnikova zahvata iznos je nepromijenjen.
+
+## Tbr. 7. toč. 4 al. 2 — petogodišnji iznos
+
+„Kao vrijednost spora uzima se petogodišnji iznos rente, zakupa, najma i drugih sličnih
+davanja." Traži se izričit unos iznosa **i** razdoblja (`mjesecno` × 60 / `godisnje` × 5).
+Bez razdoblja se ne preračunava ništa — koristi se uneseni VPS.
+
+Primjer: najam 400 €/mj × 60 = 24.000 € → **250 bodova**. Bez preračuna bio bi 400 € → 50.
+
+## Tbr. 25 — i dalje neimplementiran
+
+Ukinut presudom Visokog upravnog suda RH **Usoz-55/2024-21 od 18. srpnja 2025.**
+Stoji u pročišćenom tekstu, ali nije na snazi. Test `Tbr25_JavnaNabava_NeSmijePostojatiUKatalogu`
+pada ako ga netko doda.
+
+## Otvoreno
+
+1. **Frontend nije ažuriran** za ove odredbe — `lib/tarifa.ts` i `/troskovnik` ne nude
+   odabir osnovice, razine suda, načina po Tbr. 45 ni klizače za Tbr. 41. Backend ih
+   prihvaća; dok se sučelje ne dopuni, dostupni su samo preko API-ja.
+2. **Tbr. 10 upućuje na uži skup** — „Tbr. 7. toč. 1., 4. i 7.", bez toč. 8, za razliku od
+   Tbr. 8 i Tbr. 9. Sustav primjenjuje jednu osnovicu na cijeli obračun. Praktično je
+   bezopasno (toč. 8 ionako upućuje natrag na toč. 1, pa je iznos isti), ali razlika u
+   tekstu je stvarna.
+3. **Tbr. 7. toč. 9 kao prekidač** — implementiran je kao zasebna stavka (`par_mali_spor`),
+   a ne kao automatska zamjena cijelog obračuna. Korisnik ga bira sam; sustav ne upozorava
+   ako je VPS < 100 € a stavka nije odabrana.
+
+## Nove provjere
+
+```bash
+dotnet test Backend.Tests/Backend.Tests.csproj --filter "FullyQualifiedName~TarifaOsnovica|FullyQualifiedName~TarifaTbr45|FullyQualifiedName~TarifaTbr41"
+```
+
+- `TarifaOsnovicaTests` — Tbr. 8.1 na sve četiri točke, petogodišnji iznos, apsolutni iznosi, Tbr. 25
+- `TarifaTbr45Tests` — tri razine suda × oba čitanja, greška bez odabira
+- `TarifaTbr41Tests` — povišenje/sniženje, ograničenja raspona, zbrajanje s Tbr. 40

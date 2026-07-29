@@ -69,6 +69,55 @@ public sealed class TroskovnikRequestValidator : AbstractValidator<TroskovnikReq
         {
             RuleFor(x => x.Stranke!.Protustranka!.Oib).Matches("^\\d{11}$").WithMessage("Protustranka.oib mora sadržavati 11 znamenki.");
         });
+
+        // ── Osnovica po Tbr. 7. / Tbr. 45 ─────────────────────────
+        //
+        // Nevaljan unos daje GREŠKU, nikad tihi pad na zadanu vrijednost:
+        // razlika između razina suda po Tbr. 45 je do peterostruka.
+
+        RuleFor(x => x.OsnovicaTbr7)
+            .Must(o => OsnovicaTbr7.Sve.Contains(o))
+            .WithMessage($"Nepoznata osnovica. Dopušteno: {string.Join(", ", OsnovicaTbr7.Sve)}.");
+
+        When(x => x.OsnovicaTbr7 == OsnovicaTbr7.Tbr45Neprocjenjiv, () =>
+        {
+            RuleFor(x => x.RazinaSuda)
+                .NotEmpty().WithMessage(
+                    "Tbr. 45 zahtijeva razinu suda: 100 bodova pred općinskim, 200 pred " +
+                    "županijskim i trgovačkim, 500 pred Vrhovnim sudom RH.")
+                .Must(r => r is null || RazinaSuda.Bodovi.ContainsKey(r))
+                .WithMessage($"Nepoznata razina suda. Dopušteno: {string.Join(", ", RazinaSuda.Bodovi.Keys)}.");
+
+            RuleFor(x => x.Tbr45Nacin)
+                .NotEmpty().WithMessage(
+                    "Tbr. 45 zahtijeva način obračuna: Tarifa ne kaže primjenjuju li se postoci " +
+                    "iz Tbr. 8 i Tbr. 9 na iznos iz Tbr. 45, pa odabir mora biti izričit.")
+                .Must(n => n is null || Tbr45Nacin.Sve.Contains(n))
+                .WithMessage($"Nepoznat način. Dopušteno: {string.Join(", ", Tbr45Nacin.Sve)}.");
+        });
+
+        // Tbr. 7. toč. 4 al. 2 — petogodišnji iznos
+        RuleFor(x => x.RentaIznos)
+            .GreaterThanOrEqualTo(0).WithMessage("Iznos rente / zakupa / najma ne može biti negativan.");
+
+        When(x => x.RentaIznos > 0, () =>
+        {
+            RuleFor(x => x.RentaRazdoblje)
+                .Must(r => r is RentaRazdoblje.Mjesecno or RentaRazdoblje.Godisnje)
+                .WithMessage(
+                    "Uz periodični iznos rente / zakupa / najma morate odabrati razdoblje " +
+                    "(mjesecno ili godisnje) da bi se izveo petogodišnji iznos iz Tbr. 7. toč. 4.");
+        });
+
+        // ── Tbr. 41 — rasponi iz same Tarife ──────────────────────
+
+        RuleFor(x => x.Tbr41PovisenjePostotak)
+            .InclusiveBetween(0m, 100m)
+            .WithMessage("Tbr. 41. toč. 1 dopušta povišenje tarifnih stavaka najviše za 100 %.");
+
+        RuleFor(x => x.Tbr41SnizenjePostotak)
+            .InclusiveBetween(0m, 50m)
+            .WithMessage("Tbr. 41. toč. 2 dopušta sniženje tarifnih stavaka najviše za 50 %.");
     }
 }
 
