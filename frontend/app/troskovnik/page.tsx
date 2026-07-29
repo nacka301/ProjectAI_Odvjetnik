@@ -64,6 +64,8 @@ interface TroskovnikLineItem {
   item_id: string;
   opis: string;
   tarifni_broj: string;
+  /** Propis i tarifni broj iz kojeg redak proizlazi. */
+  pravni_izvor?: string;
   kolicina: number;
   bodova_po_jedinici: number;
   ukupno_bodova: number;
@@ -410,6 +412,7 @@ function TroskovnikContent() {
       iznos_eur: number;
       jedinica: string;
       is_jednokratna: boolean;
+      pravni_izvor: string;
     }[] = [];
     const catalogMap = new Map(katalog.map((s) => [s.id, s]));
 
@@ -442,6 +445,7 @@ function TroskovnikContent() {
         iznos_eur: zaokruziNovac(ukupnoStavke * BOD_VALUE),
         jedinica: def.jedinica,
         is_jednokratna: def.jednokratna_nagrada === true,
+        pravni_izvor: def.pravni_izvor ?? def.tarifni_broj,
       });
     });
 
@@ -674,11 +678,12 @@ function TroskovnikContent() {
     const source = result?.stavke ?? liveCalc.lines.map((l, i) => ({ rbr: i + 1, ...l }));
     if (source.length === 0) return;
 
-    const header = "Rbr;Tarifni broj;Opis;Količina;Bodova/jed.;Ukupno bodova;Iznos EUR\n";
+    const header = "Rbr;Tarifni broj;Pravni izvor;Opis;Količina;Bodova/jed.;Ukupno bodova;Iznos EUR\n";
     const rows = source
       .map((l, i) => {
         const rbr = "rbr" in l ? l.rbr : i + 1;
-        return `${rbr};"${l.tarifni_broj}";"${l.opis}";${l.kolicina};${l.bodova_po_jedinici};${l.ukupno_bodova};${formatNumber(l.iznos_eur)}`;
+        const izvor = (l.pravni_izvor ?? l.tarifni_broj).replace(/"/g, "'");
+        return `${rbr};"${l.tarifni_broj}";"${izvor}";"${l.opis}";${l.kolicina};${fmtNum(l.bodova_po_jedinici)};${fmtNum(l.ukupno_bodova)};${formatNumber(l.iznos_eur)}`;
       })
       .join("\n");
 
@@ -692,11 +697,11 @@ function TroskovnikContent() {
       const pdvAmt = result ? result.pdv : liveCalc.pdv;
       const grand = result ? result.ukupno_eur_s_pdv : liveCalc.ukupnoSPdv;
       const bodova = result ? result.ukupno_bodova : liveCalc.ukupnoBodova;
-      totals = `\n\n;;;;;Ukupno bodova;${bodova}\n;;;;;Osnovica (bez PDV);${formatNumber(base)}\n;;;;;PDV (25%);${formatNumber(pdvAmt)}\n;;;;;Odvjetnički trošak s PDV-om;${formatNumber(grand)}\n;;;;;Sudska pristojba (Tar. br. 1);${formatNumber(csvPristojba)}\n;;;;;SVEUKUPNI TROŠAK;${formatNumber(csvSveukupni)}`;
+      totals = `\n\n;;;;;;Ukupno bodova;${bodova}\n;;;;;;Osnovica (bez PDV);${formatNumber(base)}\n;;;;;;PDV (25%);${formatNumber(pdvAmt)}\n;;;;;;Odvjetnički trošak s PDV-om;${formatNumber(grand)}\n;;;;;;Sudska pristojba (Tar. br. 1);${formatNumber(csvPristojba)}\n;;;;;;SVEUKUPNI TROŠAK;${formatNumber(csvSveukupni)}`;
     } else {
       const base = result ? result.ukupno_eur_bez_pdv : liveCalc.ukupnoEur;
       const bodova = result ? result.ukupno_bodova : liveCalc.ukupnoBodova;
-      totals = `\n\n;;;;;Ukupno bodova;${bodova}\n;;;;;Odvjetnički trošak;${formatNumber(base)}\n;;;;;Sudska pristojba (Tar. br. 1);${formatNumber(csvPristojba)}\n;;;;;SVEUKUPNI TROŠAK;${formatNumber(csvSveukupni)}`;
+      totals = `\n\n;;;;;;Ukupno bodova;${bodova}\n;;;;;;Odvjetnički trošak;${formatNumber(base)}\n;;;;;;Sudska pristojba (Tar. br. 1);${formatNumber(csvPristojba)}\n;;;;;;SVEUKUPNI TROŠAK;${formatNumber(csvSveukupni)}`;
     }
 
     const bom = "\uFEFF";
@@ -1048,6 +1053,9 @@ function TroskovnikContent() {
                                 </span>
                                 <span className="text-[10px] text-slate-400">/ {item.jedinica}</span>
                               </div>
+                              <p className="text-[9px] text-slate-400/80 leading-snug mt-1">
+                                {item.pravni_izvor ?? item.tarifni_broj}
+                              </p>
                             </div>
 
                             {/* Quantity controls */}
@@ -1375,6 +1383,9 @@ function TroskovnikContent() {
                               {line.is_jednokratna
                                 ? `jednokratno · ${line.kolicina} ${line.kolicina === 1 ? "radnja" : "radnji"} = ${fmtNum(line.ukupno_bodova)} bod.`
                                 : `${line.kolicina} × ${fmtNum(line.bodova_po_jedinici)} bod.`}
+                            </p>
+                            <p className="text-[9px] text-slate-400/80 leading-snug mt-0.5" title={line.pravni_izvor}>
+                              {line.pravni_izvor}
                             </p>
                           </div>
                           <span className="text-xs font-semibold text-slate-800 shrink-0">
@@ -1744,7 +1755,14 @@ function TroskovnikContent() {
                             <span className="ml-1.5 text-[10px] font-semibold text-emerald-700">(jednokratna nagrada)</span>
                           )}
                         </td>
-                        <td className="py-2 px-2 text-slate-500 font-mono text-xs">{line.tarifni_broj}</td>
+                        <td className="py-2 px-2 text-slate-500 font-mono text-xs">
+                          {line.tarifni_broj}
+                          {line.pravni_izvor && (
+                            <span className="block font-sans text-[9px] leading-snug text-slate-400 normal-case">
+                              {line.pravni_izvor}
+                            </span>
+                          )}
+                        </td>
                         <td className="py-2 px-2 text-center text-slate-600">{line.kolicina}</td>
                         <td className="py-2 px-2 text-right text-slate-600">{fmtNum(line.bodova_po_jedinici)}</td>
                         <td className="py-2 px-2 text-right font-semibold text-slate-700">{fmtNum(line.ukupno_bodova)}</td>

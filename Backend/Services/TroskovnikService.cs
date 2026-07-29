@@ -57,9 +57,9 @@ public sealed class TroskovnikService
 
         // ── Tbr. 1 — Sastavljanje podnesaka ──
         // Toč. 1, 2, 3 → "nagrada po Tbr. 4. toč. 1." = bodovi ovise o zapriječenoj kazni
-        new() { Id = "kaz_privatna_tuzba", Kategorija = "Kazneni postupak", Opis = "Privatna tužba / kaznena prijava / optužni prijedlog (Tbr. 1.1)", TarifniBroj = "Tbr. 1.1", KazneniBase = true, MinBodova = 100, SortOrder = 100, Jedinica = "komad" },
-        new() { Id = "kaz_podnesak_obrana", Kategorija = "Kazneni postupak", Opis = "Podnesci s navođenjem činjenica / pisana obrana (Tbr. 1.2)", TarifniBroj = "Tbr. 1.2", KazneniBase = true, SortOrder = 101, Jedinica = "komad" },
-        new() { Id = "kaz_zahtjev_ostecenik", Kategorija = "Kazneni postupak", Opis = "Zahtjev oštećenika za dokazne radnje / preuzimanje progona (Tbr. 1.3)", TarifniBroj = "Tbr. 1.3", KazneniBase = true, SortOrder = 102, Jedinica = "komad" },
+        new() { Id = "kaz_privatna_tuzba", Kategorija = "Kazneni postupak", Opis = "Privatna tužba / kaznena prijava / optužni prijedlog (Tbr. 1.1)", TarifniBroj = "Tbr. 1.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 1. toč. 1 — nagrada po Tbr. 4. toč. 1", KazneniBase = true, MinBodova = 100, SortOrder = 100, Jedinica = "komad" },
+        new() { Id = "kaz_podnesak_obrana", Kategorija = "Kazneni postupak", Opis = "Podnesci s navođenjem činjenica / pisana obrana (Tbr. 1.2)", TarifniBroj = "Tbr. 1.2", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 1. toč. 2 — nagrada po Tbr. 4. toč. 1", KazneniBase = true, SortOrder = 101, Jedinica = "komad" },
+        new() { Id = "kaz_zahtjev_ostecenik", Kategorija = "Kazneni postupak", Opis = "Zahtjev oštećenika za dokazne radnje / preuzimanje progona (Tbr. 1.3)", TarifniBroj = "Tbr. 1.3", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 1. toč. 3 — nagrada po Tbr. 4. toč. 1", KazneniBase = true, SortOrder = 102, Jedinica = "komad" },
         new() { Id = "kaz_imovinskopravni", Kategorija = "Kazneni postupak", Opis = "Podnesak za imovinskopravni zahtjev oštećenika (Tbr. 1.4)", TarifniBroj = "Tbr. 1.4", FiksniBody = 75, SortOrder = 103, Jedinica = "komad" },
         new() { Id = "kaz_ostali_podnesci", Kategorija = "Kazneni postupak", Opis = "Ostali podnesci u kaznenom postupku (Tbr. 1.5)", TarifniBroj = "Tbr. 1.5", FiksniBody = 50, SortOrder = 104, Jedinica = "komad" },
 
@@ -67,60 +67,60 @@ public sealed class TroskovnikService
         // Toč. 1, 2, 4 → fiksni; Toč. 3 → "nagrada po Tbr. 4. toč. 1."
         new() { Id = "kaz_odgoda_izvrsenja", Kategorija = "Kazneni postupak", Opis = "Prijedlog za odgodu izvršenja kazne / uvjetni otpust (Tbr. 2.1)", TarifniBroj = "Tbr. 2.1", FiksniBody = 100, SortOrder = 110, Jedinica = "komad" },
         new() { Id = "kaz_rehabilitacija", Kategorija = "Kazneni postupak", Opis = "Prijedlog za rehabilitaciju (Tbr. 2.2)", TarifniBroj = "Tbr. 2.2", FiksniBody = 50, SortOrder = 111, Jedinica = "komad" },
-        new() { Id = "kaz_pomilovanje", Kategorija = "Kazneni postupak", Opis = "Molba za pomilovanje (Tbr. 2.3)", TarifniBroj = "Tbr. 2.3", KazneniBase = true, SortOrder = 112, Jedinica = "komad" },
+        new() { Id = "kaz_pomilovanje", Kategorija = "Kazneni postupak", Opis = "Molba za pomilovanje (Tbr. 2.3)", TarifniBroj = "Tbr. 2.3", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 2. toč. 3 — nagrada po Tbr. 4. toč. 1", KazneniBase = true, SortOrder = 112, Jedinica = "komad" },
         new() { Id = "kaz_opoziv_uvjetne", Kategorija = "Kazneni postupak", Opis = "Prijedlog za opoziv uvjetne osude (Tbr. 2.4)", TarifniBroj = "Tbr. 2.4", FiksniBody = 50, SortOrder = 113, Jedinica = "komad" },
 
         // ── Tbr. 3 — Zastupanje i obrana pred policijom / DO / sucem istrage ──
         // Toč. 1: prvi sat = Tbr. 4.1, svaki sljedeći sat = 50 bodova
         // Toč. 3: punomoćnik oštećenika = 50% nagrade iz Tbr. 3 (= 50% Tbr. 4.1)
         // Toč. 4: odgoda radnje = 50% nagrade iz toč. 1 (= 50% Tbr. 4.1)
-        new() { Id = "kaz_sudjelovanje_istraga", Kategorija = "Kazneni postupak", Opis = "Sudjelovanje pred policijom / DO / sucem istrage – prvi sat (Tbr. 3.1)", TarifniBroj = "Tbr. 3.1", KazneniBase = true, SortOrder = 120, Jedinica = "sat" },
-        new() { Id = "kaz_istraga_dodatni_sat", Kategorija = "Kazneni postupak", Opis = "Svaki sljedeći započeti sat u istrazi (Tbr. 3.1)", TarifniBroj = "Tbr. 3.1", FiksniBody = 50, SortOrder = 121, Jedinica = "sat" },
-        new() { Id = "kaz_istraga_ostecenik", Kategorija = "Kazneni postupak", Opis = "Punomoćnik oštećenika / žrtve u istrazi – 50% Tbr. 4.1 (Tbr. 3.3)", TarifniBroj = "Tbr. 3.3", KazneniBase = true, KazneniPovecanje = -0.5m, SortOrder = 122, Jedinica = "sat" },
-        new() { Id = "kaz_istraga_odgoda", Kategorija = "Kazneni postupak", Opis = "Pristup odgođenoj radnji u istrazi – 50% Tbr. 4.1 (Tbr. 3.4)", TarifniBroj = "Tbr. 3.4", KazneniBase = true, KazneniPovecanje = -0.5m, SortOrder = 123, Jedinica = "komad" },
+        new() { Id = "kaz_sudjelovanje_istraga", Kategorija = "Kazneni postupak", Opis = "Sudjelovanje pred policijom / DO / sucem istrage – prvi sat (Tbr. 3.1)", TarifniBroj = "Tbr. 3.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 3. toč. 1 — nagrada iz Tbr. 4. toč. 1 za prvi sat", KazneniBase = true, SortOrder = 120, Jedinica = "sat" },
+        new() { Id = "kaz_istraga_dodatni_sat", Kategorija = "Kazneni postupak", Opis = "Svaki sljedeći započeti sat u istrazi (Tbr. 3.1)", TarifniBroj = "Tbr. 3.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 3. toč. 1 — 50 bodova za svaki sljedeći započeti sat", FiksniBody = 50, SortOrder = 121, Jedinica = "sat" },
+        new() { Id = "kaz_istraga_ostecenik", Kategorija = "Kazneni postupak", Opis = "Punomoćnik oštećenika / žrtve u istrazi – 50% Tbr. 4.1 (Tbr. 3.3)", TarifniBroj = "Tbr. 3.3", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 3. toč. 3 — 50% nagrade iz Tbr. 3 (Tbr. 4. toč. 1)", KazneniBase = true, KazneniPovecanje = -0.5m, SortOrder = 122, Jedinica = "sat" },
+        new() { Id = "kaz_istraga_odgoda", Kategorija = "Kazneni postupak", Opis = "Pristup odgođenoj radnji u istrazi – 50% Tbr. 4.1 (Tbr. 3.4)", TarifniBroj = "Tbr. 3.4", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 3. toč. 4 — 50% nagrade iz Tbr. 3. toč. 1", KazneniBase = true, KazneniPovecanje = -0.5m, SortOrder = 123, Jedinica = "komad" },
 
         // ── Tbr. 4 — Obrana na raspravi ──
         new() { Id = "kaz_obrana", Kategorija = "Kazneni postupak", Opis = "Obrana okrivljenika na raspravi – prvi sat (Tbr. 4.1)", TarifniBroj = "Tbr. 4.1", KazneniBase = true, SortOrder = 130, Jedinica = "sat" },
-        new() { Id = "kaz_obrana_prekrsaj", Kategorija = "Kazneni postupak", Opis = "Obrana u prekršajnom postupku (Tbr. 4.1)", TarifniBroj = "Tbr. 4.1", FiksniBody = 100, SortOrder = 131, Jedinica = "sat" },
-        new() { Id = "kaz_dodatni_sat", Kategorija = "Kazneni postupak", Opis = "Svaki sljedeći započeti sat rasprave (Tbr. 4.1)", TarifniBroj = "Tbr. 4.1", FiksniBody = 50, SortOrder = 132, Jedinica = "sat" },
+        new() { Id = "kaz_obrana_prekrsaj", Kategorija = "Kazneni postupak", Opis = "Obrana u prekršajnom postupku (Tbr. 4.1)", TarifniBroj = "Tbr. 4.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 4. toč. 1 al. 7 — obrana u prekršajnom postupku, 100 bodova", FiksniBody = 100, SortOrder = 131, Jedinica = "sat" },
+        new() { Id = "kaz_dodatni_sat", Kategorija = "Kazneni postupak", Opis = "Svaki sljedeći započeti sat rasprave (Tbr. 4.1)", TarifniBroj = "Tbr. 4.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 4. toč. 1 — 50 bodova za svaki sljedeći započeti sat", FiksniBody = 50, SortOrder = 132, Jedinica = "sat" },
         new() { Id = "kaz_objava_presude", Kategorija = "Kazneni postupak", Opis = "Ročište za objavu presude (Tbr. 4.2)", TarifniBroj = "Tbr. 4.2", FiksniBody = 50, SortOrder = 133, Jedinica = "komad" },
-        new() { Id = "kaz_sjednica_drugostupanjska", Kategorija = "Kazneni postupak", Opis = "Sjednica vijeća drugog stupnja (Tbr. 4.2) – po Tbr. 4.1", TarifniBroj = "Tbr. 4.2", KazneniBase = true, SortOrder = 134, Jedinica = "komad" },
+        new() { Id = "kaz_sjednica_drugostupanjska", Kategorija = "Kazneni postupak", Opis = "Sjednica vijeća drugog stupnja (Tbr. 4.2) – po Tbr. 4.1", TarifniBroj = "Tbr. 4.2", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 4. toč. 2 al. 2 — kao za obranu pred sudom prvog stupnja", KazneniBase = true, SortOrder = 134, Jedinica = "komad" },
         // Tbr. 4. toč. 2 al. 3: "— na raspravi pred sudom drugog stupnja odvjetniku pripada
         // nagrada kao za obranu pred sudom prvog stupnja s povišenjem od 25%, a na raspravi
         // pred sudom drugog i trećeg stupnja za kaznena djela za koja je predviđena kazna
         // dugotrajnog zatvora s povišenjem od 50%."
-        new() { Id = "kaz_rasprava_drugostupanjska", Kategorija = "Kazneni postupak", Opis = "Rasprava pred sudom drugog (i trećeg) stupnja (Tbr. 4.2) – Tbr. 4.1 + 25%, a kod dugotrajnog zatvora + 50%", TarifniBroj = "Tbr. 4.2", KazneniBase = true, KazneniPovecanje = 0.25m, KazneniPovecanjeDugotrajni = 0.50m, SortOrder = 135, Jedinica = "komad" },
+        new() { Id = "kaz_rasprava_drugostupanjska", Kategorija = "Kazneni postupak", Opis = "Rasprava pred sudom drugog (i trećeg) stupnja (Tbr. 4.2) – Tbr. 4.1 + 25%, a kod dugotrajnog zatvora + 50%", TarifniBroj = "Tbr. 4.2", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 4. toč. 2 al. 3 — prvi stupanj + 25%, a kod dugotrajnog zatvora + 50%", KazneniBase = true, KazneniPovecanje = 0.25m, KazneniPovecanjeDugotrajni = 0.50m, SortOrder = 135, Jedinica = "komad" },
         new() { Id = "kaz_razgovor_pritvor", Kategorija = "Kazneni postupak", Opis = "Razgovor s okrivljenikom u pritvoru (Tbr. 4.5)", TarifniBroj = "Tbr. 4.5", FiksniBody = 50, SortOrder = 136, Jedinica = "komad" },
 
         // ── Tbr. 4.1 — Prekršaj s oduzimanjem predmeta ──
         // Ako se uz novčanu kaznu / kaznu zatvora može izreći i kazna oduzimanja predmeta,
         // odvjetniku pripada nagrada po Tbr. 7. toč. 1. ovisno o vrijednosti oduzetog predmeta.
-        new() { Id = "kaz_prekrsaj_oduzimanje", Kategorija = "Kazneni postupak", Opis = "Prekršaj s oduzimanjem – nagrada po Tbr. 7.1 prema vrijednosti (Tbr. 4.1)", TarifniBroj = "Tbr. 4.1", PrekrsajOduzimanje = true, SortOrder = 137, Jedinica = "sat" },
+        new() { Id = "kaz_prekrsaj_oduzimanje", Kategorija = "Kazneni postupak", Opis = "Prekršaj s oduzimanjem – nagrada po Tbr. 7.1 prema vrijednosti (Tbr. 4.1)", TarifniBroj = "Tbr. 4.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 4. toč. 1 al. 8 — nagrada po Tbr. 7. toč. 1 prema vrijednosti oduzetog predmeta", PrekrsajOduzimanje = true, SortOrder = 137, Jedinica = "sat" },
 
         // ── Tbr. 4.1, al. 9 — Obrana pravne osobe ──
         // Za obranu pravne osobe u kaznenom ili prekršajnom postupku,
         // prema visini predviđene kazne za odgovornu osobu = KazneniBase (tier).
-        new() { Id = "kaz_obrana_pravna_osoba", Kategorija = "Kazneni postupak", Opis = "Obrana pravne osobe u kazn./prekrš. postupku – po kazni za odg. osobu (Tbr. 4.1 al. 9)", TarifniBroj = "Tbr. 4.1", KazneniBase = true, SortOrder = 138, Jedinica = "sat" },
+        new() { Id = "kaz_obrana_pravna_osoba", Kategorija = "Kazneni postupak", Opis = "Obrana pravne osobe u kazn./prekrš. postupku – po kazni za odg. osobu (Tbr. 4.1 al. 9)", TarifniBroj = "Tbr. 4.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 4. toč. 1 al. 9 — prema visini kazne za odgovornu osobu", KazneniBase = true, SortOrder = 138, Jedinica = "sat" },
 
         // ── Tbr. 4.1, al. 10 — Predstavnik pravne osobe (postavi sud) ──
         // Kad odvjetnika u kaznenom postupku za predstavnika pravne osobe postavi sud = 100 bodova.
-        new() { Id = "kaz_predstavnik_sud", Kategorija = "Kazneni postupak", Opis = "Predstavnik pravne osobe – postavi sud, 100 bodova (Tbr. 4.1 al. 10)", TarifniBroj = "Tbr. 4.1", FiksniBody = 100, SortOrder = 139, Jedinica = "sat" },
+        new() { Id = "kaz_predstavnik_sud", Kategorija = "Kazneni postupak", Opis = "Predstavnik pravne osobe – postavi sud, 100 bodova (Tbr. 4.1 al. 10)", TarifniBroj = "Tbr. 4.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 4. toč. 1 al. 10 — 100 bodova kad predstavnika postavi sud", FiksniBody = 100, SortOrder = 139, Jedinica = "sat" },
 
         // ── Tbr. 4.1, al. 10 — Predstavnik pravne osobe (postavi pravna osoba) ──
         // Kad ga postavi pravna osoba, nagrada prema al. 9 (= tier za odgovornu osobu).
-        new() { Id = "kaz_predstavnik_pravna_osoba", Kategorija = "Kazneni postupak", Opis = "Predstavnik pravne osobe – postavi pravna osoba, po kazni za odg. osobu (Tbr. 4.1 al. 10→9)", TarifniBroj = "Tbr. 4.1", KazneniBase = true, SortOrder = 140, Jedinica = "sat" },
+        new() { Id = "kaz_predstavnik_pravna_osoba", Kategorija = "Kazneni postupak", Opis = "Predstavnik pravne osobe – postavi pravna osoba, po kazni za odg. osobu (Tbr. 4.1 al. 10→9)", TarifniBroj = "Tbr. 4.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 4. toč. 1 al. 10 — nagrada po al. 9 kad predstavnika postavi pravna osoba", KazneniBase = true, SortOrder = 140, Jedinica = "sat" },
 
         // ── Tbr. 5 — Pravni lijekovi ──
-        new() { Id = "kaz_zalba_presuda", Kategorija = "Kazneni postupak", Opis = "Žalba protiv presude (Tbr. 5.1) – Tbr. 4.1 + 50%", TarifniBroj = "Tbr. 5.1", KazneniBase = true, KazneniPovecanje = 0.5m, SortOrder = 150, Jedinica = "komad" },
-        new() { Id = "kaz_odgovor_zalba", Kategorija = "Kazneni postupak", Opis = "Odgovor na žalbu protiv presude (Tbr. 5.2) – 50% od Tbr. 5.1", TarifniBroj = "Tbr. 5.2", KazneniBase = true, KazneniPovecanje = -0.25m, SortOrder = 151, Jedinica = "komad" },
-        new() { Id = "kaz_zalba_istrazni_zatvor", Kategorija = "Kazneni postupak", Opis = "Žalba protiv rješenja o istražnom zatvoru (Tbr. 5.3) – po Tbr. 4.1", TarifniBroj = "Tbr. 5.3", KazneniBase = true, SortOrder = 152, Jedinica = "komad" },
-        new() { Id = "kaz_odgovor_zalba_rjesenje", Kategorija = "Kazneni postupak", Opis = "Odgovor na žalbu iz Tbr. 5.3 (Tbr. 5.4) – 50% Tbr. 4.1", TarifniBroj = "Tbr. 5.4", KazneniBase = true, KazneniPovecanje = -0.5m, SortOrder = 153, Jedinica = "komad" },
+        new() { Id = "kaz_zalba_presuda", Kategorija = "Kazneni postupak", Opis = "Žalba protiv presude (Tbr. 5.1) – Tbr. 4.1 + 50%", TarifniBroj = "Tbr. 5.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 5. toč. 1 — nagrada iz Tbr. 4. toč. 1 uvećana za 50%", KazneniBase = true, KazneniPovecanje = 0.5m, SortOrder = 150, Jedinica = "komad" },
+        new() { Id = "kaz_odgovor_zalba", Kategorija = "Kazneni postupak", Opis = "Odgovor na žalbu protiv presude (Tbr. 5.2) – 50% od Tbr. 5.1", TarifniBroj = "Tbr. 5.2", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 5. toč. 2 — 50% nagrade iz Tbr. 5. toč. 1", KazneniBase = true, KazneniPovecanje = -0.25m, SortOrder = 151, Jedinica = "komad" },
+        new() { Id = "kaz_zalba_istrazni_zatvor", Kategorija = "Kazneni postupak", Opis = "Žalba protiv rješenja o istražnom zatvoru (Tbr. 5.3) – po Tbr. 4.1", TarifniBroj = "Tbr. 5.3", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 5. toč. 3 — nagrada iz Tbr. 4. toč. 1", KazneniBase = true, SortOrder = 152, Jedinica = "komad" },
+        new() { Id = "kaz_odgovor_zalba_rjesenje", Kategorija = "Kazneni postupak", Opis = "Odgovor na žalbu iz Tbr. 5.3 (Tbr. 5.4) – 50% Tbr. 4.1", TarifniBroj = "Tbr. 5.4", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 5. toč. 4 — 50% nagrade iz Tbr. 5. toč. 3", KazneniBase = true, KazneniPovecanje = -0.5m, SortOrder = 153, Jedinica = "komad" },
         new() { Id = "kaz_zalba_troskovi", Kategorija = "Kazneni postupak", Opis = "Žalba protiv odluke o trošku (Tbr. 5.5)", TarifniBroj = "Tbr. 5.5", FiksniBody = 50, SortOrder = 154, Jedinica = "komad" },
-        new() { Id = "kaz_odgovor_optuznica", Kategorija = "Kazneni postupak", Opis = "Odgovor na optužnicu (Tbr. 5.6) – po Tbr. 4.1", TarifniBroj = "Tbr. 5.6", KazneniBase = true, SortOrder = 155, Jedinica = "komad" },
+        new() { Id = "kaz_odgovor_optuznica", Kategorija = "Kazneni postupak", Opis = "Odgovor na optužnicu (Tbr. 5.6) – po Tbr. 4.1", TarifniBroj = "Tbr. 5.6", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 5. toč. 6 — nagrada iz Tbr. 4. toč. 1", KazneniBase = true, SortOrder = 155, Jedinica = "komad" },
 
         // ── Tbr. 6 — Izvanredni pravni lijekovi ──
-        new() { Id = "kaz_izvanredni_pravni_lijek", Kategorija = "Kazneni postupak", Opis = "Izvanredni pravni lijek (Tbr. 6.1) – po Tbr. 5.1 (Tbr. 4.1 + 50%)", TarifniBroj = "Tbr. 6.1", KazneniBase = true, KazneniPovecanje = 0.5m, SortOrder = 170, Jedinica = "komad" },
-        new() { Id = "kaz_odgovor_izvanredni", Kategorija = "Kazneni postupak", Opis = "Odgovor na izvanredni pravni lijek (Tbr. 6.2) – 50% Tbr. 4.1", TarifniBroj = "Tbr. 6.2", KazneniBase = true, KazneniPovecanje = -0.5m, SortOrder = 171, Jedinica = "komad" },
+        new() { Id = "kaz_izvanredni_pravni_lijek", Kategorija = "Kazneni postupak", Opis = "Izvanredni pravni lijek (Tbr. 6.1) – po Tbr. 5.1 (Tbr. 4.1 + 50%)", TarifniBroj = "Tbr. 6.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 6. toč. 1 — nagrada po Tbr. 5. toč. 1", KazneniBase = true, KazneniPovecanje = 0.5m, SortOrder = 170, Jedinica = "komad" },
+        new() { Id = "kaz_odgovor_izvanredni", Kategorija = "Kazneni postupak", Opis = "Odgovor na izvanredni pravni lijek (Tbr. 6.2) – 50% Tbr. 4.1", TarifniBroj = "Tbr. 6.2", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 6. toč. 2 — 50% nagrade iz Tbr. 4. toč. 1", KazneniBase = true, KazneniPovecanje = -0.5m, SortOrder = 171, Jedinica = "komad" },
 
         // ═══════════════════════════════════════════════════════════
         // II. PARNIČNI POSTUPAK
@@ -145,81 +145,81 @@ public sealed class TroskovnikService
         //  maloljetna djeca, - za zakonsko uzdržavanje ili dokidanje obveze uzdržavanja.
         //  Za svaku daljnju radnju (...) nagrada u visini od 50 bodova."
         new() { Id = "par_tuzba_obiteljski", Kategorija = "Parnični postupak", Opis = "Tužba – razvod / poništenje braka / očinstvo / s kime žive djeca / uzdržavanje (Tbr. 7.3) – jednokratno 200 bod. za do 4 radnje", TarifniBroj = "Tbr. 7.3", FiksniBody = 200, JednokratnaNagrada = true, UkljuceneRadnje = 4, DaljnjaRadnjaBodovi = 50, SortOrder = 202, Jedinica = "radnja" },
-        new() { Id = "par_tuzba_platni_nalog", Kategorija = "Parnični postupak", Opis = "Tužba za platni nalog (Tbr. 7.5) – 50% Tbr. 7.1, max 100", TarifniBroj = "Tbr. 7.5", Tbr71Postotak = 0.5m, MaxBodova = 100, SortOrder = 205, Jedinica = "komad" },
-        new() { Id = "par_tuzba_arbitraza", Kategorija = "Parnični postupak", Opis = "Tužba pred domaćom arbitražom (Tbr. 7.7)", TarifniBroj = "Tbr. 7.7", Tbr71Postotak = 1.0m, SortOrder = 207, Jedinica = "komad" },
-        new() { Id = "par_tuzba_med_arbitraza", Kategorija = "Parnični postupak", Opis = "Tužba pred međunarodnom arbitražom (Tbr. 7.7) – +100%", TarifniBroj = "Tbr. 7.7", Tbr71Postotak = 1.0m, Tbr71Povecanje = 1.0m, SortOrder = 208, Jedinica = "komad" },
+        new() { Id = "par_tuzba_platni_nalog", Kategorija = "Parnični postupak", Opis = "Tužba za platni nalog (Tbr. 7.5) – 50% Tbr. 7.1, max 100", TarifniBroj = "Tbr. 7.5", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 7. toč. 5 — 50% nagrade iz Tbr. 7. toč. 1, najviše 100 bodova", Tbr71Postotak = 0.5m, MaxBodova = 100, SortOrder = 205, Jedinica = "komad" },
+        new() { Id = "par_tuzba_arbitraza", Kategorija = "Parnični postupak", Opis = "Tužba pred domaćom arbitražom (Tbr. 7.7)", TarifniBroj = "Tbr. 7.7", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 7. toč. 7 — nagrada po Tbr. 7. toč. 1", Tbr71Postotak = 1.0m, SortOrder = 207, Jedinica = "komad" },
+        new() { Id = "par_tuzba_med_arbitraza", Kategorija = "Parnični postupak", Opis = "Tužba pred međunarodnom arbitražom (Tbr. 7.7) – +100%", TarifniBroj = "Tbr. 7.7", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 7. toč. 7 — Tbr. 7. toč. 1 s povišenjem od 100%", Tbr71Postotak = 1.0m, Tbr71Povecanje = 1.0m, SortOrder = 208, Jedinica = "komad" },
         // ── Tbr. 8. toč. 1 — odgovor na tužbu + prigovor + četiri podneska ──
         // "Za sastavljanje odgovora na tužbu, prigovora protiv platnog naloga i četiri
         //  obrazložena podneska u prvostupanjskom postupku odvjetniku pripada nagrada
         //  kao za tužbu po Tbr. 7. toč. 1., 4., 7. i 8."
         // Jedna nagrada pokriva sve navedeno — bez naknade za daljnje radnje, jer je
         // toč. 1 ne propisuje; podnesci izvan toga idu po Tbr. 8. toč. 3 (niže).
-        new() { Id = "par_odgovor_tuzba", Kategorija = "Parnični postupak", Opis = "Odgovor na tužbu / prigovor protiv platnog naloga + do četiri obrazložena podneska (Tbr. 8.1) – jedna nagrada kao za tužbu po Tbr. 7.1", TarifniBroj = "Tbr. 8.1", Tbr71Postotak = 1.0m, JednokratnaNagrada = true, SortOrder = 209, Jedinica = "postupak" },
+        new() { Id = "par_odgovor_tuzba", Kategorija = "Parnični postupak", Opis = "Odgovor na tužbu / prigovor protiv platnog naloga + do četiri obrazložena podneska (Tbr. 8.1) – jedna nagrada kao za tužbu po Tbr. 7.1", TarifniBroj = "Tbr. 8.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 8. toč. 1 — nagrada kao za tužbu po Tbr. 7. toč. 1., 4., 7. i 8.", Tbr71Postotak = 1.0m, JednokratnaNagrada = true, SortOrder = 209, Jedinica = "postupak" },
 
         // ── Tbr. 8. toč. 3 — obrazloženi podnesci IZVAN Tbr. 8. toč. 1 ──
         // "Za sastavljanje obrazloženih podnesaka izvan Tbr. 8. toč. 1. odvjetniku
         //  pripada 50 % nagrade iz Tbr. 7. toč. 1., 4., 7. i 8., ali ne više od 100 bodova."
-        new() { Id = "par_obrazlozeni_podnesak", Kategorija = "Parnični postupak", Opis = "Obrazloženi podnesci izvan Tbr. 8.1 (Tbr. 8.3) – 50% Tbr. 7.1, max 100", TarifniBroj = "Tbr. 8.3", Tbr71Postotak = 0.5m, MaxBodova = 100, SortOrder = 210, Jedinica = "komad" },
-        new() { Id = "par_ostali_podnesci", Kategorija = "Parnični postupak", Opis = "Ostali podnesci (Tbr. 8.4) – 25% Tbr. 7.1, max 25", TarifniBroj = "Tbr. 8.4", Tbr71Postotak = 0.25m, MaxBodova = 25, SortOrder = 211, Jedinica = "komad" },
+        new() { Id = "par_obrazlozeni_podnesak", Kategorija = "Parnični postupak", Opis = "Obrazloženi podnesci izvan Tbr. 8.1 (Tbr. 8.3) – 50% Tbr. 7.1, max 100", TarifniBroj = "Tbr. 8.3", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 8. toč. 3 — 50% nagrade iz Tbr. 7. toč. 1, najviše 100 bodova", Tbr71Postotak = 0.5m, MaxBodova = 100, SortOrder = 210, Jedinica = "komad" },
+        new() { Id = "par_ostali_podnesci", Kategorija = "Parnični postupak", Opis = "Ostali podnesci (Tbr. 8.4) – 25% Tbr. 7.1, max 25", TarifniBroj = "Tbr. 8.4", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 8. toč. 4 — 25% nagrade iz Tbr. 7. toč. 1, najviše 25 bodova", Tbr71Postotak = 0.25m, MaxBodova = 25, SortOrder = 211, Jedinica = "komad" },
         new() { Id = "par_rociste_glavno", Kategorija = "Parnični postupak", Opis = "Ročište – glavna stvar / dokazi / nagodba (Tbr. 9.1)", TarifniBroj = "Tbr. 9.1", Tbr71Postotak = 1.0m, SortOrder = 220, Jedinica = "komad" },
-        new() { Id = "par_rociste_procesno", Kategorija = "Parnični postupak", Opis = "Ročište – procesna pitanja (Tbr. 9.2) – 50% Tbr. 7.1", TarifniBroj = "Tbr. 9.2", Tbr71Postotak = 0.5m, SortOrder = 221, Jedinica = "komad" },
-        new() { Id = "par_rociste_presuda", Kategorija = "Parnični postupak", Opis = "Ročište – objava presude (Tbr. 9.3) – 50% Tbr. 7.1, max 50", TarifniBroj = "Tbr. 9.3", Tbr71Postotak = 0.5m, MaxBodova = 50, SortOrder = 222, Jedinica = "komad" },
-        new() { Id = "par_pristup_odgodjen", Kategorija = "Parnični postupak", Opis = "Pristup odgođenom ročištu (Tbr. 9.5) – 25% Tbr. 7.1, max 50", TarifniBroj = "Tbr. 9.5", Tbr71Postotak = 0.25m, MaxBodova = 50, SortOrder = 223, Jedinica = "komad" },
+        new() { Id = "par_rociste_procesno", Kategorija = "Parnični postupak", Opis = "Ročište – procesna pitanja (Tbr. 9.2) – 50% Tbr. 7.1", TarifniBroj = "Tbr. 9.2", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 9. toč. 2 — 50% nagrade iz Tbr. 7. toč. 1", Tbr71Postotak = 0.5m, SortOrder = 221, Jedinica = "komad" },
+        new() { Id = "par_rociste_presuda", Kategorija = "Parnični postupak", Opis = "Ročište – objava presude (Tbr. 9.3) – 50% Tbr. 7.1, max 50", TarifniBroj = "Tbr. 9.3", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 9. toč. 3 — 50% nagrade iz Tbr. 7. toč. 1, najviše 50 bodova", Tbr71Postotak = 0.5m, MaxBodova = 50, SortOrder = 222, Jedinica = "komad" },
+        new() { Id = "par_pristup_odgodjen", Kategorija = "Parnični postupak", Opis = "Pristup odgođenom ročištu (Tbr. 9.5) – 25% Tbr. 7.1, max 50", TarifniBroj = "Tbr. 9.5", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 9. toč. 5 — 25% nagrade iz Tbr. 7. toč. 1, najviše 50 bodova", Tbr71Postotak = 0.25m, MaxBodova = 50, SortOrder = 223, Jedinica = "komad" },
         new() { Id = "par_ocevid", Kategorija = "Parnični postupak", Opis = "Nazočnost očevidu (Tbr. 9.7)", TarifniBroj = "Tbr. 9.7", Tbr71Postotak = 1.0m, SortOrder = 224, Jedinica = "komad" },
-        new() { Id = "par_zalba_presuda", Kategorija = "Parnični postupak", Opis = "Žalba protiv presude (Tbr. 10.1) – Tbr. 7.1 + 25%", TarifniBroj = "Tbr. 10.1", Tbr71Postotak = 1.0m, Tbr71Povecanje = 0.25m, SortOrder = 230, Jedinica = "komad" },
-        new() { Id = "par_zalba_rjesenje", Kategorija = "Parnični postupak", Opis = "Žalba protiv rješenja (Tbr. 10.4) – 50% Tbr. 7.1", TarifniBroj = "Tbr. 10.4", Tbr71Postotak = 0.5m, SortOrder = 231, Jedinica = "komad" },
-        new() { Id = "par_revizija", Kategorija = "Parnični postupak", Opis = "Revizija / izvanredni pravni lijek (Tbr. 10.5) – Tbr. 7.1 + 50%", TarifniBroj = "Tbr. 10.5", Tbr71Postotak = 1.0m, Tbr71Povecanje = 0.5m, SortOrder = 232, Jedinica = "komad" },
+        new() { Id = "par_zalba_presuda", Kategorija = "Parnični postupak", Opis = "Žalba protiv presude (Tbr. 10.1) – Tbr. 7.1 + 25%", TarifniBroj = "Tbr. 10.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 10. toč. 1 — Tbr. 7. toč. 1 s povišenjem od 25%", Tbr71Postotak = 1.0m, Tbr71Povecanje = 0.25m, SortOrder = 230, Jedinica = "komad" },
+        new() { Id = "par_zalba_rjesenje", Kategorija = "Parnični postupak", Opis = "Žalba protiv rješenja (Tbr. 10.4) – 50% Tbr. 7.1", TarifniBroj = "Tbr. 10.4", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 10. toč. 4 — 50% nagrade iz Tbr. 7. toč. 1", Tbr71Postotak = 0.5m, SortOrder = 231, Jedinica = "komad" },
+        new() { Id = "par_revizija", Kategorija = "Parnični postupak", Opis = "Revizija / izvanredni pravni lijek (Tbr. 10.5) – Tbr. 7.1 + 50%", TarifniBroj = "Tbr. 10.5", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 10. toč. 5 — Tbr. 7. toč. 1 s povišenjem od 50%", Tbr71Postotak = 1.0m, Tbr71Povecanje = 0.5m, SortOrder = 232, Jedinica = "komad" },
         new() { Id = "par_odgovor_zalba", Kategorija = "Parnični postupak", Opis = "Odgovor na žalbu / reviziju (Tbr. 10.6)", TarifniBroj = "Tbr. 10.6", Tbr71Postotak = 1.0m, SortOrder = 233, Jedinica = "komad" },
 
         // ═══════════════════════════════════════════════════════════
         // III. OVRŠNI POSTUPAK
         // ═══════════════════════════════════════════════════════════
         new() { Id = "ovr_prijedlog", Kategorija = "Ovršni postupak", Opis = "Prijedlog za ovrhu / protuovrhu / osiguranje (Tbr. 11.1)", TarifniBroj = "Tbr. 11.1", Tbr71Postotak = 1.0m, SortOrder = 300, Jedinica = "komad" },
-        new() { Id = "ovr_prokazna_izjava", Kategorija = "Ovršni postupak", Opis = "Prijedlog za prokaznu izjavu (Tbr. 11.3) – 50% Tbr. 7.1, max 500", TarifniBroj = "Tbr. 11.3", Tbr71Postotak = 0.5m, MaxBodova = 500, SortOrder = 303, Jedinica = "komad" },
-        new() { Id = "ovr_odgoda", Kategorija = "Ovršni postupak", Opis = "Prijedlog za odgodu ovrhe (Tbr. 11.4) – 50% Tbr. 7.1, max 500", TarifniBroj = "Tbr. 11.4", Tbr71Postotak = 0.5m, MaxBodova = 500, SortOrder = 304, Jedinica = "komad" },
-        new() { Id = "ovr_sudska_ovrha", Kategorija = "Ovršni postupak", Opis = "Prijedlog sudu za provedbu sudske ovrhe (Tbr. 11.5) – 50% Tbr. 7.1, max 500", TarifniBroj = "Tbr. 11.5", Tbr71Postotak = 0.5m, MaxBodova = 500, SortOrder = 305, Jedinica = "komad" },
-        new() { Id = "ovr_dostava", Kategorija = "Ovršni postupak", Opis = "Dostava ovršne isprave (Tbr. 11.6) – 50% Tbr. 11.1, max 100", TarifniBroj = "Tbr. 11.6", Tbr71Postotak = 0.5m, MaxBodova = 100, SortOrder = 306, Jedinica = "komad" },
-        new() { Id = "ovr_prituzba", Kategorija = "Ovršni postupak", Opis = "Pritužba ovršenika (Tbr. 11.7) – 50% Tbr. 11.1, max 100", TarifniBroj = "Tbr. 11.7", Tbr71Postotak = 0.5m, MaxBodova = 100, SortOrder = 307, Jedinica = "komad" },
-        new() { Id = "ovr_zaduznica", Kategorija = "Ovršni postupak", Opis = "Zahtjev za naplatu po zadužnici (Tbr. 11.8) – 50% Tbr. 7.1, max 500", TarifniBroj = "Tbr. 11.8", Tbr71Postotak = 0.5m, MaxBodova = 500, SortOrder = 308, Jedinica = "komad" },
+        new() { Id = "ovr_prokazna_izjava", Kategorija = "Ovršni postupak", Opis = "Prijedlog za prokaznu izjavu (Tbr. 11.3) – 50% Tbr. 7.1, max 500", TarifniBroj = "Tbr. 11.3", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 11. toč. 3 — 50% nagrade iz Tbr. 7. toč. 1, najviše 500 bodova", Tbr71Postotak = 0.5m, MaxBodova = 500, SortOrder = 303, Jedinica = "komad" },
+        new() { Id = "ovr_odgoda", Kategorija = "Ovršni postupak", Opis = "Prijedlog za odgodu ovrhe (Tbr. 11.4) – 50% Tbr. 7.1, max 500", TarifniBroj = "Tbr. 11.4", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 11. toč. 4 — 50% nagrade iz Tbr. 7. toč. 1, najviše 500 bodova", Tbr71Postotak = 0.5m, MaxBodova = 500, SortOrder = 304, Jedinica = "komad" },
+        new() { Id = "ovr_sudska_ovrha", Kategorija = "Ovršni postupak", Opis = "Prijedlog sudu za provedbu sudske ovrhe (Tbr. 11.5) – 50% Tbr. 7.1, max 500", TarifniBroj = "Tbr. 11.5", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 11. toč. 5 — 50% nagrade iz Tbr. 7. toč. 1, najviše 500 bodova", Tbr71Postotak = 0.5m, MaxBodova = 500, SortOrder = 305, Jedinica = "komad" },
+        new() { Id = "ovr_dostava", Kategorija = "Ovršni postupak", Opis = "Dostava ovršne isprave (Tbr. 11.6) – 50% Tbr. 11.1, max 100", TarifniBroj = "Tbr. 11.6", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 11. toč. 6 — 50% nagrade iz Tbr. 11. toč. 1, najviše 100 bodova", Tbr71Postotak = 0.5m, MaxBodova = 100, SortOrder = 306, Jedinica = "komad" },
+        new() { Id = "ovr_prituzba", Kategorija = "Ovršni postupak", Opis = "Pritužba ovršenika (Tbr. 11.7) – 50% Tbr. 11.1, max 100", TarifniBroj = "Tbr. 11.7", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 11. toč. 7 — 50% nagrade iz Tbr. 11. toč. 1, najviše 100 bodova", Tbr71Postotak = 0.5m, MaxBodova = 100, SortOrder = 307, Jedinica = "komad" },
+        new() { Id = "ovr_zaduznica", Kategorija = "Ovršni postupak", Opis = "Zahtjev za naplatu po zadužnici (Tbr. 11.8) – 50% Tbr. 7.1, max 500", TarifniBroj = "Tbr. 11.8", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 11. toč. 8 — 50% nagrade iz Tbr. 7. toč. 1, najviše 500 bodova", Tbr71Postotak = 0.5m, MaxBodova = 500, SortOrder = 308, Jedinica = "komad" },
         new() { Id = "ovr_drazbeni_uvjeti", Kategorija = "Ovršni postupak", Opis = "Dražbeni uvjeti (Tbr. 11.9)", TarifniBroj = "Tbr. 11.9", Tbr71Postotak = 1.0m, SortOrder = 309, Jedinica = "komad" },
-        new() { Id = "ovr_ostali_podnesci", Kategorija = "Ovršni postupak", Opis = "Ostali podnesci u ovrsi (Tbr. 11.10) – 25% Tbr. 7.1, max 250", TarifniBroj = "Tbr. 11.10", Tbr71Postotak = 0.25m, MaxBodova = 250, SortOrder = 310, Jedinica = "komad" },
+        new() { Id = "ovr_ostali_podnesci", Kategorija = "Ovršni postupak", Opis = "Ostali podnesci u ovrsi (Tbr. 11.10) – 25% Tbr. 7.1, max 250", TarifniBroj = "Tbr. 11.10", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 11. toč. 10 — 25% nagrade iz Tbr. 7. toč. 1, najviše 250 bodova", Tbr71Postotak = 0.25m, MaxBodova = 250, SortOrder = 310, Jedinica = "komad" },
         new() { Id = "ovr_rociste", Kategorija = "Ovršni postupak", Opis = "Ročište u ovrsi (Tbr. 12.1)", TarifniBroj = "Tbr. 12.1", Tbr71Postotak = 1.0m, SortOrder = 312, Jedinica = "komad" },
         new() { Id = "ovr_pravni_lijek", Kategorija = "Ovršni postupak", Opis = "Pravni lijek u ovrsi (Tbr. 13.1)", TarifniBroj = "Tbr. 13.1", Tbr71Postotak = 1.0m, SortOrder = 315, Jedinica = "komad" },
 
         // ═══════════════════════════════════════════════════════════
         // IV. STEČAJNI I PREDSTEČAJNI POSTUPAK
         // ═══════════════════════════════════════════════════════════
-        new() { Id = "ste_prijedlog", Kategorija = "Stečajni postupak", Opis = "Prijedlog za pokretanje stečaja/predstečaja (Tbr. 14.1) – Tbr. 7.1, max 1000", TarifniBroj = "Tbr. 14.1", Tbr71Postotak = 1.0m, MaxBodova = 1000, SortOrder = 400, Jedinica = "komad" },
-        new() { Id = "ste_prijava_potrazivanja", Kategorija = "Stečajni postupak", Opis = "Prijava potraživanja / obrazloženi podnesak (Tbr. 14.2) – Tbr. 7.1, max 2000", TarifniBroj = "Tbr. 14.2", Tbr71Postotak = 1.0m, MaxBodova = 2000, SortOrder = 401, Jedinica = "komad" },
-        new() { Id = "ste_pravni_lijek", Kategorija = "Stečajni postupak", Opis = "Pravni lijek u stečaju (Tbr. 14.3) – Tbr. 7.1 + 25%", TarifniBroj = "Tbr. 14.3", Tbr71Postotak = 1.0m, Tbr71Povecanje = 0.25m, SortOrder = 402, Jedinica = "komad" },
+        new() { Id = "ste_prijedlog", Kategorija = "Stečajni postupak", Opis = "Prijedlog za pokretanje stečaja/predstečaja (Tbr. 14.1) – Tbr. 7.1, max 1000", TarifniBroj = "Tbr. 14.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 14. toč. 1 — nagrada po Tbr. 7. toč. 1, najviše 1000 bodova", Tbr71Postotak = 1.0m, MaxBodova = 1000, SortOrder = 400, Jedinica = "komad" },
+        new() { Id = "ste_prijava_potrazivanja", Kategorija = "Stečajni postupak", Opis = "Prijava potraživanja / obrazloženi podnesak (Tbr. 14.2) – Tbr. 7.1, max 2000", TarifniBroj = "Tbr. 14.2", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 14. toč. 2 — nagrada po Tbr. 7. toč. 1, najviše 2000 bodova", Tbr71Postotak = 1.0m, MaxBodova = 2000, SortOrder = 401, Jedinica = "komad" },
+        new() { Id = "ste_pravni_lijek", Kategorija = "Stečajni postupak", Opis = "Pravni lijek u stečaju (Tbr. 14.3) – Tbr. 7.1 + 25%", TarifniBroj = "Tbr. 14.3", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 14. toč. 3 — Tbr. 7. toč. 1 s povišenjem od 25%", Tbr71Postotak = 1.0m, Tbr71Povecanje = 0.25m, SortOrder = 402, Jedinica = "komad" },
         new() { Id = "ste_rociste", Kategorija = "Stečajni postupak", Opis = "Ročište / sjednica vjerovnika (Tbr. 15)", TarifniBroj = "Tbr. 15", Tbr71Postotak = 1.0m, SortOrder = 405, Jedinica = "komad" },
 
         // ═══════════════════════════════════════════════════════════
         // V. IZVANPARNIČNI POSTUPAK
         // ═══════════════════════════════════════════════════════════
-        new() { Id = "izv_dioba", Kategorija = "Izvanparnični postupak", Opis = "Pokretanje postupka – dioba / ostavina / procjenjivi (Tbr. 16.1) – 50% Tbr. 7.1", TarifniBroj = "Tbr. 16.1", Tbr71Postotak = 0.5m, SortOrder = 500, Jedinica = "komad" },
+        new() { Id = "izv_dioba", Kategorija = "Izvanparnični postupak", Opis = "Pokretanje postupka – dioba / ostavina / procjenjivi (Tbr. 16.1) – 50% Tbr. 7.1", TarifniBroj = "Tbr. 16.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 16. toč. 1 — 50% nagrade iz Tbr. 7. toč. 1", Tbr71Postotak = 0.5m, SortOrder = 500, Jedinica = "komad" },
         new() { Id = "izv_meda", Kategorija = "Izvanparnični postupak", Opis = "Uređenje međe (Tbr. 16.1)", TarifniBroj = "Tbr. 16.1", FiksniBody = 50, SortOrder = 501, Jedinica = "komad" },
         new() { Id = "izv_neprocjenjivi", Kategorija = "Izvanparnični postupak", Opis = "Ostali neprocjenjivi izvanparnični (Tbr. 16.1)", TarifniBroj = "Tbr. 16.1", FiksniBody = 50, SortOrder = 502, Jedinica = "komad" },
-        new() { Id = "izv_amortizacija", Kategorija = "Izvanparnični postupak", Opis = "Amortizacija isprava (Tbr. 16.1) – 50% Tbr. 7.1, max 50", TarifniBroj = "Tbr. 16.1", Tbr71Postotak = 0.5m, MaxBodova = 50, SortOrder = 503, Jedinica = "komad" },
-        new() { Id = "izv_rociste", Kategorija = "Izvanparnični postupak", Opis = "Ročište u izvanparnici – procjenjivo (Tbr. 17.1) – 75% Tbr. 7.1", TarifniBroj = "Tbr. 17.1", Tbr71Postotak = 0.75m, SortOrder = 510, Jedinica = "komad" },
-        new() { Id = "izv_pravni_lijek", Kategorija = "Izvanparnični postupak", Opis = "Pravni lijek u izvanparnici (Tbr. 18.1) – Tbr. 16 + 25%", TarifniBroj = "Tbr. 18.1", Tbr71Postotak = 0.5m, Tbr71Povecanje = 0.25m, SortOrder = 515, Jedinica = "komad" },
+        new() { Id = "izv_amortizacija", Kategorija = "Izvanparnični postupak", Opis = "Amortizacija isprava (Tbr. 16.1) – 50% Tbr. 7.1, max 50", TarifniBroj = "Tbr. 16.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 16. toč. 1 — 50% nagrade iz Tbr. 7. toč. 1, najviše 50 bodova", Tbr71Postotak = 0.5m, MaxBodova = 50, SortOrder = 503, Jedinica = "komad" },
+        new() { Id = "izv_rociste", Kategorija = "Izvanparnični postupak", Opis = "Ročište u izvanparnici – procjenjivo (Tbr. 17.1) – 75% Tbr. 7.1", TarifniBroj = "Tbr. 17.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 17. toč. 1 — 75% nagrade iz Tbr. 7. toč. 1", Tbr71Postotak = 0.75m, SortOrder = 510, Jedinica = "komad" },
+        new() { Id = "izv_pravni_lijek", Kategorija = "Izvanparnični postupak", Opis = "Pravni lijek u izvanparnici (Tbr. 18.1) – Tbr. 16 + 25%", TarifniBroj = "Tbr. 18.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 18. toč. 1 — nagrada iz Tbr. 16 s povišenjem od 25%", Tbr71Postotak = 0.5m, Tbr71Povecanje = 0.25m, SortOrder = 515, Jedinica = "komad" },
 
         // ═══════════════════════════════════════════════════════════
         // VI. ZEMLJIŠNOKNJIŽNI POSTUPAK
         // ═══════════════════════════════════════════════════════════
-        new() { Id = "zk_redoviti", Kategorija = "Zemljišnoknjižni postupak", Opis = "ZK prijedlog – redoviti postupak (Tbr. 19.1) – 25% Tbr. 7.1, max 500", TarifniBroj = "Tbr. 19.1", Tbr71Postotak = 0.25m, MaxBodova = 500, SortOrder = 600, Jedinica = "komad" },
+        new() { Id = "zk_redoviti", Kategorija = "Zemljišnoknjižni postupak", Opis = "ZK prijedlog – redoviti postupak (Tbr. 19.1) – 25% Tbr. 7.1, max 500", TarifniBroj = "Tbr. 19.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 19. toč. 1 — 25% nagrade iz Tbr. 7. toč. 1, najviše 500 bodova", Tbr71Postotak = 0.25m, MaxBodova = 500, SortOrder = 600, Jedinica = "komad" },
         new() { Id = "zk_redoviti_neproc", Kategorija = "Zemljišnoknjižni postupak", Opis = "ZK prijedlog – neprocjenjiv (Tbr. 19.2)", TarifniBroj = "Tbr. 19.2", FiksniBody = 50, SortOrder = 601, Jedinica = "komad" },
         new() { Id = "zk_ostali", Kategorija = "Zemljišnoknjižni postupak", Opis = "Ostali podnesci u ZK postupku (Tbr. 19.3)", TarifniBroj = "Tbr. 19.3", FiksniBody = 50, SortOrder = 602, Jedinica = "komad" },
-        new() { Id = "zk_posebni", Kategorija = "Zemljišnoknjižni postupak", Opis = "ZK prijedlog – posebni postupak (Tbr. 20.1) – 25% Tbr. 7.1", TarifniBroj = "Tbr. 20.1", Tbr71Postotak = 0.25m, SortOrder = 605, Jedinica = "komad" },
-        new() { Id = "zk_pravni_lijek", Kategorija = "Zemljišnoknjižni postupak", Opis = "Pravni lijek u ZK postupku (Tbr. 21) – Tbr. 7.1 + 25%", TarifniBroj = "Tbr. 21", Tbr71Postotak = 1.0m, Tbr71Povecanje = 0.25m, SortOrder = 610, Jedinica = "komad" },
+        new() { Id = "zk_posebni", Kategorija = "Zemljišnoknjižni postupak", Opis = "ZK prijedlog – posebni postupak (Tbr. 20.1) – 25% Tbr. 7.1", TarifniBroj = "Tbr. 20.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 20. toč. 1 — 25% nagrade iz Tbr. 7. toč. 1", Tbr71Postotak = 0.25m, SortOrder = 605, Jedinica = "komad" },
+        new() { Id = "zk_pravni_lijek", Kategorija = "Zemljišnoknjižni postupak", Opis = "Pravni lijek u ZK postupku (Tbr. 21) – Tbr. 7.1 + 25%", TarifniBroj = "Tbr. 21", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 21 — Tbr. 7. toč. 1 s povišenjem od 25%", Tbr71Postotak = 1.0m, Tbr71Povecanje = 0.25m, SortOrder = 610, Jedinica = "komad" },
 
         // ═══════════════════════════════════════════════════════════
         // VII. UPRAVNI POSTUPAK
         // ═══════════════════════════════════════════════════════════
         new() { Id = "upr_neprocjenjiv", Kategorija = "Upravni postupak", Opis = "Zahtjev u upravnom postupku – neprocjenjiv (Tbr. 22.1)", TarifniBroj = "Tbr. 22.1", FiksniBody = 50, SortOrder = 700, Jedinica = "komad" },
-        new() { Id = "upr_procjenjiv", Kategorija = "Upravni postupak", Opis = "Zahtjev u upravnom postupku – procjenjiv (Tbr. 22.1)", TarifniBroj = "Tbr. 22.1", Tbr71Postotak = 1.0m, SortOrder = 701, Jedinica = "komad" },
-        new() { Id = "upr_ostali", Kategorija = "Upravni postupak", Opis = "Ostali podnesci u upravnom postupku (Tbr. 22.2) – 25%, max 25", TarifniBroj = "Tbr. 22.2", Tbr71Postotak = 0.25m, MaxBodova = 25, SortOrder = 702, Jedinica = "komad" },
-        new() { Id = "upr_zalba", Kategorija = "Upravni postupak", Opis = "Žalba / prigovor / drug. instanca (Tbr. 24) – Tbr. 22 + 25%", TarifniBroj = "Tbr. 24", Tbr71Postotak = 1.0m, Tbr71Povecanje = 0.25m, SortOrder = 710, Jedinica = "komad" },
+        new() { Id = "upr_procjenjiv", Kategorija = "Upravni postupak", Opis = "Zahtjev u upravnom postupku – procjenjiv (Tbr. 22.1)", TarifniBroj = "Tbr. 22.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 22. toč. 1 — nagrada po Tbr. 7. toč. 1", Tbr71Postotak = 1.0m, SortOrder = 701, Jedinica = "komad" },
+        new() { Id = "upr_ostali", Kategorija = "Upravni postupak", Opis = "Ostali podnesci u upravnom postupku (Tbr. 22.2) – 25%, max 25", TarifniBroj = "Tbr. 22.2", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 22. toč. 2 — 25% nagrade iz Tbr. 7. toč. 1, najviše 25 bodova", Tbr71Postotak = 0.25m, MaxBodova = 25, SortOrder = 702, Jedinica = "komad" },
+        new() { Id = "upr_zalba", Kategorija = "Upravni postupak", Opis = "Žalba / prigovor / drug. instanca (Tbr. 24) – Tbr. 22 + 25%", TarifniBroj = "Tbr. 24", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 24 — nagrada iz Tbr. 22 s povišenjem od 25%", Tbr71Postotak = 1.0m, Tbr71Povecanje = 0.25m, SortOrder = 710, Jedinica = "komad" },
 
         // ═══════════════════════════════════════════════════════════
         // VIII. UPRAVNI SPOR
@@ -228,30 +228,30 @@ public sealed class TroskovnikService
         // Tbr. 7. toč. 1., — u neprocjenjivim predmetima odvjetniku pripada nagrada od
         // 500 bodova." Toč. 2, 3 i 4 sve upućuju na toč. 1, pa svaka od njih ima
         // procjenjivu i neprocjenjivu varijantu.
-        new() { Id = "usp_tuzba_proc", Kategorija = "Upravni spor", Opis = "Tužba / odgovor na tužbu / obrazloženi podnesak – procjenjiv (Tbr. 27.1)", TarifniBroj = "Tbr. 27.1", Tbr71Postotak = 1.0m, SortOrder = 800, Jedinica = "komad" },
-        new() { Id = "usp_tuzba_neproc", Kategorija = "Upravni spor", Opis = "Tužba / odgovor na tužbu / obrazloženi podnesak – neprocjenjiv (Tbr. 27.1) – 500 bodova", TarifniBroj = "Tbr. 27.1", FiksniBody = 500, SortOrder = 801, Jedinica = "komad" },
+        new() { Id = "usp_tuzba_proc", Kategorija = "Upravni spor", Opis = "Tužba / odgovor na tužbu / obrazloženi podnesak – procjenjiv (Tbr. 27.1)", TarifniBroj = "Tbr. 27.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 27. toč. 1 al. 1 — nagrada iz Tbr. 7. toč. 1", Tbr71Postotak = 1.0m, SortOrder = 800, Jedinica = "komad" },
+        new() { Id = "usp_tuzba_neproc", Kategorija = "Upravni spor", Opis = "Tužba / odgovor na tužbu / obrazloženi podnesak – neprocjenjiv (Tbr. 27.1) – 500 bodova", TarifniBroj = "Tbr. 27.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 27. toč. 1 al. 2 — 500 bodova u neprocjenjivim predmetima", FiksniBody = 500, SortOrder = 801, Jedinica = "komad" },
 
         // Tbr. 27. toč. 2: "Za zastupanje na raspravi odvjetniku pripada nagrada iz
         // toč. 1. ovog tarifnog broja."
-        new() { Id = "usp_rasprava", Kategorija = "Upravni spor", Opis = "Zastupanje na raspravi – procjenjiv (Tbr. 27.2)", TarifniBroj = "Tbr. 27.2", Tbr71Postotak = 1.0m, SortOrder = 802, Jedinica = "komad" },
-        new() { Id = "usp_rasprava_neproc", Kategorija = "Upravni spor", Opis = "Zastupanje na raspravi – neprocjenjiv (Tbr. 27.2 → 27.1) – 500 bodova", TarifniBroj = "Tbr. 27.2", FiksniBody = 500, SortOrder = 803, Jedinica = "komad" },
+        new() { Id = "usp_rasprava", Kategorija = "Upravni spor", Opis = "Zastupanje na raspravi – procjenjiv (Tbr. 27.2)", TarifniBroj = "Tbr. 27.2", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 27. toč. 2 — nagrada iz Tbr. 27. toč. 1 (procjenjivo: Tbr. 7. toč. 1)", Tbr71Postotak = 1.0m, SortOrder = 802, Jedinica = "komad" },
+        new() { Id = "usp_rasprava_neproc", Kategorija = "Upravni spor", Opis = "Zastupanje na raspravi – neprocjenjiv (Tbr. 27.2 → 27.1) – 500 bodova", TarifniBroj = "Tbr. 27.2", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 27. toč. 2 — nagrada iz Tbr. 27. toč. 1 al. 2, 500 bodova", FiksniBody = 500, SortOrder = 803, Jedinica = "komad" },
 
         // Tbr. 27. toč. 3: "(...) pripada nagrada iz toč. 1. ovog tarifnog broja
         // uvećana za 25%."  Neprocjenjivo: 500 × 1,25 = 625 bodova.
-        new() { Id = "usp_zalba", Kategorija = "Upravni spor", Opis = "Žalba / zahtjev VUS – procjenjiv (Tbr. 27.3) – Tbr. 27.1 + 25%", TarifniBroj = "Tbr. 27.3", Tbr71Postotak = 1.0m, Tbr71Povecanje = 0.25m, SortOrder = 805, Jedinica = "komad" },
-        new() { Id = "usp_zalba_neproc", Kategorija = "Upravni spor", Opis = "Žalba / zahtjev VUS – neprocjenjiv (Tbr. 27.3) – 500 + 25% = 625 bodova", TarifniBroj = "Tbr. 27.3", FiksniBody = 625, SortOrder = 806, Jedinica = "komad" },
+        new() { Id = "usp_zalba", Kategorija = "Upravni spor", Opis = "Žalba / zahtjev VUS – procjenjiv (Tbr. 27.3) – Tbr. 27.1 + 25%", TarifniBroj = "Tbr. 27.3", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 27. toč. 3 — nagrada iz Tbr. 27. toč. 1 uvećana za 25%", Tbr71Postotak = 1.0m, Tbr71Povecanje = 0.25m, SortOrder = 805, Jedinica = "komad" },
+        new() { Id = "usp_zalba_neproc", Kategorija = "Upravni spor", Opis = "Žalba / zahtjev VUS – neprocjenjiv (Tbr. 27.3) – 500 + 25% = 625 bodova", TarifniBroj = "Tbr. 27.3", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 27. toč. 3 — 500 bodova iz Tbr. 27. toč. 1 al. 2 uvećano za 25% = 625", FiksniBody = 625, SortOrder = 806, Jedinica = "komad" },
 
         // Tbr. 27. toč. 4: "(...) pripada 50% nagrade iz toč. 1. ovog tarifnog broja."
         // Neprocjenjivo: 50% od 500 = 250 bodova.
-        new() { Id = "usp_izvrsenje", Kategorija = "Upravni spor", Opis = "Zahtjev za izvršenje presude – procjenjiv (Tbr. 27.4) – 50% Tbr. 27.1", TarifniBroj = "Tbr. 27.4", Tbr71Postotak = 0.5m, SortOrder = 807, Jedinica = "komad" },
-        new() { Id = "usp_izvrsenje_neproc", Kategorija = "Upravni spor", Opis = "Zahtjev za izvršenje presude – neprocjenjiv (Tbr. 27.4) – 50% od 500 = 250 bodova", TarifniBroj = "Tbr. 27.4", FiksniBody = 250, SortOrder = 808, Jedinica = "komad" },
+        new() { Id = "usp_izvrsenje", Kategorija = "Upravni spor", Opis = "Zahtjev za izvršenje presude – procjenjiv (Tbr. 27.4) – 50% Tbr. 27.1", TarifniBroj = "Tbr. 27.4", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 27. toč. 4 — 50% nagrade iz Tbr. 27. toč. 1", Tbr71Postotak = 0.5m, SortOrder = 807, Jedinica = "komad" },
+        new() { Id = "usp_izvrsenje_neproc", Kategorija = "Upravni spor", Opis = "Zahtjev za izvršenje presude – neprocjenjiv (Tbr. 27.4) – 50% od 500 = 250 bodova", TarifniBroj = "Tbr. 27.4", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 27. toč. 4 — 50% od 500 bodova iz Tbr. 27. toč. 1 al. 2 = 250", FiksniBody = 250, SortOrder = 808, Jedinica = "komad" },
 
         // ═══════════════════════════════════════════════════════════
         // IX. REGISTARSKI POSTUPAK
         // ═══════════════════════════════════════════════════════════
         new() { Id = "reg_upis", Kategorija = "Registarski postupak", Opis = "Podnesak za upis / promjenu u registru (Tbr. 28.1)", TarifniBroj = "Tbr. 28.1", FiksniBody = 50, SortOrder = 900, Jedinica = "komad" },
         new() { Id = "reg_ostali", Kategorija = "Registarski postupak", Opis = "Ostali podnesci za upis (Tbr. 28.3)", TarifniBroj = "Tbr. 28.3", FiksniBody = 50, SortOrder = 903, Jedinica = "komad" },
-        new() { Id = "reg_pravni_lijek", Kategorija = "Registarski postupak", Opis = "Pravni lijek u registarskom postupku (Tbr. 28.4) – 50 + 50%", TarifniBroj = "Tbr. 28.4", FiksniBody = 75, SortOrder = 904, Jedinica = "komad" },
+        new() { Id = "reg_pravni_lijek", Kategorija = "Registarski postupak", Opis = "Pravni lijek u registarskom postupku (Tbr. 28.4) – 50 + 50%", TarifniBroj = "Tbr. 28.4", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 28. toč. 4 — nagrada iz Tbr. 28. toč. 1 uvećana za 50%", FiksniBody = 75, SortOrder = 904, Jedinica = "komad" },
 
         // ═══════════════════════════════════════════════════════════
         // X. ZAŠTITA PRAVA PRED POSLODAVCEM
@@ -270,13 +270,13 @@ public sealed class TroskovnikService
         // ═══════════════════════════════════════════════════════════
         // XII. OSTALI POSTUPCI
         // ═══════════════════════════════════════════════════════════
-        new() { Id = "ost_naknada_stete", Kategorija = "Ostali postupci", Opis = "Zahtjev za naknadu štete prema državi / osiguranju (Tbr. 32.1)", TarifniBroj = "Tbr. 32.1", Tbr71Postotak = 1.0m, SortOrder = 1200, Jedinica = "komad" },
+        new() { Id = "ost_naknada_stete", Kategorija = "Ostali postupci", Opis = "Zahtjev za naknadu štete prema državi / osiguranju (Tbr. 32.1)", TarifniBroj = "Tbr. 32.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 32. toč. 1 — nagrada po Tbr. 7. toč. 1", Tbr71Postotak = 1.0m, SortOrder = 1200, Jedinica = "komad" },
         new() { Id = "ost_stegovni", Kategorija = "Ostali postupci", Opis = "Stegovni postupak – podnesci / pravni lijekovi (Tbr. 32.2)", TarifniBroj = "Tbr. 32.2", FiksniBody = 100, SortOrder = 1201, Jedinica = "komad" },
 
         // ═══════════════════════════════════════════════════════════
         // XIII. RAZNO – ISPRAVE, SAVJETI, OPOMENE
         // ═══════════════════════════════════════════════════════════
-        new() { Id = "raz_ugovor", Kategorija = "Razno", Opis = "Sastavljanje ugovora (Tbr. 33.1) – Tbr. 7.1 + 25%", TarifniBroj = "Tbr. 33.1", Tbr71Postotak = 1.0m, Tbr71Povecanje = 0.25m, SortOrder = 1300, Jedinica = "komad" },
+        new() { Id = "raz_ugovor", Kategorija = "Razno", Opis = "Sastavljanje ugovora (Tbr. 33.1) – Tbr. 7.1 + 25%", TarifniBroj = "Tbr. 33.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 33. toč. 1 — Tbr. 7. toč. 1 s povišenjem od 25%", Tbr71Postotak = 1.0m, Tbr71Povecanje = 0.25m, SortOrder = 1300, Jedinica = "komad" },
         new() { Id = "raz_ugovor_neproc", Kategorija = "Razno", Opis = "Ugovor – neprocjenjiv (Tbr. 33.2)", TarifniBroj = "Tbr. 33.2", FiksniBody = 200, SortOrder = 1301, Jedinica = "komad" },
         new() { Id = "raz_izjava", Kategorija = "Razno", Opis = "Jednostavna izjava volje (Tbr. 33.3)", TarifniBroj = "Tbr. 33.3", FiksniBody = 50, SortOrder = 1302, Jedinica = "komad" },
         new() { Id = "raz_oporuka", Kategorija = "Razno", Opis = "Sastavljanje oporuke (Tbr. 33.4)", TarifniBroj = "Tbr. 33.4", FiksniBody = 100, SortOrder = 1303, Jedinica = "komad" },
@@ -284,11 +284,11 @@ public sealed class TroskovnikService
         // Tbr. 34. toč. 2, odlomak 1: "Za sastavljanje pisanih pravnih savjeta i pisanih
         // pravnih mišljenja s činjeničnim i pravnim obrazloženjima odvjetniku pripada
         // nagrada iz Tbr. 7. toč. 1. i 4." — bez minimuma.
-        new() { Id = "raz_pisani_savjet", Kategorija = "Razno", Opis = "Pisani pravni savjet / mišljenje – procjenjiv predmet (Tbr. 34.2)", TarifniBroj = "Tbr. 34.2", Tbr71Postotak = 1.0m, SortOrder = 1311, Jedinica = "komad" },
+        new() { Id = "raz_pisani_savjet", Kategorija = "Razno", Opis = "Pisani pravni savjet / mišljenje – procjenjiv predmet (Tbr. 34.2)", TarifniBroj = "Tbr. 34.2", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 34. toč. 2 odl. 1 — nagrada iz Tbr. 7. toč. 1. i 4.", Tbr71Postotak = 1.0m, SortOrder = 1311, Jedinica = "komad" },
 
         // Tbr. 34. toč. 2, odlomak 2: "(...) u neprocjenjivim predmetima odvjetniku
         // pripada nagrada ne manja od 200 bodova." Minimum vrijedi SAMO ovdje.
-        new() { Id = "raz_pisani_savjet_neproc", Kategorija = "Razno", Opis = "Pisani pravni savjet / mišljenje – neprocjenjiv predmet (Tbr. 34.2) – najmanje 200 bodova", TarifniBroj = "Tbr. 34.2", FiksniBody = 200, MinBodova = 200, SortOrder = 1312, Jedinica = "komad" },
+        new() { Id = "raz_pisani_savjet_neproc", Kategorija = "Razno", Opis = "Pisani pravni savjet / mišljenje – neprocjenjiv predmet (Tbr. 34.2) – najmanje 200 bodova", TarifniBroj = "Tbr. 34.2", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 34. toč. 2 odl. 2 — u neprocjenjivim predmetima ne manje od 200 bodova", FiksniBody = 200, MinBodova = 200, SortOrder = 1312, Jedinica = "komad" },
         new() { Id = "raz_konferencija", Kategorija = "Razno", Opis = "Konferencija / sastanak (Tbr. 35) – 50 bodova/sat", TarifniBroj = "Tbr. 35", FiksniBody = 50, SortOrder = 1320, Jedinica = "sat" },
         new() { Id = "raz_razmatranje_spisa", Kategorija = "Razno", Opis = "Razmatranje spisa / uvid u ZK / registre (Tbr. 36) – 25 bodova/sat", TarifniBroj = "Tbr. 36", FiksniBody = 25, SortOrder = 1330, Jedinica = "sat" },
         new() { Id = "raz_izvid_pravomocnost", Kategorija = "Razno", Opis = "Izvid pravomoćnosti / izvršnosti (Tbr. 36)", TarifniBroj = "Tbr. 36", FiksniBody = 25, SortOrder = 1331, Jedinica = "komad" },
@@ -416,6 +416,7 @@ public sealed class TroskovnikService
                 ItemId = def.Id,
                 Opis = def.Opis,
                 TarifniBroj = def.TarifniBroj,
+                PravniIzvor = def.PravniIzvor,
                 Kolicina = stavka.Kolicina,
                 BodovaPoJedinici = bodovi,
                 UkupnoBodova = ukupnoStavke,

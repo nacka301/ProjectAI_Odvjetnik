@@ -121,11 +121,19 @@ public sealed class TroskovnikDocumentService
 
         // Line items (if any)
         sb.AppendLine("<h3>Stavke</h3>");
-        sb.AppendLine("<table><tr><th>#</th><th>Opis</th><th>Tarifni broj</th><th>Količina</th><th>Bod/jed</th><th>Ukupno bodova</th><th>Iznos (EUR)</th></tr>");
+        sb.AppendLine("<table><tr><th>#</th><th>Opis</th><th>Tarifni broj</th><th>Pravni izvor</th><th>Količina</th><th>Bod/jed</th><th>Ukupno bodova</th><th>Iznos (EUR)</th></tr>");
 
         foreach (var l in resp.Stavke ?? new List<TroskovnikLineItem>())
         {
-            sb.AppendLine($"<tr><td>{l.Rbr}</td><td>{System.Net.WebUtility.HtmlEncode(l.Opis)}</td><td>{System.Net.WebUtility.HtmlEncode(l.TarifniBroj)}</td><td>{l.Kolicina}</td><td>{FormatBodovi(l.BodovaPoJedinici)}</td><td>{FormatBodovi(l.UkupnoBodova)}</td><td style=\"text-align:right\">{FormatCurrency(l.IznosEur)}</td></tr>");
+            var izvor = string.IsNullOrWhiteSpace(l.PravniIzvor) ? l.TarifniBroj : l.PravniIzvor;
+            sb.AppendLine($"<tr><td>{l.Rbr}</td><td>{System.Net.WebUtility.HtmlEncode(l.Opis)}</td><td>{System.Net.WebUtility.HtmlEncode(l.TarifniBroj)}</td><td style=\"font-size:10px;color:#555\">{System.Net.WebUtility.HtmlEncode(izvor)}</td><td>{l.Kolicina}</td><td>{FormatBodovi(l.BodovaPoJedinici)}</td><td>{FormatBodovi(l.UkupnoBodova)}</td><td style=\"text-align:right\">{FormatCurrency(l.IznosEur)}</td></tr>");
+        }
+
+        // Tbr. 40 — povišenje za zastupanje više osoba, kao vlastiti redak.
+        if (resp.PovisenjeViseOsobaPostotak > 0)
+        {
+            var povisenjeIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 40. toč. 1 — 10% za drugu i svaku sljedeću osobu, najviše 50%";
+            sb.AppendLine($"<tr><td></td><td>Povišenje za zastupanje {resp.BrojZastupanihOsoba} osoba</td><td>Tbr. 40</td><td style=\"font-size:10px;color:#555\">{System.Net.WebUtility.HtmlEncode(povisenjeIzvor)}</td><td></td><td>{resp.PovisenjeViseOsobaPostotak:P0}</td><td>{FormatBodovi(resp.PovisenjeViseOsobaBodovi)}</td><td style=\"text-align:right\">{FormatCurrency(resp.PovisenjeViseOsobaBodovi * TarifaConstants.BodValue)}</td></tr>");
         }
 
         sb.AppendLine("</table>");
@@ -138,12 +146,26 @@ public sealed class TroskovnikDocumentService
         {
             sb.AppendLine($"<tr><td>Osnovica (bez PDV)</td><td style=\"text-align:right\">{FormatCurrency(resp.UkupnoEurBezPdv)}</td></tr>");
             sb.AppendLine($"<tr><td>PDV (25%)</td><td style=\"text-align:right\">{FormatCurrency(resp.Pdv)}</td></tr>");
-            sb.AppendLine($"<tr><th>SVEUKUPNO s PDV-om</th><th style=\"text-align:right\">{FormatCurrency(resp.UkupnoEurSPdv)}</th></tr>");
+            sb.AppendLine($"<tr><th>Odvjetnički trošak s PDV-om</th><th style=\"text-align:right\">{FormatCurrency(resp.UkupnoEurSPdv)}</th></tr>");
         }
         else
         {
-            sb.AppendLine($"<tr><th>UKUPNO</th><th style=\"text-align:right\">{FormatCurrency(resp.UkupnoEurBezPdv)}</th></tr>");
+            sb.AppendLine($"<tr><th>Odvjetnički trošak</th><th style=\"text-align:right\">{FormatCurrency(resp.UkupnoEurBezPdv)}</th></tr>");
         }
+
+        // Sudska pristojba — s razlogom kad je nema, da "0,00 €" ne izgleda kao greška.
+        var pristojbaObrazlozenje = resp.PristojbaOsnova switch
+        {
+            PristojbaOsnova.Nema =>
+                $"{TarifaConstants.NazivUredbeOPristojbama} ne propisuje pristojbu za kazneni postupak (Poglavlje I. — parnični i ovršni postupak)",
+            PristojbaOsnova.Polovica =>
+                $"{TarifaConstants.NazivUredbeOPristojbama}, Tar. br. 1 st. 2 — polovica iznosa iz st. 1",
+            _ =>
+                $"{TarifaConstants.NazivUredbeOPristojbama}, Tar. br. 1 st. 1"
+        };
+
+        sb.AppendLine($"<tr><td>Sudska pristojba{(resp.IsOslobodjenPristojbi ? " (oslobođeno)" : "")}<br/><span style=\"font-size:10px;color:#555\">{System.Net.WebUtility.HtmlEncode(pristojbaObrazlozenje)}</span></td><td style=\"text-align:right\">{FormatCurrency(resp.SudskaPristojba)}</td></tr>");
+        sb.AppendLine($"<tr><th>SVEUKUPNI TROŠAK</th><th style=\"text-align:right\">{FormatCurrency(resp.SveukupniTrosak)}</th></tr>");
 
         sb.AppendLine("</table>");
 

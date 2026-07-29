@@ -8,6 +8,14 @@ namespace Backend.Models;
 /// </summary>
 public static class TarifaConstants
 {
+    /// <summary>Puni naziv propisa, za navođenje uz svaku stavku troškovnika.</summary>
+    public const string NazivTarife =
+        "Tarifa o nagradama i naknadi troškova za rad odvjetnika (Hrvatska odvjetnička komora, 14. listopada 2023.)";
+
+    /// <summary>Uredba koja propisuje sudske pristojbe.</summary>
+    public const string NazivUredbeOPristojbama =
+        "Uredba o tarifi sudskih pristojbi (NN 37/2023)";
+
     /// <summary>Tbr. 54 — vrijednost boda.</summary>
     public const decimal BodValue = 2.00m;
 
@@ -412,6 +420,10 @@ public sealed class TroskovnikLineItem
     [JsonPropertyName("tarifni_broj")]
     public string TarifniBroj { get; set; } = "";
 
+    /// <summary>Propis i tarifni broj iz kojeg ovaj redak proizlazi — vidi <see cref="TarifnaStavka.PravniIzvor"/>.</summary>
+    [JsonPropertyName("pravni_izvor")]
+    public string PravniIzvor { get; set; } = "";
+
     [JsonPropertyName("kolicina")]
     public int Kolicina { get; set; }
 
@@ -477,6 +489,23 @@ public sealed class TarifnaStavka
     /// <summary>Redoslijed za prikaz.</summary>
     [JsonPropertyName("sort_order")]
     public int SortOrder { get; set; }
+
+    private string? _pravniIzvor;
+
+    /// <summary>
+    /// Propis i tarifni broj iz kojeg nagrada proizlazi. Prikazuje se u sučelju uz
+    /// stavku i uz svaki redak troškovnika, da se svaki iznos može provjeriti u izvoru.
+    ///
+    /// Ako nije postavljen, sastavlja se od naziva Tarife i vlastitog tarifnog broja.
+    /// Stavke čija se nagrada izvodi iz DRUGOG tarifnog broja postavljaju ga izričito,
+    /// s uputom na taj broj.
+    /// </summary>
+    [JsonPropertyName("pravni_izvor")]
+    public string PravniIzvor
+    {
+        get => _pravniIzvor ?? $"{TarifaConstants.NazivTarife}, {TarifniBroj}";
+        set => _pravniIzvor = value;
+    }
 
     /// <summary>True = bodovi dolaze iz ZaprijecenaKaznaTiers lookup-a (kazneni postupak).</summary>
     [JsonPropertyName("kazneni_base")]

@@ -52,6 +52,8 @@ export interface TarifnaStavka {
   kategorija: string;
   opis: string;
   tarifni_broj: string;
+  /** Propis i tarifni broj iz kojeg nagrada proizlazi — prikazuje se uz stavku i uz redak. */
+  pravni_izvor?: string;
   fiksni_body: number | null;
   tbr71_postotak: number | null;
   tbr71_povecanje: number | null;
