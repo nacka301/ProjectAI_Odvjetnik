@@ -43,6 +43,7 @@ import {
   izracunajSudskuPristojbu,
   objasnjenjePristojbe,
   odrediPristojbuOsnovu,
+  povisenjeViseOsobaPostotak,
   tbr71Bodovi,
   ukupnoBodovaZaStavku,
   type PristojbaOsnova,
@@ -76,6 +77,10 @@ interface TroskovnikResponse {
   vrijednost_spora?: number;
   /** True kad su odabrane isključivo kaznene/prekršajne stavke. */
   is_samo_kazneni?: boolean;
+  // Tbr. 40 — zastupanje više osoba
+  broj_zastupanih_osoba?: number;
+  povisenje_vise_osoba_postotak?: number;
+  povisenje_vise_osoba_bodovi?: number;
   ukupno_eur_bez_pdv: number;
   pdv: number;
   ukupno_eur_s_pdv: number;
@@ -210,6 +215,9 @@ function TroskovnikContent() {
 
   // ── Sudske pristojbe state ──
   const [isOslobodjenPristojbi, setIsOslobodjenPristojbi] = useState(false);
+
+  // ── Tbr. 40 — broj osoba koje odvjetnik zastupa u istom postupku ──
+  const [brojZastupanihOsoba, setBrojZastupanihOsoba] = useState(1);
 
   // ── Client picker state ──
   type ClientOption = { id: string; ime_naziv: string; oib?: string; adresa?: string; grad?: string; tip: string };
@@ -434,7 +442,13 @@ function TroskovnikContent() {
       });
     });
 
-    const ukupnoBodova = lines.reduce((s, l) => s + l.ukupno_bodova, 0);
+    const osnovicaBodova = lines.reduce((s, l) => s + l.ukupno_bodova, 0);
+
+    // Tbr. 40. toč. 1 — povišenje za drugu i svaku sljedeću zastupanu osobu.
+    const povisenjePostotak = povisenjeViseOsobaPostotak(brojZastupanihOsoba);
+    const povisenjeBodovi = osnovicaBodova * povisenjePostotak;
+
+    const ukupnoBodova = osnovicaBodova + povisenjeBodovi;
     const ukupnoEur = ukupnoBodova * BOD_VALUE;
     const rawPdv = Math.round(ukupnoEur * PDV_RATE * 100) / 100;
     const pdv = isPdvUkljucen ? rawPdv : 0;
@@ -446,8 +460,8 @@ function TroskovnikContent() {
       : izracunajSudskuPristojbu(vrijednostNum, pristojbaOsnova);
     const sveukupniTrosak = odvjetnickiTrosak + sudskaPristojba;
 
-    return { lines, ukupnoBodova, ukupnoEur, pdv, ukupnoSPdv: ukupnoEur + pdv, sudskaPristojba, sveukupniTrosak };
-  }, [selectedItems, katalog, baseBodovi, isPdvUkljucen, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, isOduzimanjePrekrsaj, parsedVrijednostOduzimanja, isOslobodjenPristojbi, vrijednostNum, pristojbaOsnova]);
+    return { lines, osnovicaBodova, povisenjePostotak, povisenjeBodovi, ukupnoBodova, ukupnoEur, pdv, ukupnoSPdv: ukupnoEur + pdv, sudskaPristojba, sveukupniTrosak };
+  }, [selectedItems, katalog, baseBodovi, isPdvUkljucen, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, isOduzimanjePrekrsaj, parsedVrijednostOduzimanja, isOslobodjenPristojbi, vrijednostNum, pristojbaOsnova, brojZastupanihOsoba]);
 
   // ── Handlers ──
   const toggleCategory = useCallback((cat: string) => {
@@ -535,6 +549,7 @@ function TroskovnikContent() {
         is_oduzimanje_prekrsaj: isOduzimanjePrekrsaj,
         vrijednost_oduzimanja: parsedVrijednostOduzimanja,
         is_oslobodjen_pristojbi: isOslobodjenPristojbi,
+        broj_zastupanih_osoba: brojZastupanihOsoba,
       };
 
       const res = await fetch(`${API_BASE}/api/troskovnik/izracunaj`, {
@@ -606,6 +621,7 @@ function TroskovnikContent() {
         is_oduzimanje_prekrsaj: isOduzimanjePrekrsaj,
         vrijednost_oduzimanja: parsedVrijednostOduzimanja,
         is_oslobodjen_pristojbi: isOslobodjenPristojbi,
+        broj_zastupanih_osoba: brojZastupanihOsoba,
         client_id: selectedClientId || undefined,
         // Signal backend to auto-create client from stranke data if no client_id
         auto_create_client: !selectedClientId && !!klijentIme.trim(),
@@ -782,6 +798,32 @@ function TroskovnikContent() {
               </div>
             </div>
             )}
+
+            {/* ── Tbr. 40 — zastupanje više osoba ── */}
+            <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
+                <Users className="h-3.5 w-3.5 inline mr-1 -mt-0.5" />
+                Broj zastupanih osoba (Tbr. 40)
+              </label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={brojZastupanihOsoba}
+                  onChange={(e) => setBrojZastupanihOsoba(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                  className="w-24 px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
+                />
+                <div className="flex-1 text-right">
+                  <div className="text-lg font-bold text-indigo-600">
+                    +{Math.round(liveCalc.povisenjePostotak * 100)} %
+                  </div>
+                  <p className="text-[10px] text-slate-400 leading-snug">
+                    10 % za drugu i svaku sljedeću osobu, najviše 50 %
+                  </p>
+                </div>
+              </div>
+            </div>
 
             {/* ── Kazneni postupak panel ── */}
             {isKazneniMode && (
@@ -1342,6 +1384,20 @@ function TroskovnikContent() {
                   {/* Totals */}
                   {selectedItems.size > 0 && (
                     <div className="mt-4 pt-3 border-t border-slate-200 space-y-1.5">
+                      {liveCalc.povisenjePostotak > 0 && (
+                        <>
+                          <div className="flex justify-between text-xs text-slate-500">
+                            <span>Osnovica</span>
+                            <span>{fmtNum(liveCalc.osnovicaBodova)} bod.</span>
+                          </div>
+                          <div className="flex justify-between text-xs text-slate-500">
+                            <span>
+                              Zastupanje {brojZastupanihOsoba} osoba (Tbr. 40) +{Math.round(liveCalc.povisenjePostotak * 100)} %
+                            </span>
+                            <span>{fmtNum(liveCalc.povisenjeBodovi)} bod.</span>
+                          </div>
+                        </>
+                      )}
                       <div className="flex justify-between text-xs text-slate-500">
                         <span>Ukupno bodova</span>
                         <span className="font-semibold">{fmtNum(liveCalc.ukupnoBodova)}</span>
@@ -1693,6 +1749,20 @@ function TroskovnikContent() {
                     ))}
                   </tbody>
                   <tfoot>
+                    {(result.povisenje_vise_osoba_postotak ?? 0) > 0 && (
+                      <tr className="border-t border-slate-200">
+                        <td colSpan={5} className="py-2 px-2 text-right text-xs text-slate-500">
+                          Zastupanje {result.broj_zastupanih_osoba} osoba (Tbr. 40) — povišenje{" "}
+                          {Math.round((result.povisenje_vise_osoba_postotak ?? 0) * 100)} %
+                        </td>
+                        <td className="py-2 px-2 text-right text-slate-600">
+                          {fmtNum(result.povisenje_vise_osoba_bodovi ?? 0)}
+                        </td>
+                        <td className="py-2 px-2 text-right text-slate-600">
+                          {fmtEur((result.povisenje_vise_osoba_bodovi ?? 0) * BOD_VALUE)}
+                        </td>
+                      </tr>
+                    )}
                     <tr className="border-t-2 border-indigo-200">
                       <td colSpan={5} className="py-2 px-2 text-right text-xs text-slate-500 font-semibold">Ukupno bodova</td>
                       <td className="py-2 px-2 text-right font-bold text-indigo-700">{fmtNum(result.ukupno_bodova)}</td>

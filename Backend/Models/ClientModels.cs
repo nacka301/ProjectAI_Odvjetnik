@@ -86,7 +86,7 @@ public sealed class TroskovnikRecord
     public string? CaseId { get; set; }
     public string? OpisPredmeta { get; set; }
     public decimal VrijednostSpora { get; set; }
-    public int UkupnoBodova { get; set; }
+    public decimal UkupnoBodova { get; set; }
     public decimal UkupnoEurBezPdv { get; set; }
     public decimal Pdv { get; set; }
     public decimal UkupnoEurSPdv { get; set; }
@@ -116,7 +116,7 @@ public sealed class TroskovnikReadRecord
     public string? CaseId { get; set; }
     public string? OpisPredmeta { get; set; }
     public decimal VrijednostSpora { get; set; }
-    public int UkupnoBodova { get; set; }
+    public decimal UkupnoBodova { get; set; }
     public decimal UkupnoEurBezPdv { get; set; }
     public decimal Pdv { get; set; }
     public decimal UkupnoEurSPdv { get; set; }

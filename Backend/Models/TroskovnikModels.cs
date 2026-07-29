@@ -153,6 +153,13 @@ public sealed class TroskovnikRequest
     /// <summary>Oslobođenje od plaćanja sudskih pristojbi (čl. 11. Zakona).</summary>
     [JsonPropertyName("is_oslobodjen_pristojbi")]
     public bool IsOslobodjenPristojbi { get; set; }
+
+    /// <summary>
+    /// Broj osoba koje odvjetnik brani ili zastupa u istom postupku (Tbr. 40. toč. 1).
+    /// Vrijednosti manje od 2 znače da nema povišenja.
+    /// </summary>
+    [JsonPropertyName("broj_zastupanih_osoba")]
+    public int BrojZastupanihOsoba { get; set; } = 1;
 }
 
 // New request DTOs for nested schema
@@ -235,8 +242,24 @@ public sealed class TroskovnikResponse
     [JsonPropertyName("stavke")]
     public List<TroskovnikLineItem> Stavke { get; set; } = [];
 
+    /// <summary>Ukupno bodova, uključujući povišenje po Tbr. 40.</summary>
     [JsonPropertyName("ukupno_bodova")]
-    public int UkupnoBodova { get; set; }
+    public decimal UkupnoBodova { get; set; }
+
+    /// <summary>Broj zastupanih osoba iz zahtjeva (Tbr. 40. toč. 1).</summary>
+    [JsonPropertyName("broj_zastupanih_osoba")]
+    public int BrojZastupanihOsoba { get; set; } = 1;
+
+    /// <summary>
+    /// Postotak povišenja po Tbr. 40. toč. 1: 10% za drugu i svaku sljedeću osobu,
+    /// najviše 50%. Prva osoba ne ulazi u postotak.
+    /// </summary>
+    [JsonPropertyName("povisenje_vise_osoba_postotak")]
+    public decimal PovisenjeViseOsobaPostotak { get; set; }
+
+    /// <summary>Bodovi koje donosi povišenje po Tbr. 40 — prikazuju se kao zaseban redak.</summary>
+    [JsonPropertyName("povisenje_vise_osoba_bodovi")]
+    public decimal PovisenjeViseOsobaBodovi { get; set; }
 
     /// <summary>
     /// Vrijednost predmeta spora korištena u izračunu. U kaznenom postupku uvijek 0 —

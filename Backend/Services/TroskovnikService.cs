@@ -275,7 +275,8 @@ public sealed class TroskovnikService
         // XIV. ZAJEDNIČKE ODREDBE
         // ═══════════════════════════════════════════════════════════
         new() { Id = "zaj_cekanje", Kategorija = "Zajedničke odredbe", Opis = "Čekanje na raspravu / putovanje (Tbr. 39) – 25 bod/sat, max 7h", TarifniBroj = "Tbr. 39", FiksniBody = 25, SortOrder = 1400, Jedinica = "sat" },
-        new() { Id = "zaj_vise_osoba", Kategorija = "Zajedničke odredbe", Opis = "Povišenje za zastupanje više osoba +10%/os (Tbr. 40)", TarifniBroj = "Tbr. 40", FiksniBody = 0, SortOrder = 1410, Jedinica = "osoba" },
+        // Tbr. 40 (zastupanje više osoba) NIJE stavka kataloga nego povišenje cijele
+        // osnovice — vidi IzracunajPovisenjeViseOsoba i polje broj_zastupanih_osoba.
     ];
 
     // ── Calculate a troškovnik ────────────────────────────────────
@@ -397,7 +398,13 @@ public sealed class TroskovnikService
             });
         }
 
-        var ukupnoBodova = lines.Sum(l => l.UkupnoBodova);
+        var osnovicaBodova = (decimal)lines.Sum(l => l.UkupnoBodova);
+
+        // ── Tbr. 40. toč. 1 — zastupanje više osoba ──
+        var povisenjePostotak = PovisenjeViseOsobaPostotak(request.BrojZastupanihOsoba);
+        var povisenjeBodovi = osnovicaBodova * povisenjePostotak;
+
+        var ukupnoBodova = osnovicaBodova + povisenjeBodovi;
         var ukupnoEur = ukupnoBodova * TarifaConstants.BodValue;
         decimal pdv = 0;
         var useVat = request.IsPdvUkljucen ?? request.HasVat;
@@ -418,6 +425,9 @@ public sealed class TroskovnikService
         {
             Stavke = lines,
             UkupnoBodova = ukupnoBodova,
+            BrojZastupanihOsoba = Math.Max(1, request.BrojZastupanihOsoba),
+            PovisenjeViseOsobaPostotak = povisenjePostotak,
+            PovisenjeViseOsobaBodovi = povisenjeBodovi,
             VrijednostSpora = vrijednostSpora,
             IsSamoKazneni = isSamoKazneni,
             UkupnoEurBezPdv = ukupnoEur,
@@ -454,6 +464,29 @@ public sealed class TroskovnikService
             IsOslobodjenPristojbi = request.IsOslobodjenPristojbi,
             SveukupniTrosak = sveukupniTrosak
         };
+    }
+
+    // ── Tbr. 40. toč. 1 — zastupanje više osoba ───────────────────
+
+    /// <summary>10% za drugu i svaku sljedeću osobu, najviše 50%.</summary>
+    public const decimal ViseOsobaPoOsobi = 0.10m;
+
+    /// <summary>Gornja granica povišenja iz Tbr. 40. toč. 1.</summary>
+    public const decimal ViseOsobaMaxPovisenje = 0.50m;
+
+    /// <summary>
+    /// Tbr. 40. toč. 1: "Kad odvjetnik u istom postupku brani ili zastupa više osoba,
+    /// pripada mu pravo na povišenje tarifnih stavaka za drugu i svaku sljedeću osobu
+    /// za 10% — uz uvjet da to povišenje može iznositi najviše 50%."
+    ///
+    /// Prva osoba ne ulazi u postotak, pa je osnova (n − 1). Povišenje se primjenjuje
+    /// na cijelu osnovicu troškovnika ("tarifnih stavaka"), a ne na pojedinu stavku.
+    /// </summary>
+    public static decimal PovisenjeViseOsobaPostotak(int brojOsoba)
+    {
+        if (brojOsoba <= 1) return 0m;
+
+        return Math.Min((brojOsoba - 1) * ViseOsobaPoOsobi, ViseOsobaMaxPovisenje);
     }
 
     // ── Ukupno bodova za jednu stavku troškovnika ─────────────────

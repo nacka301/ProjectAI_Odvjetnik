@@ -170,6 +170,27 @@ export function izracunajKazneneBodove(
   return clampBodovi(bodovi, def);
 }
 
+// ── Tbr. 40. toč. 1 — zastupanje više osoba ──────────────────────
+
+/** 10% za drugu i svaku sljedeću osobu. */
+export const VISE_OSOBA_PO_OSOBI = 0.1;
+
+/** "uz uvjet da to povišenje može iznositi najviše 50%" */
+export const VISE_OSOBA_MAX_POVISENJE = 0.5;
+
+/**
+ * Tbr. 40. toč. 1: "Kad odvjetnik u istom postupku brani ili zastupa više osoba,
+ * pripada mu pravo na povišenje tarifnih stavaka za drugu i svaku sljedeću osobu
+ * za 10% — uz uvjet da to povišenje može iznositi najviše 50%."
+ *
+ * Prva osoba ne ulazi u postotak. Povišenje ide na cijelu osnovicu troškovnika.
+ */
+export function povisenjeViseOsobaPostotak(brojOsoba: number): number {
+  if (!Number.isFinite(brojOsoba) || brojOsoba <= 1) return 0;
+
+  return Math.min((brojOsoba - 1) * VISE_OSOBA_PO_OSOBI, VISE_OSOBA_MAX_POVISENJE);
+}
+
 // ── Ukupno bodova za jednu stavku troškovnika ────────────────────
 
 /**
