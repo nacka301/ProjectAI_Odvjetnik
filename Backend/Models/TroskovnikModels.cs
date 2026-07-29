@@ -379,6 +379,13 @@ public sealed class TroskovnikResponse
     [JsonPropertyName("is_stjecaj")]
     public bool IsStjecaj { get; set; }
 
+    /// <summary>
+    /// Obrazloženje uz odabrani razred kad je riječ o stjecaju ili produljenom
+    /// kaznenom djelu (Tbr. 4. toč. 1 al. 6). Null kad stjecaja nema.
+    /// </summary>
+    [JsonPropertyName("napomena_stjecaj")]
+    public string? NapomenaStjecaj { get; set; }
+
     [JsonPropertyName("is_oduzimanje_prekrsaj")]
     public bool IsOduzimanjePrekrsaj { get; set; }
 

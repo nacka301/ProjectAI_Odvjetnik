@@ -36,6 +36,7 @@ import {
   BOD_VALUE,
   KATEGORIJA_KAZNENI,
   PDV_RATE,
+  TBR_7_1_RAZREDI,
   ZAPRIJECENA_KAZNA_TIERS,
   formatirajBodove,
   izracunajBodove,
@@ -113,6 +114,8 @@ interface TroskovnikResponse {
   is_na_teret_proracuna?: boolean;
   is_zastupnik_djeteta?: boolean;
   is_stjecaj?: boolean;
+  /** Obrazloženje odabranog razreda kod stjecaja (Tbr. 4. toč. 1 al. 6). */
+  napomena_stjecaj?: string | null;
   is_oduzimanje_prekrsaj?: boolean;
   vrijednost_oduzimanja?: number;
   // Sudske pristojbe
@@ -1596,23 +1599,18 @@ function TroskovnikContent() {
                   <span className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Tbr. 7.1 — Tablica bodova</span>
                 </div>
                 <div className="space-y-1 text-[11px]">
-                  {(() => {
-                    const ranges: Array<[string, string]> = [];
-                    const bounds = [0, 332, 664, 1327, 13272, 33181, 66361, 663614, 1327228];
-                    const pts = ["25", "50", "75", "100", "250", "500", "500+", "4.991+"];
-                    for (let i = 0; i < bounds.length - 1; i++) {
-                      const from = bounds[i];
-                      const to = bounds[i + 1];
-                      ranges.push([`${formatThreshold(from)} – ${formatThreshold(to)}`, pts[i]]);
-                    }
-                    ranges.push([`> ${formatThreshold(bounds[bounds.length - 1])}`, "max 10.000"]);
-                    return ranges.map(([range, pts]) => (
-                      <div key={range} className="flex justify-between text-slate-500">
-                        <span>{range}</span>
-                        <span className="font-mono font-semibold text-slate-700">{pts} bod.</span>
-                      </div>
-                    ));
-                  })()}
+                  {TBR_7_1_RAZREDI.map((razred) => (
+                    <div key={razred.od ?? "dno"} className="flex justify-between gap-3 text-slate-500">
+                      <span className="shrink-0">
+                        {razred.do === null
+                          ? `iznad ${formatThreshold(razred.od ?? 0)}`
+                          : `${formatThreshold(razred.od ?? 0)} – ${formatThreshold(razred.do)}`}
+                      </span>
+                      <span className="font-mono font-semibold text-slate-700 text-right">
+                        {razred.bodovi}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
 

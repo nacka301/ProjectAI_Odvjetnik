@@ -119,6 +119,12 @@ public sealed class TroskovnikDocumentService
         sb.AppendLine($"<tr><td>{System.Net.WebUtility.HtmlEncode(protPolozaj)}</td><td>{System.Net.WebUtility.HtmlEncode(protNaziv)}</td><td>{System.Net.WebUtility.HtmlEncode(protOib)}</td><td>{System.Net.WebUtility.HtmlEncode(protAdresa)}</td></tr>");
         sb.AppendLine("</table>");
 
+        // Stjecaj — obrazloženje odabranog razreda (Tbr. 4. toč. 1 al. 6)
+        if (!string.IsNullOrWhiteSpace(resp.NapomenaStjecaj))
+        {
+            sb.AppendLine($"<p style=\"margin-top:12px;font-size:11px;color:#555\"><em>{System.Net.WebUtility.HtmlEncode(resp.NapomenaStjecaj)}</em></p>");
+        }
+
         // Line items (if any)
         sb.AppendLine("<h3>Stavke</h3>");
         sb.AppendLine("<table><tr><th>#</th><th>Opis</th><th>Tarifni broj</th><th>Pravni izvor</th><th>Količina</th><th>Bod/jed</th><th>Ukupno bodova</th><th>Iznos (EUR)</th></tr>");
@@ -184,21 +190,44 @@ public sealed class TroskovnikDocumentService
     /// Appends a Tbr. 7.1 quick-reference table with VPS ranges formatted
     /// using FormatThreshold (hr-HR, exactly 2 decimal places).
     /// </summary>
+    /// <summary>
+    /// Tablica iz Tbr. 7. toč. 1 onako kako stoji u Tarifi — s decimalama i bez
+    /// preklapanja granica: 0,00–332,00 pa 332,01–664,00.
+    ///
+    /// Progresivni razredi nemaju jedan broj nego formulu, pa se ispisuju tekstom
+    /// kojim ih Tarifa opisuje ("1 boda za svakih započetih 133,00 eura").
+    /// </summary>
+    private static readonly (decimal Od, decimal? Do, string Bodovi)[] Tbr71Razredi =
+    [
+        (            0m,           332.00m, "25"),
+        (       332.01m,           664.00m, "50"),
+        (       664.01m,         1_327.00m, "75"),
+        (     1_327.01m,        13_272.00m, "100"),
+        (    13_272.01m,        33_181.00m, "250"),
+        (    33_181.01m,        66_361.00m, "500"),
+        (    66_361.01m,       663_614.00m, "500 + 1 bod / započetih 133,00 €"),
+        (   663_614.01m,     1_327_228.00m, "4.991 + 1 bod / započetih 265,00 €"),
+        ( 1_327_228.01m,              null, "7.496 + 1 bod / započetih 664,00 €, najviše 10.000")
+    ];
+
     private void AppendVpsRangeTable(StringBuilder sb)
     {
-        sb.AppendLine("<h3 style=\"margin-top:24px;\">Tbr. 7.1 — Tablica bodova (VPS rasponi)</h3>");
-        sb.AppendLine("<table style=\"width:420px;\">");
+        sb.AppendLine("<h3 style=\"margin-top:24px;\">Tbr. 7. toč. 1 — tablica bodova prema vrijednosti predmeta spora</h3>");
+        sb.AppendLine("<table style=\"width:480px;\">");
         sb.AppendLine("<tr><th>Vrijednost predmeta spora (EUR)</th><th style=\"text-align:right\">Bodovi</th></tr>");
 
-        var bounds = new[] { 0m, 332m, 664m, 1_327m, 13_272m, 33_181m, 66_361m, 663_614m, 1_327_228m };
-        var points = new[] { "25", "50", "75", "100", "250", "500", "500+", "4.991+" };
-
-        for (int i = 0; i < bounds.Length - 1; i++)
+        foreach (var (od, doIznos, bodovi) in Tbr71Razredi)
         {
-            sb.AppendLine($"<tr><td>{FormatThreshold(bounds[i])} – {FormatThreshold(bounds[i + 1])}</td><td style=\"text-align:right\">{points[i]}</td></tr>");
+            var raspon = doIznos is null
+                ? $"iznad {FormatThreshold(od)}"
+                : $"{FormatThreshold(od)} – {FormatThreshold(doIznos.Value)}";
+
+            sb.AppendLine($"<tr><td>{raspon}</td><td style=\"text-align:right\">{bodovi}</td></tr>");
         }
 
-        sb.AppendLine($"<tr><td>&gt; {FormatThreshold(bounds[^1])}</td><td style=\"text-align:right\">max 10.000</td></tr>");
         sb.AppendLine("</table>");
     }
+
+    /// <summary>Razredi za prikaz — izloženo radi provjere u testovima.</summary>
+    public static IReadOnlyList<(decimal Od, decimal? Do, string Bodovi)> RazrediZaPrikaz => Tbr71Razredi;
 }

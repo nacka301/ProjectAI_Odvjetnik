@@ -79,8 +79,15 @@ public sealed class TroskovnikService
         // Toč. 4: odgoda radnje = 50% nagrade iz toč. 1 (= 50% Tbr. 4.1)
         new() { Id = "kaz_sudjelovanje_istraga", Kategorija = "Kazneni postupak", Opis = "Sudjelovanje pred policijom / DO / sucem istrage – prvi sat (Tbr. 3.1)", TarifniBroj = "Tbr. 3.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 3. toč. 1 — nagrada iz Tbr. 4. toč. 1 za prvi sat", KazneniBase = true, SortOrder = 120, Jedinica = "sat" },
         new() { Id = "kaz_istraga_dodatni_sat", Kategorija = "Kazneni postupak", Opis = "Svaki sljedeći započeti sat u istrazi (Tbr. 3.1)", TarifniBroj = "Tbr. 3.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 3. toč. 1 — 50 bodova za svaki sljedeći započeti sat", FiksniBody = 50, SortOrder = 121, Jedinica = "sat" },
+        // Tbr. 3. toč. 2 — "Za radnje iz toč. 1 ovog tarifnog broja koje policija, državno
+        // odvjetništvo, Ured europskog javnog tužitelja ili sud, provode izvan zgrade svog
+        // sjedišta odvjetniku pripada, osim nagrade iz toč. 1. ovog tarifnog broja i
+        // naknada po Tbr. 49."
+        // Tbr. 49 su stvarni putni troškovi — nisu bodovi i obračunavaju se zasebno.
+        new() { Id = "kaz_istraga_izvan_sjedista", Kategorija = "Kazneni postupak", Opis = "Radnje pred policijom / DO / EPPO / sucem istrage izvan zgrade sjedišta (Tbr. 3.2) – nagrada kao po Tbr. 3.1, uz naknadu putnih troškova po Tbr. 49", TarifniBroj = "Tbr. 3.2", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 3. toč. 2 — nagrada iz Tbr. 3. toč. 1 (Tbr. 4. toč. 1) uz naknadu po Tbr. 49 (stvarni putni troškovi, izvan bodovnog sustava)", KazneniBase = true, SortOrder = 124, Jedinica = "sat" },
+
         new() { Id = "kaz_istraga_ostecenik", Kategorija = "Kazneni postupak", Opis = "Punomoćnik oštećenika / žrtve u istrazi – 50% Tbr. 4.1 (Tbr. 3.3)", TarifniBroj = "Tbr. 3.3", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 3. toč. 3 — 50% nagrade iz Tbr. 3 (Tbr. 4. toč. 1)", KazneniBase = true, KazneniPovecanje = -0.5m, SortOrder = 122, Jedinica = "sat" },
-        new() { Id = "kaz_istraga_odgoda", Kategorija = "Kazneni postupak", Opis = "Pristup odgođenoj radnji u istrazi – 50% Tbr. 4.1 (Tbr. 3.4)", TarifniBroj = "Tbr. 3.4", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 3. toč. 4 — 50% nagrade iz Tbr. 3. toč. 1", KazneniBase = true, KazneniPovecanje = -0.5m, SortOrder = 123, Jedinica = "komad" },
+        new() { Id = "kaz_istraga_odgoda", Kategorija = "Kazneni postupak", Opis = "Pristup odgođenoj radnji u istrazi – 50% Tbr. 4.1, uz naknadu po Tbr. 49 (Tbr. 3.4)", TarifniBroj = "Tbr. 3.4", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 3. toč. 4 — 50% nagrade iz Tbr. 3. toč. 1 uz naknadu po Tbr. 49", KazneniBase = true, KazneniPovecanje = -0.5m, SortOrder = 123, Jedinica = "komad" },
 
         // ── Tbr. 4 — Obrana na raspravi ──
         new() { Id = "kaz_obrana", Kategorija = "Kazneni postupak", Opis = "Obrana okrivljenika na raspravi – prvi sat (Tbr. 4.1)", TarifniBroj = "Tbr. 4.1", KazneniBase = true, SortOrder = 130, Jedinica = "sat" },
@@ -93,7 +100,43 @@ public sealed class TroskovnikService
         // pred sudom drugog i trećeg stupnja za kaznena djela za koja je predviđena kazna
         // dugotrajnog zatvora s povišenjem od 50%."
         new() { Id = "kaz_rasprava_drugostupanjska", Kategorija = "Kazneni postupak", Opis = "Rasprava pred sudom drugog (i trećeg) stupnja (Tbr. 4.2) – Tbr. 4.1 + 25%, a kod dugotrajnog zatvora + 50%", TarifniBroj = "Tbr. 4.2", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 4. toč. 2 al. 3 — prvi stupanj + 25%, a kod dugotrajnog zatvora + 50%", KazneniBase = true, KazneniPovecanje = 0.25m, KazneniPovecanjeDugotrajni = 0.50m, SortOrder = 135, Jedinica = "komad" },
-        new() { Id = "kaz_razgovor_pritvor", Kategorija = "Kazneni postupak", Opis = "Razgovor s okrivljenikom u pritvoru (Tbr. 4.5)", TarifniBroj = "Tbr. 4.5", FiksniBody = 50, SortOrder = 136, Jedinica = "komad" },
+        // Tbr. 4. toč. 2 al. 4 — "na sjednici povodom izvanrednih pravnih lijekova odvjetniku
+        // pripada nagrada kao za obranu pred sudom drugog stupnja."
+        // "Obrana pred sudom drugog stupnja" definirana je u al. 3 — nagrada iz toč. 1
+        // uvećana za 25%, odnosno za 50% kod dugotrajnog zatvora.
+        new() { Id = "kaz_sjednica_izvanredni", Kategorija = "Kazneni postupak", Opis = "Sjednica povodom izvanrednih pravnih lijekova (Tbr. 4.2) – kao obrana pred sudom drugog stupnja", TarifniBroj = "Tbr. 4.2", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 4. toč. 2 al. 4 — nagrada kao za obranu pred sudom drugog stupnja (al. 3: toč. 1 + 25%, kod dugotrajnog zatvora + 50%)", KazneniBase = true, KazneniPovecanje = 0.25m, KazneniPovecanjeDugotrajni = 0.50m, SortOrder = 136, Jedinica = "komad" },
+
+        // Tbr. 4. toč. 3 — "U postupku prema maloljetniku i u postupku prema osobama s
+        // duševnim smetnjama, odvjetniku kao branitelju pripada nagrada kao za obranu
+        // po toč. 1. ovog tarifnog broja."
+        new() { Id = "kaz_maloljetnik", Kategorija = "Kazneni postupak", Opis = "Obrana u postupku prema maloljetniku ili osobi s duševnim smetnjama (Tbr. 4.3) – po Tbr. 4.1", TarifniBroj = "Tbr. 4.3", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 4. toč. 3 — nagrada kao za obranu po toč. 1", KazneniBase = true, SortOrder = 137, Jedinica = "sat" },
+
+        // Tbr. 4. toč. 4 — "Ako je poslije podignute optužnice, optužnog prijedloga ili
+        // privatne tužbe, ukidanja obaveznog prekršajnog naloga ili prekršajnog naloga, a
+        // prije izvođenja dokaza na raspravi, došlo do obustave postupka, ili do odgode
+        // rasprave, odvjetniku pripada 50% nagrade iz toč. 1. ovog tarifnog broja, osim u
+        // slučaju ako sud nakon odgode rasprave nastavi s izvanraspravnim izvođenjem dokaza,
+        // u kojem slučaju odvjetniku pripada nagrada iz toč. 1."
+        new() { Id = "kaz_obustava_odgoda", Kategorija = "Kazneni postupak", Opis = "Obustava postupka ili odgoda rasprave prije izvođenja dokaza (Tbr. 4.4) – 50% Tbr. 4.1; ako sud nastavi s izvanraspravnim izvođenjem dokaza, obračunaj punu obranu po Tbr. 4.1", TarifniBroj = "Tbr. 4.4", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 4. toč. 4 — 50% nagrade iz toč. 1", KazneniBase = true, KazneniPovecanje = -0.5m, SortOrder = 138, Jedinica = "komad" },
+
+        // Tbr. 4. toč. 5 — "Za svaki obavljeni razgovor s okrivljenikom koji se nalazi u
+        // pritvoru ili istražnom zatvoru odvjetniku pripada nagrada od 50 bodova, te za
+        // drugi i svaki sljedeći započeti sat nagrada od 50 bodova."
+        new() { Id = "kaz_razgovor_pritvor", Kategorija = "Kazneni postupak", Opis = "Razgovor s okrivljenikom u pritvoru ili istražnom zatvoru – prvi (Tbr. 4.5)", TarifniBroj = "Tbr. 4.5", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 4. toč. 5 — 50 bodova po obavljenom razgovoru", FiksniBody = 50, SortOrder = 139, Jedinica = "komad" },
+        new() { Id = "kaz_pritvor_dodatni_sat", Kategorija = "Kazneni postupak", Opis = "Razgovor u pritvoru – svaki sljedeći započeti sat (Tbr. 4.5)", TarifniBroj = "Tbr. 4.5", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 4. toč. 5 — 50 bodova za drugi i svaki sljedeći započeti sat", FiksniBody = 50, SortOrder = 140, Jedinica = "sat" },
+
+        // Tbr. 4. toč. 6 — "Za prisustvovanje očevidu, rekonstrukciji, kao i ostalim radnjama,
+        // koje policija, državno odvjetništvo, Ured europskog javnog tužitelja ili sud provode
+        // izvan zgrade svog sjedišta, odvjetniku pripada nagrada iz toč. 1. ovog tarifnog broja
+        // kao i naknada po Tbr. 49."
+        new() { Id = "kaz_ocevid_izvan_zgrade", Kategorija = "Kazneni postupak", Opis = "Očevid / rekonstrukcija / ostale radnje izvan zgrade suda (Tbr. 4.6) – po Tbr. 4.1, uz naknadu putnih troškova po Tbr. 49", TarifniBroj = "Tbr. 4.6", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 4. toč. 6 — nagrada iz toč. 1 uz naknadu po Tbr. 49 (stvarni putni troškovi, izvan bodovnog sustava)", KazneniBase = true, SortOrder = 141, Jedinica = "komad" },
+
+        // Tbr. 4. toč. 8 — "Odvjetniku koji zastupa oštećenika u postupku koji se vodi pred
+        // policijom, državnim odvjetništvom, Uredom europskog javnog tužitelja te sucem istrage,
+        // u postupku donošenja odluke o davanju suglasnosti za uvjetni odustanak od kaznenog
+        // progona po načelu svrhovitosti, postupku provođenja pojedinačne procjene žrtve te na
+        // raspravi pred sudom, pripada 50% nagrade iz ovog tarifnog broja."
+        new() { Id = "kaz_zastupanje_ostecenika", Kategorija = "Kazneni postupak", Opis = "Zastupanje oštećenika (uvjetni odustanak, pojedinačna procjena žrtve, rasprava) – 50% Tbr. 4 (Tbr. 4.8)", TarifniBroj = "Tbr. 4.8", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 4. toč. 8 — 50% nagrade iz Tbr. 4", KazneniBase = true, KazneniPovecanje = -0.5m, SortOrder = 142, Jedinica = "komad" },
 
         // ── Tbr. 4.1 — Prekršaj s oduzimanjem predmeta ──
         // Ako se uz novčanu kaznu / kaznu zatvora može izreći i kazna oduzimanja predmeta,
@@ -526,6 +569,7 @@ public sealed class TroskovnikService
             IsNaTeretProracuna = request.IsNaTeretProracuna,
             IsZastupnikDjeteta = request.IsZastupnikDjeteta,
             IsStjecaj = request.IsStjecaj,
+            NapomenaStjecaj = request.IsStjecaj ? NapomenaZaStjecaj : null,
             IsOduzimanjePrekrsaj = request.IsOduzimanjePrekrsaj,
             VrijednostOduzimanja = request.VrijednostOduzimanja,
             // Sudske pristojbe
@@ -535,6 +579,21 @@ public sealed class TroskovnikService
             SveukupniTrosak = sveukupniTrosak
         };
     }
+
+    // ── Stjecaj i produljeno kazneno djelo (Tbr. 4. toč. 1 al. 6) ─
+
+    /// <summary>
+    /// Alineja 6 ne uvodi ni množitelj ni broj radnji — ona samo određuje KOJI se od
+    /// razreda iz alineja 1–5 uzima: onaj koji odgovara najtežoj kazni koja se u
+    /// postupku može izreći primjenom pravila o stjecaju. Nagrada ostaje jedna.
+    ///
+    /// Zato zastavica ne mijenja izračun, nego se bilježi uz troškovnik kako bi se
+    /// vidjelo zašto je odabran razred koji ne odgovara pojedinačnom djelu.
+    /// </summary>
+    public const string NapomenaZaStjecaj =
+        "Kaznena djela u stjecaju odnosno produljeno kazneno djelo: razred je odabran " +
+        "prema najtežoj kazni koja se u postupku može izreći primjenom odredbi o " +
+        "izricanju kazne za djela u stjecaju (Tbr. 4. toč. 1 al. 6).";
 
     // ── Zaokruživanje ─────────────────────────────────────────────
 
