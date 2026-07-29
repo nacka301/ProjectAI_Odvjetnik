@@ -39,7 +39,17 @@ public class TroskovnikController : ControllerBase
         if (request.Stavke is null || request.Stavke.Count == 0)
             return BadRequest(new { error = "Morate odabrati barem jednu stavku." });
 
-        var result = _service.Izracunaj(request);
+        TroskovnikResponse result;
+        try
+        {
+            result = _service.Izracunaj(request);
+        }
+        catch (TroskovnikValidationException ex)
+        {
+            // Troškovnik se ne može valjano izračunati — bolje jasna poruka nego
+            // stavka koja tiho nestane ili redak s 0,00 €.
+            return BadRequest(new { error = ex.Message });
+        }
 
         // If a case id was provided, attempt to enrich the response with case metadata (sud, broj predmeta)
         // SECURITY: Only enrich if the case belongs to the authenticated user
@@ -85,8 +95,15 @@ public class TroskovnikController : ControllerBase
         if (request.Stavke is null || request.Stavke.Count == 0)
             return BadRequest(new { error = "Morate odabrati barem jednu stavku." });
 
-
-        var result = _service.Izracunaj(request);
+        TroskovnikResponse result;
+        try
+        {
+            result = _service.Izracunaj(request);
+        }
+        catch (TroskovnikValidationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
 
         // ═════════════════════════════════════════════════════════
         //  SECURITY: Validate CaseId ownership before linking

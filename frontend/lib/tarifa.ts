@@ -219,6 +219,48 @@ export function izracunajKazneneBodove(
   return clampBodovi(bodovi, def);
 }
 
+// ── Provjera zahtjeva ────────────────────────────────────────────
+
+export interface ProvjeraUlaza {
+  zaprijecenaKazna?: string;
+  isOduzimanjePrekrsaj: boolean;
+  vrijednostOduzimanja: number;
+}
+
+/**
+ * Vraća poruke o onome što nedostaje da se troškovnik može valjano izračunati.
+ * Zrcali provjere iz `TroskovnikService.Izracunaj` — sučelje ne smije prikazati
+ * redak s 0 bodova ni tiho izostaviti odabranu stavku.
+ */
+export function provjeriZahtjev(
+  odabraneStavke: TarifnaStavka[],
+  ulaz: ProvjeraUlaza,
+): string[] {
+  const greske: string[] = [];
+
+  const trebaKazneniTier = odabraneStavke.some((s) => s.kazneni_base);
+  if (trebaKazneniTier) {
+    if (!ulaz.zaprijecenaKazna) {
+      greske.push(
+        "Odabrane su stavke iz kaznenog postupka, a nije odabrana zapriječena kazna. " +
+          "Tbr. 4. toč. 1 nagradu veže isključivo uz visinu zapriječene kazne.",
+      );
+    } else if (!(ulaz.zaprijecenaKazna in ZAPRIJECENA_KAZNA_TIERS)) {
+      greske.push(`Nepoznata zapriječena kazna: "${ulaz.zaprijecenaKazna}".`);
+    }
+  }
+
+  const imaOduzimanje = odabraneStavke.some((s) => s.prekrsaj_oduzimanje);
+  if (imaOduzimanje && ulaz.isOduzimanjePrekrsaj && ulaz.vrijednostOduzimanja <= 0) {
+    greske.push(
+      "Uključeno je oduzimanje predmeta, a nije unesena vrijednost oduzetog predmeta " +
+        "odnosno imovinske koristi (Tbr. 4. toč. 1 al. 8 → Tbr. 7. toč. 1).",
+    );
+  }
+
+  return greske;
+}
+
 // ── Novac ────────────────────────────────────────────────────────
 
 /**

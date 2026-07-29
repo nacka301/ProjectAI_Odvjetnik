@@ -45,6 +45,7 @@ import {
   objasnjenjePristojbe,
   odrediPristojbuOsnovu,
   povisenjeViseOsobaPostotak,
+  provjeriZahtjev,
   tbr71Bodovi,
   ukupnoBodovaZaStavku,
   zaokruziNovac,
@@ -367,6 +368,17 @@ function TroskovnikContent() {
   // Uredba NN 37/23, Poglavlje I. pokriva parnični i ovršni postupak.
   const pristojbaOsnova = odrediPristojbuOsnovu(odabraneDefinicije);
 
+  // Što nedostaje da se troškovnik može valjano izračunati — zrcali backend provjere.
+  const nedostaci = useMemo(
+    () =>
+      provjeriZahtjev(odabraneDefinicije, {
+        zaprijecenaKazna: zaprijecenaKazna || undefined,
+        isOduzimanjePrekrsaj,
+        vrijednostOduzimanja: parseFloat(vrijednostOduzimanja.replace(/\./g, "").replace(",", ".")) || 0,
+      }),
+    [odabraneDefinicije, zaprijecenaKazna, isOduzimanjePrekrsaj, vrijednostOduzimanja],
+  );
+
   // Resolved kazneni tier points
   const kazneniTierBodovi = zaprijecenaKazna
     ? (ZAPRIJECENA_KAZNA_TIERS[zaprijecenaKazna]?.bodovi ?? 0)
@@ -433,6 +445,10 @@ function TroskovnikContent() {
       } else {
         bodovi = izracunajBodove(def, baseBodovi);
       }
+
+      // Redak s 0 bodova izgleda kao valjan iznos, a nije — ne prikazuje se.
+      // Razlog stoji u `nedostaci`, iznad gumba za izračun.
+      if (bodovi <= 0) return;
 
       const ukupnoStavke = ukupnoBodovaZaStavku(def, bodovi, kol);
 
@@ -1505,10 +1521,20 @@ function TroskovnikContent() {
                 {/* Action buttons */}
                 {selectedItems.size > 0 && (
                   <div className="px-4 pb-4 space-y-2">
+                    {nedostaci.length > 0 && (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-1.5">
+                        {nedostaci.map((poruka) => (
+                          <p key={poruka} className="flex items-start gap-1.5 text-[11px] text-amber-800 leading-snug">
+                            <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                            <span>{poruka}</span>
+                          </p>
+                        ))}
+                      </div>
+                    )}
                     <CreditQuotaBadge quota={troskovnikQuota} loading={creditsLoading} className="mb-1" />
                     <button
                       onClick={handleCalculate}
-                      disabled={calculating || troskovnikQuota.exhausted}
+                      disabled={calculating || troskovnikQuota.exhausted || nedostaci.length > 0}
                       className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white text-sm font-semibold py-2.5 rounded-lg transition"
                     >
                       {calculating ? (
@@ -1521,7 +1547,7 @@ function TroskovnikContent() {
                     {userId && (
                       <button
                         onClick={handleSave}
-                        disabled={saving}
+                        disabled={saving || nedostaci.length > 0}
                         className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white text-sm font-semibold py-2.5 rounded-lg transition"
                       >
                         {saving ? (

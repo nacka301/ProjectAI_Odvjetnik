@@ -354,10 +354,21 @@ public sealed class TroskovnikService
         // U kaznenom se postupku sve veže na zapriječenu kaznu (Tbr. 4. toč. 1),
         // nikad na vrijednost predmeta spora. VPS je institut parničnog postupka,
         // pa se u kaznenom toku ne koristi ni za bodove ni za sudsku pristojbu.
-        var odabraneDefinicije = request.Stavke
-            .Select(s => catalogMap.TryGetValue(s.ItemId, out var def) ? def : null)
-            .OfType<TarifnaStavka>()
-            .ToList();
+        // Nepoznata stavka i nevaljana količina odbijaju se odmah — prije se takva
+        // stavka tiho preskakala i nestajala iz troškovnika bez ijedne poruke.
+        var odabraneDefinicije = new List<TarifnaStavka>();
+        foreach (var stavka in request.Stavke)
+        {
+            if (!catalogMap.TryGetValue(stavka.ItemId, out var def))
+                throw new TroskovnikValidationException(
+                    $"Nepoznata tarifna stavka: \"{stavka.ItemId}\". Nije pronađena u katalogu.");
+
+            if (stavka.Kolicina <= 0)
+                throw new TroskovnikValidationException(
+                    $"Stavka \"{def.Opis}\" ima količinu {stavka.Kolicina}. Količina mora biti veća od 0.");
+
+            odabraneDefinicije.Add(def);
+        }
 
         var isSamoKazneni = odabraneDefinicije.Count > 0
             && odabraneDefinicije.TrueForAll(d => d.Kategorija == KategorijaKazneni);
@@ -367,28 +378,43 @@ public sealed class TroskovnikService
         var vrijednostSpora = isSamoKazneni ? 0m : request.VrijednostSpora;
         var baseBodovi = Tbr71Bodovi(vrijednostSpora);
 
-        // Resolve kazneni tier points (0 if not set or invalid)
+        // ── Zapriječena kazna (Tbr. 4. toč. 1) ──
+        // Kaznene stavke nemaju osnovicu bez nje, pa se traži samo kad je stvarno treba.
+        var trebaKazneniTier = odabraneDefinicije.Exists(d => d.KazneniBase);
         int kazneniTierBodovi = 0;
-        if (!string.IsNullOrEmpty(request.ZaprijecenaKazna) &&
-            ZaprijecenaKaznaTiers.Bodovi.TryGetValue(request.ZaprijecenaKazna, out var tierPts))
+
+        if (trebaKazneniTier)
         {
+            if (string.IsNullOrWhiteSpace(request.ZaprijecenaKazna))
+                throw new TroskovnikValidationException(
+                    "Odabrane su stavke iz kaznenog postupka, a nije odabrana zapriječena kazna. " +
+                    "Tbr. 4. toč. 1 nagradu veže isključivo uz visinu zapriječene kazne.");
+
+            if (!ZaprijecenaKaznaTiers.Bodovi.TryGetValue(request.ZaprijecenaKazna, out var tierPts))
+                throw new TroskovnikValidationException(
+                    $"Nepoznata zapriječena kazna: \"{request.ZaprijecenaKazna}\". " +
+                    $"Dopuštene vrijednosti: {string.Join(", ", ZaprijecenaKaznaTiers.Bodovi.Keys)}.");
+
             kazneniTierBodovi = tierPts;
         }
 
         foreach (var stavka in request.Stavke)
         {
-            if (!catalogMap.TryGetValue(stavka.ItemId, out var def))
-                continue;
-            if (stavka.Kolicina <= 0)
-                continue;
+            var def = catalogMap[stavka.ItemId];
 
             decimal bodovi;
             if (def.PrekrsajOduzimanje)
             {
-                // Tbr. 4. toč. 1 al. 8 — prekršaj s oduzimanjem ide po Tbr. 7. toč. 1
-                // prema vrijednosti oduzetog predmeta odnosno imovinske koristi.
-                if (request.IsOduzimanjePrekrsaj && request.VrijednostOduzimanja > 0)
+                if (request.IsOduzimanjePrekrsaj)
                 {
+                    // Tbr. 4. toč. 1 al. 8 — prekršaj s oduzimanjem ide po Tbr. 7. toč. 1
+                    // prema vrijednosti oduzetog predmeta odnosno imovinske koristi.
+                    if (request.VrijednostOduzimanja <= 0)
+                        throw new TroskovnikValidationException(
+                            "Uključeno je oduzimanje predmeta, a nije unesena vrijednost oduzetog " +
+                            "predmeta odnosno imovinske koristi. Tbr. 4. toč. 1 al. 8 nagradu veže " +
+                            "uz tu vrijednost po Tbr. 7. toč. 1.");
+
                     bodovi = Tbr71Bodovi(request.VrijednostOduzimanja);
                 }
                 else
@@ -405,6 +431,13 @@ public sealed class TroskovnikService
             {
                 bodovi = IzracunajBodove(def, baseBodovi);
             }
+
+            // Zaštitna mreža: nijedna stavka ne smije završiti na nula bodova.
+            // Nula je u troškovniku neupotrebljiva — izgleda kao valjan iznos, a nije.
+            if (bodovi <= 0)
+                throw new TroskovnikValidationException(
+                    $"Stavka \"{def.Opis}\" ({def.TarifniBroj}) daje 0 bodova. " +
+                    "Provjerite unesene parametre predmeta.");
 
             rbr++;
 
