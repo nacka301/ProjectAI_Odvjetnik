@@ -124,8 +124,25 @@ public sealed class TroskovnikService
         // II. PARNIČNI POSTUPAK
         // ═══════════════════════════════════════════════════════════
         new() { Id = "par_tuzba", Kategorija = "Parnični postupak", Opis = "Tužba / protutužba / prijedlog (Tbr. 7.1)", TarifniBroj = "Tbr. 7.1", Tbr71Postotak = 1.0m, SortOrder = 200, Jedinica = "komad" },
-        new() { Id = "par_tuzba_smetanje", Kategorija = "Parnični postupak", Opis = "Tužba – smetanje posjeda / služnost / stambeni / radni spor (Tbr. 7.2)", TarifniBroj = "Tbr. 7.2", FiksniBody = 250, SortOrder = 201, Jedinica = "komad" },
-        new() { Id = "par_tuzba_obiteljski", Kategorija = "Parnični postupak", Opis = "Tužba – razvod / očinstvo / uzdržavanje (Tbr. 7.3)", TarifniBroj = "Tbr. 7.3", FiksniBody = 200, SortOrder = 202, Jedinica = "komad" },
+        // ── Tbr. 7. toč. 2 — jednokratna nagrada od 250 bodova ──
+        // "Odvjetniku pripada jednokratna nagrada u visini od 250 bodova, koja obuhvaća
+        //  najviše do četiri radnje za svaki prvostupanjski postupak, i to u sljedećim
+        //  postupcima: - radi smetanja posjeda, - radi služnosti, - iz stambenih odnosa
+        //  (otkazi, iseljenja, utvrđenja), - iz radnih odnosa (poništenje otkaza,
+        //  utvrđivanje prava na rad i sl.), OSIM u procjenjivim predmetima na koje se
+        //  primjenjuje Tbr. 7. toč. 1.
+        //  Za svaku daljnju radnju u navedenim postupcima odvjetniku pripada nagrada
+        //  u visini od 50 bodova."
+        new() { Id = "par_tuzba_smetanje", Kategorija = "Parnični postupak", Opis = "Tužba – smetanje posjeda / služnost / stambeni / radni spor (Tbr. 7.2) – jednokratno 250 bod. za do 4 radnje; radni sporovi s procjenjivom vrijednošću idu po Tbr. 7. toč. 1", TarifniBroj = "Tbr. 7.2", FiksniBody = 250, JednokratnaNagrada = true, UkljuceneRadnje = 4, DaljnjaRadnjaBodovi = 50, SortOrder = 201, Jedinica = "radnja" },
+
+        // ── Tbr. 7. toč. 3 — jednokratna nagrada od 200 bodova ──
+        // "Odvjetniku pripada jednokratna nagrada u visini od 200 bodova, koja obuhvaća
+        //  najviše do četiri radnje za svaki prvostupanjski postupak, i to u sljedećim
+        //  postupcima: - radi razvoda ili poništenja braka, o postojanju ili nepostojanju
+        //  braka, - za utvrđivanje ili osporavanje očinstva, te o tome s kime će živjeti
+        //  maloljetna djeca, - za zakonsko uzdržavanje ili dokidanje obveze uzdržavanja.
+        //  Za svaku daljnju radnju (...) nagrada u visini od 50 bodova."
+        new() { Id = "par_tuzba_obiteljski", Kategorija = "Parnični postupak", Opis = "Tužba – razvod / poništenje braka / očinstvo / s kime žive djeca / uzdržavanje (Tbr. 7.3) – jednokratno 200 bod. za do 4 radnje", TarifniBroj = "Tbr. 7.3", FiksniBody = 200, JednokratnaNagrada = true, UkljuceneRadnje = 4, DaljnjaRadnjaBodovi = 50, SortOrder = 202, Jedinica = "radnja" },
         new() { Id = "par_tuzba_platni_nalog", Kategorija = "Parnični postupak", Opis = "Tužba za platni nalog (Tbr. 7.5) – 50% Tbr. 7.1, max 100", TarifniBroj = "Tbr. 7.5", Tbr71Postotak = 0.5m, MaxBodova = 100, SortOrder = 205, Jedinica = "komad" },
         new() { Id = "par_tuzba_arbitraza", Kategorija = "Parnični postupak", Opis = "Tužba pred domaćom arbitražom (Tbr. 7.7)", TarifniBroj = "Tbr. 7.7", Tbr71Postotak = 1.0m, SortOrder = 207, Jedinica = "komad" },
         new() { Id = "par_tuzba_med_arbitraza", Kategorija = "Parnični postupak", Opis = "Tužba pred međunarodnom arbitražom (Tbr. 7.7) – +100%", TarifniBroj = "Tbr. 7.7", Tbr71Postotak = 1.0m, Tbr71Povecanje = 1.0m, SortOrder = 208, Jedinica = "komad" },
@@ -299,6 +316,8 @@ public sealed class TroskovnikService
 
             rbr++;
 
+            var ukupnoStavke = UkupnoBodovaZaStavku(def, bodovi, stavka.Kolicina);
+
             lines.Add(new TroskovnikLineItem
             {
                 Rbr = rbr,
@@ -307,8 +326,9 @@ public sealed class TroskovnikService
                 TarifniBroj = def.TarifniBroj,
                 Kolicina = stavka.Kolicina,
                 BodovaPoJedinici = bodovi,
-                UkupnoBodova = bodovi * stavka.Kolicina,
-                IznosEur = bodovi * stavka.Kolicina * TarifaConstants.BodValue
+                UkupnoBodova = ukupnoStavke,
+                IznosEur = ukupnoStavke * TarifaConstants.BodValue,
+                IsJednokratna = def.JednokratnaNagrada
             });
         }
 
@@ -363,6 +383,32 @@ public sealed class TroskovnikService
             IsOslobodjenPristojbi = request.IsOslobodjenPristojbi,
             SveukupniTrosak = sveukupniTrosak
         };
+    }
+
+    // ── Ukupno bodova za jednu stavku troškovnika ─────────────────
+
+    /// <summary>
+    /// Za obične stavke: osnovica × količina.
+    ///
+    /// Za jednokratne nagrade (Tbr. 7. toč. 2 i 3, Tbr. 8. toč. 1) osnovica pokriva
+    /// cijeli prvostupanjski postupak i NE množi se količinom. Ako tarifni broj
+    /// propisuje naknadu za daljnje radnje ("Za svaku daljnju radnju... 50 bodova"),
+    /// dodaje se samo za radnje preko uključenog broja.
+    /// </summary>
+    private static int UkupnoBodovaZaStavku(TarifnaStavka def, int bodovi, int kolicina)
+    {
+        if (!def.JednokratnaNagrada)
+            return bodovi * kolicina;
+
+        var ukupno = bodovi;
+
+        if (def.UkljuceneRadnje.HasValue && def.DaljnjaRadnjaBodovi.HasValue)
+        {
+            var daljnjeRadnje = Math.Max(0, kolicina - def.UkljuceneRadnje.Value);
+            ukupno += daljnjeRadnje * def.DaljnjaRadnjaBodovi.Value;
+        }
+
+        return ukupno;
     }
 
     // ── Point calculation for a single item ───────────────────────

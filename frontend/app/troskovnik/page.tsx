@@ -40,6 +40,7 @@ import {
   izracunajKazneneBodove,
   izracunajSudskuPristojbu,
   tbr71Bodovi,
+  ukupnoBodovaZaStavku,
   type TarifnaStavka,
 } from "@/lib/tarifa";
 
@@ -59,6 +60,8 @@ interface TroskovnikLineItem {
   bodova_po_jedinici: number;
   ukupno_bodova: number;
   iznos_eur: number;
+  /** Tbr. 7. toč. 2 i 3, Tbr. 8. toč. 1 — ukupno ≠ bodova_po_jedinici × kolicina. */
+  is_jednokratna?: boolean;
 }
 
 interface TroskovnikResponse {
@@ -386,6 +389,7 @@ function TroskovnikContent() {
       ukupno_bodova: number;
       iznos_eur: number;
       jedinica: string;
+      is_jednokratna: boolean;
     }[] = [];
     const catalogMap = new Map(katalog.map((s) => [s.id, s]));
 
@@ -407,14 +411,17 @@ function TroskovnikContent() {
         bodovi = izracunajBodove(def, baseBodovi);
       }
 
+      const ukupnoStavke = ukupnoBodovaZaStavku(def, bodovi, kol);
+
       lines.push({
         opis: def.opis,
         tarifni_broj: def.tarifni_broj,
         kolicina: kol,
         bodova_po_jedinici: bodovi,
-        ukupno_bodova: bodovi * kol,
-        iznos_eur: bodovi * kol * BOD_VALUE,
+        ukupno_bodova: ukupnoStavke,
+        iznos_eur: ukupnoStavke * BOD_VALUE,
         jedinica: def.jedinica,
+        is_jednokratna: def.jednokratna_nagrada === true,
       });
     });
 
@@ -968,6 +975,13 @@ function TroskovnikContent() {
                                     {isOduzimanjePrekrsaj ? "↔ Tbr. 7.1 oduzimanje" : "100 bod. (prekršaj)"}
                                   </span>
                                 )}
+                                {item.jednokratna_nagrada && (
+                                  <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
+                                    {item.ukljucene_radnje && item.daljnja_radnja_bodovi
+                                      ? `jednokratno · do ${item.ukljucene_radnje} radnje, dalje +${item.daljnja_radnja_bodovi} bod.`
+                                      : "jednokratno"}
+                                  </span>
+                                )}
                                 <span className="text-[10px] text-indigo-600 font-semibold">
                                   {item.kazneni_base && !zaprijecenaKazna
                                     ? "— odaberi kaznu —"
@@ -1301,7 +1315,9 @@ function TroskovnikContent() {
                               {line.opis}
                             </p>
                             <p className="text-[10px] text-slate-400 mt-0.5">
-                              {line.kolicina} × {fmtNum(line.bodova_po_jedinici)} bod.
+                              {line.is_jednokratna
+                                ? `jednokratno ${fmtNum(line.bodova_po_jedinici)} bod. za ${line.kolicina} radnji = ${fmtNum(line.ukupno_bodova)} bod.`
+                                : `${line.kolicina} × ${fmtNum(line.bodova_po_jedinici)} bod.`}
                             </p>
                           </div>
                           <span className="text-xs font-semibold text-slate-800 shrink-0">
@@ -1637,7 +1653,12 @@ function TroskovnikContent() {
                     {result.stavke.map((line) => (
                       <tr key={line.rbr} className="border-b border-slate-100 hover:bg-slate-50">
                         <td className="py-2 px-2 text-slate-400">{line.rbr}.</td>
-                        <td className="py-2 px-2 text-slate-800">{line.opis}</td>
+                        <td className="py-2 px-2 text-slate-800">
+                          {line.opis}
+                          {line.is_jednokratna && (
+                            <span className="ml-1.5 text-[10px] font-semibold text-emerald-700">(jednokratna nagrada)</span>
+                          )}
+                        </td>
                         <td className="py-2 px-2 text-slate-500 font-mono text-xs">{line.tarifni_broj}</td>
                         <td className="py-2 px-2 text-center text-slate-600">{line.kolicina}</td>
                         <td className="py-2 px-2 text-right text-slate-600">{fmtNum(line.bodova_po_jedinici)}</td>

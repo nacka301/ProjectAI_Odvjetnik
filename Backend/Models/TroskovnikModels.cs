@@ -332,6 +332,14 @@ public sealed class TroskovnikLineItem
 
     [JsonPropertyName("iznos_eur")]
     public decimal IznosEur { get; set; }
+
+    /// <summary>
+    /// True kad je nagrada jednokratna (Tbr. 7. toč. 2 i 3, Tbr. 8. toč. 1), pa
+    /// <see cref="UkupnoBodova"/> NIJE <see cref="BodovaPoJedinici"/> × <see cref="Kolicina"/>.
+    /// Sučelje o tome mora obavijestiti korisnika.
+    /// </summary>
+    [JsonPropertyName("is_jednokratna")]
+    public bool IsJednokratna { get; set; }
 }
 
 // ── Catalog item definition ──────────────────────────────────
@@ -389,4 +397,22 @@ public sealed class TarifnaStavka
     /// <summary>True = prekršajni stavka s mogućnošću oduzimanja; kad je oduzimanje aktivno, koristi Tbr. 7.1 po vrijednosti.</summary>
     [JsonPropertyName("prekrsaj_oduzimanje")]
     public bool PrekrsajOduzimanje { get; set; }
+
+    // ── Jednokratna nagrada (Tbr. 7. toč. 2 i 3, Tbr. 8. toč. 1) ──
+    //
+    // Tarifa na više mjesta propisuje JEDNU nagradu za cijeli prvostupanjski
+    // postupak, neovisno o broju obavljenih radnji. Takve se stavke ne množe
+    // količinom; količina samo određuje koliko radnji prelazi uključeni broj.
+
+    /// <summary>True = jedna nagrada za cijeli postupak, ne množi se količinom.</summary>
+    [JsonPropertyName("jednokratna_nagrada")]
+    public bool JednokratnaNagrada { get; set; }
+
+    /// <summary>Koliko je radnji obuhvaćeno osnovicom (Tbr. 7. toč. 2 i 3: "najviše do četiri radnje").</summary>
+    [JsonPropertyName("ukljucene_radnje")]
+    public int? UkljuceneRadnje { get; set; }
+
+    /// <summary>Bodovi za svaku radnju preko <see cref="UkljuceneRadnje"/> ("Za svaku daljnju radnju... 50 bodova").</summary>
+    [JsonPropertyName("daljnja_radnja_bodovi")]
+    public int? DaljnjaRadnjaBodovi { get; set; }
 }

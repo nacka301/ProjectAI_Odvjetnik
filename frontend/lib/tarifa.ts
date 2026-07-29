@@ -37,6 +37,12 @@ export interface TarifnaStavka {
   kazneni_base: boolean;
   kazneni_povecanje: number | null;
   prekrsaj_oduzimanje: boolean;
+  /** Tbr. 7. toč. 2 i 3, Tbr. 8. toč. 1 — jedna nagrada za cijeli postupak. */
+  jednokratna_nagrada?: boolean;
+  /** Koliko je radnji obuhvaćeno osnovicom ("najviše do četiri radnje"). */
+  ukljucene_radnje?: number | null;
+  /** Bodovi za svaku radnju preko uključenog broja ("Za svaku daljnju radnju... 50 bodova"). */
+  daljnja_radnja_bodovi?: number | null;
 }
 
 // ── Tbr. 7. toč. 1 — osnovna tablica bodova po VPS-u ─────────────
@@ -142,6 +148,37 @@ export function izracunajKazneneBodove(
   }
 
   return clampBodovi(bodovi, def);
+}
+
+// ── Ukupno bodova za jednu stavku troškovnika ────────────────────
+
+/**
+ * Za obične stavke: osnovica × količina.
+ *
+ * Za jednokratne nagrade (Tbr. 7. toč. 2 i 3, Tbr. 8. toč. 1) osnovica pokriva
+ * cijeli prvostupanjski postupak i NE množi se količinom; dodaje se samo naknada
+ * za radnje preko uključenog broja.
+ */
+export function ukupnoBodovaZaStavku(
+  def: TarifnaStavka,
+  bodovi: number,
+  kolicina: number,
+): number {
+  if (!def.jednokratna_nagrada) return bodovi * kolicina;
+
+  let ukupno = bodovi;
+
+  if (
+    def.ukljucene_radnje !== null &&
+    def.ukljucene_radnje !== undefined &&
+    def.daljnja_radnja_bodovi !== null &&
+    def.daljnja_radnja_bodovi !== undefined
+  ) {
+    const daljnjeRadnje = Math.max(0, kolicina - def.ukljucene_radnje);
+    ukupno += daljnjeRadnje * def.daljnja_radnja_bodovi;
+  }
+
+  return ukupno;
 }
 
 // ── Sudske pristojbe (Uredba NN 37/2023) ─────────────────────────
