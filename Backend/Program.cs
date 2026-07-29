@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
+using Backend.Extensions;
 using Backend.Middleware;
 using Backend.Models;
 using Backend.Services;
@@ -155,65 +156,14 @@ var fastModel = builder.Configuration["OpenRouter:FastModel"] ?? "openai/gpt-4o-
 var heavyModel = builder.Configuration["OpenRouter:HeavyModel"] ?? "deepseek/deepseek-chat-v3-0324";
 var reasoningModel = builder.Configuration["OpenRouter:ReasoningModel"] ?? "deepseek/deepseek-chat-v3-0324";
 builder.Services.AddSingleton(new ChatClientProvider(openRouterKey, baseUrl, fastModel, heavyModel, reasoningModel));
-builder.Services.AddScoped<PdfService>();
-builder.Services.AddScoped<IValuationService, ValuationService>();
-builder.Services.AddScoped<ITextAnalysisService, TextAnalysisService>();
-builder.Services.AddScoped<IValuationAgentService, ValuationAgentService>();
-builder.Services.AddScoped<IContractAnalysisService, ContractAnalysisService>();
-builder.Services.AddScoped<ChronologyService>();
-builder.Services.AddScoped<ValuationEngine>();
-builder.Services.AddScoped<IZkParsingService, ZkParsingService>();
-builder.Services.AddScoped<ILegalIntelligenceService, LegalIntelligenceService>();
-builder.Services.AddSingleton<NormValidityService>();
-builder.Services.AddScoped<InvoiceService>();
-builder.Services.AddScoped<ITranslationService, TranslationService>();
-builder.Services.AddHttpClient<EmailService>();
 
-// ── Resend transactional email (MailKit SMTP → smtp.resend.com:465) ──
-builder.Services.AddSingleton<IEmailService, ResendEmailService>();
-
-// ── Auth registration (MailKit email + Supabase Admin API) ──
+// ── SMTP postavke (čita ih AuthEmailService preko IOptions) ──
 builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection(SmtpSettings.SectionName));
-builder.Services.AddSingleton<IAuthEmailService, AuthEmailService>();
-builder.Services.AddHttpClient<AuthService>();
 
-// ── Audit logging (GDPR-safe, fire-and-forget) ──
-builder.Services.AddHttpClient<AuditLogService>();
-builder.Services.AddScoped<IAuditLogService>(sp => sp.GetRequiredService<AuditLogService>());
-
-// ── Tenant resolution (user → law_firm, cached 5 min) ──
-builder.Services.AddHttpClient<TenantResolver>();
-builder.Services.AddScoped<ITenantResolver>(sp => sp.GetRequiredService<TenantResolver>());
-builder.Services.AddHttpClient<EmbeddingService>(client =>
-{
-    client.Timeout = TimeSpan.FromMinutes(2);
-});
-builder.Services.AddHttpClient<LawRAGService>(client =>
-{
-    client.Timeout = TimeSpan.FromMinutes(3);
-});
-builder.Services.AddHttpClient<MarketResearchService>(client =>
-{
-    // V20d: Increased timeout — deep dive of 20+ listings can take 60-120s total
-    client.Timeout = TimeSpan.FromMinutes(5);
-});
-builder.Services.AddHttpClient<SupabaseService>();
-builder.Services.AddHttpClient<TwoFactorService>();
-builder.Services.AddHttpClient<SettingsService>();
-builder.Services.AddHttpClient<CreditService>();
-builder.Services.AddHttpClient<UsageService>();
-builder.Services.AddHttpClient<ClientCaseService>();
-
-// ── DataSeeder (admin-only, uses ClientCaseService) ──
-builder.Services.AddScoped<DataSeederService>();
-builder.Services.AddHttpClient<PerplexityAuditService>(client =>
-{
-    client.Timeout = TimeSpan.FromMinutes(2);
-});
-builder.Services.AddHttpClient<PerplexityTestValidationService>(client =>
-{
-    client.Timeout = TimeSpan.FromMinutes(3);
-});
+// ── Svi domenski servisi ──
+// Registracije žive u Backend.Extensions.DomainServiceCollectionExtensions kako bi ih
+// Backend.Tests.DependencyInjectionTests mogao provjeriti bez pokretanja hosta.
+builder.Services.AddDomainServices();
 
 var app = builder.Build();
 
