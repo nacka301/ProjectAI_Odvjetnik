@@ -1,6 +1,6 @@
 # Popravci odvjetničke tarife i sudskih pristojbi
 
-Grana: `claude/audit-tarifa-fixes-9e61a6` · 16 commitova · 29. srpnja 2026.
+Grana: `claude/audit-tarifa-fixes-9e61a6` · 20 commitova · 29. srpnja 2026.
 
 Mjerodavno:
 
@@ -19,8 +19,8 @@ Mjerodavno:
 Stanje testova nakon svih popravaka:
 
 ```
-dotnet test Backend.Tests/Backend.Tests.csproj   →  1347 prolaza, 0 padova
-cd frontend && npx vitest run __tests__/tarifa   →   123 prolaza, 0 padova
+dotnet test Backend.Tests/Backend.Tests.csproj   →  1433 prolaza, 0 padova
+cd frontend && npx vitest run __tests__/tarifa   →   130 prolaza, 0 padova
 ```
 
 ---
@@ -395,6 +395,170 @@ Ista parnica uz zastupanje tri osobe (Tbr. 40, +20 %) → 2.550 bodova = 5.100,0
 3. **Ostali kontroleri iz commita `c04aeeb`.** Commit 0 popravio je DI za sve kontrolere,
    ali njihovu poslovnu logiku nisam dirao ni provjeravao.
 
+## 15. Dopune kaznenog dijela (`244b47a`, `064bc42`, `321871d`)
+
+Drugi krug, nakon što je odvjetnica pregledala aplikaciju i prijavila da u kaznenom
+dijelu nedostaju cijeli tarifni brojevi.
+
+### Što je provjereno u pročišćenom tekstu
+
+Pročitao sam Tbr. 1, 2, 3 i 4 u cijelosti prije ijedne izmjene. **Prijava je bila
+djelomično netočna:**
+
+| prijavljeno | stvarno stanje |
+|---|---|
+| Tbr. 1 toč. 2 i 3 nedostaju | **postoje** — `kaz_podnesak_obrana`, `kaz_zahtjev_ostecenik`, obje vezane na Tbr. 4. toč. 1 |
+| Tbr. 2 potpuno nedostaje | **postoji u cijelosti** — sva četiri točke, iznosi 100 / 50 / po Tbr. 4.1 / 50 poklapaju se s PDF-om |
+| Tbr. 3 potpuno nedostaje | toč. 1, 3 i 4 **postoje**; nedostajala je samo toč. 2 |
+| "sve stavke iz Tbr. 1 vezane su na Tbr. 4. toč. 1" | **netočno** — toč. 4 je fiksnih 75 bodova, toč. 5 fiksnih 50; katalog je to imao ispravno |
+
+### Sedam odredaba koje su stvarno nedostajale
+
+| Tbr. | ID | nagrada | ručni izračun iz testa |
+|---|---|---|---|
+| 3. toč. 2 | `kaz_istraga_izvan_sjedista` | nagrada iz toč. 1 **+ naknada po Tbr. 49** | do 5 god. → 200 bod. = 400,00 € |
+| 4. toč. 2 al. 4 | `kaz_sjednica_izvanredni` | kao obrana pred sudom drugog stupnja | do 5 god.: 200 × 1,25 = **250 bod.** = 500,00 € |
+| 4. toč. 3 | `kaz_maloljetnik` | kao obrana po toč. 1 | do 10 god. → 300 bod. = 600,00 € |
+| 4. toč. 4 | `kaz_obustava_odgoda` | 50 % nagrade iz toč. 1 | do 10 god.: 50 % od 300 = **150 bod.** = 300,00 € |
+| 4. toč. 5 | `kaz_pritvor_dodatni_sat` | 50 bodova po svakom sljedećem započetom satu | 2 sata × 50 = **100 bod.** = 200,00 € |
+| 4. toč. 6 | `kaz_ocevid_izvan_zgrade` | nagrada iz toč. 1 **+ Tbr. 49** | dugotrajni → 500 bod. = 1.000,00 € |
+| 4. toč. 8 | `kaz_zastupanje_ostecenika` | 50 % nagrade iz Tbr. 4 | preko 10 god.: 50 % od 400 = **200 bod.** = 400,00 € |
+
+Testovi: `TarifaTbr3Tests` (12) · `TarifaTbr4DopuneTests` (33), uključujući dvije
+theory koje provjeravaju da svaka točka Tbr. 4 i svaka alineja toč. 1 ima stavku.
+
+**Tbr. 49 nije bodovna nagrada** nego naknada stvarnih putnih troškova. Stavke koje
+ga spominju to kažu u opisu i u `pravniIzvor`; iznos se obračunava zasebno i namjerno
+nije sveden na bodove.
+
+### Jedan izmišljen broj uklonjen
+
+`kaz_privatna_tuzba` nosio je `MinBodova = 100`. Tbr. 1. toč. 1 glasi samo *"odvjetniku
+pripada nagrada po Tbr. 4. toč. 1."* — nikakav minimum se ne spominje. Taj je clamp
+poništavao umanjenje od 50 % za branitelja po službenoj dužnosti: 100 × 0,50 = 50, pa
+natrag na 100.
+
+Testovi: `TarifaTbr1Tests` (8). Privatna tužba po službenoj dužnosti, novčana kazna →
+**50 bodova**, prije 100.
+
+### Stjecaj — odstupanje od zadatka
+
+Zadatak je tražio da *"korisnik ručno unosi broj radnji"*. **Tarifa to ne poznaje.**
+Tbr. 4. toč. 1 al. 6 glasi:
+
+> *"za kaznena djela u stjecaju i za produljena kaznena djela nagrada se određuje
+> sukladno rasponima iz alineja od 1. do 5. ovog tarifnog broja, pri čemu se kao
+> predviđena kazna smatra najteža kazna koja se u postupku može izreći (…)"*
+
+Alineja ne uvodi ni množitelj ni broj radnji — određuje samo **koji se razred uzima**.
+Nagrada ostaje jedna. Uvođenje "broja radnji" značilo bi izmišljanje broja, što je
+zadatak izričito zabranio.
+
+Implementirano po tekstu: zastavica ne mijenja izračun, ali sada putuje u odgovor s
+obrazloženjem (`napomena_stjecaj`) koje se ispisuje na troškovniku — pa se vidi zašto
+je odabran razred koji ne odgovara pojedinačnom djelu. Sučelje je uputu već imalo.
+
+Testovi: `TarifaStjecajTests` (7), uključujući tvrdnju da stjecaj **ne množi** nagradu.
+
+### PDV — potvrđeno, već je postojalo
+
+`is_pdv_ukljucen` postoji, zadana vrijednost je **isključen** (odvjetnik izvan sustava
+PDV-a), uz stariji `has_vat` kao rezervu. Zaključano s `TarifaPdvTests` (7):
+nagrada 1.000,00 € → s PDV-om 1.250,00 €, bez PDV-a 1.000,00 €; sveukupno izvan sustava
+PDV-a 1.546,45 € (nagrada + pristojba).
+
+### Tablica razreda
+
+Sučelje i ispis prikazivali su `0 – 332,00` pa `332,00 – 664,00` — 332,00 je izgledalo
+kao da pripada u oba razreda. Progresivni razredi bili su svedeni na `500+` i `4.991+`.
+
+Sada stoji točno kako Tarifa piše:
+
+```
+0,00 – 332,00                    25
+332,01 – 664,00                  50
+664,01 – 1.327,00                75
+1.327,01 – 13.272,00             100
+13.272,01 – 33.181,00            250
+33.181,01 – 66.361,00            500
+66.361,01 – 663.614,00           500 + 1 bod / započetih 133,00 €
+663.614,01 – 1.327.228,00        4.991 + 1 bod / započetih 265,00 €
+iznad 1.327.228,00               7.496 + 1 bod / započetih 664,00 €, najviše 10.000
+```
+
+Testovi: `TarifaTablicaPrikazTests` (7) · `__tests__/tarifa-tablica-prikaz.test.ts` —
+svaka donja granica je točno cent iznad prethodne gornje, a prikazane granice daju
+bodove koje motor doista računa.
+
+---
+
+## Što još nije pokriveno
+
+Sustavna usporedba kataloga s Tbr. 1–54 iz pročišćenog teksta.
+
+### Kazneni i prekršajni postupak — pokriven u cijelosti
+
+Tbr. 1 do Tbr. 6 sada nemaju neimplementiranih odredaba. Jedina iznimka je
+**Tbr. 4. toč. 7** (branitelj po službenoj dužnosti), koja nije stavka nego zastavica
+zahtjeva i upućuje na Pravilnik NN 22/2022 br. 271 — vidi odjeljak 11.
+
+### Parnični postupak — nedostaju pojedine točke
+
+| Tbr. | odredba |
+|---|---|
+| 7. toč. 4 | autorsko pravo i industrijsko vlasništvo (Tbr. 7.1, ne manje od 100 bodova); renta, zakup i najam — kao VPS uzima se **petogodišnji iznos** |
+| 7. toč. 6 | mjenični, čekovni i platni nalozi na temelju drugih vrijednosnih papira |
+| 7. toč. 8 | zastupanje u postupcima mirnog rješavanja sporova |
+| 7. toč. 9 | VPS manji od 100,00 € → jednokratno **50 bodova** za cijeli prvostupanjski postupak |
+| 7. toč. 10 | obiteljski sporovi s međunarodnim elementom (Haška konvencija i dr.) → **250 bodova** |
+| 8. toč. 2 | prijedlog za povrat u prijašnje stanje → 50 % iz toč. 1, najviše 100 bodova |
+| 9. toč. 4 | ročište pred arbitražom |
+| 9. toč. 6 | rasprava pred sudom drugog stupnja |
+| 9. toč. 8 | zastupanje u postupcima po Haškoj konvenciji |
+| 10. toč. 2 | redovni pravni lijekovi u parnicama iz Tbr. 7. toč. 2 i 3 |
+| 10. toč. 3 | redovni pravni lijekovi u parnicama iz Tbr. 7. toč. 9 → **100 bodova** |
+
+### Tarifni brojevi kojih uopće nema u katalogu
+
+| Tbr. | sadržaj | napomena |
+|---|---|---|
+| 23 | zastupanje u ispitnom postupku, osiguranju dokaza, na usmenoj raspravi i očevidu u prvostupanjskom upravnom postupku | nagrada iz Tbr. 22 + naknada po Tbr. 39 |
+| 25 | žalba u postupcima javne nabave | **UKINUT** presudom Visokog upravnog suda RH Usoz-55/2024-21 od 18. srpnja 2025. — ne smije se implementirati |
+| 26 | izvlaštenje | |
+| 29 | tužba na poništaj upisa u registar | Tbr. 7. toč. 1, ne manje od 100 bodova; za druge registre po Tbr. 27 |
+| 38 | nagrada za utrošeni sat kad nije drukčije određeno | **25 bodova** |
+| 41 | povišenje do **100 %** za posebno stručno i specijalističko znanje, osobitu težinu predmeta ili posebnu odgovornost | jedini preostali modifikator osnovice uz Tbr. 40 |
+| 42 | paušalni ugovor o pružanju pravne pomoći | |
+| 43 | ugovorena nagrada | ne obvezuje sud pri dosuđivanju troška |
+| 44 | pravna pomoć u inozemstvu | po tarifi zemlje zastupanja |
+| 45 | neprocjenjivi predmeti koje Tarifa ne predviđa | općinski sud **100**, županijski i trgovački **200**, Vrhovni sud **500** bodova po radnji |
+| 46 | PDV | implementirano kao zastavica, nije zasebna stavka |
+| 47 | pisani obračun nagrade na zahtjev stranke | |
+| 48 | stvarni izdaci (poštanski, telekomunikacijski i dr.) | |
+| 49, 50, 51 | putni troškovi, prijevoz, dnevnica i hotelski smještaj | Tbr. 49 se spominje u opisima stavaka Tbr. 3.2, 3.4 i 4.6, ali se ne obračunava |
+| 52 | mjerodavna tarifa i vrijednost boda u trenutku dospijeća | |
+| 53 | donositelj Tarife | nema računskog učinka |
+| 54 | vrijednost boda | implementirano kao konstanta `BodValue = 2,00 €` |
+
+**Najveći preostali propust je Tbr. 41** — povišenje do 100 % mijenja iznos jednako
+kao Tbr. 40, a Tbr. 40 je već implementiran kao globalni modifikator osnovice, pa bi
+se Tbr. 41 uklopio na isto mjesto.
+
+**Tbr. 45** je drugi po važnosti: pokriva svaki neprocjenjivi predmet koji Tarifa
+posebno ne predviđa, a sada takvi predmeti padaju na dno tablice iz Tbr. 7. toč. 1
+(25 bodova) umjesto na 100 / 200 / 500 prema razini suda.
+
+### Jedno tumačenje, ne doslovan citat
+
+Tbr. 4. toč. 2 al. 4 kaže *"nagrada kao za obranu pred sudom drugog stupnja"*, ne
+navodeći postotak. Uzeo sam da je taj pojam definiran u al. 3 (toč. 1 + 25 %, kod
+dugotrajnog zatvora + 50 %), jer je al. 3 jedina alineja koja nagradu pripisuje
+obrani pred drugim stupnjem — dok al. 2 sjednicu vijeća drugog stupnja izjednačuje s
+prvim stupnjem. Drugo bi čitanje dalo nagradu bez povišenja. Zabilježeno je u
+komentaru uz stavku; ako odvjetnica smatra suprotno, izmjena je jedan broj.
+
+---
+
 ## Kako provjeriti rukom
 
 ```bash
@@ -415,3 +579,9 @@ U pokrenutoj aplikaciji, na `/troskovnik`:
 5. VPS 1.000 €, "Pravni lijek u izvanparnici" → **46,875 bod. = 93,75 €**
 6. broj zastupanih osoba 8 → povišenje **+50 %**, ne +70 %
 7. svaka stavka i svaki redak troškovnika prikazuju pravni izvor
+8. tablica bodova u desnom stupcu → `0,00 – 332,00` pa `332,01 – 664,00`, bez
+   preklapanja, a progresivni razredi pišu formulu iz Tarife
+9. "Sjednica povodom izvanrednih pravnih lijekova", kazna do 5 godina → **250 bodova**
+10. "Zastupanje oštećenika", kazna preko 10 godina → **200 bodova**
+11. uključi "Stjecaj / produljeno kazneno djelo" → iznos se ne mijenja, ali na
+    troškovniku se pojavi obrazloženje odabranog razreda
