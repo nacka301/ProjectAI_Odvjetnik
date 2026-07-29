@@ -57,7 +57,10 @@ public sealed class TroskovnikService
 
         // ── Tbr. 1 — Sastavljanje podnesaka ──
         // Toč. 1, 2, 3 → "nagrada po Tbr. 4. toč. 1." = bodovi ovise o zapriječenoj kazni
-        new() { Id = "kaz_privatna_tuzba", Kategorija = "Kazneni postupak", Opis = "Privatna tužba / kaznena prijava / optužni prijedlog (Tbr. 1.1)", TarifniBroj = "Tbr. 1.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 1. toč. 1 — nagrada po Tbr. 4. toč. 1", KazneniBase = true, MinBodova = 100, SortOrder = 100, Jedinica = "komad" },
+        // Tbr. 1. toč. 1 glasi samo "odvjetniku pripada nagrada po Tbr. 4. toč. 1." —
+        // nikakav minimum se ne spominje. Zatečeni MinBodova = 100 nije imao izvor i
+        // poništavao je umanjenje od 50% za branitelja po službenoj dužnosti.
+        new() { Id = "kaz_privatna_tuzba", Kategorija = "Kazneni postupak", Opis = "Privatna tužba / kaznena prijava / prijedlog za kazneni progon / optužni prijedlog (Tbr. 1.1)", TarifniBroj = "Tbr. 1.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 1. toč. 1 — nagrada po Tbr. 4. toč. 1", KazneniBase = true, SortOrder = 100, Jedinica = "komad" },
         new() { Id = "kaz_podnesak_obrana", Kategorija = "Kazneni postupak", Opis = "Podnesci s navođenjem činjenica / pisana obrana (Tbr. 1.2)", TarifniBroj = "Tbr. 1.2", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 1. toč. 2 — nagrada po Tbr. 4. toč. 1", KazneniBase = true, SortOrder = 101, Jedinica = "komad" },
         new() { Id = "kaz_zahtjev_ostecenik", Kategorija = "Kazneni postupak", Opis = "Zahtjev oštećenika za dokazne radnje / preuzimanje progona (Tbr. 1.3)", TarifniBroj = "Tbr. 1.3", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 1. toč. 3 — nagrada po Tbr. 4. toč. 1", KazneniBase = true, SortOrder = 102, Jedinica = "komad" },
         new() { Id = "kaz_imovinskopravni", Kategorija = "Kazneni postupak", Opis = "Podnesak za imovinskopravni zahtjev oštećenika (Tbr. 1.4)", TarifniBroj = "Tbr. 1.4", FiksniBody = 75, SortOrder = 103, Jedinica = "komad" },
