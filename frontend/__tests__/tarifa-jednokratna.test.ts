@@ -64,6 +64,20 @@ describe("Tbr. 7. toč. 3 — jednokratna nagrada od 200 bodova", () => {
   });
 });
 
+describe("Tbr. 8. toč. 1 — odgovor na tužbu + četiri podneska", () => {
+  // Nema naknade za daljnje radnje: jedna nagrada pokriva sve, bez obzira na količinu.
+  const tbr81 = stavka({
+    id: "par_odgovor_tuzba",
+    tbr71_postotak: 1.0,
+    jednokratna_nagrada: true,
+    jedinica: "postupak",
+  });
+
+  it.each([1, 3, 6, 20])("količina %i i dalje daje osnovicu", (kolicina) => {
+    expect(ukupnoBodovaZaStavku(tbr81, 250, kolicina)).toBe(250);
+  });
+});
+
 describe("obične stavke", () => {
   it("i dalje se množe količinom", () => {
     const obicna = stavka({ id: "par_rociste_glavno", tbr71_postotak: 1.0 });

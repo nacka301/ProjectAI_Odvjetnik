@@ -1316,7 +1316,7 @@ function TroskovnikContent() {
                             </p>
                             <p className="text-[10px] text-slate-400 mt-0.5">
                               {line.is_jednokratna
-                                ? `jednokratno ${fmtNum(line.bodova_po_jedinici)} bod. za ${line.kolicina} radnji = ${fmtNum(line.ukupno_bodova)} bod.`
+                                ? `jednokratno · ${line.kolicina} ${line.kolicina === 1 ? "radnja" : "radnji"} = ${fmtNum(line.ukupno_bodova)} bod.`
                                 : `${line.kolicina} × ${fmtNum(line.bodova_po_jedinici)} bod.`}
                             </p>
                           </div>

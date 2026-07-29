@@ -146,7 +146,18 @@ public sealed class TroskovnikService
         new() { Id = "par_tuzba_platni_nalog", Kategorija = "Parnični postupak", Opis = "Tužba za platni nalog (Tbr. 7.5) – 50% Tbr. 7.1, max 100", TarifniBroj = "Tbr. 7.5", Tbr71Postotak = 0.5m, MaxBodova = 100, SortOrder = 205, Jedinica = "komad" },
         new() { Id = "par_tuzba_arbitraza", Kategorija = "Parnični postupak", Opis = "Tužba pred domaćom arbitražom (Tbr. 7.7)", TarifniBroj = "Tbr. 7.7", Tbr71Postotak = 1.0m, SortOrder = 207, Jedinica = "komad" },
         new() { Id = "par_tuzba_med_arbitraza", Kategorija = "Parnični postupak", Opis = "Tužba pred međunarodnom arbitražom (Tbr. 7.7) – +100%", TarifniBroj = "Tbr. 7.7", Tbr71Postotak = 1.0m, Tbr71Povecanje = 1.0m, SortOrder = 208, Jedinica = "komad" },
-        new() { Id = "par_obrazlozeni_podnesak", Kategorija = "Parnični postupak", Opis = "Obrazloženi podnesci (Tbr. 8.3) – 50% Tbr. 7.1, max 100", TarifniBroj = "Tbr. 8.3", Tbr71Postotak = 0.5m, MaxBodova = 100, SortOrder = 210, Jedinica = "komad" },
+        // ── Tbr. 8. toč. 1 — odgovor na tužbu + prigovor + četiri podneska ──
+        // "Za sastavljanje odgovora na tužbu, prigovora protiv platnog naloga i četiri
+        //  obrazložena podneska u prvostupanjskom postupku odvjetniku pripada nagrada
+        //  kao za tužbu po Tbr. 7. toč. 1., 4., 7. i 8."
+        // Jedna nagrada pokriva sve navedeno — bez naknade za daljnje radnje, jer je
+        // toč. 1 ne propisuje; podnesci izvan toga idu po Tbr. 8. toč. 3 (niže).
+        new() { Id = "par_odgovor_tuzba", Kategorija = "Parnični postupak", Opis = "Odgovor na tužbu / prigovor protiv platnog naloga + do četiri obrazložena podneska (Tbr. 8.1) – jedna nagrada kao za tužbu po Tbr. 7.1", TarifniBroj = "Tbr. 8.1", Tbr71Postotak = 1.0m, JednokratnaNagrada = true, SortOrder = 209, Jedinica = "postupak" },
+
+        // ── Tbr. 8. toč. 3 — obrazloženi podnesci IZVAN Tbr. 8. toč. 1 ──
+        // "Za sastavljanje obrazloženih podnesaka izvan Tbr. 8. toč. 1. odvjetniku
+        //  pripada 50 % nagrade iz Tbr. 7. toč. 1., 4., 7. i 8., ali ne više od 100 bodova."
+        new() { Id = "par_obrazlozeni_podnesak", Kategorija = "Parnični postupak", Opis = "Obrazloženi podnesci izvan Tbr. 8.1 (Tbr. 8.3) – 50% Tbr. 7.1, max 100", TarifniBroj = "Tbr. 8.3", Tbr71Postotak = 0.5m, MaxBodova = 100, SortOrder = 210, Jedinica = "komad" },
         new() { Id = "par_ostali_podnesci", Kategorija = "Parnični postupak", Opis = "Ostali podnesci (Tbr. 8.4) – 25% Tbr. 7.1, max 25", TarifniBroj = "Tbr. 8.4", Tbr71Postotak = 0.25m, MaxBodova = 25, SortOrder = 211, Jedinica = "komad" },
         new() { Id = "par_rociste_glavno", Kategorija = "Parnični postupak", Opis = "Ročište – glavna stvar / dokazi / nagodba (Tbr. 9.1)", TarifniBroj = "Tbr. 9.1", Tbr71Postotak = 1.0m, SortOrder = 220, Jedinica = "komad" },
         new() { Id = "par_rociste_procesno", Kategorija = "Parnični postupak", Opis = "Ročište – procesna pitanja (Tbr. 9.2) – 50% Tbr. 7.1", TarifniBroj = "Tbr. 9.2", Tbr71Postotak = 0.5m, SortOrder = 221, Jedinica = "komad" },
