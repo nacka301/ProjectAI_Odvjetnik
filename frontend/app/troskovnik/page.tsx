@@ -41,8 +41,11 @@ import {
   jeSamoKazneni,
   izracunajKazneneBodove,
   izracunajSudskuPristojbu,
+  objasnjenjePristojbe,
+  odrediPristojbuOsnovu,
   tbr71Bodovi,
   ukupnoBodovaZaStavku,
+  type PristojbaOsnova,
   type TarifnaStavka,
 } from "@/lib/tarifa";
 
@@ -104,6 +107,7 @@ interface TroskovnikResponse {
   vrijednost_oduzimanja?: number;
   // Sudske pristojbe
   sudska_pristojba?: number;
+  pristojba_osnova?: PristojbaOsnova;
   is_oslobodjen_pristojbi?: boolean;
   sveukupni_trosak?: number;
 }
@@ -347,6 +351,9 @@ function TroskovnikContent() {
   const vrijednostNum = isOnlyKazneni ? 0 : unesenVps;
   const baseBodovi = tbr71Bodovi(vrijednostNum);
 
+  // Uredba NN 37/23, Poglavlje I. pokriva parnični i ovršni postupak.
+  const pristojbaOsnova = odrediPristojbuOsnovu(odabraneDefinicije);
+
   // Resolved kazneni tier points
   const kazneniTierBodovi = zaprijecenaKazna
     ? (ZAPRIJECENA_KAZNA_TIERS[zaprijecenaKazna]?.bodovi ?? 0)
@@ -433,12 +440,14 @@ function TroskovnikContent() {
     const pdv = isPdvUkljucen ? rawPdv : 0;
     const odvjetnickiTrosak = ukupnoEur + pdv;
 
-    // Sudske pristojbe
-    const sudskaPristojba = isOslobodjenPristojbi ? 0 : izracunajSudskuPristojbu(vrijednostNum);
+    // Sudske pristojbe (Uredba NN 37/2023, Tar. br. 1)
+    const sudskaPristojba = isOslobodjenPristojbi
+      ? 0
+      : izracunajSudskuPristojbu(vrijednostNum, pristojbaOsnova);
     const sveukupniTrosak = odvjetnickiTrosak + sudskaPristojba;
 
     return { lines, ukupnoBodova, ukupnoEur, pdv, ukupnoSPdv: ukupnoEur + pdv, sudskaPristojba, sveukupniTrosak };
-  }, [selectedItems, katalog, baseBodovi, isPdvUkljucen, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, isOduzimanjePrekrsaj, parsedVrijednostOduzimanja, isOslobodjenPristojbi, vrijednostNum]);
+  }, [selectedItems, katalog, baseBodovi, isPdvUkljucen, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, isOduzimanjePrekrsaj, parsedVrijednostOduzimanja, isOslobodjenPristojbi, vrijednostNum, pristojbaOsnova]);
 
   // ── Handlers ──
   const toggleCategory = useCallback((cat: string) => {
@@ -1380,23 +1389,33 @@ function TroskovnikContent() {
 
                       {/* ── Sudske pristojbe ── */}
                       <div className="pt-2 mt-1 border-t border-dashed border-slate-200 space-y-1.5">
-                        <div className="flex items-center justify-between text-xs text-slate-500">
-                          <label className="inline-flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={isOslobodjenPristojbi}
-                              onChange={(e) => setIsOslobodjenPristojbi(e.target.checked)}
-                              className="h-4 w-4 rounded border-slate-200 text-amber-600 focus:ring-amber-500"
-                            />
-                            <span className="text-xs">Oslobođenje od pristojbi (čl. 11.)</span>
-                          </label>
-                        </div>
-                        <div className="flex justify-between text-xs text-slate-600">
-                          <span>Sudska pristojba (Tbr. 1)</span>
-                          <span className={`font-semibold ${isOslobodjenPristojbi ? 'line-through text-slate-400' : ''}`}>
-                            {fmtEur(isOslobodjenPristojbi ? 0 : liveCalc.sudskaPristojba)}
-                          </span>
-                        </div>
+                        {pristojbaOsnova === "Nema" ? (
+                          <div className="flex items-start gap-1.5 text-[10px] text-slate-500 leading-snug">
+                            <Info className="h-3 w-3 shrink-0 mt-0.5 text-slate-400" />
+                            <span>{objasnjenjePristojbe("Nema")}</span>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex items-center justify-between text-xs text-slate-500">
+                              <label className="inline-flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={isOslobodjenPristojbi}
+                                  onChange={(e) => setIsOslobodjenPristojbi(e.target.checked)}
+                                  className="h-4 w-4 rounded border-slate-200 text-amber-600 focus:ring-amber-500"
+                                />
+                                <span className="text-xs">Oslobođenje od pristojbi (čl. 11.)</span>
+                              </label>
+                            </div>
+                            <div className="flex justify-between text-xs text-slate-600">
+                              <span>Sudska pristojba (Tar. br. 1)</span>
+                              <span className={`font-semibold ${isOslobodjenPristojbi ? 'line-through text-slate-400' : ''}`}>
+                                {fmtEur(isOslobodjenPristojbi ? 0 : liveCalc.sudskaPristojba)}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-slate-400">{objasnjenjePristojbe(pristojbaOsnova)}</p>
+                          </>
+                        )}
                       </div>
 
                       {/* ── Grand Total ── */}
@@ -1717,8 +1736,11 @@ function TroskovnikContent() {
                           )}
                           <tr>
                             <td colSpan={5} className="py-1 px-2 text-right text-xs text-slate-500">
-                              Sudska pristojba (Tbr. 1)
+                              Sudska pristojba (Tar. br. 1)
                               {result.is_oslobodjen_pristojbi && <span className="ml-1 text-amber-600">(oslobođeno)</span>}
+                              <span className="block text-[10px] text-slate-400">
+                                {objasnjenjePristojbe(result.pristojba_osnova ?? "Puna")}
+                              </span>
                             </td>
                             <td />
                             <td className={`py-1 px-2 text-right text-sm ${result.is_oslobodjen_pristojbi ? 'line-through text-slate-400' : 'text-slate-600'}`}>

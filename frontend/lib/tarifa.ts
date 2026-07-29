@@ -203,6 +203,32 @@ export function ukupnoBodovaZaStavku(
 
 // ── Sudske pristojbe (Uredba NN 37/2023) ─────────────────────────
 
+/**
+ * Osnova za obračun sudske pristojbe.
+ *
+ * Prilog Uredbe, POGLAVLJE I. nosi naslov "PARNIČNI I OVRŠNI POSTUPAK" — izvan
+ * tog poglavlja Tar. br. 1 se ne primjenjuje, pa kazneni predmet dobiva "Nema".
+ */
+export type PristojbaOsnova = "Puna" | "Polovica" | "Nema";
+
+/** Objašnjenje koje sučelje prikazuje uz iznos pristojbe. */
+export function objasnjenjePristojbe(osnova: PristojbaOsnova): string {
+  switch (osnova) {
+    case "Nema":
+      return "Uredba NN 37/23 ne propisuje pristojbu za kazneni postupak (Poglavlje I. – parnični i ovršni postupak).";
+    case "Polovica":
+      return "Tar. br. 1 st. 2 – polovica iznosa iz st. 1.";
+    default:
+      return "Tar. br. 1 st. 1.";
+  }
+}
+
+/** Vrsta postupka → osnova za pristojbu. */
+export function odrediPristojbuOsnovu(odabraneStavke: TarifnaStavka[]): PristojbaOsnova {
+  if (jeSamoKazneni(odabraneStavke)) return "Nema";
+  return "Puna";
+}
+
 const PRISTOJBA_BRACKETS: [number, number][] = [
   [398.17, 13.27],
   [796.34, 26.54],
@@ -233,7 +259,11 @@ const PRISTOJBA_BRACKETS: [number, number][] = [
 ];
 const PRISTOJBA_MAX = 3_981.68;
 
-export function izracunajSudskuPristojbu(vps: number): number {
+export function izracunajSudskuPristojbu(
+  vps: number,
+  osnova: PristojbaOsnova = "Puna",
+): number {
+  if (osnova === "Nema") return 0;
   if (vps <= 0) return 0;
   for (const [maxVps, fee] of PRISTOJBA_BRACKETS) {
     if (vps <= maxVps) return fee;

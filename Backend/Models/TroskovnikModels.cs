@@ -38,6 +38,23 @@ public static class ZaprijecenaKaznaTiers
     };
 }
 
+/// <summary>
+/// Osnova za obračun sudske pristojbe prema Uredbi o tarifi sudskih pristojbi
+/// (NN 37/2023). Prilog, POGLAVLJE I. nosi naslov "PARNIČNI I OVRŠNI POSTUPAK" —
+/// izvan tog poglavlja Tar. br. 1 se ne primjenjuje.
+/// </summary>
+public enum PristojbaOsnova
+{
+    /// <summary>Tar. br. 1 st. 1 — puni iznos.</summary>
+    Puna = 0,
+
+    /// <summary>Tar. br. 1 st. 2 — polovica iznosa iz st. 1 (prijedlog za ovrhu, žalba, revizija...).</summary>
+    Polovica = 1,
+
+    /// <summary>Uredba ne propisuje pristojbu za ovu vrstu postupka (npr. kazneni).</summary>
+    Nema = 2
+}
+
 // ── Request / Response ────────────────────────────────────────
 
 public sealed class TroskovnikRequest
@@ -315,6 +332,15 @@ public sealed class TroskovnikResponse
 
     [JsonPropertyName("is_oslobodjen_pristojbi")]
     public bool IsOslobodjenPristojbi { get; set; }
+
+    /// <summary>
+    /// Po kojoj se osnovi obračunava pristojba. Razlikuje "Uredba ovdje ne propisuje
+    /// pristojbu" (<see cref="Backend.Models.PristojbaOsnova.Nema"/>) od oslobođenja
+    /// stranke — oboje daju 0,00 €, ali iz posve različitih razloga.
+    /// </summary>
+    [JsonPropertyName("pristojba_osnova")]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public PristojbaOsnova PristojbaOsnova { get; set; }
 
     /// <summary>Grand total = odvjetnički trošak (s PDV) + sudska pristojba.</summary>
     [JsonPropertyName("sveukupni_trosak")]

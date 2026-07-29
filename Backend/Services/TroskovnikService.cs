@@ -369,10 +369,16 @@ public sealed class TroskovnikService
         if (useVat)
             pdv = Math.Round(ukupnoEur * TarifaConstants.PdvRate, 2);
 
-        // Sudske pristojbe (Tar. br. 1 — Uredba o tarifi sudskih pristojbi, NN 37/2023)
+        // ── Sudska pristojba (Uredba o tarifi sudskih pristojbi, NN 37/2023) ──
+        //
+        // Prilog "TARIFA SUDSKIH PRISTOJBI", POGLAVLJE I. nosi naslov
+        // "PARNIČNI I OVRŠNI POSTUPAK". Kazneni postupak u Uredbi ne postoji, pa se
+        // pristojba po Tar. br. 1 u kaznenom predmetu uopće ne obračunava.
+        var pristojbaOsnova = isSamoKazneni ? PristojbaOsnova.Nema : PristojbaOsnova.Puna;
+
         var sudskaPristojba = request.IsOslobodjenPristojbi
             ? 0m
-            : SudskePristojbeCalculator.Izracunaj(vrijednostSpora);
+            : SudskePristojbeCalculator.Izracunaj(vrijednostSpora, pristojbaOsnova);
         var odvjetnickiTrosak = ukupnoEur + pdv;
         var sveukupniTrosak = odvjetnickiTrosak + sudskaPristojba;
 
@@ -412,6 +418,7 @@ public sealed class TroskovnikService
             VrijednostOduzimanja = request.VrijednostOduzimanja,
             // Sudske pristojbe
             SudskaPristojba = sudskaPristojba,
+            PristojbaOsnova = pristojbaOsnova,
             IsOslobodjenPristojbi = request.IsOslobodjenPristojbi,
             SveukupniTrosak = sveukupniTrosak
         };

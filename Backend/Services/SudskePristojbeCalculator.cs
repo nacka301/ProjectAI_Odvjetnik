@@ -1,3 +1,5 @@
+using Backend.Models;
+
 namespace Backend.Services;
 
 /// <summary>
@@ -47,14 +49,33 @@ public static class SudskePristojbeCalculator
     private const decimal ProgressiveRate = 0.01m; // 1%
 
     /// <summary>
-    /// Izračunava sudsku pristojbu na tužbu (Tar. br. 1) prema VPS-u.
+    /// Izračunava sudsku pristojbu (Tar. br. 1) prema VPS-u i osnovi obračuna.
+    ///
+    /// <para><see cref="PristojbaOsnova.Nema"/> znači da Uredba za tu vrstu postupka
+    /// uopće ne propisuje pristojbu — POGLAVLJE I. Priloga nosi naslov
+    /// "PARNIČNI I OVRŠNI POSTUPAK", pa kazneni postupak u njega ne ulazi.</para>
+    ///
     /// Ako je VPS ≤ 0, vraća 0.
     /// </summary>
-    public static decimal Izracunaj(decimal vrijednostSpora)
+    public static decimal Izracunaj(decimal vrijednostSpora, PristojbaOsnova osnova = PristojbaOsnova.Puna)
     {
+        if (osnova == PristojbaOsnova.Nema)
+            return 0m;
+
         if (vrijednostSpora <= 0)
             return 0m;
 
+        var iznos = IzracunajNezaokruzeno(vrijednostSpora);
+
+        return Math.Round(iznos, 2, MidpointRounding.AwayFromZero);
+    }
+
+    /// <summary>
+    /// Tar. br. 1 st. 1 — nezaokruženi iznos, da se zaokruživanje dogodi samo jednom,
+    /// nakon eventualnog polovljenja po st. 2.
+    /// </summary>
+    private static decimal IzracunajNezaokruzeno(decimal vrijednostSpora)
+    {
         // Fiksni razredi (5 razreda prema NN 37/2023)
         foreach (var (maxVps, fee) in Brackets)
         {
@@ -62,9 +83,10 @@ public static class SudskePristojbeCalculator
                 return fee;
         }
 
-        // FIXED: Progresivna formula za VPS > 1.990,84 EUR
-        // "66,36 eura i još 1% na razliku iznad 1.990,84 eura, ali ne više od 663,61 euro."
+        // Progresivna formula za VPS > 1.990,84 EUR
+        // "Preko 1.990,84 eura plaća se pristojba u iznosu od 66,36 eura i još 1% na
+        //  razliku iznad 1.990,84 eura, ali ne više od 663,61 euro."
         var progressive = ProgressiveBase + ProgressiveRate * (vrijednostSpora - ProgressiveThreshold);
-        return Math.Min(Math.Round(progressive, 2), MaxFee);
+        return Math.Min(progressive, MaxFee);
     }
 }
