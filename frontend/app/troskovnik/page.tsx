@@ -32,28 +32,18 @@ import { useAuth } from "@/lib/useAuth";
 import { useCredits, getModuleQuota } from "@/lib/useCredits";
 import { CreditQuotaBadge, CreditExhaustedWarning } from "@/components/CreditQuotaBadge";
 import { formatEur, formatNumber, formatThreshold } from "@/lib/format";
-
-const BOD_VALUE = 2.0;
-const PDV_RATE = 0.25;
+import {
+  BOD_VALUE,
+  PDV_RATE,
+  ZAPRIJECENA_KAZNA_TIERS,
+  izracunajBodove,
+  izracunajKazneneBodove,
+  izracunajSudskuPristojbu,
+  tbr71Bodovi,
+  type TarifnaStavka,
+} from "@/lib/tarifa";
 
 // ── Types (mirror backend models) ──
-
-interface TarifnaStavka {
-  id: string;
-  kategorija: string;
-  opis: string;
-  tarifni_broj: string;
-  fiksni_body: number | null;
-  tbr71_postotak: number | null;
-  tbr71_povecanje: number | null;
-  max_bodova: number | null;
-  min_bodova: number | null;
-  jedinica: string;
-  sort_order: number;
-  kazneni_base: boolean;
-  kazneni_povecanje: number | null;
-  prekrsaj_oduzimanje: boolean;
-}
 
 interface SelectedItem {
   itemId: string;
@@ -109,94 +99,6 @@ interface TroskovnikResponse {
   sveukupni_trosak?: number;
 }
 
-// ── Tbr. 7.1 client-side point lookup (mirrors backend) ──
-
-function tbr71Bodovi(vrijednost: number): number {
-  if (vrijednost <= 0) return 25;
-  if (vrijednost <= 332.0) return 25;
-  if (vrijednost <= 664.0) return 50;
-  if (vrijednost <= 1327.0) return 75;
-  if (vrijednost <= 13272.0) return 100;
-  if (vrijednost <= 33181.0) return 250;
-  if (vrijednost <= 66361.0) return 500;
-  if (vrijednost <= 663614.0) {
-    const extra = Math.ceil((vrijednost - 66361.0) / 133.0);
-    return 500 + extra;
-  }
-  if (vrijednost <= 1327228.0) {
-    const extra = Math.ceil((vrijednost - 663614.0) / 265.0);
-    return 4991 + extra;
-  }
-  const extra = Math.ceil((vrijednost - 1327228.0) / 664.0);
-  return Math.min(7496 + extra, 10000);
-}
-
-function izracunajBodove(def: TarifnaStavka, baseBodovi: number): number {
-  let bodovi: number;
-
-  if (def.fiksni_body !== null && def.fiksni_body !== undefined) {
-    bodovi = def.fiksni_body;
-  } else if (def.tbr71_postotak !== null && def.tbr71_postotak !== undefined) {
-    let raw = Math.ceil(baseBodovi * def.tbr71_postotak);
-    if (def.tbr71_povecanje !== null && def.tbr71_povecanje !== undefined) {
-      raw = Math.ceil(raw * (1 + def.tbr71_povecanje));
-    }
-    bodovi = raw;
-  } else {
-    bodovi = baseBodovi;
-  }
-
-  if (def.max_bodova !== null && def.max_bodova !== undefined && bodovi > def.max_bodova)
-    bodovi = def.max_bodova;
-  if (def.min_bodova !== null && def.min_bodova !== undefined && bodovi < def.min_bodova)
-    bodovi = def.min_bodova;
-
-  return bodovi;
-}
-
-// ── Kazneni tier lookup ──
-
-const ZAPRIJECENA_KAZNA_TIERS: Record<string, { label: string; bodovi: number }> = {
-  novcana_do3: { label: "Novčana kazna ili kazna do 3 godine zatvora", bodovi: 100 },
-  do_5:        { label: "Do 5 godina zatvora",                         bodovi: 200 },
-  do_10:       { label: "Do 10 godina zatvora",                        bodovi: 300 },
-  preko_10:    { label: "Preko 10 godina zatvora",                     bodovi: 400 },
-  dugotrajni:  { label: "Dugotrajni zatvor",                           bodovi: 500 },
-};
-
-function izracunajKazneneBodove(
-  def: TarifnaStavka,
-  tierBodovi: number,
-  isZastupnikDjeteta: boolean,
-  isPoSluzbenojDuznosti: boolean,
-  isNaTeretProracuna: boolean,
-): number {
-  let bodovi = tierBodovi;
-
-  // Kazneni povećanje (e.g. +50% za žalbu)
-  if (def.kazneni_povecanje !== null && def.kazneni_povecanje !== undefined) {
-    bodovi = Math.ceil(bodovi * (1 + def.kazneni_povecanje));
-  }
-
-  // Zastupnik djeteta → 70% od Tbr. 4.8 (= 70% × 50% = 35% baze)
-  if (isZastupnikDjeteta) {
-    bodovi = Math.ceil(bodovi * 0.50 * 0.70);
-  }
-
-  // Branitelj po službenoj dužnosti ili na teret proračuna → 50%
-  if (isPoSluzbenojDuznosti || isNaTeretProracuna) {
-    bodovi = Math.ceil(bodovi * 0.50);
-  }
-
-  // Clamp
-  if (def.max_bodova !== null && def.max_bodova !== undefined && bodovi > def.max_bodova)
-    bodovi = def.max_bodova;
-  if (def.min_bodova !== null && def.min_bodova !== undefined && bodovi < def.min_bodova)
-    bodovi = def.min_bodova;
-
-  return bodovi;
-}
-
 // ── Format helpers ──
 
 function fmtEur(n: number) {
@@ -205,47 +107,6 @@ function fmtEur(n: number) {
 
 function fmtNum(n: number) {
   return n.toLocaleString("hr-HR");
-}
-
-// ── Sudske pristojbe — Tbr. 1 (Uredba o tarifi sudskih pristojbi) ──
-// Brackets: [maxVps, fee] in EUR — converted at 1 EUR = 7.53450 HRK
-
-const PRISTOJBA_BRACKETS: [number, number][] = [
-  [   398.17,    13.27],
-  [   796.34,    26.54],
-  [ 1_327.23,    39.82],
-  [ 1_990.84,    53.09],
-  [ 3_318.07,    79.63],
-  [ 5_308.91,   119.45],
-  [ 7_963.37,   172.54],
-  [13_272.28,   265.45],
-  [26_544.56,   398.17],
-  [39_816.84,   530.89],
-  [53_089.12,   663.61],
-  [66_361.40,   796.34],
-  [99_542.10,   929.06],
-  [132_722.81, 1_061.78],
-  [165_903.51, 1_194.51],
-  [199_084.21, 1_327.23],
-  [265_445.61, 1_592.67],
-  [331_807.02, 1_858.12],
-  [398_168.42, 2_123.56],
-  [464_529.82, 2_389.01],
-  [530_891.22, 2_654.46],
-  [663_614.03, 2_919.90],
-  [796_336.83, 3_185.35],
-  [929_059.64, 3_450.79],
-  [1_061_782.44, 3_716.24],
-  [1_327_228.05, 3_981.68],
-];
-const PRISTOJBA_MAX = 3_981.68;
-
-function izracunajSudskuPristojbu(vps: number): number {
-  if (vps <= 0) return 0;
-  for (const [maxVps, fee] of PRISTOJBA_BRACKETS) {
-    if (vps <= maxVps) return fee;
-  }
-  return PRISTOJBA_MAX;
 }
 
 // ── Category icons / colors ──
