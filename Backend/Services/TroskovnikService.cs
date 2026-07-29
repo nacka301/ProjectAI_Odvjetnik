@@ -281,7 +281,14 @@ public sealed class TroskovnikService
         new() { Id = "raz_izjava", Kategorija = "Razno", Opis = "Jednostavna izjava volje (Tbr. 33.3)", TarifniBroj = "Tbr. 33.3", FiksniBody = 50, SortOrder = 1302, Jedinica = "komad" },
         new() { Id = "raz_oporuka", Kategorija = "Razno", Opis = "Sastavljanje oporuke (Tbr. 33.4)", TarifniBroj = "Tbr. 33.4", FiksniBody = 100, SortOrder = 1303, Jedinica = "komad" },
         new() { Id = "raz_usmeni_savjet", Kategorija = "Razno", Opis = "Usmeni pravni savjet (Tbr. 34.1) – 50 bodova/sat", TarifniBroj = "Tbr. 34.1", FiksniBody = 50, SortOrder = 1310, Jedinica = "sat" },
-        new() { Id = "raz_pisani_savjet", Kategorija = "Razno", Opis = "Pisani pravni savjet / mišljenje (Tbr. 34.2)", TarifniBroj = "Tbr. 34.2", Tbr71Postotak = 1.0m, MinBodova = 200, SortOrder = 1311, Jedinica = "komad" },
+        // Tbr. 34. toč. 2, odlomak 1: "Za sastavljanje pisanih pravnih savjeta i pisanih
+        // pravnih mišljenja s činjeničnim i pravnim obrazloženjima odvjetniku pripada
+        // nagrada iz Tbr. 7. toč. 1. i 4." — bez minimuma.
+        new() { Id = "raz_pisani_savjet", Kategorija = "Razno", Opis = "Pisani pravni savjet / mišljenje – procjenjiv predmet (Tbr. 34.2)", TarifniBroj = "Tbr. 34.2", Tbr71Postotak = 1.0m, SortOrder = 1311, Jedinica = "komad" },
+
+        // Tbr. 34. toč. 2, odlomak 2: "(...) u neprocjenjivim predmetima odvjetniku
+        // pripada nagrada ne manja od 200 bodova." Minimum vrijedi SAMO ovdje.
+        new() { Id = "raz_pisani_savjet_neproc", Kategorija = "Razno", Opis = "Pisani pravni savjet / mišljenje – neprocjenjiv predmet (Tbr. 34.2) – najmanje 200 bodova", TarifniBroj = "Tbr. 34.2", FiksniBody = 200, MinBodova = 200, SortOrder = 1312, Jedinica = "komad" },
         new() { Id = "raz_konferencija", Kategorija = "Razno", Opis = "Konferencija / sastanak (Tbr. 35) – 50 bodova/sat", TarifniBroj = "Tbr. 35", FiksniBody = 50, SortOrder = 1320, Jedinica = "sat" },
         new() { Id = "raz_razmatranje_spisa", Kategorija = "Razno", Opis = "Razmatranje spisa / uvid u ZK / registre (Tbr. 36) – 25 bodova/sat", TarifniBroj = "Tbr. 36", FiksniBody = 25, SortOrder = 1330, Jedinica = "sat" },
         new() { Id = "raz_izvid_pravomocnost", Kategorija = "Razno", Opis = "Izvid pravomoćnosti / izvršnosti (Tbr. 36)", TarifniBroj = "Tbr. 36", FiksniBody = 25, SortOrder = 1331, Jedinica = "komad" },
