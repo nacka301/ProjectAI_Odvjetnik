@@ -737,6 +737,15 @@ public sealed class TroskovnikService
         // gotov iznos zaokružuje, jednom, na dvije decimale.
         var ukupnoEur = ZaokruziNovac(ukupnoBodova * TarifaConstants.BodValue);
 
+        // ── Tbr. 40. toč. 1, drugi odlomak ──
+        // "Iznos povišene nagrade dijeli se na jednake dijelove prema broju branjenika,
+        //  odnosno zastupanih osoba."
+        // Dioba ne mijenja ukupnu nagradu — pokazuje koliko od nje otpada na svaku osobu.
+        // Dijeli se NAGRADA; PDV i sudska pristojba nisu odvjetnička nagrada pa ne ulaze.
+        var brojOsoba = Math.Max(1, request.BrojZastupanihOsoba);
+        var bodoviPoOsobi = ukupnoBodova / brojOsoba;
+        var nagradaPoOsobi = ZaokruziNovac(ukupnoEur / brojOsoba);
+
         decimal pdv = 0;
         var useVat = request.IsPdvUkljucen ?? request.HasVat;
         if (useVat)
@@ -767,6 +776,8 @@ public sealed class TroskovnikService
             Tbr41SnizenjePostotak = Math.Clamp(request.Tbr41SnizenjePostotak, 0m, 50m),
             Tbr41Bodovi = tbr41Bodovi,
             PovisenjeViseOsobaBodovi = povisenjeBodovi,
+            BodoviPoOsobi = bodoviPoOsobi,
+            NagradaPoOsobi = nagradaPoOsobi,
             VrijednostSpora = vrijednostSpora,
             IsSamoKazneni = isSamoKazneni,
             UkupnoEurBezPdv = ukupnoEur,

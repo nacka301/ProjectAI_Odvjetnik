@@ -25,7 +25,7 @@ export const PDV_RATE = 0.25;
  *
  * Tbr. 4. toč. 7 ne određuje iznos nego upućuje na "Pravilnik ministarstva nadležnog
  * za poslove pravosuđa".
- * Izvor stope: Pravilnik, Narodne novine 22/2022, br. 271.
+ * Izvor stope: Pravilnik, Narodne novine 22/2022, br. 271, čl. 1.
  * https://narodne-novine.nn.hr/clanci/sluzbeni/2022_02_22_271.html
  */
 export const KAZNENO_UMANJENJE_STOPA = 0.5;
@@ -38,7 +38,7 @@ export const TBR_4_8_STOPA = 0.5;
 /**
  * Opunomoćenik djeteta žrtve kaznenog djela — 70% od nagrade iz Tbr. 4. toč. 8.
  *
- * Izvor stope: Pravilnik, Narodne novine 22/2022, br. 271.
+ * Izvor stope: Pravilnik, Narodne novine 22/2022, br. 271, čl. 2.
  * https://narodne-novine.nn.hr/clanci/sluzbeni/2022_02_22_271.html
  *
  * Efektivno je to 0,50 × 0,70 = 35% pune tarife, ne 70%.
@@ -596,6 +596,17 @@ export const VISE_OSOBA_MAX_POVISENJE = 0.5;
  *
  * Prva osoba ne ulazi u postotak. Povišenje ide na cijelu osnovicu troškovnika.
  */
+/**
+ * Tbr. 40. toč. 1, drugi odlomak: "Iznos povišene nagrade dijeli se na jednake
+ * dijelove prema broju branjenika, odnosno zastupanih osoba."
+ *
+ * Dioba ne mijenja ukupan iznos — pokazuje koliko od njega otpada na svaku osobu.
+ * Dijeli se nagrada; PDV i sudska pristojba nisu odvjetnička nagrada pa ne ulaze.
+ */
+export function podijeliPoOsobama(iznos: number, brojOsoba: number): number {
+  return iznos / Math.max(1, brojOsoba);
+}
+
 export function povisenjeViseOsobaPostotak(brojOsoba: number): number {
   if (!Number.isFinite(brojOsoba) || brojOsoba <= 1) return 0;
 

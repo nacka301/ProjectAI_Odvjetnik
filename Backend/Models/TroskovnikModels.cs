@@ -29,7 +29,7 @@ public static class TarifaConstants
     /// koji je određen za branitelja po službenoj dužnosti, sukladno odredbama Zakona o
     /// odvjetništvu, određuje se Pravilnikom ministarstva nadležnog za poslove pravosuđa."
     ///
-    /// Izvor stope: Pravilnik, Narodne novine 22/2022, br. 271.
+    /// Izvor stope: Pravilnik, Narodne novine 22/2022, br. 271, ČL. 1.
     /// https://narodne-novine.nn.hr/clanci/sluzbeni/2022_02_22_271.html
     /// </summary>
     public const decimal KazneniReductionRate = 0.50m;
@@ -44,7 +44,7 @@ public static class TarifaConstants
     /// <summary>
     /// Opunomoćenik djeteta žrtve kaznenog djela — 70% od nagrade iz Tbr. 4. toč. 8.
     ///
-    /// Izvor stope: Pravilnik, Narodne novine 22/2022, br. 271.
+    /// Izvor stope: Pravilnik, Narodne novine 22/2022, br. 271, ČL. 2.
     /// https://narodne-novine.nn.hr/clanci/sluzbeni/2022_02_22_271.html
     ///
     /// Budući da je Tbr. 4. toč. 8 već 50% nagrade iz Tbr. 4, efektivna stopa je
@@ -432,6 +432,22 @@ public sealed class TroskovnikResponse
     /// <summary>Bodovi koje donosi povišenje po Tbr. 40 — prikazuju se kao zaseban redak.</summary>
     [JsonPropertyName("povisenje_vise_osoba_bodovi")]
     public decimal PovisenjeViseOsobaBodovi { get; set; }
+
+    /// <summary>
+    /// Tbr. 40. toč. 1, drugi odlomak: "Iznos povišene nagrade dijeli se na jednake
+    /// dijelove prema broju branjenika, odnosno zastupanih osoba."
+    ///
+    /// Dioba ne mijenja ukupnu nagradu — pokazuje koliko od nje otpada na svaku osobu.
+    /// </summary>
+    [JsonPropertyName("bodovi_po_osobi")]
+    public decimal BodoviPoOsobi { get; set; }
+
+    /// <summary>
+    /// Nagrada po zastupanoj osobi u EUR. Dijeli se nagrada, ne sveukupni trošak —
+    /// PDV i sudska pristojba nisu odvjetnička nagrada.
+    /// </summary>
+    [JsonPropertyName("nagrada_po_osobi")]
+    public decimal NagradaPoOsobi { get; set; }
 
     // ── Osnovica po Tbr. 7. / Tbr. 45 ─────────────────────────────
 

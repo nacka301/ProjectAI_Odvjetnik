@@ -56,6 +56,7 @@ import {
   efektivniVps,
   izracunajOsnovicu,
   odrediPristojbuOsnovu,
+  podijeliPoOsobama,
   povisenjeViseOsobaPostotak,
   provjeriZahtjev,
   tbr41Udio,
@@ -104,6 +105,8 @@ interface TroskovnikResponse {
   broj_zastupanih_osoba?: number;
   povisenje_vise_osoba_postotak?: number;
   povisenje_vise_osoba_bodovi?: number;
+  bodovi_po_osobi?: number;
+  nagrada_po_osobi?: number;
   // Osnovica po Tbr. 7. / Tbr. 45
   osnovica_tbr7?: string;
   osnovica_bodovi?: number;
@@ -562,7 +565,11 @@ function TroskovnikContent() {
       : izracunajSudskuPristojbu(vrijednostNum, pristojbaOsnova);
     const sveukupniTrosak = odvjetnickiTrosak + sudskaPristojba;
 
-    return { lines, osnovicaBodova, povisenjePostotak, povisenjeBodovi, tbr41Postotak, tbr41Bodovi, ukupnoBodova, ukupnoEur, pdv, ukupnoSPdv: ukupnoEur + pdv, sudskaPristojba, sveukupniTrosak };
+    // Tbr. 40. toč. 1, drugi odlomak — dioba na jednake dijelove po zastupanoj osobi.
+    const bodoviPoOsobi = podijeliPoOsobama(ukupnoBodova, brojZastupanihOsoba);
+    const nagradaPoOsobi = zaokruziNovac(podijeliPoOsobama(ukupnoEur, brojZastupanihOsoba));
+
+    return { lines, osnovicaBodova, povisenjePostotak, povisenjeBodovi, tbr41Postotak, tbr41Bodovi, ukupnoBodova, bodoviPoOsobi, nagradaPoOsobi, ukupnoEur, pdv, ukupnoSPdv: ukupnoEur + pdv, sudskaPristojba, sveukupniTrosak };
   }, [selectedItems, katalog, osnovica, isPdvUkljucen, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, isOduzimanjePrekrsaj, parsedVrijednostOduzimanja, isOslobodjenPristojbi, vrijednostNum, pristojbaOsnova, brojZastupanihOsoba, zaprijecenaKazna, tbr41Povisenje, tbr41Snizenje]);
 
   // ── Handlers ──
@@ -1772,6 +1779,21 @@ function TroskovnikContent() {
                         <span>{fmtEur(liveCalc.sveukupniTrosak)}</span>
                       </div>
 
+                      {/* Tbr. 40. toč. 1, drugi odlomak — dioba na jednake dijelove */}
+                      {brojZastupanihOsoba > 1 && (
+                        <div className="mt-2 pt-2 border-t border-dashed border-slate-200">
+                          <div className="flex justify-between text-xs font-semibold text-slate-700">
+                            <span>Nagrada po osobi ({brojZastupanihOsoba} branjenika)</span>
+                            <span>{fmtEur(liveCalc.nagradaPoOsobi)}</span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 leading-snug mt-0.5">
+                            {fmtNum(liveCalc.bodoviPoOsobi)} bod. · Tbr. 40. toč. 1: „Iznos povišene
+                            nagrade dijeli se na jednake dijelove prema broju branjenika."
+                            Dijeli se nagrada, bez PDV-a i sudske pristojbe.
+                          </p>
+                        </div>
+                      )}
+
                       <div className="text-[10px] text-slate-400 text-right">
                         1 bod = {fmtEur(BOD_VALUE)}
                       </div>
@@ -2148,6 +2170,22 @@ function TroskovnikContent() {
                             <td />
                             <td className="py-3 px-2 text-right text-lg font-bold text-indigo-800">{fmtEur(sveukupni)}</td>
                           </tr>
+                          {(result.broj_zastupanih_osoba ?? 1) > 1 && (
+                            <tr>
+                              <td colSpan={5} className="py-2 px-2 text-right text-xs text-slate-500">
+                                Nagrada po osobi ({result.broj_zastupanih_osoba} branjenika)
+                                <span className="block text-[10px] text-slate-400">
+                                  Tbr. 40. toč. 1 — dioba na jednake dijelove; bez PDV-a i pristojbe
+                                </span>
+                              </td>
+                              <td className="py-2 px-2 text-right text-slate-600">
+                                {fmtNum(result.bodovi_po_osobi ?? 0)}
+                              </td>
+                              <td className="py-2 px-2 text-right font-semibold text-slate-700">
+                                {fmtEur(result.nagrada_po_osobi ?? 0)}
+                              </td>
+                            </tr>
+                          )}
                         </>
                       );
                     })()}

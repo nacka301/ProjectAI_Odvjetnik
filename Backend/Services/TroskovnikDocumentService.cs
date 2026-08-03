@@ -173,6 +173,13 @@ public sealed class TroskovnikDocumentService
         sb.AppendLine($"<tr><td>Sudska pristojba{(resp.IsOslobodjenPristojbi ? " (oslobođeno)" : "")}<br/><span style=\"font-size:10px;color:#555\">{System.Net.WebUtility.HtmlEncode(pristojbaObrazlozenje)}</span></td><td style=\"text-align:right\">{FormatCurrency(resp.SudskaPristojba)}</td></tr>");
         sb.AppendLine($"<tr><th>SVEUKUPNI TROŠAK</th><th style=\"text-align:right\">{FormatCurrency(resp.SveukupniTrosak)}</th></tr>");
 
+        // Tbr. 40. toč. 1, drugi odlomak — "Iznos povišene nagrade dijeli se na jednake
+        // dijelove prema broju branjenika, odnosno zastupanih osoba."
+        if (resp.BrojZastupanihOsoba > 1)
+        {
+            sb.AppendLine($"<tr><td>Nagrada po osobi ({resp.BrojZastupanihOsoba} branjenika)<br/><span style=\"font-size:10px;color:#555\">Tbr. 40. toč. 1 — dioba na jednake dijelove; {FormatBodovi(resp.BodoviPoOsobi)} bodova, bez PDV-a i sudske pristojbe</span></td><td style=\"text-align:right\">{FormatCurrency(resp.NagradaPoOsobi)}</td></tr>");
+        }
+
         sb.AppendLine("</table>");
 
         sb.AppendLine("<div style=\"clear:both;\"></div>");
