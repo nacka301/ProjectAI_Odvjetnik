@@ -1,6 +1,7 @@
 # Popravci odvjetničke tarife i sudskih pristojbi
 
-Grana: `claude/audit-tarifa-fixes-9e61a6` · 20 commitova · 29. srpnja 2026.
+Grana: `claude/tarifa-parnicni-na-audit` (stoji na `claude/audit-tarifa-fixes-9e61a6`)
+· 22 commita · 29. srpnja 2026.
 
 Mjerodavno:
 
@@ -19,8 +20,8 @@ Mjerodavno:
 Stanje testova nakon svih popravaka:
 
 ```
-dotnet test Backend.Tests/Backend.Tests.csproj   →  1433 prolaza, 0 padova
-cd frontend && npx vitest run __tests__/tarifa   →   130 prolaza, 0 padova
+dotnet test Backend.Tests/Backend.Tests.csproj   →  1487 prolaza, 0 padova
+cd frontend && npx vitest run __tests__/tarifa   →   164 prolaza, 0 padova
 ```
 
 ---
@@ -527,11 +528,11 @@ zahtjeva i upućuje na Pravilnik NN 22/2022 br. 271 — vidi odjeljak 11.
 | 26 | izvlaštenje | |
 | 29 | tužba na poništaj upisa u registar | Tbr. 7. toč. 1, ne manje od 100 bodova; za druge registre po Tbr. 27 |
 | 38 | nagrada za utrošeni sat kad nije drukčije određeno | **25 bodova** |
-| 41 | povišenje do **100 %** za posebno stručno i specijalističko znanje, osobitu težinu predmeta ili posebnu odgovornost | jedini preostali modifikator osnovice uz Tbr. 40 |
+| ~~41~~ | povišenje do 100 % za posebnu stručnost, sniženje do 50 % | **implementirano** u `50a7e4b`, sučelje u `f0ba06d` |
 | 42 | paušalni ugovor o pružanju pravne pomoći | |
 | 43 | ugovorena nagrada | ne obvezuje sud pri dosuđivanju troška |
 | 44 | pravna pomoć u inozemstvu | po tarifi zemlje zastupanja |
-| 45 | neprocjenjivi predmeti koje Tarifa ne predviđa | općinski sud **100**, županijski i trgovački **200**, Vrhovni sud **500** bodova po radnji |
+| ~~45~~ | neprocjenjivi predmeti koje Tarifa ne predviđa | **implementirano** u `50a7e4b`: 100 / 200 / 500 po razini suda, sučelje u `f0ba06d` |
 | 46 | PDV | implementirano kao zastavica, nije zasebna stavka |
 | 47 | pisani obračun nagrade na zahtjev stranke | |
 | 48 | stvarni izdaci (poštanski, telekomunikacijski i dr.) | |
@@ -540,13 +541,12 @@ zahtjeva i upućuje na Pravilnik NN 22/2022 br. 271 — vidi odjeljak 11.
 | 53 | donositelj Tarife | nema računskog učinka |
 | 54 | vrijednost boda | implementirano kao konstanta `BodValue = 2,00 €` |
 
-**Najveći preostali propust je Tbr. 41** — povišenje do 100 % mijenja iznos jednako
-kao Tbr. 40, a Tbr. 40 je već implementiran kao globalni modifikator osnovice, pa bi
-se Tbr. 41 uklopio na isto mjesto.
-
-**Tbr. 45** je drugi po važnosti: pokriva svaki neprocjenjivi predmet koji Tarifa
-posebno ne predviđa, a sada takvi predmeti padaju na dno tablice iz Tbr. 7. toč. 1
-(25 bodova) umjesto na 100 / 200 / 500 prema razini suda.
+> **Zastarjelo od `50a7e4b` i `f0ba06d`.** Ovaj je popis nastao prije parničnog kruga.
+> **Tbr. 41 i Tbr. 45 su u međuvremenu implementirani**, kao i cijeli parnični dio
+> (Tbr. 7 toč. 4, 6, 8, 9, 10; Tbr. 8 toč. 2 i 5; Tbr. 9 toč. 4, 6, 8; Tbr. 10 toč. 2,
+> 3, 5 st. 2 i 6 st. 2) — vidi dopunu na kraju dokumenta. Ostatak tablice i dalje vrijedi:
+> Tbr. 23, 26, 29, 38, 42, 43, 44, 47, 48, 49–51 i 52 nisu pokriveni, a Tbr. 25 je ukinut
+> i namjerno se ne implementira.
 
 ### Jedno tumačenje, ne doslovan citat
 
@@ -691,16 +691,81 @@ pada ako ga netko doda.
 
 ## Otvoreno
 
-1. **Frontend nije ažuriran** za ove odredbe — `lib/tarifa.ts` i `/troskovnik` ne nude
-   odabir osnovice, razine suda, načina po Tbr. 45 ni klizače za Tbr. 41. Backend ih
-   prihvaća; dok se sučelje ne dopuni, dostupni su samo preko API-ja.
-2. **Tbr. 10 upućuje na uži skup** — „Tbr. 7. toč. 1., 4. i 7.", bez toč. 8, za razliku od
+1. **Tbr. 10 upućuje na uži skup** — „Tbr. 7. toč. 1., 4. i 7.", bez toč. 8, za razliku od
    Tbr. 8 i Tbr. 9. Sustav primjenjuje jednu osnovicu na cijeli obračun. Praktično je
    bezopasno (toč. 8 ionako upućuje natrag na toč. 1, pa je iznos isti), ali razlika u
    tekstu je stvarna.
-3. **Tbr. 7. toč. 9 kao prekidač** — implementiran je kao zasebna stavka (`par_mali_spor`),
-   a ne kao automatska zamjena cijelog obračuna. Korisnik ga bira sam; sustav ne upozorava
-   ako je VPS < 100 € a stavka nije odabrana.
+2. **Tbr. 7. toč. 9 ostaje stavka, ne prekidač** — `par_mali_spor` odvjetnik bira sam.
+   Sustav sada upozorava kad je VPS ispod 100 € a stavka nije odabrana (vidi niže), ali
+   ne mijenja obračun automatski.
+
+---
+
+# Dopuna — sučelje za osnovicu, Tbr. 41 i Tbr. 45 (`f0ba06d`)
+
+Backend je od `50a7e4b` prihvaćao osnovicu, razinu suda i Tbr. 41, ali su ta polja bila
+dostupna samo preko API-ja — kroz `/troskovnik` se do njih nije moglo. Ovo zatvara rupu.
+
+## Klijentski motor
+
+`frontend/lib/tarifa.ts` zrcali `IzracunajOsnovicu`, `EfektivniVps` i `Tbr41Udio`.
+Ključna promjena potpisa: `izracunajBodove(def, osnovica)` umjesto `izracunajBodove(def,
+baseBodovi)` — isto kao na backendu, pa „fiksno po radnji" iz Tbr. 45 radi i u živom
+pregledu, gdje se postoci i stropovi iz Tbr. 8./9. ne smiju primijeniti.
+
+| funkcija | zrcali |
+|---|---|
+| `izracunajOsnovicu` | `TroskovnikService.IzracunajOsnovicu` |
+| `efektivniVps` | `TroskovnikService.EfektivniVps` |
+| `tbr41Udio` | `TroskovnikService.Tbr41Udio` |
+| `provjeriZahtjev` | provjere Tbr. 45 iz `Izracunaj` |
+
+## Sučelje
+
+- **Osnovica** — padajući izbornik sa svih sedam varijanti, uz ispis pravnog izvora
+  odabrane varijante ispod polja.
+- **Tbr. 7. toč. 4 al. 2** — unos iznosa rente/zakupa/najma i razdoblja (mjesečno × 60,
+  godišnje × 5), uz prikaz izračunatog petogodišnjeg iznosa. Bez odabranog razdoblja
+  ne preračunava se ništa.
+- **Tbr. 45** — razina suda i način obračuna, oboje obavezno. Dok nisu odabrani, iznos
+  se ne prikazuje, stavke pišu „— dovrši osnovicu —", a gumbi su onemogućeni s
+  obrazloženjem. Raspon je 1:5, pa nema razumne zadane vrijednosti.
+- **Tbr. 41** — dva klizača: povišenje 0–100 % (toč. 1) i sniženje 0–50 % (toč. 2), oba
+  zadano 0. Prikazuje se kao zaseban redak u živom troškovniku i u tablici rezultata.
+
+## Tbr. 7. toč. 9 — upozorenje
+
+Kad je vrijednost spora ispod 100,00 €, osnovica je toč. 1 i odabrane su parnične stavke
+koje se obračunavaju po toč. 1, sučelje javlja da toč. 9 za takve postupke propisuje
+jednokratnih 50 bodova za cijeli prvostupanjski postupak.
+
+Upozorenje, ne greška: odredba se veže uz toč. 1, a odvjetnik odlučuje primjenjuje li se.
+
+## Testovi
+
+`frontend/__tests__/tarifa-osnovica.test.ts` — 34 provjere, isti presudni slučajevi kao
+na backendu:
+
+| slučaj | očekivano |
+|---|---|
+| VPS 1.000 € uz toč. 4 al. 1 | **100** bodova (tablica bi dala 75) |
+| međunarodna arbitraža pri VPS-u 20.000 € | **500** bodova (toč. 1 daje 250) |
+| renta 500 €/mj. | petogodišnji iznos **30.000 €** |
+| Tbr. 45, Vrhovni sud, „kao osnovica" | obrazloženi podnesak → **100** (50 % od 500, strop) |
+| Tbr. 45, Vrhovni sud, „fiksno po radnji" | isti podnesak → **500** |
+| Tbr. 41 povišenje 250 % | ograničeno na **+100 %** |
+| Tbr. 41 sniženje 90 % | ograničeno na **−50 %** |
+
+`tarifa-zaokruzivanje.test.ts` prilagođen novom potpisu; test iz audita i dalje daje
+46,875 bodova i 93,75 €.
+
+```
+dotnet test Backend.Tests/Backend.Tests.csproj   →  1487 prolaza, 0 padova
+cd frontend && npx vitest run __tests__/tarifa   →   164 prolaza, 0 padova
+```
+
+Zatečenih 5 padova u `__tests__/delete.test.ts` nema veze s tarifom — provjereno na
+čistom stablu prije prve izmjene.
 
 ## Nove provjere
 
