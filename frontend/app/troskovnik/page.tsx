@@ -44,14 +44,31 @@ import {
   izracunajKazneneBodove,
   izracunajSudskuPristojbu,
   objasnjenjePristojbe,
+  OSNOVICA_TBR7,
+  OSNOVICA_LABELE,
+  RAZINA_SUDA,
+  RAZINA_SUDA_LABELE,
+  RENTA_RAZDOBLJE,
+  TBR41_MAX_POVISENJE,
+  TBR41_MAX_SNIZENJE,
+  TBR45_NACIN,
+  TBR45_NACIN_LABELE,
+  efektivniVps,
+  izracunajOsnovicu,
   odrediPristojbuOsnovu,
   povisenjeViseOsobaPostotak,
   provjeriZahtjev,
+  tbr41Udio,
   tbr71Bodovi,
+  upozorenjeMaliSpor,
   ukupnoBodovaZaStavku,
   zaokruziNovac,
+  type OsnovicaTbr7,
   type PristojbaOsnova,
+  type RazinaSuda,
+  type RentaRazdoblje,
   type TarifnaStavka,
+  type Tbr45Nacin,
 } from "@/lib/tarifa";
 
 // ── Types (mirror backend models) ──
@@ -87,6 +104,16 @@ interface TroskovnikResponse {
   broj_zastupanih_osoba?: number;
   povisenje_vise_osoba_postotak?: number;
   povisenje_vise_osoba_bodovi?: number;
+  // Osnovica po Tbr. 7. / Tbr. 45
+  osnovica_tbr7?: string;
+  osnovica_bodovi?: number;
+  osnovica_pravni_izvor?: string;
+  razina_suda?: string | null;
+  tbr45_nacin?: string | null;
+  // Tbr. 41
+  tbr41_povisenje_postotak?: number;
+  tbr41_snizenje_postotak?: number;
+  tbr41_bodovi?: number;
   ukupno_eur_bez_pdv: number;
   pdv: number;
   ukupno_eur_s_pdv: number;
@@ -228,6 +255,17 @@ function TroskovnikContent() {
   // ── Tbr. 40 — broj osoba koje odvjetnik zastupa u istom postupku ──
   const [brojZastupanihOsoba, setBrojZastupanihOsoba] = useState(1);
 
+  // ── Osnovica po Tbr. 7. toč. 1., 4., 7. i 8., odnosno Tbr. 45 ──
+  const [osnovicaTbr7, setOsnovicaTbr7] = useState<OsnovicaTbr7>(OSNOVICA_TBR7.Toc1);
+  const [razinaSuda, setRazinaSuda] = useState<RazinaSuda | null>(null);
+  const [tbr45Nacin, setTbr45Nacin] = useState<Tbr45Nacin | null>(null);
+  const [rentaIznos, setRentaIznos] = useState("");
+  const [rentaRazdoblje, setRentaRazdoblje] = useState<RentaRazdoblje | null>(null);
+
+  // ── Tbr. 41 — povisivanje i snižavanje tarifnih stavaka ──
+  const [tbr41Povisenje, setTbr41Povisenje] = useState(0);
+  const [tbr41Snizenje, setTbr41Snizenje] = useState(0);
+
   // ── Client picker state ──
   type ClientOption = { id: string; ime_naziv: string; oib?: string; adresa?: string; grad?: string; tip: string };
   const [clients, setClients] = useState<ClientOption[]>([]);
@@ -366,9 +404,28 @@ function TroskovnikContent() {
   const unesenVps = parseFloat(vrijednostSpora.replace(/\./g, "").replace(",", ".")) || 0;
   // U kaznenom postupku sve ide po zapriječenoj kazni (Tbr. 4. toč. 1) — VPS otpada.
   const vrijednostNum = isOnlyKazneni ? 0 : unesenVps;
-  const baseBodovi = tbr71Bodovi(vrijednostNum);
+  const rentaIznosNum = parseFloat(rentaIznos.replace(/\./g, "").replace(",", ".")) || 0;
+
+  // Osnovica na koju upućuju Tbr. 8. toč. 1, 3, 4 i Tbr. 9. toč. 1–6:
+  // "Tbr. 7. toč. 1., 4., 7. i 8." — četiri varijante iste osnovice.
+  const osnovicaUlaz = useMemo(
+    () => ({
+      osnovicaTbr7,
+      vrijednostSpora: vrijednostNum,
+      razinaSuda,
+      tbr45Nacin,
+      rentaIznos: rentaIznosNum,
+      rentaRazdoblje,
+    }),
+    [osnovicaTbr7, vrijednostNum, razinaSuda, tbr45Nacin, rentaIznosNum, rentaRazdoblje],
+  );
+
+  const osnovica = useMemo(() => izracunajOsnovicu(osnovicaUlaz), [osnovicaUlaz]);
+  const efektivniVpsNum = useMemo(() => efektivniVps(osnovicaUlaz), [osnovicaUlaz]);
+  const baseBodovi = osnovica?.bodovi ?? 0;
 
   // Uredba NN 37/23, Poglavlje I. pokriva parnični i ovršni postupak.
+  // Pristojba se veže uz stvarnu vrijednost spora, ne uz osnovicu iz Tbr. 45.
   const pristojbaOsnova = odrediPristojbuOsnovu(odabraneDefinicije);
 
   // Što nedostaje da se troškovnik može valjano izračunati — zrcali backend provjere.
@@ -378,8 +435,17 @@ function TroskovnikContent() {
         zaprijecenaKazna: zaprijecenaKazna || undefined,
         isOduzimanjePrekrsaj,
         vrijednostOduzimanja: parseFloat(vrijednostOduzimanja.replace(/\./g, "").replace(",", ".")) || 0,
+        osnovicaTbr7,
+        razinaSuda,
+        tbr45Nacin,
       }),
-    [odabraneDefinicije, zaprijecenaKazna, isOduzimanjePrekrsaj, vrijednostOduzimanja],
+    [odabraneDefinicije, zaprijecenaKazna, isOduzimanjePrekrsaj, vrijednostOduzimanja, osnovicaTbr7, razinaSuda, tbr45Nacin],
+  );
+
+  // Tbr. 7. toč. 9 — upozorenje, ne greška: odvjetnik stavku bira sam.
+  const upozorenjeSpor = useMemo(
+    () => upozorenjeMaliSpor(odabraneDefinicije, vrijednostNum, osnovicaTbr7),
+    [odabraneDefinicije, vrijednostNum, osnovicaTbr7],
   );
 
   // Resolved kazneni tier points
@@ -445,8 +511,12 @@ function TroskovnikContent() {
         }
       } else if (def.kazneni_base) {
         bodovi = izracunajKazneneBodove(def, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, zaprijecenaKazna);
+      } else if (osnovica) {
+        bodovi = izracunajBodove(def, osnovica);
       } else {
-        bodovi = izracunajBodove(def, baseBodovi);
+        // Osnovica nije razriješena (Tbr. 45 bez razine suda ili načina) —
+        // razlog stoji u `nedostaci`, iznad gumba za izračun.
+        return;
       }
 
       // Redak s 0 bodova izgleda kao valjan iznos, a nije — ne prikazuje se.
@@ -474,7 +544,12 @@ function TroskovnikContent() {
     const povisenjePostotak = povisenjeViseOsobaPostotak(brojZastupanihOsoba);
     const povisenjeBodovi = osnovicaBodova * povisenjePostotak;
 
-    const ukupnoBodova = osnovicaBodova + povisenjeBodovi;
+    // Tbr. 41 — povisivanje i snižavanje tarifnih stavaka. Djeluje na zbroj stavaka,
+    // kao i Tbr. 40; sudska pristojba se ne dira jer nije odvjetnička nagrada.
+    const tbr41Postotak = tbr41Udio(tbr41Povisenje, tbr41Snizenje);
+    const tbr41Bodovi = osnovicaBodova * tbr41Postotak;
+
+    const ukupnoBodova = osnovicaBodova + povisenjeBodovi + tbr41Bodovi;
 
     // Bodovi su do ovdje ostali decimalni; tek se gotov iznos zaokružuje, jednom.
     const ukupnoEur = zaokruziNovac(ukupnoBodova * BOD_VALUE);
@@ -487,8 +562,8 @@ function TroskovnikContent() {
       : izracunajSudskuPristojbu(vrijednostNum, pristojbaOsnova);
     const sveukupniTrosak = odvjetnickiTrosak + sudskaPristojba;
 
-    return { lines, osnovicaBodova, povisenjePostotak, povisenjeBodovi, ukupnoBodova, ukupnoEur, pdv, ukupnoSPdv: ukupnoEur + pdv, sudskaPristojba, sveukupniTrosak };
-  }, [selectedItems, katalog, baseBodovi, isPdvUkljucen, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, isOduzimanjePrekrsaj, parsedVrijednostOduzimanja, isOslobodjenPristojbi, vrijednostNum, pristojbaOsnova, brojZastupanihOsoba, zaprijecenaKazna]);
+    return { lines, osnovicaBodova, povisenjePostotak, povisenjeBodovi, tbr41Postotak, tbr41Bodovi, ukupnoBodova, ukupnoEur, pdv, ukupnoSPdv: ukupnoEur + pdv, sudskaPristojba, sveukupniTrosak };
+  }, [selectedItems, katalog, osnovica, isPdvUkljucen, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, isOduzimanjePrekrsaj, parsedVrijednostOduzimanja, isOslobodjenPristojbi, vrijednostNum, pristojbaOsnova, brojZastupanihOsoba, zaprijecenaKazna, tbr41Povisenje, tbr41Snizenje]);
 
   // ── Handlers ──
   const toggleCategory = useCallback((cat: string) => {
@@ -577,6 +652,15 @@ function TroskovnikContent() {
         vrijednost_oduzimanja: parsedVrijednostOduzimanja,
         is_oslobodjen_pristojbi: isOslobodjenPristojbi,
         broj_zastupanih_osoba: brojZastupanihOsoba,
+        // Osnovica po Tbr. 7. toč. 1., 4., 7. i 8., odnosno Tbr. 45
+        osnovica_tbr7: osnovicaTbr7,
+        razina_suda: razinaSuda ?? undefined,
+        tbr45_nacin: tbr45Nacin ?? undefined,
+        renta_iznos: rentaIznosNum || undefined,
+        renta_razdoblje: rentaRazdoblje ?? undefined,
+        // Tbr. 41 — povisivanje i snižavanje tarifnih stavaka
+        tbr41_povisenje_postotak: tbr41Povisenje,
+        tbr41_snizenje_postotak: tbr41Snizenje,
       };
 
       const res = await fetch(`${API_BASE}/api/troskovnik/izracunaj`, {
@@ -649,6 +733,15 @@ function TroskovnikContent() {
         vrijednost_oduzimanja: parsedVrijednostOduzimanja,
         is_oslobodjen_pristojbi: isOslobodjenPristojbi,
         broj_zastupanih_osoba: brojZastupanihOsoba,
+        // Osnovica po Tbr. 7. toč. 1., 4., 7. i 8., odnosno Tbr. 45
+        osnovica_tbr7: osnovicaTbr7,
+        razina_suda: razinaSuda ?? undefined,
+        tbr45_nacin: tbr45Nacin ?? undefined,
+        renta_iznos: rentaIznosNum || undefined,
+        renta_razdoblje: rentaRazdoblje ?? undefined,
+        // Tbr. 41 — povisivanje i snižavanje tarifnih stavaka
+        tbr41_povisenje_postotak: tbr41Povisenje,
+        tbr41_snizenje_postotak: tbr41Snizenje,
         client_id: selectedClientId || undefined,
         // Signal backend to auto-create client from stranke data if no client_id
         auto_create_client: !selectedClientId && !!klijentIme.trim(),
@@ -820,12 +913,161 @@ function TroskovnikContent() {
                   className="flex-1 px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
                 />
                 <div className="text-right shrink-0">
-                  <div className="text-xs text-slate-500">Tbr. 7.1</div>
-                  <div className="text-lg font-bold text-indigo-600">{fmtNum(baseBodovi)} bod.</div>
+                  <div className="text-xs text-slate-500">Osnovica</div>
+                  <div className="text-lg font-bold text-indigo-600">
+                    {osnovica ? `${fmtNum(baseBodovi)} bod.` : "—"}
+                  </div>
                 </div>
+              </div>
+
+              {/* ── Osnovica: Tbr. 7. toč. 1., 4., 7. i 8., odnosno Tbr. 45 ── */}
+              <div className="mt-3 pt-3 border-t border-dashed border-slate-200 space-y-2">
+                <label className="block text-[11px] font-semibold text-slate-600">
+                  Osnovica po Tbr. 7. toč. 1., 4., 7. i 8.
+                </label>
+                <select
+                  value={osnovicaTbr7}
+                  onChange={(e) => {
+                    const nova = e.target.value as OsnovicaTbr7;
+                    setOsnovicaTbr7(nova);
+                    if (nova !== OSNOVICA_TBR7.Tbr45Neprocjenjiv) {
+                      setRazinaSuda(null);
+                      setTbr45Nacin(null);
+                    }
+                    if (nova !== OSNOVICA_TBR7.Toc4Renta) {
+                      setRentaIznos("");
+                      setRentaRazdoblje(null);
+                    }
+                  }}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
+                >
+                  {Object.values(OSNOVICA_TBR7).map((o) => (
+                    <option key={o} value={o}>
+                      {OSNOVICA_LABELE[o]}
+                    </option>
+                  ))}
+                </select>
+                {osnovica && (
+                  <p className="text-[10px] text-slate-400 leading-snug">{osnovica.pravniIzvor}</p>
+                )}
+
+                {/* Tbr. 7. toč. 4 al. 2 — petogodišnji iznos rente / zakupa / najma */}
+                {osnovicaTbr7 === OSNOVICA_TBR7.Toc4Renta && (
+                  <div className="rounded-lg bg-slate-50 border border-slate-200 p-2.5 space-y-2">
+                    <p className="text-[10px] text-slate-500 leading-snug">
+                      Kao vrijednost spora uzima se petogodišnji iznos. Unesite iznos i razdoblje —
+                      bez toga se ne preračunava ništa.
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={rentaIznos}
+                        onChange={(e) => setRentaIznos(e.target.value)}
+                        placeholder="iznos u €"
+                        className="flex-1 px-2.5 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                      <select
+                        value={rentaRazdoblje ?? ""}
+                        onChange={(e) =>
+                          setRentaRazdoblje((e.target.value || null) as RentaRazdoblje | null)
+                        }
+                        className="px-2.5 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500"
+                      >
+                        <option value="">— razdoblje —</option>
+                        <option value={RENTA_RAZDOBLJE.Mjesecno}>mjesečno (× 60)</option>
+                        <option value={RENTA_RAZDOBLJE.Godisnje}>godišnje (× 5)</option>
+                      </select>
+                    </div>
+                    {rentaRazdoblje && rentaIznosNum > 0 && (
+                      <p className="text-[10px] text-indigo-600 font-semibold">
+                        Petogodišnji iznos: {fmtEur(efektivniVpsNum)}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Tbr. 45 — razina suda i način obračuna */}
+                {osnovicaTbr7 === OSNOVICA_TBR7.Tbr45Neprocjenjiv && (
+                  <div className="rounded-lg bg-slate-50 border border-slate-200 p-2.5 space-y-2">
+                    <select
+                      value={razinaSuda ?? ""}
+                      onChange={(e) => setRazinaSuda((e.target.value || null) as RazinaSuda | null)}
+                      className="w-full px-2.5 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value="">— razina suda (obavezno) —</option>
+                      {Object.values(RAZINA_SUDA).map((r) => (
+                        <option key={r} value={r}>
+                          {RAZINA_SUDA_LABELE[r]}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={tbr45Nacin ?? ""}
+                      onChange={(e) => setTbr45Nacin((e.target.value || null) as Tbr45Nacin | null)}
+                      className="w-full px-2.5 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value="">— način obračuna (obavezno) —</option>
+                      {Object.values(TBR45_NACIN).map((n) => (
+                        <option key={n} value={n}>
+                          {TBR45_NACIN_LABELE[n]}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-slate-500 leading-snug">
+                      Tarifa ne kaže primjenjuju li se postoci iz Tbr. 8. i 9. na iznos iz Tbr. 45.
+                      Oba čitanja su dostupna; odaberite ono koje primjenjujete.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
             )}
+
+            {/* ── Tbr. 41 — povisivanje i snižavanje tarifnih stavaka ── */}
+            <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm space-y-3">
+              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                <Scale className="h-3.5 w-3.5 inline mr-1 -mt-0.5" />
+                Povisivanje i snižavanje (Tbr. 41)
+              </label>
+
+              <div>
+                <div className="flex justify-between text-[11px] text-slate-600 mb-1">
+                  <span>Povišenje — posebna stručnost, težina, odgovornost (toč. 1)</span>
+                  <span className="font-semibold text-indigo-600">+{tbr41Povisenje} %</span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={TBR41_MAX_POVISENJE}
+                  step={5}
+                  value={tbr41Povisenje}
+                  onChange={(e) => setTbr41Povisenje(Number(e.target.value))}
+                  className="w-full accent-indigo-600"
+                />
+              </div>
+
+              <div>
+                <div className="flex justify-between text-[11px] text-slate-600 mb-1">
+                  <span>Sniženje (toč. 2)</span>
+                  <span className="font-semibold text-amber-600">−{tbr41Snizenje} %</span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={TBR41_MAX_SNIZENJE}
+                  step={5}
+                  value={tbr41Snizenje}
+                  onChange={(e) => setTbr41Snizenje(Number(e.target.value))}
+                  className="w-full accent-amber-600"
+                />
+              </div>
+
+              <p className="text-[10px] text-slate-400 leading-snug">
+                Toč. 1 dopušta povišenje do 100 %, toč. 2 sniženje do 50 %. Zbraja se s Tbr. 40;
+                sudsku pristojbu ne dira jer ona nije odvjetnička nagrada.
+              </p>
+            </div>
 
             {/* ── Tbr. 40 — zastupanje više osoba ── */}
             <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
@@ -1031,8 +1273,10 @@ function TroskovnikContent() {
                               : 100)
                           : item.kazneni_base
                           ? izracunajKazneneBodove(item, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, zaprijecenaKazna)
-                          : izracunajBodove(item, baseBodovi);
-                        const iznosPerUnit = bodovi * BOD_VALUE;
+                          : osnovica
+                          ? izracunajBodove(item, osnovica)
+                          : null;
+                        const iznosPerUnit = bodovi === null ? 0 : bodovi * BOD_VALUE;
 
                         return (
                           <div
@@ -1068,6 +1312,8 @@ function TroskovnikContent() {
                                     ? "— odaberi kaznu —"
                                     : item.prekrsaj_oduzimanje && isOduzimanjePrekrsaj && parsedVrijednostOduzimanja <= 0
                                     ? "— unesi vrijednost oduzimanja —"
+                                    : bodovi === null
+                                    ? "— dovrši osnovicu —"
                                     : `${fmtNum(bodovi)} bod. = ${fmtEur(iznosPerUnit)}`}
                                 </span>
                                 <span className="text-[10px] text-slate-400">/ {item.jedinica}</span>
@@ -1418,19 +1664,31 @@ function TroskovnikContent() {
                   {/* Totals */}
                   {selectedItems.size > 0 && (
                     <div className="mt-4 pt-3 border-t border-slate-200 space-y-1.5">
+                      {(liveCalc.povisenjePostotak > 0 || liveCalc.tbr41Postotak !== 0) && (
+                        <div className="flex justify-between text-xs text-slate-500">
+                          <span>Osnovica</span>
+                          <span>{fmtNum(liveCalc.osnovicaBodova)} bod.</span>
+                        </div>
+                      )}
                       {liveCalc.povisenjePostotak > 0 && (
-                        <>
-                          <div className="flex justify-between text-xs text-slate-500">
-                            <span>Osnovica</span>
-                            <span>{fmtNum(liveCalc.osnovicaBodova)} bod.</span>
-                          </div>
-                          <div className="flex justify-between text-xs text-slate-500">
-                            <span>
-                              Zastupanje {brojZastupanihOsoba} osoba (Tbr. 40) +{Math.round(liveCalc.povisenjePostotak * 100)} %
-                            </span>
-                            <span>{fmtNum(liveCalc.povisenjeBodovi)} bod.</span>
-                          </div>
-                        </>
+                        <div className="flex justify-between text-xs text-slate-500">
+                          <span>
+                            Zastupanje {brojZastupanihOsoba} osoba (Tbr. 40) +{Math.round(liveCalc.povisenjePostotak * 100)} %
+                          </span>
+                          <span>{fmtNum(liveCalc.povisenjeBodovi)} bod.</span>
+                        </div>
+                      )}
+                      {liveCalc.tbr41Postotak !== 0 && (
+                        <div className="flex justify-between text-xs text-slate-500">
+                          <span>
+                            Tbr. 41 {liveCalc.tbr41Postotak > 0 ? "+" : "−"}
+                            {Math.abs(Math.round(liveCalc.tbr41Postotak * 100))} %
+                            {tbr41Povisenje > 0 && tbr41Snizenje > 0
+                              ? ` (+${tbr41Povisenje} % / −${tbr41Snizenje} %)`
+                              : ""}
+                          </span>
+                          <span>{fmtNum(liveCalc.tbr41Bodovi)} bod.</span>
+                        </div>
                       )}
                       <div className="flex justify-between text-xs text-slate-500">
                         <span>Ukupno bodova</span>
@@ -1524,6 +1782,14 @@ function TroskovnikContent() {
                 {/* Action buttons */}
                 {selectedItems.size > 0 && (
                   <div className="px-4 pb-4 space-y-2">
+                    {upozorenjeSpor && (
+                      <div className="rounded-lg border border-sky-200 bg-sky-50 p-3">
+                        <p className="flex items-start gap-1.5 text-[11px] text-sky-800 leading-snug">
+                          <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                          <span>{upozorenjeSpor}</span>
+                        </p>
+                      </div>
+                    )}
                     {nedostaci.length > 0 && (
                       <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-1.5">
                         {nedostaci.map((poruka) => (
@@ -1806,6 +2072,20 @@ function TroskovnikContent() {
                         </td>
                         <td className="py-2 px-2 text-right text-slate-600">
                           {fmtEur((result.povisenje_vise_osoba_bodovi ?? 0) * BOD_VALUE)}
+                        </td>
+                      </tr>
+                    )}
+                    {(result.tbr41_bodovi ?? 0) !== 0 && (
+                      <tr className="border-t border-slate-200">
+                        <td colSpan={5} className="py-2 px-2 text-right text-xs text-slate-500">
+                          Tbr. 41 — povišenje {result.tbr41_povisenje_postotak ?? 0} %, sniženje{" "}
+                          {result.tbr41_snizenje_postotak ?? 0} %
+                        </td>
+                        <td className="py-2 px-2 text-right text-slate-600">
+                          {fmtNum(result.tbr41_bodovi ?? 0)}
+                        </td>
+                        <td className="py-2 px-2 text-right text-slate-600">
+                          {fmtEur((result.tbr41_bodovi ?? 0) * BOD_VALUE)}
                         </td>
                       </tr>
                     )}

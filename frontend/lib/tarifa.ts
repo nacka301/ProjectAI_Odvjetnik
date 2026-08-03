@@ -160,6 +160,216 @@ export const TBR_7_1_RAZREDI: RazredZaPrikaz[] = [
   { od: 1_327_228.01, do: null, bodovi: "7.496 + 1 bod / započetih 664,00 €, najviše 10.000" },
 ];
 
+// ── Osnovica: "Tbr. 7. toč. 1., 4., 7. i 8." ─────────────────────
+//
+// Tarifa na devet mjesta upućuje na "nagradu iz Tbr. 7. toč. 1., 4., 7. i 8."
+// To nisu četiri iznosa nego četiri VARIJANTE iste osnovice; koja se primjenjuje
+// ovisi o vrsti postupka. Zrcali `TroskovnikService.IzracunajOsnovicu`.
+
+export const OSNOVICA_TBR7 = {
+  /** Tbr. 7. toč. 1 — tablica vrijednost spora → bodovi. Zadano. */
+  Toc1: "toc1",
+  /** Tbr. 7. toč. 4 al. 1 — autorsko / industrijsko vlasništvo: po toč. 1, ali ne manje od 100. */
+  Toc4Autorsko: "toc4_autorsko",
+  /** Tbr. 7. toč. 4 al. 2 — renta / zakup / najam: kao VPS uzima se petogodišnji iznos. */
+  Toc4Renta: "toc4_renta",
+  /** Tbr. 7. toč. 7 st. 1 — domaća arbitraža. */
+  Toc7DomacaArbitraza: "toc7_domaca_arbitraza",
+  /** Tbr. 7. toč. 7 st. 2 — međunarodna arbitraža: povišenje od 100 %. */
+  Toc7MedunarodnaArbitraza: "toc7_medunarodna_arbitraza",
+  /** Tbr. 7. toč. 8 — mirno rješavanje sporova. */
+  Toc8Mirenje: "toc8_mirenje",
+  /** Tbr. 45 — neprocjenjivi predmeti: 100 / 200 / 500 prema razini suda. */
+  Tbr45Neprocjenjiv: "tbr45_neprocjenjiv",
+} as const;
+
+export type OsnovicaTbr7 = (typeof OSNOVICA_TBR7)[keyof typeof OSNOVICA_TBR7];
+
+/** Nazivi za padajući izbornik, s tarifnim brojem iz kojeg proizlaze. */
+export const OSNOVICA_LABELE: Record<OsnovicaTbr7, string> = {
+  [OSNOVICA_TBR7.Toc1]: "Tbr. 7. toč. 1 — prema vrijednosti predmeta spora",
+  [OSNOVICA_TBR7.Toc4Autorsko]: "Tbr. 7. toč. 4 al. 1 — autorsko pravo i industrijsko vlasništvo (ne manje od 100 bodova)",
+  [OSNOVICA_TBR7.Toc4Renta]: "Tbr. 7. toč. 4 al. 2 — renta / zakup / najam (petogodišnji iznos)",
+  [OSNOVICA_TBR7.Toc7DomacaArbitraza]: "Tbr. 7. toč. 7 st. 1 — domaća arbitraža",
+  [OSNOVICA_TBR7.Toc7MedunarodnaArbitraza]: "Tbr. 7. toč. 7 st. 2 — međunarodna arbitraža (+100 %)",
+  [OSNOVICA_TBR7.Toc8Mirenje]: "Tbr. 7. toč. 8 — mirno rješavanje sporova",
+  [OSNOVICA_TBR7.Tbr45Neprocjenjiv]: "Tbr. 45 — neprocjenjiv predmet koji Tarifa ne predviđa",
+};
+
+/** Tbr. 45. toč. 1–3 — bodovi po razini suda, doslovno iz Tarife. */
+export const RAZINA_SUDA = {
+  Opcinski: "opcinski",
+  ZupanijskiTrgovacki: "zupanijski_trgovacki",
+  Vrhovni: "vrhovni",
+} as const;
+
+export type RazinaSuda = (typeof RAZINA_SUDA)[keyof typeof RAZINA_SUDA];
+
+export const RAZINA_SUDA_BODOVI: Record<RazinaSuda, number> = {
+  [RAZINA_SUDA.Opcinski]: 100,
+  [RAZINA_SUDA.ZupanijskiTrgovacki]: 200,
+  [RAZINA_SUDA.Vrhovni]: 500,
+};
+
+export const RAZINA_SUDA_LABELE: Record<RazinaSuda, string> = {
+  [RAZINA_SUDA.Opcinski]: "Općinski sud i tijela iste razine — 100 bodova (toč. 1)",
+  [RAZINA_SUDA.ZupanijskiTrgovacki]: "Županijski i trgovački sudovi te tijela iste razine — 200 bodova (toč. 2)",
+  [RAZINA_SUDA.Vrhovni]: "Vrhovni sud RH i tijela iste razine — 500 bodova (toč. 3)",
+};
+
+/**
+ * Tarifa ne kaže primjenjuju li se postoci iz Tbr. 8 i 9 na iznos iz Tbr. 45.
+ * Oba su čitanja implementirana; odabir je obavezan, ništa se ne pretpostavlja.
+ */
+export const TBR45_NACIN = {
+  KaoOsnovica: "kao_osnovica",
+  FiksnoPoRadnji: "fiksno_po_radnji",
+} as const;
+
+export type Tbr45Nacin = (typeof TBR45_NACIN)[keyof typeof TBR45_NACIN];
+
+export const TBR45_NACIN_LABELE: Record<Tbr45Nacin, string> = {
+  [TBR45_NACIN.KaoOsnovica]: "Kao osnovica — postoci iz Tbr. 8. i 9. primjenjuju se na 100/200/500",
+  [TBR45_NACIN.FiksnoPoRadnji]: "Fiksno po radnji — svaka radnja nosi puni iznos, bez postotaka i stropova",
+};
+
+export const RENTA_RAZDOBLJE = {
+  Mjesecno: "mjesecno",
+  Godisnje: "godisnje",
+} as const;
+
+export type RentaRazdoblje = (typeof RENTA_RAZDOBLJE)[keyof typeof RENTA_RAZDOBLJE];
+
+export interface OsnovicaUlaz {
+  osnovicaTbr7: OsnovicaTbr7;
+  vrijednostSpora: number;
+  razinaSuda?: RazinaSuda | null;
+  tbr45Nacin?: Tbr45Nacin | null;
+  rentaIznos?: number;
+  rentaRazdoblje?: RentaRazdoblje | null;
+}
+
+export interface OsnovicaRezultat {
+  bodovi: number;
+  pravniIzvor: string;
+  /** Tbr. 45 uz "fiksno po radnji" — postoci iz Tbr. 8./9. se ne primjenjuju. */
+  fiksnoPoRadnji: boolean;
+}
+
+const NAZIV_TARIFE =
+  "Tarifa o nagradama i naknadi troškova za rad odvjetnika (Hrvatska odvjetnička komora, 14. listopada 2023.)";
+
+/**
+ * Tbr. 7. toč. 4 al. 2: "za utvrđivanje rente, zakupa, najma i u drugim sličnim
+ * postupcima kao vrijednost spora uzima se petogodišnji iznos rente, zakupa, najma
+ * i drugih sličnih davanja."
+ *
+ * Preračun se radi samo uz osnovicu `toc4_renta` i uz izričito odabrano razdoblje —
+ * ništa se ne izvodi tiho.
+ */
+export function efektivniVps(ulaz: OsnovicaUlaz): number {
+  if (ulaz.osnovicaTbr7 !== OSNOVICA_TBR7.Toc4Renta || !ulaz.rentaIznos || ulaz.rentaIznos <= 0) {
+    return ulaz.vrijednostSpora;
+  }
+
+  if (ulaz.rentaRazdoblje === RENTA_RAZDOBLJE.Mjesecno) return ulaz.rentaIznos * 60; // 5 god. × 12 mj.
+  if (ulaz.rentaRazdoblje === RENTA_RAZDOBLJE.Godisnje) return ulaz.rentaIznos * 5;
+
+  return ulaz.vrijednostSpora; // razdoblje nije odabrano → bez preračuna
+}
+
+/**
+ * Razrješava koja se varijanta osnovice primjenjuje.
+ * Vraća `null` kad Tbr. 45 nema odabranu razinu suda ili način — tada `provjeriZahtjev`
+ * vraća poruku, a sučelje ne prikazuje iznos.
+ */
+export function izracunajOsnovicu(ulaz: OsnovicaUlaz): OsnovicaRezultat | null {
+  const vps = efektivniVps(ulaz);
+
+  switch (ulaz.osnovicaTbr7) {
+    // "nagrada po Tbr. 7. toč. 1., ali ne manje od 100 bodova"
+    case OSNOVICA_TBR7.Toc4Autorsko:
+      return {
+        bodovi: Math.max(tbr71Bodovi(vps), 100),
+        pravniIzvor: `${NAZIV_TARIFE}, Tbr. 7. toč. 4 al. 1 — nagrada po Tbr. 7. toč. 1, ali ne manje od 100 bodova`,
+        fiksnoPoRadnji: false,
+      };
+
+    case OSNOVICA_TBR7.Toc4Renta:
+      return {
+        bodovi: tbr71Bodovi(vps),
+        pravniIzvor: `${NAZIV_TARIFE}, Tbr. 7. toč. 4 al. 2 — kao vrijednost spora uzima se petogodišnji iznos rente, zakupa ili najma`,
+        fiksnoPoRadnji: false,
+      };
+
+    case OSNOVICA_TBR7.Toc7DomacaArbitraza:
+      return {
+        bodovi: tbr71Bodovi(vps),
+        pravniIzvor: `${NAZIV_TARIFE}, Tbr. 7. toč. 7 st. 1 — nagrada po Tbr. 7. toč. 1`,
+        fiksnoPoRadnji: false,
+      };
+
+    // "...pred međunarodnom arbitražom (...) po Tbr. 7. toč. 1. s povišenjem od 100%."
+    case OSNOVICA_TBR7.Toc7MedunarodnaArbitraza:
+      return {
+        bodovi: tbr71Bodovi(vps) * 2,
+        pravniIzvor: `${NAZIV_TARIFE}, Tbr. 7. toč. 7 st. 2 — Tbr. 7. toč. 1 s povišenjem od 100%`,
+        fiksnoPoRadnji: false,
+      };
+
+    case OSNOVICA_TBR7.Toc8Mirenje:
+      return {
+        bodovi: tbr71Bodovi(vps),
+        pravniIzvor: `${NAZIV_TARIFE}, Tbr. 7. toč. 8 — nagrada po Tbr. 7. toč. 1`,
+        fiksnoPoRadnji: false,
+      };
+
+    case OSNOVICA_TBR7.Tbr45Neprocjenjiv: {
+      if (!ulaz.razinaSuda || !(ulaz.razinaSuda in RAZINA_SUDA_BODOVI)) return null;
+      if (!ulaz.tbr45Nacin) return null;
+
+      const tocka =
+        ulaz.razinaSuda === RAZINA_SUDA.Opcinski
+          ? "Tbr. 45. toč. 1 — pred općinskim sudom i tijelima iste razine 100 bodova"
+          : ulaz.razinaSuda === RAZINA_SUDA.ZupanijskiTrgovacki
+            ? "Tbr. 45. toč. 2 — pred županijskim i trgovačkim sudovima te tijelima iste razine 200 bodova"
+            : "Tbr. 45. toč. 3 — pred Vrhovnim sudom RH i tijelima iste razine 500 bodova";
+
+      return {
+        bodovi: RAZINA_SUDA_BODOVI[ulaz.razinaSuda],
+        pravniIzvor: `${NAZIV_TARIFE}, ${tocka}`,
+        fiksnoPoRadnji: ulaz.tbr45Nacin === TBR45_NACIN.FiksnoPoRadnji,
+      };
+    }
+
+    default:
+      return {
+        bodovi: tbr71Bodovi(vps),
+        pravniIzvor: `${NAZIV_TARIFE}, Tbr. 7. toč. 1 — nagrada prema vrijednosti predmeta spora`,
+        fiksnoPoRadnji: false,
+      };
+  }
+}
+
+// ── Tbr. 41 — povisivanje i snižavanje tarifnih stavaka ──────────
+
+/** Tbr. 41. toč. 1 — "tarifne stavke mogu se povisiti za 100%". */
+export const TBR41_MAX_POVISENJE = 100;
+
+/** Tbr. 41. toč. 2 — "pojedine tarifne stavke odvjetnik može sniziti za 50%". */
+export const TBR41_MAX_SNIZENJE = 50;
+
+/**
+ * Neto udio: 0,25 znači +25 %, −0,10 znači −10 %. Oba su zadano 0, pa bez
+ * korisnikova zahvata iznos ostaje nepromijenjen.
+ */
+export function tbr41Udio(povisenjePostotak: number, snizenjePostotak: number): number {
+  const povisenje = Math.min(Math.max(povisenjePostotak || 0, 0), TBR41_MAX_POVISENJE) / 100;
+  const snizenje = Math.min(Math.max(snizenjePostotak || 0, 0), TBR41_MAX_SNIZENJE) / 100;
+
+  return povisenje - snizenje;
+}
+
 // ── Kazneni tier (Tbr. 4. toč. 1) ────────────────────────────────
 
 /**
@@ -192,18 +402,24 @@ function clampBodovi(bodovi: number, def: TarifnaStavka): number {
  * nigdje ne propisuje, a Math.ceil na svakom koraku sustavno je podizao iznose:
  * 75 × 0,5 = 37,5 → 38, pa 38 × 1,25 = 47,5 → 48, iako je točno 46,875.
  */
-export function izracunajBodove(def: TarifnaStavka, baseBodovi: number): number {
+export function izracunajBodove(def: TarifnaStavka, osnovica: OsnovicaRezultat): number {
   let bodovi: number;
 
   if (def.fiksni_body !== null && def.fiksni_body !== undefined) {
+    // Iznos koji Tarifa određuje apsolutno (npr. Tbr. 7. toč. 10 = 250 bodova) —
+    // ne ovisi ni o vrijednosti spora ni o osnovici.
     bodovi = def.fiksni_body;
+  } else if (osnovica.fiksnoPoRadnji) {
+    // Tbr. 45 uz način "fiksno po radnji": svaka radnja nosi puni iznos iz toč. 1–3.
+    // Postoci i stropovi iz Tbr. 8./9. se NE primjenjuju.
+    return osnovica.bodovi;
   } else if (def.tbr71_postotak !== null && def.tbr71_postotak !== undefined) {
-    bodovi = baseBodovi * def.tbr71_postotak;
+    bodovi = osnovica.bodovi * def.tbr71_postotak;
     if (def.tbr71_povecanje !== null && def.tbr71_povecanje !== undefined) {
       bodovi *= 1 + def.tbr71_povecanje;
     }
   } else {
-    bodovi = baseBodovi;
+    bodovi = osnovica.bodovi;
   }
 
   return clampBodovi(bodovi, def);
@@ -255,6 +471,9 @@ export interface ProvjeraUlaza {
   zaprijecenaKazna?: string;
   isOduzimanjePrekrsaj: boolean;
   vrijednostOduzimanja: number;
+  osnovicaTbr7?: OsnovicaTbr7;
+  razinaSuda?: RazinaSuda | null;
+  tbr45Nacin?: Tbr45Nacin | null;
 }
 
 /**
@@ -288,7 +507,60 @@ export function provjeriZahtjev(
     );
   }
 
+  // Tbr. 45 — razlika između razina suda je do peterostruke, pa nema razumne
+  // zadane vrijednosti. Isto vrijedi za način obračuna, koji Tarifa ne razrješava.
+  if (ulaz.osnovicaTbr7 === OSNOVICA_TBR7.Tbr45Neprocjenjiv) {
+    if (!ulaz.razinaSuda) {
+      greske.push(
+        "Tbr. 45 zahtijeva odabranu razinu suda (općinski / županijski i trgovački / " +
+          "Vrhovni). Bez nje se bodovi ne mogu odrediti — razlika je do peterostruke.",
+      );
+    }
+    if (!ulaz.tbr45Nacin) {
+      greske.push(
+        "Tbr. 45 zahtijeva odabrani način obračuna. Tarifa ne kaže primjenjuju li se " +
+          "postoci iz Tbr. 8. i Tbr. 9. na iznos iz Tbr. 45, pa sustav ne smije pretpostaviti.",
+      );
+    }
+  }
+
   return greske;
+}
+
+/** ID stavke po Tbr. 7. toč. 9 — jednokratna nagrada u sporovima ispod 100,00 €. */
+export const ITEM_MALI_SPOR = "par_mali_spor";
+
+/** Gornja granica iz Tbr. 7. toč. 9. */
+export const PRAG_MALOG_SPORA = 100;
+
+/**
+ * Tbr. 7. toč. 9: "Za zastupanje u parničnom postupku u kojem je vrijednost predmeta
+ * spora manja od 100,00 eura (…) odvjetniku pripada jednokratna nagrada za cijeli
+ * prvostupanjski postupak u visini od 50 bodova."
+ *
+ * Odredba je obavezna, ali je u katalogu stavka koju odvjetnik bira sam. Ovo vraća
+ * upozorenje — ne grešku — kad je VPS ispod praga, a odabrane su parnične stavke
+ * koje se obračunavaju po toč. 1.
+ */
+export function upozorenjeMaliSpor(
+  odabraneStavke: TarifnaStavka[],
+  vrijednostSpora: number,
+  osnovicaTbr7: OsnovicaTbr7 = OSNOVICA_TBR7.Toc1,
+): string | null {
+  if (osnovicaTbr7 !== OSNOVICA_TBR7.Toc1) return null;
+  if (vrijednostSpora <= 0 || vrijednostSpora >= PRAG_MALOG_SPORA) return null;
+  if (odabraneStavke.some((s) => s.id === ITEM_MALI_SPOR)) return null;
+
+  const imaParnicnihPoToc1 = odabraneStavke.some(
+    (s) => s.kategorija === KATEGORIJA_PARNICNI && s.tbr71_postotak !== null && s.tbr71_postotak !== undefined,
+  );
+  if (!imaParnicnihPoToc1) return null;
+
+  return (
+    `Vrijednost spora je ispod 100,00 €. Tbr. 7. toč. 9 za takve postupke propisuje ` +
+    `jednokratnu nagradu od 50 bodova za cijeli prvostupanjski postupak — provjerite ` +
+    `treba li umjesto ovih stavaka odabrati „Parnica male vrijednosti (Tbr. 7.9)".`
+  );
 }
 
 // ── Novac ────────────────────────────────────────────────────────

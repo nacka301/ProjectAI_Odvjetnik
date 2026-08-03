@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   BOD_VALUE,
+  OSNOVICA_TBR7,
   formatirajBodove,
   izracunajBodove,
+  izracunajOsnovicu,
   tbr71Bodovi,
   zaokruziNovac,
   type TarifnaStavka,
@@ -44,23 +46,30 @@ const izvPravniLijek = stavka({
 describe("test iz audita — izv_pravni_lijek pri VPS-u 1.000 €", () => {
   const baza = tbr71Bodovi(1_000); // 75
 
+  // Osnovica po Tbr. 7. toč. 1 — zadana varijanta.
+  const osnovica = izracunajOsnovicu({
+    osnovicaTbr7: OSNOVICA_TBR7.Toc1,
+    vrijednostSpora: 1_000,
+  })!;
+
   it("osnovica je 75 bodova", () => {
     expect(baza).toBe(75);
+    expect(osnovica.bodovi).toBe(75);
   });
 
   it("daje 46,875 bodova, a nikako 48", () => {
-    const bodovi = izracunajBodove(izvPravniLijek, baza);
+    const bodovi = izracunajBodove(izvPravniLijek, osnovica);
 
     expect(bodovi).toBeCloseTo(46.875, 10);
     expect(bodovi).not.toBe(48);
   });
 
   it("standardno zaokruženo je 47", () => {
-    expect(Math.round(izracunajBodove(izvPravniLijek, baza))).toBe(47);
+    expect(Math.round(izracunajBodove(izvPravniLijek, osnovica))).toBe(47);
   });
 
   it("iznos je 93,75 €", () => {
-    expect(zaokruziNovac(izracunajBodove(izvPravniLijek, baza) * BOD_VALUE)).toBe(93.75);
+    expect(zaokruziNovac(izracunajBodove(izvPravniLijek, osnovica) * BOD_VALUE)).toBe(93.75);
   });
 });
 
