@@ -662,11 +662,30 @@ public sealed class TroskovnikService
         new() { Id = "ust_ostali_podnesci", Kategorija = "Ustavni sud / ECHR / Sud EU", Opis = "Ostali podnesci (Tbr. 31.2)", TarifniBroj = "Tbr. 31.2", FiksniBody = 50, SortOrder = 1101, Jedinica = "komad" },
         new() { Id = "ust_rasprava", Kategorija = "Ustavni sud / ECHR / Sud EU", Opis = "Zastupanje na raspravi (Tbr. 31.3)", TarifniBroj = "Tbr. 31.3", FiksniBody = 1000, SortOrder = 1102, Jedinica = "komad" },
 
+        // Tbr. 31. toč. 4: "Za zastupanje i sudjelovanje na raspravama na kojima se
+        // raspravljalo samo o procesnim pitanjima, ili je postupak obustavljen prije
+        // raspravljanja o glavnoj stvari odvjetniku pripada 50% nagrade iz toč. 1. ovog
+        // tarifnog broja."  Toč. 1 = 1000 bodova ⇒ 50% × 1000 = 500 bodova.
+        new() { Id = "ust_rasprava_procesna", Kategorija = "Ustavni sud / ECHR / Sud EU", Opis = "Rasprava samo o procesnim pitanjima / obustava prije glavne stvari (Tbr. 31.4) – 50% od 1000 = 500", TarifniBroj = "Tbr. 31.4", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 31. toč. 4 — 50% nagrade iz Tbr. 31. toč. 1 (1000 bodova) = 500", FiksniBody = 500, SortOrder = 1103, Jedinica = "komad" },
+
         // ═══════════════════════════════════════════════════════════
         // XII. OSTALI POSTUPCI
         // ═══════════════════════════════════════════════════════════
         new() { Id = "ost_naknada_stete", Kategorija = "Ostali postupci", Opis = "Zahtjev za naknadu štete prema državi / osiguranju (Tbr. 32.1)", TarifniBroj = "Tbr. 32.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 32. toč. 1 — nagrada po Tbr. 7. toč. 1", Tbr71Postotak = 1.0m, SortOrder = 1200, Jedinica = "komad" },
         new() { Id = "ost_stegovni", Kategorija = "Ostali postupci", Opis = "Stegovni postupak – podnesci / pravni lijekovi (Tbr. 32.2)", TarifniBroj = "Tbr. 32.2", FiksniBody = 100, SortOrder = 1201, Jedinica = "komad" },
+
+        // Tbr. 32. toč. 3, 4 i 5 sve se izvode iz toč. 2 (100 bodova):
+        //
+        // Toč. 3: "Za sastavljanje ostalih podnesaka u tijeku postupka iz toč. 2. ovog
+        // tarifnog broja odvjetniku pripada 25 % nagrade iz toč. 2."  → 25
+        // Toč. 4: "Za zastupanje i sudjelovanje na raspravama u postupku iz toč. 2. ovog
+        // tarifnog broja odvjetniku pripada nagrada iz toč. 2."  → 100
+        // Toč. 5: "Za zastupanje na raspravi u postupku iz toč. 2. (...) na kojoj se
+        // raspravljalo samo o procesnim pitanjima, ili je postupak obustavljen prije
+        // raspravljanja o glavnoj stvari, odvjetniku pripada 25% nagrade iz toč. 2."  → 25
+        new() { Id = "ost_stegovni_ostali", Kategorija = "Ostali postupci", Opis = "Stegovni postupak – ostali podnesci (Tbr. 32.3) – 25% od 100 = 25", TarifniBroj = "Tbr. 32.3", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 32. toč. 3 — 25% nagrade iz Tbr. 32. toč. 2 (100 bodova) = 25", FiksniBody = 25, SortOrder = 1202, Jedinica = "komad" },
+        new() { Id = "ost_stegovni_rasprava", Kategorija = "Ostali postupci", Opis = "Stegovni postupak – zastupanje na raspravi (Tbr. 32.4) – nagrada iz Tbr. 32.2", TarifniBroj = "Tbr. 32.4", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 32. toč. 4 — nagrada iz Tbr. 32. toč. 2, 100 bodova", FiksniBody = 100, SortOrder = 1203, Jedinica = "komad" },
+        new() { Id = "ost_stegovni_rasprava_procesna", Kategorija = "Ostali postupci", Opis = "Stegovni postupak – rasprava samo o procesnim pitanjima / obustava (Tbr. 32.5) – 25% od 100 = 25", TarifniBroj = "Tbr. 32.5", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 32. toč. 5 — 25% nagrade iz Tbr. 32. toč. 2 (100 bodova) = 25", FiksniBody = 25, SortOrder = 1204, Jedinica = "komad" },
 
         // ═══════════════════════════════════════════════════════════
         // XIII. RAZNO – ISPRAVE, SAVJETI, OPOMENE
