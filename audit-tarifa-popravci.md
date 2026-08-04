@@ -776,3 +776,219 @@ dotnet test Backend.Tests/Backend.Tests.csproj --filter "FullyQualifiedName~Tari
 - `TarifaOsnovicaTests` — Tbr. 8.1 na sve četiri točke, petogodišnji iznos, apsolutni iznosi, Tbr. 25
 - `TarifaTbr45Tests` — tri razine suda × oba čitanja, greška bez odabira
 - `TarifaTbr41Tests` — povišenje/sniženje, ograničenja raspona, zbrajanje s Tbr. 40
+
+---
+
+# Dopuna kataloga — Tbr. 23, 28.2, 29, 31.4, 32.3–32.5
+
+Šest commita · nastavak na `196b43c`.
+
+Popis otvorenog iz `PROMPT-NASTAVAK.md` navodio je jedanaest „nepokrivenih" tarifnih
+brojeva. Provjera protiv Tarife pokazala je da većina njih **nisu obračunske stavke**, a
+da tri rupe koje jesu **nisu bile na popisu**. Ovaj odjeljak bilježi i popravke i ispravke
+prethodnih nalaza.
+
+## Ispravci prethodnih nalaza
+
+### Tbr. 38 nije stavka — brief ga je krivo označio „najkorisnijim"
+
+> Tbr. 38: *„Ako pojedinim tarifnim odredbama, prema kojima se određeni poslovi naknađuju
+> po utrošenom satu, nije drugačije određeno, nagrada za utrošeni sat iznosi 25 bodova."*
+
+Tbr. 38 je **rezidualno pravilo**, ne obračunska stavka. Provjerena je svaka odredba
+Tarife koja posao naknađuje po satu — **svaka propisuje vlastitu satnicu**:
+
+| odredba | satnica |
+|---|---|
+| Tbr. 2 | 50 bodova |
+| Tbr. 4. toč. 1 al. 10 | 100 bodova (prvi sat), 50 (svaki sljedeći) |
+| Tbr. 4. toč. 3 | 50 bodova |
+| Tbr. 29. toč. 4 | najmanje 100 bodova |
+| Tbr. 34. toč. 1 | 50 bodova |
+| Tbr. 35 | 50 bodova |
+| Tbr. 36 | 25 bodova |
+| Tbr. 39 | 25 bodova |
+
+Ne postoji dakle nijedna odredba na koju bi se Tbr. 38 danas primijenio. Stavka
+„25 bodova po satu" izmislila bi mu primjenu i omogućila obračun rada koji Tarifa ne
+priznaje kao zasebnu radnju.
+
+| | |
+|---|---|
+| Brana | `TarifaKatalogDopunaTests.Tbr38_NijeStavkaKataloga` |
+| Dopuna | `SatneStavke_IzvodeIznosIzVlastiteOdredbe` — svaka satna stavka mora iznos izvoditi iz vlastite odredbe |
+
+Isti obrazac kao postojeća brana za ukinuti Tbr. 25, iako je razlog drukčiji: Tbr. 25 je
+ukinut presudom, Tbr. 38 je na snazi ali nije stavka.
+
+### Tbr. 42, 43, 44, 47, 48, 52 također nisu obračunske stavke
+
+Paušalni ugovor (42), ugovorena nagrada (43), inozemna tarifa (44), odnos odvjetnik–stranka
+(47), stvarni izdaci općenito (48), vremenska primjena Tarife (52). Nijedna ne daje bodove
+za obračun. Tbr. 46 (PDV) je već implementiran.
+
+### Tri rupe koje nisu bile na popisu
+
+Tbr. **28. toč. 2**, Tbr. **31. toč. 4**, Tbr. **32. toč. 3, 4 i 5** — sve tri su
+obračunske, s fiksnim iznosima, i sve su nedostajale.
+
+## 1. Tbr. 23 — zastupanje i obrana u upravnom postupku (`353bfff`)
+
+> Toč. 1: *„Za zastupanje u ispitnom postupku, u postupku osiguranja dokaza, na usmenoj
+> raspravi te očevidu u prvostupanjskom upravnom postupku odvjetniku pripada nagrada iz
+> Tbr. 22. te naknada po Tbr. 39."*
+> Toč. 2: *„Za obranu u postupcima radi poreznih, carinskih ili deviznih prekršaja
+> odvjetniku pripada nagrada po Tbr. 22., te naknada po Tbr. 39."*
+
+Tbr. 22. toč. 1 ima dvije alineje, pa svaka točka daje dvije stavke.
+
+| stavka | Tbr. | bodovi |
+|---|---|---|
+| `upr_zastupanje_neproc` | 23.1 | 50 |
+| `upr_zastupanje_proc` | 23.1 | Tbr. 7. toč. 1 |
+| `upr_obrana_prekrsaj_neproc` | 23.2 | 50 |
+| `upr_obrana_prekrsaj_proc` | 23.2 | Tbr. 7. toč. 1 |
+
+„naknada po Tbr. 39" **nije uključena** — Tbr. 39 je već zasebna stavka `zaj_cekanje` i
+obračunava se po započetom satu.
+
+Toč. 2 govori o prekršajima, ali Tarifa je smješta u glavu VII. UPRAVNI POSTUPAK i nagradu
+veže uz Tbr. 22, ne uz Tbr. 4. Kategorija je obračunski bitna: u kategoriji
+„Kazneni postupak" tiho bi ugasila sudsku pristojbu. Test to zaključava.
+
+| | |
+|---|---|
+| Popravak | `TroskovnikService.cs`, blok VII. UPRAVNI POSTUPAK |
+| Testovi | `TarifaTbr23Tests` (15) |
+
+## 2. Tbr. 28. toč. 2 — osnivačke isprave (`4e9e9a1`)
+
+> *„Za sastavljanje isprava (izjava o osnivanju društva, društveni ugovor, statut, te
+> ostale isprave) potrebnih za upis osnivanja ili promjena u registru, odvjetniku pripada
+> nagrada prema Tbr. 33. toč. 1. i 2."*
+
+Katalog je imao 28.1, 28.3 i 28.4, ali ne i 28.2.
+
+| stavka | izvor | iznos |
+|---|---|---|
+| `reg_isprave_proc` | Tbr. 33. toč. 1 | Tbr. 7. toč. 1 + 25 % → VPS 50.000 € = 625 bod. = 1.250,00 € |
+| `reg_isprave_neproc` | Tbr. 33. toč. 2 al. 3 | 200 bod. = 400,00 € |
+
+Test uspoređuje nove stavke s postojećima po Tbr. 33 (`raz_ugovor`, `raz_ugovor_neproc`) —
+moraju dati isto, jer Tbr. 28. toč. 2 na njih upućuje.
+
+| | |
+|---|---|
+| Testovi | `TarifaTbr282Tests` (7) |
+
+## 3. Tbr. 29 — poništaj upisa u registar (`c9503aa`)
+
+Cijeli tarifni broj je nedostajao. Toč. 1 daje **tri osnovice**, toč. 2 i 3 **pet radnji**
+— 15 stavki, plus toč. 4 (skupština) = **16**.
+
+> Toč. 1: *„(...) nagrada iz Tbr. 7. toč. 1. kod tužbi na poništaj upisa u sudski registar,
+> a ne manje od 100 bodova, odnosno po Tbr. 27. kod tužbi na poništaj upisa u drugi
+> registar."*
+
+### Prag od 100 bodova skalira se s postotkom
+
+Ovo je bilo jedino netrivijalno mjesto. `ClampBodovi` primjenjuje `MinBodova` **nakon**
+postotka, a toč. 2 i 3 uzimaju postotak nagrade **iz toč. 1**, u kojoj prag već stoji.
+Kako je prag konstanta, vrijedi
+
+```
+max(x, 100) × p  ≡  max(p·x, 100p)
+```
+
+pa je u svaku stavku upisan prag pomnožen istim postotkom: 100 → **50** (50 %) odnosno
+**125** (125 %). Naivan prag od 100 na svakoj stavci u malim bi predmetima dao previše.
+
+Uz VPS 200 € (25 bodova po Tbr. 7. toč. 1), sudski registar:
+
+| radnja | prije | sada | naivni prag 100 dao bi |
+|---|---|---|---|
+| toč. 1 — tužba / odgovor / podnesak | — | **100** bod. = 200,00 € | 100 |
+| toč. 2 — ročište o glavnoj stvari | — | **100** bod. = 200,00 € | 100 |
+| toč. 2 — ostala ročišta | — | **50** bod. = 100,00 € | 100 ✗ |
+| toč. 3 — pravni lijek protiv presude | — | **125** bod. = 250,00 € | 100 ✗ |
+| toč. 3 — pravni lijek protiv rješenja | — | **50** bod. = 100,00 € | 100 ✗ |
+
+Prag **ne vrijedi** za drugi registar — toč. 1 ga veže izrijekom uz sudski. Uz VPS 200 €
+tužba u drugi registar daje 25 bodova, ne 100.
+
+Neprocjenjivi drugi registar ide po Tbr. 27. toč. 1 al. 2: 500 · 250 · 625 · 250.
+
+### Toč. 4 — skupština
+
+> *„(...) nagrada prema dogovoru sa strankom, ali ne manje od 100 bodova za svaki započeti
+> sat skupštine."*
+
+Tarifa određuje samo **donju** granicu; gornju prepušta dogovoru, pa sustav obračunava
+minimum (`reg_skupstina`, 100 bod./sat). Povišenje iznad toga ide kroz Tbr. 41 ili ugovor
+po Tbr. 43.
+
+| | |
+|---|---|
+| Testovi | `TarifaTbr29Tests` (34), uz odnosne provjere da toč. 2 i 3 ostaju točan postotak toč. 1 i ispod i iznad praga |
+| Zrcalo | `frontend/__tests__/tarifa-tbr29-prag.test.ts` (6) — živi pregled mora dati iste iznose |
+
+## 4. Tbr. 31. toč. 4 i Tbr. 32. toč. 3–5 (`da77548`)
+
+> Tbr. 31. toč. 4: *„(...) odvjetniku pripada 50% nagrade iz toč. 1. ovog tarifnog broja."*
+
+Toč. 1 = 1000 bodova → **500** bod. = 1.000,00 €. Katalog je imao 31.1, 31.2 i 31.3.
+
+Tbr. 32. toč. 3, 4 i 5 sve se izvode iz toč. 2 (100 bodova); katalog je imao samo 32.1 i 32.2:
+
+| stavka | Tbr. | iznos |
+|---|---|---|
+| `ost_stegovni_ostali` | 32.3 | 25 % × 100 = **25** bod. = 50,00 € |
+| `ost_stegovni_rasprava` | 32.4 | **100** bod. = 200,00 € |
+| `ost_stegovni_rasprava_procesna` | 32.5 | 25 % × 100 = **25** bod. = 50,00 € |
+
+| | |
+|---|---|
+| Testovi | `TarifaKatalogDopunaTests` (14) |
+
+## Što nije dirano
+
+Motor obračuna (`IzracunajBodove`, `ClampBodovi`, `UkupnoBodovaZaStavku`), određivanje
+osnove sudske pristojbe, sučelje i klijentsko zrcalo. Sve 26 stavki izražene su postojećim
+poljima `TarifnaStavka` i ulaze u postojeće kategorije, pa se katalog na `/troskovnik`
+grupira sam.
+
+## Nalaz za odluku — `Jedinica = "sat"` na prekršajnim stavkama
+
+Test `SatneStavke_IzvodeIznosIzVlastiteOdredbe` otkrio je **zatečeno** stanje, nije ga
+uzrokovao:
+
+- `kaz_obrana_prekrsaj` (Tbr. 4. toč. 1 al. 7) — *„za obranu u prekršajnom postupku
+  100 bodova"*
+- `kaz_prekrsaj_oduzimanje` (Tbr. 4. toč. 1 al. 8) — *„nagrada po Tbr. 7. toč. 1., ovisno
+  o vrijednosti oduzetog predmeta odnosno imovinske koristi"*
+
+Nijedna od dvije alineje **ne spominje sat**. Satnica u Tbr. 4. toč. 1 pripada samo
+al. 10 (*„za prvi sat svakog dana rasprave (...) 100 bodova"*, uz 50 za svaki sljedeći).
+Obje stavke ipak nose `Jedinica = "sat"`, pa ih sučelje množi brojem sati.
+
+**Nije popravljeno namjerno.** Kazneni blok koristi „sat" i kao oznaku „prvi sat", uz
+zasebne stavke `kaz_dodatni_sat` i `kaz_istraga_dodatni_sat` za daljnje sate, pa nije jasno
+je li ovo greška ili dio te konvencije. Odluka traži pregled cijelog kaznenog bloka i
+mišljenje odvjetnice — nije nešto što se popravlja usput.
+
+## Stanje testova
+
+```
+dotnet test Backend.Tests/Backend.Tests.csproj   →  1582 prolaza, 0 padova   (bilo 1512)
+cd frontend && npx vitest run __tests__/tarifa   →   197 prolaza, 0 padova   (bilo 191)
+```
+
+Zatečenih 5 padova u `__tests__/delete.test.ts` i dalje nema veze s tarifom.
+
+## Preostalo nepokriveno
+
+| tarifni broj | zašto nije ovdje |
+|---|---|
+| **Tbr. 26** — izvlaštenje | vlastita tablica po tržišnoj vrijednosti nekretnine (0–1.000 → 50; do 10.000 → 100; do 30.000 → 250; preko → 500). Traži novo polje u zahtjevu i sučelju, po uzoru na `VrijednostOduzimanja`. |
+| **Tbr. 49–51** — putni troškovi, dnevnica, hotel | stvarni izdaci izvan bodovnog sustava. Tarifa ne fiksira ni cijenu benzina ni iznos dnevnice (veže je uz dnevnicu suca županijskog suda), pa oboje mora biti unos, ne pretpostavka. |
+| **Osnovica Tbr. 22** | Tarifa za procjenjive upravne predmete propisuje osnovicu *„ukupan prihod, odnosno vrijednost imovine, odnosno iznos jednogodišnje najamnine ili zakupnine"*, a sustav koristi opću osnovicu Tbr. 7. Nove stavke po Tbr. 23 nasljeđuju to jer preslikavaju postojeći `upr_procjenjiv`. Isti razred problema kao Tbr. 10 i uži skup osnovica. |
