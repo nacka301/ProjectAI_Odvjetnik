@@ -370,6 +370,81 @@ export function tbr41Udio(povisenjePostotak: number, snizenjePostotak: number): 
   return povisenje - snizenje;
 }
 
+/** Postoci Tbr. 41 za jednu stavku troškovnika. */
+export interface Tbr41Stavka {
+  /** Toč. 1 — 0–100 %. Null znači „naslijedi postotak s razine troškovnika". */
+  povisenje?: number | null;
+  /** Toč. 2 — 0–50 %. Null znači isto. */
+  snizenje?: number | null;
+}
+
+/**
+ * Razrješava postotke Tbr. 41 za jednu stavku. Stavka bez vlastitog postotka
+ * nasljeđuje onaj s razine troškovnika — to je prečac „primijeni na sve stavke".
+ *
+ * Zrcali `TroskovnikService.RazrijesiTbr41`.
+ */
+export function razrijesiTbr41(
+  stavka: Tbr41Stavka,
+  precacPovisenje: number,
+  precacSnizenje: number,
+): { povisenje: number; snizenje: number } {
+  return {
+    povisenje: stavka.povisenje ?? precacPovisenje,
+    snizenje: stavka.snizenje ?? precacSnizenje,
+  };
+}
+
+/**
+ * Citat odredbe uz prilagođenu stavku; prazan string kad Tbr. 41 nije primijenjen.
+ * Zrcali `TroskovnikService.Tbr41Izvor`.
+ */
+export function tbr41Izvor(povisenje: number, snizenje: number): string {
+  if (povisenje > 0) {
+    return (
+      `${NAZIV_TARIFE}, Tbr. 41. toč. 1 — povišenje od ${povisenje} % za posebno stručno ` +
+      `i specijalističko znanje, osobitu težinu predmeta ili posebnu odgovornost za obavljeni rad`
+    );
+  }
+
+  if (snizenje > 0) {
+    return (
+      `${NAZIV_TARIFE}, Tbr. 41. toč. 2 — sniženje od ${snizenje} %; ` +
+      `„pojedine tarifne stavke odvjetnik može sniziti za 50%"`
+    );
+  }
+
+  return "";
+}
+
+/**
+ * Toč. 1 i toč. 2 polaze od suprotnih razloga, pa ne mogu stajati na istoj stavci.
+ * Vraća poruku ili null.
+ */
+export function provjeriTbr41Stavku(
+  opisStavke: string,
+  povisenje: number,
+  snizenje: number,
+): string | null {
+  if (povisenje > 0 && snizenje > 0) {
+    return (
+      `Stavka „${opisStavke}" ima istovremeno povišenje (${povisenje} %) i sniženje ` +
+      `(${snizenje} %) po Tbr. 41. Toč. 1 i toč. 2 polaze od suprotnih razloga, pa se na ` +
+      `istu stavku ne mogu primijeniti istovremeno.`
+    );
+  }
+
+  if (povisenje < 0 || povisenje > TBR41_MAX_POVISENJE) {
+    return `Povišenje po Tbr. 41. toč. 1 za „${opisStavke}" iznosi ${povisenje} %. Tarifa dopušta najviše ${TBR41_MAX_POVISENJE} %.`;
+  }
+
+  if (snizenje < 0 || snizenje > TBR41_MAX_SNIZENJE) {
+    return `Sniženje po Tbr. 41. toč. 2 za „${opisStavke}" iznosi ${snizenje} %. Tarifa dopušta najviše ${TBR41_MAX_SNIZENJE} %.`;
+  }
+
+  return null;
+}
+
 // ── Kazneni tier (Tbr. 4. toč. 1) ────────────────────────────────
 
 /**

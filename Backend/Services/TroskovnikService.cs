@@ -138,11 +138,63 @@ public sealed class TroskovnikService
     /// Tbr. 41. toč. 2 — sniženje do 50 %.
     /// Vraća neto udio (0,25 = +25 %; −0,10 = −10 %). Oba su zadano 0.
     /// </summary>
-    public static decimal Tbr41Udio(TroskovnikRequest request)
+    public static decimal Tbr41Udio(decimal povisenjePostotak, decimal snizenjePostotak)
+        => (povisenjePostotak / 100m) - (snizenjePostotak / 100m);
+
+    /// <summary>
+    /// Razrješava postotke Tbr. 41 za jednu stavku i provjerava ih.
+    ///
+    /// Stavka koja nema vlastiti postotak nasljeđuje onaj s razine zahtjeva — to je
+    /// prečac „primijeni na sve stavke".
+    ///
+    /// Povišenje i sniženje ne mogu stajati na istoj stavci: toč. 1 i toč. 2 polaze od
+    /// suprotnih razloga (posebna stručnost naspram koristi za stranku), pa bi njihovo
+    /// istovremeno navođenje značilo da nijedan razlog nije stvaran.
+    /// </summary>
+    private static (decimal Povisenje, decimal Snizenje) RazrijesiTbr41(
+        TroskovnikItemRequest stavka, TroskovnikRequest request, TarifnaStavka def)
     {
-        var povisenje = Math.Clamp(request.Tbr41PovisenjePostotak, 0m, 100m) / 100m;
-        var snizenje = Math.Clamp(request.Tbr41SnizenjePostotak, 0m, 50m) / 100m;
-        return povisenje - snizenje;
+        var povisenje = stavka.Tbr41PovisenjePostotak ?? request.Tbr41PovisenjePostotak;
+        var snizenje = stavka.Tbr41SnizenjePostotak ?? request.Tbr41SnizenjePostotak;
+
+        if (povisenje > 0m && snizenje > 0m)
+            throw new TroskovnikValidationException(
+                $"Stavka \"{def.Opis}\" ima istovremeno povišenje ({povisenje} %) i sniženje " +
+                $"({snizenje} %) po Tbr. 41. Toč. 1 i toč. 2 polaze od suprotnih razloga, pa se " +
+                "na istu stavku ne mogu primijeniti istovremeno.");
+
+        if (povisenje < 0m || povisenje > Tbr41MaxPovisenje)
+            throw new TroskovnikValidationException(
+                $"Povišenje po Tbr. 41. toč. 1 za stavku \"{def.Opis}\" iznosi {povisenje} %. " +
+                $"Tarifa dopušta najviše {Tbr41MaxPovisenje} %.");
+
+        if (snizenje < 0m || snizenje > Tbr41MaxSnizenje)
+            throw new TroskovnikValidationException(
+                $"Sniženje po Tbr. 41. toč. 2 za stavku \"{def.Opis}\" iznosi {snizenje} %. " +
+                $"Tarifa dopušta najviše {Tbr41MaxSnizenje} %.");
+
+        return (povisenje, snizenje);
+    }
+
+    /// <summary>Tbr. 41. toč. 1 — "tarifne stavke mogu se povisiti za 100%".</summary>
+    public const decimal Tbr41MaxPovisenje = 100m;
+
+    /// <summary>Tbr. 41. toč. 2 — "pojedine tarifne stavke odvjetnik može sniziti za 50%".</summary>
+    public const decimal Tbr41MaxSnizenje = 50m;
+
+    /// <summary>Citat odredbe uz prilagođenu stavku; prazan kad Tbr. 41 nije primijenjen.</summary>
+    private static string Tbr41Izvor(decimal povisenje, decimal snizenje)
+    {
+        if (povisenje > 0m)
+            return $"{TarifaConstants.NazivTarife}, Tbr. 41. toč. 1 — povišenje od {povisenje} % " +
+                   "za posebno stručno i specijalističko znanje, osobitu težinu predmeta ili " +
+                   "posebnu odgovornost za obavljeni rad";
+
+        if (snizenje > 0m)
+            return $"{TarifaConstants.NazivTarife}, Tbr. 41. toč. 2 — sniženje od {snizenje} %; " +
+                   "\"pojedine tarifne stavke odvjetnik može sniziti za 50%\"";
+
+        return "";
     }
 
     /// <summary>
@@ -698,6 +750,12 @@ public sealed class TroskovnikService
 
             var ukupnoStavke = UkupnoBodovaZaStavku(def, bodovi, stavka.Kolicina);
 
+            // ── Tbr. 41 po POJEDINOJ stavci ──
+            // Toč. 2 kaže "POJEDINE tarifne stavke odvjetnik može sniziti za 50%" —
+            // riječ "pojedine" stoji samo ondje, pa se prilagodba veže uz stavku.
+            var (tbr41Povisenje, tbr41Snizenje) = RazrijesiTbr41(stavka, request, def);
+            var tbr41BodoviStavke = ukupnoStavke * Tbr41Udio(tbr41Povisenje, tbr41Snizenje);
+
             lines.Add(new TroskovnikLineItem
             {
                 Rbr = rbr,
@@ -711,7 +769,11 @@ public sealed class TroskovnikService
                 // Redak se prikazuje u eurima, pa se ovdje zaokružuje. Zbrojevi niže
                 // računaju se iz nezaokruženih bodova, da se greška ne akumulira.
                 IznosEur = ZaokruziNovac(ukupnoStavke * TarifaConstants.BodValue),
-                IsJednokratna = def.JednokratnaNagrada
+                IsJednokratna = def.JednokratnaNagrada,
+                Tbr41PovisenjePostotak = tbr41Povisenje,
+                Tbr41SnizenjePostotak = tbr41Snizenje,
+                Tbr41Bodovi = tbr41BodoviStavke,
+                Tbr41PravniIzvor = Tbr41Izvor(tbr41Povisenje, tbr41Snizenje)
             });
         }
 
@@ -721,14 +783,13 @@ public sealed class TroskovnikService
         var povisenjePostotak = PovisenjeViseOsobaPostotak(request.BrojZastupanihOsoba);
         var povisenjeBodovi = osnovicaBodova * povisenjePostotak;
 
-        // ── Tbr. 41 — povisivanje i snižavanje tarifnih stavaka ──
-        // Toč. 1: "tarifne stavke mogu se povisiti za 100%" (posebna stručnost).
-        // Toč. 2: "pojedine tarifne stavke odvjetnik može sniziti za 50%".
-        // Oba su zadano 0 — bez korisnikova zahvata iznos je nepromijenjen.
-        // Djeluje na zbroj stavaka, kao i Tbr. 40; sudska pristojba se ne uvećava
-        // jer nije odvjetnička nagrada.
-        var tbr41Udio = Tbr41Udio(request);
-        var tbr41Bodovi = osnovicaBodova * tbr41Udio;
+        // ── Tbr. 41 — zbroj prilagodbi po stavkama ──
+        // Doprinos je ADITIVAN na ukupan iznos, kao i Tbr. 40, iako se računa po stavci.
+        // Da je umjesto toga multiplikativan (osnovica' = Σ stavka × (1 + udio)), Tbr. 40
+        // bi se složio na već prilagođenu osnovicu i ukupan bi se iznos promijenio —
+        // vidi TarifaTbr41PoStavciTests.RegresijaSaTbr40_OstajeAditivna.
+        // Sudska pristojba se ne dira jer nije odvjetnička nagrada.
+        var tbr41Bodovi = lines.Sum(l => l.Tbr41Bodovi);
 
         var ukupnoBodova = osnovicaBodova + povisenjeBodovi + tbr41Bodovi;
 

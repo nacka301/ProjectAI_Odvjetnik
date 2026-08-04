@@ -392,6 +392,20 @@ public sealed class TroskovnikItemRequest
     /// <summary>Količina (broj radnji, sati, itd.).</summary>
     [JsonPropertyName("kolicina")]
     public int Kolicina { get; set; } = 1;
+
+    /// <summary>
+    /// Tbr. 41. toč. 1 — povišenje ove stavke, 0–100 %. Null znači „koristi postotak
+    /// s razine zahtjeva" (prečac „primijeni na sve stavke").
+    /// </summary>
+    [JsonPropertyName("tbr41_povisenje_postotak")]
+    public decimal? Tbr41PovisenjePostotak { get; set; }
+
+    /// <summary>
+    /// Tbr. 41. toč. 2 — sniženje ove stavke, 0–50 %. Riječ „pojedine" u toč. 2 znači
+    /// da se sniženje odnosi na pojedinačne stavke, ne na ukupan zbroj.
+    /// </summary>
+    [JsonPropertyName("tbr41_snizenje_postotak")]
+    public decimal? Tbr41SnizenjePostotak { get; set; }
 }
 
 public sealed class TroskovnikParty
@@ -637,6 +651,30 @@ public sealed class TroskovnikLineItem
     /// </summary>
     [JsonPropertyName("is_jednokratna")]
     public bool IsJednokratna { get; set; }
+
+    // ── Tbr. 41 po pojedinoj stavci ───────────────────────────────
+
+    /// <summary>Tbr. 41. toč. 1 — primijenjeno povišenje ove stavke u postotku (0–100).</summary>
+    [JsonPropertyName("tbr41_povisenje_postotak")]
+    public decimal Tbr41PovisenjePostotak { get; set; }
+
+    /// <summary>Tbr. 41. toč. 2 — primijenjeno sniženje ove stavke u postotku (0–50).</summary>
+    [JsonPropertyName("tbr41_snizenje_postotak")]
+    public decimal Tbr41SnizenjePostotak { get; set; }
+
+    /// <summary>
+    /// Bodovi koje Tbr. 41 dodaje ili oduzima ovoj stavci — pozitivno za povišenje,
+    /// negativno za sniženje. Zbrajaju se u <see cref="TroskovnikResponse.Tbr41Bodovi"/>.
+    /// </summary>
+    [JsonPropertyName("tbr41_bodovi")]
+    public decimal Tbr41Bodovi { get; set; }
+
+    /// <summary>
+    /// Citat odredbe uz prilagođenu stavku — prazan kad Tbr. 41 nije primijenjen.
+    /// Vidi se na ispisu, da se svaki odmak od tarifne stavke može provjeriti.
+    /// </summary>
+    [JsonPropertyName("tbr41_pravni_izvor")]
+    public string Tbr41PravniIzvor { get; set; } = "";
 }
 
 // ── Catalog item definition ──────────────────────────────────

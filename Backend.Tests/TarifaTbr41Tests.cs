@@ -60,33 +60,40 @@ public class TarifaTbr41Tests
     }
 
     /// <summary>
-    /// Tarifa ne dopušta povišenje iznad 100 % ni sniženje ispod 50 % — vrijednosti
-    /// izvan raspona se ograničavaju, a ne primjenjuju.
+    /// Postotak izvan raspona iz Tarife odbija se s porukom.
+    ///
+    /// Prije se tiho ograničavao, pa je odvjetnik koji upiše 90 % sniženja dobivao 50 %
+    /// bez ijedne naznake da mu unos nije prihvaćen. Tiho ispravljanje unosa je isto što
+    /// i tiha nula — iznos izgleda kao da je onakav kakav je zatražen, a nije.
     /// </summary>
     [Theory]
-    [InlineData(500,  0, 500)]   // povišenje ograničeno na 100 %
-    [InlineData(  0, 90, 125)]   // sniženje ograničeno na 50 %
-    [InlineData(-50,  0, 250)]   // negativno povišenje se ignorira
-    public void IzvanRasponaSeOgranicava(decimal povisenje, decimal snizenje, decimal ocekivano)
+    [InlineData(500,  0)]   // povišenje iznad 100 %
+    [InlineData(  0, 90)]   // sniženje iznad 50 %
+    [InlineData(-50,  0)]   // negativno povišenje
+    public void IzvanRaspona_BacaGresku(decimal povisenje, decimal snizenje)
     {
-        Assert.Equal(ocekivano, Izracunaj(povisenje, snizenje).UkupnoBodova);
+        var greska = Assert.Throws<TroskovnikValidationException>(() => Izracunaj(povisenje, snizenje));
+
+        Assert.Contains("Tbr. 41", greska.Message);
     }
 
     /// <summary>
     /// Tbr. 40 i Tbr. 41 djeluju na isti zbroj i zbrajaju se — Tarifa ih navodi kao
     /// povišenja odnosno sniženja tarifnih stavaka, ne kao uzastopne množitelje.
     ///
-    /// RUČNI IZRAČUN: 250 × (1 + 0,20 + 1,00 − 0,50) = 250 × 1,70 = 425 bodova.
+    /// RUČNI IZRAČUN: 250 × (1 + 0,20 + 1,00) = 250 × 2,20 = 550 bodova.
     ///   Tbr. 40: 3 osobe → +20 %
     ///   Tbr. 41. toč. 1  → +100 %
-    ///   Tbr. 41. toč. 2  → −50 %
+    ///
+    /// Sniženje se ovdje ne kombinira: toč. 1 i toč. 2 ne mogu stajati na istoj stavci
+    /// (v. TarifaTbr41PoStavciTests.PovisenjeISnizenje_NaIstojStavci_BacaGresku).
     /// </summary>
     [Fact]
     public void Tbr40_iTbr41_SeZbrajaju()
     {
-        var r = Izracunaj(povisenje: 100, snizenje: 50, brojOsoba: 3);
+        var r = Izracunaj(povisenje: 100, snizenje: 0, brojOsoba: 3);
 
-        Assert.Equal(425m, r.UkupnoBodova);
+        Assert.Equal(550m, r.UkupnoBodova);
     }
 
     /// <summary>

@@ -28,6 +28,10 @@ public sealed class TroskovnikDocumentService
     /// </summary>
     private string FormatBodovi(decimal value) => value.ToString("0.###", _hr);
 
+    /// <summary>Isto zaokruživanje kao u motoru: novac, dvije decimale, od nule.</summary>
+    private static decimal ZaokruziNovac(decimal iznos)
+        => Math.Round(iznos, 2, MidpointRounding.AwayFromZero);
+
     /// <summary>
     /// Render HTML for a troškovnik from a read record. If the record contains
     /// the full response JSON in `RawJsonOutput`, the method will attempt to
@@ -132,7 +136,24 @@ public sealed class TroskovnikDocumentService
         foreach (var l in resp.Stavke ?? new List<TroskovnikLineItem>())
         {
             var izvor = string.IsNullOrWhiteSpace(l.PravniIzvor) ? l.TarifniBroj : l.PravniIzvor;
-            sb.AppendLine($"<tr><td>{l.Rbr}</td><td>{System.Net.WebUtility.HtmlEncode(l.Opis)}</td><td>{System.Net.WebUtility.HtmlEncode(l.TarifniBroj)}</td><td style=\"font-size:10px;color:#555\">{System.Net.WebUtility.HtmlEncode(izvor)}</td><td>{l.Kolicina}</td><td>{FormatBodovi(l.BodovaPoJedinici)}</td><td>{FormatBodovi(l.UkupnoBodova)}</td><td style=\"text-align:right\">{FormatCurrency(l.IznosEur)}</td></tr>");
+
+            // Tbr. 41 — uz prilagođenu stavku ide postotak i citat odredbe, da se svaki
+            // odmak od tarifne stavke može provjeriti u izvoru.
+            var tbr41 = "";
+            if (!string.IsNullOrWhiteSpace(l.Tbr41PravniIzvor))
+            {
+                var predznak = l.Tbr41Bodovi >= 0 ? "+" : "−";
+                var postotak = l.Tbr41PovisenjePostotak > 0 ? l.Tbr41PovisenjePostotak : l.Tbr41SnizenjePostotak;
+
+                tbr41 = $"<br/><span style=\"font-size:10px;color:#555\">Tbr. 41: {predznak}{FormatBodovi(postotak)} % " +
+                        $"({predznak}{FormatBodovi(Math.Abs(l.Tbr41Bodovi))} bod.) — " +
+                        $"{System.Net.WebUtility.HtmlEncode(l.Tbr41PravniIzvor)}</span>";
+            }
+
+            var ukupnoSTbr41 = l.UkupnoBodova + l.Tbr41Bodovi;
+            var iznosSTbr41 = ZaokruziNovac(ukupnoSTbr41 * TarifaConstants.BodValue);
+
+            sb.AppendLine($"<tr><td>{l.Rbr}</td><td>{System.Net.WebUtility.HtmlEncode(l.Opis)}{tbr41}</td><td>{System.Net.WebUtility.HtmlEncode(l.TarifniBroj)}</td><td style=\"font-size:10px;color:#555\">{System.Net.WebUtility.HtmlEncode(izvor)}</td><td>{l.Kolicina}</td><td>{FormatBodovi(l.BodovaPoJedinici)}</td><td>{FormatBodovi(ukupnoSTbr41)}</td><td style=\"text-align:right\">{FormatCurrency(iznosSTbr41)}</td></tr>");
         }
 
         // Tbr. 40 — povišenje za zastupanje više osoba, kao vlastiti redak.
