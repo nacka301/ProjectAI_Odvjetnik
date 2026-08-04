@@ -522,6 +522,27 @@ public sealed class TroskovnikService
         new() { Id = "upr_ostali", Kategorija = "Upravni postupak", Opis = "Ostali podnesci u upravnom postupku (Tbr. 22.2) – 25%, max 25", TarifniBroj = "Tbr. 22.2", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 22. toč. 2 — 25% nagrade iz Tbr. 7. toč. 1, najviše 25 bodova", Tbr71Postotak = 0.25m, MaxBodova = 25, SortOrder = 702, Jedinica = "komad" },
         new() { Id = "upr_zalba", Kategorija = "Upravni postupak", Opis = "Žalba / prigovor / drug. instanca (Tbr. 24) – Tbr. 22 + 25%", TarifniBroj = "Tbr. 24", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 24 — nagrada iz Tbr. 22 s povišenjem od 25%", Tbr71Postotak = 1.0m, Tbr71Povecanje = 0.25m, SortOrder = 710, Jedinica = "komad" },
 
+        // Tbr. 23. toč. 1: "Za zastupanje u ispitnom postupku, u postupku osiguranja
+        // dokaza, na usmenoj raspravi te očevidu u prvostupanjskom upravnom postupku
+        // odvjetniku pripada nagrada iz Tbr. 22. te naknada po Tbr. 39."
+        // Toč. 2: "Za obranu u postupcima radi poreznih, carinskih ili deviznih prekršaja
+        // odvjetniku pripada nagrada po Tbr. 22., te naknada po Tbr. 39."
+        //
+        // Tbr. 22. toč. 1 ima dvije alineje (neprocjenjivo 50 bodova, procjenjivo po
+        // Tbr. 7. toč. 1), pa svaka točka Tbr. 23 daje dvije stavke — isti obrazac kao
+        // upr_neprocjenjiv / upr_procjenjiv gore.
+        //
+        // "naknada po Tbr. 39" se NE dodaje ovdje: Tbr. 39 je već zasebna stavka
+        // zaj_cekanje i obračunava se odvojeno, po započetom satu.
+        //
+        // Toč. 2 govori o prekršajima, ali Tarifa je smješta u glavu VII. UPRAVNI POSTUPAK
+        // i nagradu veže uz Tbr. 22, ne uz Tbr. 4. Kategorija mora ostati "Upravni
+        // postupak" — u kategoriji "Kazneni postupak" tiho bi ugasila sudsku pristojbu.
+        new() { Id = "upr_zastupanje_neproc", Kategorija = "Upravni postupak", Opis = "Zastupanje u ispitnom postupku / na raspravi / očevidu – neprocjenjiv (Tbr. 23.1); Tbr. 39 se obračunava zasebno", TarifniBroj = "Tbr. 23.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 23. toč. 1 — nagrada iz Tbr. 22. toč. 1 al. 1, 50 bodova", FiksniBody = 50, SortOrder = 720, Jedinica = "komad" },
+        new() { Id = "upr_zastupanje_proc", Kategorija = "Upravni postupak", Opis = "Zastupanje u ispitnom postupku / na raspravi / očevidu – procjenjiv (Tbr. 23.1); Tbr. 39 se obračunava zasebno", TarifniBroj = "Tbr. 23.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 23. toč. 1 — nagrada iz Tbr. 22. toč. 1 al. 2 (Tbr. 7. toč. 1)", Tbr71Postotak = 1.0m, SortOrder = 721, Jedinica = "komad" },
+        new() { Id = "upr_obrana_prekrsaj_neproc", Kategorija = "Upravni postupak", Opis = "Obrana u poreznom / carinskom / deviznom prekršaju – neprocjenjiv (Tbr. 23.2); Tbr. 39 se obračunava zasebno", TarifniBroj = "Tbr. 23.2", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 23. toč. 2 — nagrada po Tbr. 22. toč. 1 al. 1, 50 bodova", FiksniBody = 50, SortOrder = 722, Jedinica = "komad" },
+        new() { Id = "upr_obrana_prekrsaj_proc", Kategorija = "Upravni postupak", Opis = "Obrana u poreznom / carinskom / deviznom prekršaju – procjenjiv (Tbr. 23.2); Tbr. 39 se obračunava zasebno", TarifniBroj = "Tbr. 23.2", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 23. toč. 2 — nagrada po Tbr. 22. toč. 1 al. 2 (Tbr. 7. toč. 1)", Tbr71Postotak = 1.0m, SortOrder = 723, Jedinica = "komad" },
+
         // ═══════════════════════════════════════════════════════════
         // VIII. UPRAVNI SPOR
         // ═══════════════════════════════════════════════════════════
