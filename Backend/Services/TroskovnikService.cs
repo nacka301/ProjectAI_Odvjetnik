@@ -572,6 +572,18 @@ public sealed class TroskovnikService
         // IX. REGISTARSKI POSTUPAK
         // ═══════════════════════════════════════════════════════════
         new() { Id = "reg_upis", Kategorija = "Registarski postupak", Opis = "Podnesak za upis / promjenu u registru (Tbr. 28.1)", TarifniBroj = "Tbr. 28.1", FiksniBody = 50, SortOrder = 900, Jedinica = "komad" },
+
+        // Tbr. 28. toč. 2: "Za sastavljanje isprava (izjava o osnivanju društva, društveni
+        // ugovor, statut, te ostale isprave) potrebnih za upis osnivanja ili promjena u
+        // registru, odvjetniku pripada nagrada prema Tbr. 33. toč. 1. i 2."
+        //
+        // Tbr. 33. toč. 1: "nagrada iz Tbr. 7. toč. 1. uvećana za 25%."
+        // Tbr. 33. toč. 2 al. 3: "ako u ugovoru nije naznačena vrijednost ugovora
+        // odvjetniku pripada nagrada od 200 bodova."
+        // Isti par kakav već postoji za raz_ugovor / raz_ugovor_neproc.
+        new() { Id = "reg_isprave_proc", Kategorija = "Registarski postupak", Opis = "Osnivačke isprave za upis u registar – naznačena vrijednost (Tbr. 28.2) – Tbr. 7.1 + 25%", TarifniBroj = "Tbr. 28.2", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 28. toč. 2 — nagrada prema Tbr. 33. toč. 1 (Tbr. 7. toč. 1 uvećan za 25%)", Tbr71Postotak = 1.0m, Tbr71Povecanje = 0.25m, SortOrder = 901, Jedinica = "komad" },
+        new() { Id = "reg_isprave_neproc", Kategorija = "Registarski postupak", Opis = "Osnivačke isprave za upis u registar – bez naznačene vrijednosti (Tbr. 28.2) – 200 bodova", TarifniBroj = "Tbr. 28.2", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 28. toč. 2 — nagrada prema Tbr. 33. toč. 2 al. 3, 200 bodova", FiksniBody = 200, SortOrder = 902, Jedinica = "komad" },
+
         new() { Id = "reg_ostali", Kategorija = "Registarski postupak", Opis = "Ostali podnesci za upis (Tbr. 28.3)", TarifniBroj = "Tbr. 28.3", FiksniBody = 50, SortOrder = 903, Jedinica = "komad" },
         new() { Id = "reg_pravni_lijek", Kategorija = "Registarski postupak", Opis = "Pravni lijek u registarskom postupku (Tbr. 28.4) – 50 + 50%", TarifniBroj = "Tbr. 28.4", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 28. toč. 4 — nagrada iz Tbr. 28. toč. 1 uvećana za 50%", FiksniBody = 75, SortOrder = 904, Jedinica = "komad" },
 
