@@ -587,6 +587,67 @@ public sealed class TroskovnikService
         new() { Id = "reg_ostali", Kategorija = "Registarski postupak", Opis = "Ostali podnesci za upis (Tbr. 28.3)", TarifniBroj = "Tbr. 28.3", FiksniBody = 50, SortOrder = 903, Jedinica = "komad" },
         new() { Id = "reg_pravni_lijek", Kategorija = "Registarski postupak", Opis = "Pravni lijek u registarskom postupku (Tbr. 28.4) – 50 + 50%", TarifniBroj = "Tbr. 28.4", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 28. toč. 4 — nagrada iz Tbr. 28. toč. 1 uvećana za 50%", FiksniBody = 75, SortOrder = 904, Jedinica = "komad" },
 
+        // ── Tbr. 29 — poništaj upisa u registar ──────────────────────
+        //
+        // Toč. 1: "Za sastavljanje tužbe na poništaj upisa u registar, za odgovore na tužbu
+        // i obrazložene podneske o činjeničnim i pravnim navodima, odvjetniku pripada
+        // nagrada iz Tbr. 7. toč. 1. kod tužbi na poništaj upisa u sudski registar, a ne
+        // manje od 100 bodova, odnosno po Tbr. 27. kod tužbi na poništaj upisa u drugi
+        // registar."
+        //
+        // Toč. 1 time daje TRI osnovice:
+        //   a) sudski registar          → Tbr. 7. toč. 1, prag 100 bodova
+        //   b) drugi registar, procj.   → Tbr. 27. toč. 1 al. 1 → Tbr. 7. toč. 1, bez praga
+        //   c) drugi registar, neprocj. → Tbr. 27. toč. 1 al. 2 → 500 bodova
+        //
+        // Toč. 2: "Za zastupanje na ročištu na kojem se raspravljalo o glavnoj stvari, ili
+        // su se izvodili dokazi (...) nagrada iz toč. 1., a za sva ostala ročišta na kojima
+        // se raspravljalo samo o procesnim pitanjima, ili za ročište na kojem se prije
+        // raspravljanja o glavnoj stvari postupak završio povlačenjem tužbe, nagodbom ili
+        // presudom na osnovi priznanja (...) 50% nagrade iz toč. 1."
+        //
+        // Toč. 3: "Za sastavljanje pravnih lijekova protiv presuda (...) nagrada iz toč. 1.
+        // uvećana za 25%, a (...) protiv rješenja (...) 50% nagrade iz toč. 1."
+        //
+        // PRAG SE SKALIRA S POSTOTKOM. ClampBodovi primjenjuje MinBodova nakon postotka, a
+        // toč. 2 i 3 uzimaju postotak nagrade IZ TOČ. 1 — u kojoj prag već stoji. Kako je
+        // prag konstanta, vrijedi max(x, 100) × p ≡ max(p·x, 100p), pa se u svaku stavku
+        // upisuje prag pomnožen istim postotkom: 100 → 50 (50%) odnosno 125 (125%).
+        // Naivan prag od 100 na svakoj stavci dao bi u malim predmetima previše.
+
+        // a) sudski registar — prag 100 bodova
+        new() { Id = "reg_ponistaj_tuzba_sudski", Kategorija = "Registarski postupak", Opis = "Tužba na poništaj upisa u sudski registar / odgovor / obrazloženi podnesak (Tbr. 29.1) – Tbr. 7.1, min 100", TarifniBroj = "Tbr. 29.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 29. toč. 1 — nagrada iz Tbr. 7. toč. 1 kod sudskog registra, a ne manje od 100 bodova", Tbr71Postotak = 1.0m, MinBodova = 100, SortOrder = 910, Jedinica = "komad" },
+        new() { Id = "reg_ponistaj_rociste_glavno_sudski", Kategorija = "Registarski postupak", Opis = "Ročište o glavnoj stvari / izvođenje dokaza – sudski registar (Tbr. 29.2) – Tbr. 29.1", TarifniBroj = "Tbr. 29.2", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 29. toč. 2 — nagrada iz Tbr. 29. toč. 1 (Tbr. 7. toč. 1, ne manje od 100 bodova)", Tbr71Postotak = 1.0m, MinBodova = 100, SortOrder = 911, Jedinica = "komad" },
+        // 50% nagrade iz toč. 1 ⇒ i prag je 50% od 100 = 50 bodova.
+        new() { Id = "reg_ponistaj_rociste_ostalo_sudski", Kategorija = "Registarski postupak", Opis = "Ostala ročišta (procesna pitanja, povlačenje, nagodba, priznanje) – sudski registar (Tbr. 29.2) – 50% Tbr. 29.1", TarifniBroj = "Tbr. 29.2", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 29. toč. 2 — 50% nagrade iz Tbr. 29. toč. 1; prag od 100 bodova skaliran istim postotkom = 50", Tbr71Postotak = 0.5m, MinBodova = 50, SortOrder = 912, Jedinica = "komad" },
+        // Toč. 1 uvećana za 25% ⇒ prag 100 × 1,25 = 125 bodova.
+        new() { Id = "reg_ponistaj_lijek_presuda_sudski", Kategorija = "Registarski postupak", Opis = "Pravni lijek protiv presude – sudski registar (Tbr. 29.3) – Tbr. 29.1 + 25%", TarifniBroj = "Tbr. 29.3", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 29. toč. 3 — nagrada iz Tbr. 29. toč. 1 uvećana za 25%; prag od 100 bodova skaliran istim postotkom = 125", Tbr71Postotak = 1.0m, Tbr71Povecanje = 0.25m, MinBodova = 125, SortOrder = 913, Jedinica = "komad" },
+        new() { Id = "reg_ponistaj_lijek_rjesenje_sudski", Kategorija = "Registarski postupak", Opis = "Pravni lijek protiv rješenja – sudski registar (Tbr. 29.3) – 50% Tbr. 29.1", TarifniBroj = "Tbr. 29.3", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 29. toč. 3 — 50% nagrade iz Tbr. 29. toč. 1; prag od 100 bodova skaliran istim postotkom = 50", Tbr71Postotak = 0.5m, MinBodova = 50, SortOrder = 914, Jedinica = "komad" },
+
+        // b) drugi registar, procjenjiv — po Tbr. 27. toč. 1 al. 1; prag iz toč. 1 vezan je
+        //    izrijekom uz sudski registar, pa se ovdje NE primjenjuje.
+        new() { Id = "reg_ponistaj_tuzba_drugi_proc", Kategorija = "Registarski postupak", Opis = "Tužba na poništaj upisa u drugi registar / odgovor / obrazloženi podnesak – procjenjiv (Tbr. 29.1 → Tbr. 27.1)", TarifniBroj = "Tbr. 29.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 29. toč. 1 — po Tbr. 27 kod drugog registra; Tbr. 27. toč. 1 al. 1 → Tbr. 7. toč. 1", Tbr71Postotak = 1.0m, SortOrder = 920, Jedinica = "komad" },
+        new() { Id = "reg_ponistaj_rociste_glavno_drugi_proc", Kategorija = "Registarski postupak", Opis = "Ročište o glavnoj stvari / izvođenje dokaza – drugi registar, procjenjiv (Tbr. 29.2)", TarifniBroj = "Tbr. 29.2", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 29. toč. 2 — nagrada iz Tbr. 29. toč. 1 (drugi registar: Tbr. 27. toč. 1 al. 1 → Tbr. 7. toč. 1)", Tbr71Postotak = 1.0m, SortOrder = 921, Jedinica = "komad" },
+        new() { Id = "reg_ponistaj_rociste_ostalo_drugi_proc", Kategorija = "Registarski postupak", Opis = "Ostala ročišta (procesna pitanja, povlačenje, nagodba, priznanje) – drugi registar, procjenjiv (Tbr. 29.2) – 50%", TarifniBroj = "Tbr. 29.2", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 29. toč. 2 — 50% nagrade iz Tbr. 29. toč. 1 (drugi registar: Tbr. 27. toč. 1 al. 1)", Tbr71Postotak = 0.5m, SortOrder = 922, Jedinica = "komad" },
+        new() { Id = "reg_ponistaj_lijek_presuda_drugi_proc", Kategorija = "Registarski postupak", Opis = "Pravni lijek protiv presude – drugi registar, procjenjiv (Tbr. 29.3) – Tbr. 29.1 + 25%", TarifniBroj = "Tbr. 29.3", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 29. toč. 3 — nagrada iz Tbr. 29. toč. 1 uvećana za 25% (drugi registar: Tbr. 27. toč. 1 al. 1)", Tbr71Postotak = 1.0m, Tbr71Povecanje = 0.25m, SortOrder = 923, Jedinica = "komad" },
+        new() { Id = "reg_ponistaj_lijek_rjesenje_drugi_proc", Kategorija = "Registarski postupak", Opis = "Pravni lijek protiv rješenja – drugi registar, procjenjiv (Tbr. 29.3) – 50% Tbr. 29.1", TarifniBroj = "Tbr. 29.3", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 29. toč. 3 — 50% nagrade iz Tbr. 29. toč. 1 (drugi registar: Tbr. 27. toč. 1 al. 1)", Tbr71Postotak = 0.5m, SortOrder = 924, Jedinica = "komad" },
+
+        // c) drugi registar, neprocjenjiv — Tbr. 27. toč. 1 al. 2 daje 500 bodova.
+        //    Izvedeni iznosi: 50% = 250, +25% = 625. Isti obrazac kao usp_*_neproc.
+        new() { Id = "reg_ponistaj_tuzba_drugi_neproc", Kategorija = "Registarski postupak", Opis = "Tužba na poništaj upisa u drugi registar / odgovor / obrazloženi podnesak – neprocjenjiv (Tbr. 29.1 → Tbr. 27.1) – 500 bodova", TarifniBroj = "Tbr. 29.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 29. toč. 1 — po Tbr. 27 kod drugog registra; Tbr. 27. toč. 1 al. 2 → 500 bodova", FiksniBody = 500, SortOrder = 930, Jedinica = "komad" },
+        new() { Id = "reg_ponistaj_rociste_glavno_drugi_neproc", Kategorija = "Registarski postupak", Opis = "Ročište o glavnoj stvari / izvođenje dokaza – drugi registar, neprocjenjiv (Tbr. 29.2) – 500 bodova", TarifniBroj = "Tbr. 29.2", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 29. toč. 2 — nagrada iz Tbr. 29. toč. 1 (drugi registar neprocjenjiv: 500 bodova)", FiksniBody = 500, SortOrder = 931, Jedinica = "komad" },
+        new() { Id = "reg_ponistaj_rociste_ostalo_drugi_neproc", Kategorija = "Registarski postupak", Opis = "Ostala ročišta (procesna pitanja, povlačenje, nagodba, priznanje) – drugi registar, neprocjenjiv (Tbr. 29.2) – 50% od 500 = 250", TarifniBroj = "Tbr. 29.2", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 29. toč. 2 — 50% od 500 bodova iz Tbr. 29. toč. 1 = 250", FiksniBody = 250, SortOrder = 932, Jedinica = "komad" },
+        new() { Id = "reg_ponistaj_lijek_presuda_drugi_neproc", Kategorija = "Registarski postupak", Opis = "Pravni lijek protiv presude – drugi registar, neprocjenjiv (Tbr. 29.3) – 500 + 25% = 625", TarifniBroj = "Tbr. 29.3", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 29. toč. 3 — 500 bodova iz Tbr. 29. toč. 1 uvećano za 25% = 625", FiksniBody = 625, SortOrder = 933, Jedinica = "komad" },
+        new() { Id = "reg_ponistaj_lijek_rjesenje_drugi_neproc", Kategorija = "Registarski postupak", Opis = "Pravni lijek protiv rješenja – drugi registar, neprocjenjiv (Tbr. 29.3) – 50% od 500 = 250", TarifniBroj = "Tbr. 29.3", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 29. toč. 3 — 50% od 500 bodova iz Tbr. 29. toč. 1 = 250", FiksniBody = 250, SortOrder = 934, Jedinica = "komad" },
+
+        // Toč. 4: "Za zastupanje dioničara ili člana društva na skupštini trgovačkog
+        // društva, odvjetniku pripada nagrada prema dogovoru sa strankom, ali ne manje od
+        // 100 bodova za svaki započeti sat skupštine."
+        //
+        // Tarifa određuje samo DONJU granicu; gornju prepušta dogovoru sa strankom, pa se
+        // obračunava minimum. Povišenje iznad toga ide kroz Tbr. 41 ili ugovor po Tbr. 43.
+        new() { Id = "reg_skupstina", Kategorija = "Registarski postupak", Opis = "Zastupanje dioničara / člana društva na skupštini (Tbr. 29.4) – najmanje 100 bodova po započetom satu", TarifniBroj = "Tbr. 29.4", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 29. toč. 4 — nagrada prema dogovoru sa strankom, ali ne manje od 100 bodova za svaki započeti sat skupštine", FiksniBody = 100, SortOrder = 940, Jedinica = "sat" },
+
         // ═══════════════════════════════════════════════════════════
         // X. ZAŠTITA PRAVA PRED POSLODAVCEM
         // ═══════════════════════════════════════════════════════════
