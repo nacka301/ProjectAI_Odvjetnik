@@ -817,16 +817,26 @@ public sealed class TroskovnikService : ITroskovnikService
     public TroskovnikResponse Izracunaj(TroskovnikRequest request)
     {
         var katalogPoId = _katalog.ToDictionary(s => s.Id);
-        var stavkeRetci = new List<TroskovnikLineItem>();
-        var redniBroj = 0;
+        var odabraneDefinicije = ProvjeriIRazrijesiDefinicije(request, katalogPoId);
+        var kontekst = RazrijesiKontekst(request, odabraneDefinicije);
 
-        // ── Vrsta postupka ──────────────────────────────────────────
-        // U kaznenom se postupku sve veže na zapriječenu kaznu (Tbr. 4. toč. 1),
-        // nikad na vrijednost predmeta spora. VPS je institut parničnog postupka,
-        // pa se u kaznenom toku ne koristi ni za bodove ni za sudsku pristojbu.
-        // Nepoznata stavka i nevaljana količina odbijaju se odmah — prije se takva
-        // stavka tiho preskakala i nestajala iz troškovnika bez ijedne poruke.
+        var stavkeRetci = IzracunajRetke(request, katalogPoId, kontekst);
+        var zbrojevi = IzracunajZbrojeve(request, stavkeRetci, odabraneDefinicije, kontekst);
+
+        return SastaviOdgovor(request, stavkeRetci, zbrojevi, kontekst);
+    }
+
+    /// <summary>
+    /// Provjerava svaku traženu stavku i vraća njezinu definiciju iz kataloga.
+    ///
+    /// Nepoznata stavka i nevaljana količina odbijaju se odmah — prije se takva stavka
+    /// tiho preskakala i nestajala iz troškovnika bez ijedne poruke.
+    /// </summary>
+    private static List<TarifnaStavka> ProvjeriIRazrijesiDefinicije(
+        TroskovnikRequest request, Dictionary<string, TarifnaStavka> katalogPoId)
+    {
         var odabraneDefinicije = new List<TarifnaStavka>();
+
         foreach (var stavka in request.Stavke)
         {
             if (!katalogPoId.TryGetValue(stavka.ItemId, out var definicija))
@@ -840,11 +850,25 @@ public sealed class TroskovnikService : ITroskovnikService
             odabraneDefinicije.Add(definicija);
         }
 
+        return odabraneDefinicije;
+    }
+
+    /// <summary>
+    /// Razrješava parametre predmeta koji vrijede za cijeli troškovnik, prije nego se
+    /// izračuna ijedna stavka.
+    ///
+    /// U kaznenom se postupku sve veže na zapriječenu kaznu (Tbr. 4. toč. 1), nikad na
+    /// vrijednost predmeta spora. VPS je institut parničnog postupka, pa se u kaznenom
+    /// toku ne koristi ni za bodove ni za sudsku pristojbu. Jedina iznimka je Tbr. 4.
+    /// toč. 1 al. 8 (prekršaj s oduzimanjem), koji ide po Tbr. 7. toč. 1 prema vrijednosti
+    /// ODUZETOG PREDMETA — to se računa zasebno, po pojedinoj stavci.
+    /// </summary>
+    private static KontekstIzracuna RazrijesiKontekst(
+        TroskovnikRequest request, List<TarifnaStavka> odabraneDefinicije)
+    {
         var jeSamoKazneni = odabraneDefinicije.Count > 0
             && odabraneDefinicije.TrueForAll(d => d.Kategorija == KategorijaKazneni);
 
-        // Jedina iznimka je Tbr. 4. toč. 1 al. 8 (prekršaj s oduzimanjem), koji ide po
-        // Tbr. 7. toč. 1 prema vrijednosti ODUZETOG PREDMETA — to se računa zasebno niže.
         var vrijednostSpora = jeSamoKazneni ? 0m : EfektivniVps(request);
 
         // Osnovica na koju upućuju Tbr. 8. toč. 1, 3, 4 i Tbr. 9. toč. 1–6:
@@ -854,59 +878,49 @@ public sealed class TroskovnikService : ITroskovnikService
             ? new OsnovicaRezultat(Tbr71Bodovi(0m), "", false)
             : IzracunajOsnovicu(request);
 
-        // ── Zapriječena kazna (Tbr. 4. toč. 1) ──
-        // Kaznene stavke nemaju osnovicu bez nje, pa se traži samo kad je stvarno treba.
-        var trebaKazneniRazred = odabraneDefinicije.Exists(d => d.KazneniBase);
-        int kazneniRazredBodovi = 0;
+        return new KontekstIzracuna(
+            osnovica, vrijednostSpora, jeSamoKazneni, RazrijesiKazneniRazred(request, odabraneDefinicije));
+    }
 
-        if (trebaKazneniRazred)
-        {
-            if (string.IsNullOrWhiteSpace(request.ZaprijecenaKazna))
-                throw new TroskovnikValidationException(
-                    "Odabrane su stavke iz kaznenog postupka, a nije odabrana zapriječena kazna. " +
-                    "Tbr. 4. toč. 1 nagradu veže isključivo uz visinu zapriječene kazne.");
+    /// <summary>
+    /// Tbr. 4. toč. 1 — bodovi razreda prema zapriječenoj kazni.
+    ///
+    /// Kaznene stavke bez toga nemaju osnovicu, pa se kazna traži samo kad je stvarno treba.
+    /// Vraća 0 kad nijedna odabrana stavka ne ovisi o zapriječenoj kazni.
+    /// </summary>
+    private static int RazrijesiKazneniRazred(
+        TroskovnikRequest request, List<TarifnaStavka> odabraneDefinicije)
+    {
+        if (!odabraneDefinicije.Exists(d => d.KazneniBase))
+            return 0;
 
-            if (!ZaprijecenaKaznaTiers.Bodovi.TryGetValue(request.ZaprijecenaKazna, out var razredBodovi))
-                throw new TroskovnikValidationException(
-                    $"Nepoznata zapriječena kazna: \"{request.ZaprijecenaKazna}\". " +
-                    $"Dopuštene vrijednosti: {string.Join(", ", ZaprijecenaKaznaTiers.Bodovi.Keys)}.");
+        if (string.IsNullOrWhiteSpace(request.ZaprijecenaKazna))
+            throw new TroskovnikValidationException(
+                "Odabrane su stavke iz kaznenog postupka, a nije odabrana zapriječena kazna. " +
+                "Tbr. 4. toč. 1 nagradu veže isključivo uz visinu zapriječene kazne.");
 
-            kazneniRazredBodovi = razredBodovi;
-        }
+        if (!ZaprijecenaKaznaTiers.Bodovi.TryGetValue(request.ZaprijecenaKazna, out var razredBodovi))
+            throw new TroskovnikValidationException(
+                $"Nepoznata zapriječena kazna: \"{request.ZaprijecenaKazna}\". " +
+                $"Dopuštene vrijednosti: {string.Join(", ", ZaprijecenaKaznaTiers.Bodovi.Keys)}.");
+
+        return razredBodovi;
+    }
+
+    /// <summary>Sastavlja retke troškovnika, jedan po odabranoj stavci.</summary>
+    private static List<TroskovnikLineItem> IzracunajRetke(
+        TroskovnikRequest request,
+        Dictionary<string, TarifnaStavka> katalogPoId,
+        KontekstIzracuna kontekst)
+    {
+        var stavkeRetci = new List<TroskovnikLineItem>();
+        var redniBroj = 0;
 
         foreach (var stavka in request.Stavke)
         {
             var definicija = katalogPoId[stavka.ItemId];
 
-            decimal bodovi;
-            if (definicija.PrekrsajOduzimanje)
-            {
-                if (request.IsOduzimanjePrekrsaj)
-                {
-                    // Tbr. 4. toč. 1 al. 8 — prekršaj s oduzimanjem ide po Tbr. 7. toč. 1
-                    // prema vrijednosti oduzetog predmeta odnosno imovinske koristi.
-                    if (request.VrijednostOduzimanja <= 0)
-                        throw new TroskovnikValidationException(
-                            "Uključeno je oduzimanje predmeta, a nije unesena vrijednost oduzetog " +
-                            "predmeta odnosno imovinske koristi. Tbr. 4. toč. 1 al. 8 nagradu veže " +
-                            "uz tu vrijednost po Tbr. 7. toč. 1.");
-
-                    bodovi = Tbr71Bodovi(request.VrijednostOduzimanja);
-                }
-                else
-                {
-                    // Tbr. 4. toč. 1 al. 7 — "za obranu u prekršajnom postupku 100 bodova".
-                    bodovi = 100m;
-                }
-            }
-            else if (definicija.KazneniBase)
-            {
-                bodovi = IzracunajKazneneBodove(definicija, kazneniRazredBodovi, request);
-            }
-            else
-            {
-                bodovi = IzracunajBodove(definicija, osnovica);
-            }
+            var bodovi = BodoviZaStavku(definicija, request, kontekst);
 
             // Zaštitna mreža: nijedna stavka ne smije završiti na nula bodova.
             // Nula je u troškovniku neupotrebljiva — izgleda kao valjan iznos, a nije.
@@ -946,6 +960,54 @@ public sealed class TroskovnikService : ITroskovnikService
             });
         }
 
+        return stavkeRetci;
+    }
+
+    /// <summary>
+    /// Bodovi jedne stavke prije množenja količinom.
+    ///
+    /// Tri su izvora, i međusobno se isključuju: prekršaj s oduzimanjem predmeta,
+    /// stavka vezana uz zapriječenu kaznu, te obična stavka koja ide po osnovici.
+    /// </summary>
+    private static decimal BodoviZaStavku(
+        TarifnaStavka definicija, TroskovnikRequest request, KontekstIzracuna kontekst)
+    {
+        if (definicija.PrekrsajOduzimanje)
+        {
+            if (!request.IsOduzimanjePrekrsaj)
+                // Tbr. 4. toč. 1 al. 7 — "za obranu u prekršajnom postupku 100 bodova".
+                return PrekrsajBezOduzimanjaBodovi;
+
+            // Tbr. 4. toč. 1 al. 8 — prekršaj s oduzimanjem ide po Tbr. 7. toč. 1
+            // prema vrijednosti oduzetog predmeta odnosno imovinske koristi.
+            if (request.VrijednostOduzimanja <= 0)
+                throw new TroskovnikValidationException(
+                    "Uključeno je oduzimanje predmeta, a nije unesena vrijednost oduzetog " +
+                    "predmeta odnosno imovinske koristi. Tbr. 4. toč. 1 al. 8 nagradu veže " +
+                    "uz tu vrijednost po Tbr. 7. toč. 1.");
+
+            return Tbr71Bodovi(request.VrijednostOduzimanja);
+        }
+
+        if (definicija.KazneniBase)
+            return IzracunajKazneneBodove(definicija, kontekst.KazneniRazredBodovi, request);
+
+        return IzracunajBodove(definicija, kontekst.Osnovica);
+    }
+
+    /// <summary>Tbr. 4. toč. 1 al. 7 — "za obranu u prekršajnom postupku 100 bodova".</summary>
+    private const decimal PrekrsajBezOduzimanjaBodovi = 100m;
+
+    /// <summary>
+    /// Zbraja retke u ukupne iznose troškovnika: povišenje po Tbr. 40, prilagodbe po
+    /// Tbr. 41, PDV i sudsku pristojbu.
+    /// </summary>
+    private static Zbrojevi IzracunajZbrojeve(
+        TroskovnikRequest request,
+        List<TroskovnikLineItem> stavkeRetci,
+        List<TarifnaStavka> odabraneDefinicije,
+        KontekstIzracuna kontekst)
+    {
         var osnovicaBodova = stavkeRetci.Sum(redak => redak.UkupnoBodova);
 
         // ── Tbr. 40. toč. 1 — zastupanje više osoba ──
@@ -986,32 +1048,44 @@ public sealed class TroskovnikService : ITroskovnikService
 
         var sudskaPristojba = request.IsOslobodjenPristojbi
             ? 0m
-            : SudskePristojbeCalculator.Izracunaj(vrijednostSpora, pristojbaOsnova);
+            : SudskePristojbeCalculator.Izracunaj(kontekst.VrijednostSpora, pristojbaOsnova);
         var odvjetnickiTrosak = ukupnoEur + pdv;
         var sveukupniTrosak = odvjetnickiTrosak + sudskaPristojba;
 
+        return new Zbrojevi(
+            ukupnoBodova, povisenjePostotak, povisenjeBodovi, tbr41Bodovi, ukupnoEur,
+            bodoviPoOsobi, nagradaPoOsobi, pdv, pristojbaOsnova, sudskaPristojba, sveukupniTrosak);
+    }
+
+    /// <summary>Preslikava zahtjev i izračunate zbrojeve u odgovor koji ide klijentu.</summary>
+    private static TroskovnikResponse SastaviOdgovor(
+        TroskovnikRequest request,
+        List<TroskovnikLineItem> stavkeRetci,
+        Zbrojevi zbrojevi,
+        KontekstIzracuna kontekst)
+    {
         return new TroskovnikResponse
         {
             Stavke = stavkeRetci,
-            UkupnoBodova = ukupnoBodova,
+            UkupnoBodova = zbrojevi.UkupnoBodova,
             BrojZastupanihOsoba = Math.Max(1, request.BrojZastupanihOsoba),
-            PovisenjeViseOsobaPostotak = povisenjePostotak,
+            PovisenjeViseOsobaPostotak = zbrojevi.PovisenjePostotak,
             OsnovicaTbr7 = request.OsnovicaTbr7,
-            OsnovicaBodovi = osnovica.Bodovi,
-            OsnovicaPravniIzvor = osnovica.PravniIzvor,
+            OsnovicaBodovi = kontekst.Osnovica.Bodovi,
+            OsnovicaPravniIzvor = kontekst.Osnovica.PravniIzvor,
             RazinaSuda = request.RazinaSuda,
             Tbr45Nacin = request.Tbr45Nacin,
             Tbr41PovisenjePostotak = Math.Clamp(request.Tbr41PovisenjePostotak, 0m, 100m),
             Tbr41SnizenjePostotak = Math.Clamp(request.Tbr41SnizenjePostotak, 0m, 50m),
-            Tbr41Bodovi = tbr41Bodovi,
-            PovisenjeViseOsobaBodovi = povisenjeBodovi,
-            BodoviPoOsobi = bodoviPoOsobi,
-            NagradaPoOsobi = nagradaPoOsobi,
-            VrijednostSpora = vrijednostSpora,
-            IsSamoKazneni = jeSamoKazneni,
-            UkupnoEurBezPdv = ukupnoEur,
-            Pdv = pdv,
-            UkupnoEurSPdv = ukupnoEur + pdv,
+            Tbr41Bodovi = zbrojevi.Tbr41Bodovi,
+            PovisenjeViseOsobaBodovi = zbrojevi.PovisenjeBodovi,
+            BodoviPoOsobi = zbrojevi.BodoviPoOsobi,
+            NagradaPoOsobi = zbrojevi.NagradaPoOsobi,
+            VrijednostSpora = kontekst.VrijednostSpora,
+            IsSamoKazneni = kontekst.JeSamoKazneni,
+            UkupnoEurBezPdv = zbrojevi.UkupnoEur,
+            Pdv = zbrojevi.Pdv,
+            UkupnoEurSPdv = zbrojevi.UkupnoEur + zbrojevi.Pdv,
             Klijent = request.Klijent,
             // Ugniježđeni odvjetnik iz zahtjeva preslikava se u stranku odgovora
             // (naziv → ime), radi spojivosti sa starijim oblikom odgovora.
@@ -1054,12 +1128,36 @@ public sealed class TroskovnikService : ITroskovnikService
             IsOduzimanjePrekrsaj = request.IsOduzimanjePrekrsaj,
             VrijednostOduzimanja = request.VrijednostOduzimanja,
             // Sudske pristojbe
-            SudskaPristojba = sudskaPristojba,
-            PristojbaOsnova = pristojbaOsnova,
+            SudskaPristojba = zbrojevi.SudskaPristojba,
+            PristojbaOsnova = zbrojevi.PristojbaOsnova,
             IsOslobodjenPristojbi = request.IsOslobodjenPristojbi,
-            SveukupniTrosak = sveukupniTrosak
+            SveukupniTrosak = zbrojevi.SveukupniTrosak
         };
     }
+
+    /// <summary>
+    /// Parametri predmeta koji vrijede za cijeli troškovnik, razriješeni jednom prije
+    /// nego se izračuna ijedna stavka.
+    /// </summary>
+    private sealed record KontekstIzracuna(
+        OsnovicaRezultat Osnovica,
+        decimal VrijednostSpora,
+        bool JeSamoKazneni,
+        int KazneniRazredBodovi);
+
+    /// <summary>Izvedene ukupne vrijednosti troškovnika, izračunate iz gotovih redaka.</summary>
+    private sealed record Zbrojevi(
+        decimal UkupnoBodova,
+        decimal PovisenjePostotak,
+        decimal PovisenjeBodovi,
+        decimal Tbr41Bodovi,
+        decimal UkupnoEur,
+        decimal BodoviPoOsobi,
+        decimal NagradaPoOsobi,
+        decimal Pdv,
+        PristojbaOsnova PristojbaOsnova,
+        decimal SudskaPristojba,
+        decimal SveukupniTrosak);
 
     /// <summary>
     /// Jedino zaokruživanje u cijelom izračunu: novac, na dvije decimale, standardno.
