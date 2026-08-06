@@ -9,8 +9,6 @@ namespace Backend.Services;
 /// </summary>
 public sealed class TroskovnikService : ITroskovnikService
 {
-    // ── Tbr. 7, toč. 1 — base point lookup ───────────────────────
-
     // ── Osnovica: "Tbr. 7. toč. 1., 4., 7. i 8." ──────────────────
 
     /// <summary>
@@ -715,10 +713,8 @@ public sealed class TroskovnikService : ITroskovnikService
         // ═══════════════════════════════════════════════════════════
         new() { Id = "zaj_cekanje", Kategorija = "Zajedničke odredbe", Opis = "Čekanje na raspravu / putovanje (Tbr. 39) – 25 bod/sat, max 7h", TarifniBroj = "Tbr. 39", FiksniBody = 25, SortOrder = 1400, Jedinica = "sat" },
         // Tbr. 40 (zastupanje više osoba) NIJE stavka kataloga nego povišenje cijele
-        // osnovice — vidi IzracunajPovisenjeViseOsoba i polje broj_zastupanih_osoba.
+        // osnovice — vidi PovisenjeViseOsobaPostotak i polje broj_zastupanih_osoba.
     ];
-
-    // ── Calculate a troškovnik ────────────────────────────────────
 
     /// <summary>Naziv kategorije kaznenog i prekršajnog postupka u katalogu.</summary>
     public const string KategorijaKazneni = "Kazneni postupak";
@@ -941,7 +937,6 @@ public sealed class TroskovnikService : ITroskovnikService
             pdv = ZaokruziNovac(ukupnoEur * TarifaConstants.PdvRate);
 
         // ── Sudska pristojba (Uredba o tarifi sudskih pristojbi, NN 37/2023) ──
-        //
         var pristojbaOsnova = OdrediPristojbuOsnovu(odabraneDefinicije);
 
         var sudskaPristojba = request.IsOslobodjenPristojbi
@@ -1020,8 +1015,6 @@ public sealed class TroskovnikService : ITroskovnikService
         };
     }
 
-    // ── Zaokruživanje ─────────────────────────────────────────────
-
     /// <summary>
     /// Jedino zaokruživanje u cijelom izračunu: novac, na dvije decimale, standardno.
     ///
@@ -1057,8 +1050,6 @@ public sealed class TroskovnikService : ITroskovnikService
         return Math.Min((brojOsoba - 1) * ViseOsobaPoOsobi, ViseOsobaMaxPovisenje);
     }
 
-    // ── Ukupno bodova za jednu stavku troškovnika ─────────────────
-
     /// <summary>
     /// Za obične stavke: osnovica × količina.
     ///
@@ -1082,8 +1073,6 @@ public sealed class TroskovnikService : ITroskovnikService
 
         return ukupno;
     }
-
-    // ── Izračun bodova za jednu stavku ────────────────────────────
 
     /// <summary>
     /// Lanac se računa u decimalu, bez zaokruživanja između koraka. Tarifa
@@ -1121,8 +1110,6 @@ public sealed class TroskovnikService : ITroskovnikService
         return ClampBodovi(bodovi, def);
     }
 
-    // ── Kazneni point calculation ─────────────────────────────────
-
     /// <summary>
     /// Izračunava bodove za stavke s KazneniBase = true.
     /// Koristi ZaprijecenaKaznaTiers lookup i primjenjuje modifikatore:
@@ -1159,8 +1146,6 @@ public sealed class TroskovnikService : ITroskovnikService
 
         return ClampBodovi(bodovi, def);
     }
-
-    // ── Clamp helper ──────────────────────────────────────────────
 
     private static decimal ClampBodovi(decimal bodovi, TarifnaStavka def)
     {
