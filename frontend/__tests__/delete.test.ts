@@ -9,8 +9,9 @@ vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://test.supabase.co");
 vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "test-anon-key");
 
 // Mock Supabase client — all .from().delete().eq() chains return { error: null }
-vi.mock("@supabase/supabase-js", () => ({
-  createClient: () => ({
+// Must mock @supabase/ssr: lib/supabase.ts builds its client with createBrowserClient.
+vi.mock("@supabase/ssr", () => ({
+  createBrowserClient: () => ({
     from: () => ({
       delete: () => ({
         eq: () => ({ error: null }),
