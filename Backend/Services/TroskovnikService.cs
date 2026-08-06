@@ -195,38 +195,83 @@ public sealed class TroskovnikService : ITroskovnikService
         return "";
     }
 
+    // ── Tbr. 7. toč. 1 — razredi prema vrijednosti predmeta spora ──
+    //
+    // Tarifa propisuje šest fiksnih razreda, zatim tri progresivna u kojima na svaki
+    // započeti korak preko donje granice dolazi jedan bod. Tri granice i iznos od
+    // 500 bodova pojavljuju se na po dva mjesta — jednom kao gornja granica razreda,
+    // jednom kao polazište sljedećeg — pa moraju biti jedna konstanta, ne dva broja.
+
+    private const decimal FiksniRazred1Granica = 332.00m;
+    private const decimal FiksniRazred2Granica = 664.00m;
+    private const decimal FiksniRazred3Granica = 1_327.00m;
+    private const decimal FiksniRazred4Granica = 13_272.00m;
+    private const decimal FiksniRazred5Granica = 33_181.00m;
+
+    /// <summary>Gornja granica zadnjeg fiksnog razreda; ujedno polazište prvog progresivnog.</summary>
+    private const decimal FiksniRazred6Granica = 66_361.00m;
+
+    private const int FiksniRazred1Bodovi = 25;
+    private const int FiksniRazred2Bodovi = 50;
+    private const int FiksniRazred3Bodovi = 75;
+    private const int FiksniRazred4Bodovi = 100;
+    private const int FiksniRazred5Bodovi = 250;
+
+    /// <summary>Bodovi zadnjeg fiksnog razreda; ujedno polazište prvog progresivnog.</summary>
+    private const int FiksniRazred6Bodovi = 500;
+
+    /// <summary>Gornja granica prvog progresivnog razreda; ujedno polazište drugog.</summary>
+    private const decimal ProgresivniRazred1Granica = 663_614.00m;
+
+    /// <summary>Gornja granica drugog progresivnog razreda; ujedno polazište trećeg.</summary>
+    private const decimal ProgresivniRazred2Granica = 1_327_228.00m;
+
+    /// <summary>Iznos svakog započetog koraka unutar pojedinog progresivnog razreda, u eurima.</summary>
+    private const decimal ProgresivniRazred1Korak = 133.00m;
+    private const decimal ProgresivniRazred2Korak = 265.00m;
+    private const decimal ProgresivniRazred3Korak = 664.00m;
+
+    /// <summary>Bodovi na donjoj granici drugog odnosno trećeg progresivnog razreda.</summary>
+    private const int ProgresivniRazred2PocetniBodovi = 4991;
+    private const int ProgresivniRazred3PocetniBodovi = 7496;
+
+    /// <summary>Tbr. 7. toč. 1 — nagrada ne može prijeći 10.000 bodova.</summary>
+    private const int Tbr71MaxBodovi = 10_000;
+
     /// <summary>
     /// Izračunava broj bodova prema Tbr. 7. toč. 1. na temelju
     /// vrijednosti predmeta spora u EUR.
     /// </summary>
     public static int Tbr71Bodovi(decimal vrijednost)
     {
-        if (vrijednost <= 0) return 25;
+        if (vrijednost <= 0) return FiksniRazred1Bodovi;
 
         // Fiksni razredi
-        if (vrijednost <= 332.00m) return 25;
-        if (vrijednost <= 664.00m) return 50;
-        if (vrijednost <= 1_327.00m) return 75;
-        if (vrijednost <= 13_272.00m) return 100;
-        if (vrijednost <= 33_181.00m) return 250;
-        if (vrijednost <= 66_361.00m) return 500;
+        if (vrijednost <= FiksniRazred1Granica) return FiksniRazred1Bodovi;
+        if (vrijednost <= FiksniRazred2Granica) return FiksniRazred2Bodovi;
+        if (vrijednost <= FiksniRazred3Granica) return FiksniRazred3Bodovi;
+        if (vrijednost <= FiksniRazred4Granica) return FiksniRazred4Bodovi;
+        if (vrijednost <= FiksniRazred5Granica) return FiksniRazred5Bodovi;
+        if (vrijednost <= FiksniRazred6Granica) return FiksniRazred6Bodovi;
 
         // Progresivni razredi
-        if (vrijednost <= 663_614.00m)
+        if (vrijednost <= ProgresivniRazred1Granica)
         {
-            var extra = (int)Math.Ceiling((vrijednost - 66_361.00m) / 133.00m);
-            return 500 + extra;
+            var koraci = (int)Math.Ceiling((vrijednost - FiksniRazred6Granica) / ProgresivniRazred1Korak);
+            return FiksniRazred6Bodovi + koraci;
         }
 
-        if (vrijednost <= 1_327_228.00m)
+        if (vrijednost <= ProgresivniRazred2Granica)
         {
-            var extra = (int)Math.Ceiling((vrijednost - 663_614.00m) / 265.00m);
-            return 4991 + extra;
+            var koraci = (int)Math.Ceiling((vrijednost - ProgresivniRazred1Granica) / ProgresivniRazred2Korak);
+            return ProgresivniRazred2PocetniBodovi + koraci;
         }
 
         // Preko 1.327.228,00 EUR
-        var extra3 = (int)Math.Ceiling((vrijednost - 1_327_228.00m) / 664.00m);
-        return Math.Min(7496 + extra3, 10_000);
+        var koraciPrekoGornjeGranice =
+            (int)Math.Ceiling((vrijednost - ProgresivniRazred2Granica) / ProgresivniRazred3Korak);
+
+        return Math.Min(ProgresivniRazred3PocetniBodovi + koraciPrekoGornjeGranice, Tbr71MaxBodovi);
     }
 
     // ── Katalog svih tarifnih stavki ──────────────────────────────
