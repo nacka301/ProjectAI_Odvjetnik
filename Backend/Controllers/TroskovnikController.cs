@@ -22,6 +22,21 @@ public class TroskovnikController : ControllerBase
     // SECURITY: Verified user_id extracted from Supabase JWT by SupabaseJwtMiddleware
     private string? GetUserId() => HttpContext.Items["AuthUserId"] as string;
 
+    /// <summary>
+    /// Provjere zajedničke akcijama koje računaju troškovnik.
+    ///
+    /// Baca istu iznimku kojom se javlja i sam servis, pa obje akcije imaju jedno
+    /// mjesto na kojem se validacijska greška pretvara u odgovor 400.
+    /// </summary>
+    private static void ProvjeriZahtjev(TroskovnikRequest request)
+    {
+        if (request.VrijednostSpora < 0)
+            throw new TroskovnikValidationException("Vrijednost spora ne može biti negativna.");
+
+        if (request.Stavke is null || request.Stavke.Count == 0)
+            throw new TroskovnikValidationException("Morate odabrati barem jednu stavku.");
+    }
+
     /// <summary>GET /api/troskovnik/katalog — vraća katalog svih tarifnih stavki.</summary>
     [HttpGet("katalog")]
     public IActionResult DohvatiKatalog()
@@ -33,15 +48,10 @@ public class TroskovnikController : ControllerBase
     [HttpPost("izracunaj")]
     public async Task<IActionResult> Izracunaj([FromBody] TroskovnikRequest request)
     {
-        if (request.VrijednostSpora < 0)
-            return BadRequest(new { error = "Vrijednost spora ne može biti negativna." });
-
-        if (request.Stavke is null || request.Stavke.Count == 0)
-            return BadRequest(new { error = "Morate odabrati barem jednu stavku." });
-
         TroskovnikResponse result;
         try
         {
+            ProvjeriZahtjev(request);
             result = _service.Izracunaj(request);
         }
         catch (TroskovnikValidationException ex)
@@ -89,15 +99,10 @@ public class TroskovnikController : ControllerBase
         if (string.IsNullOrWhiteSpace(userId))
             return Unauthorized(new { error = "Nedostaje x-user-id header." });
 
-        if (request.VrijednostSpora < 0)
-            return BadRequest(new { error = "Vrijednost spora ne može biti negativna." });
-
-        if (request.Stavke is null || request.Stavke.Count == 0)
-            return BadRequest(new { error = "Morate odabrati barem jednu stavku." });
-
         TroskovnikResponse result;
         try
         {
+            ProvjeriZahtjev(request);
             result = _service.Izracunaj(request);
         }
         catch (TroskovnikValidationException ex)

@@ -1054,7 +1054,8 @@ public sealed class TroskovnikService : ITroskovnikService
 
         return new Zbrojevi(
             ukupnoBodova, povisenjePostotak, povisenjeBodovi, tbr41Bodovi, ukupnoEur,
-            bodoviPoOsobi, nagradaPoOsobi, pdv, pristojbaOsnova, sudskaPristojba, sveukupniTrosak);
+            bodoviPoOsobi, nagradaPoOsobi, pdv, pristojbaOsnova, sudskaPristojba, sveukupniTrosak,
+            brojOsoba, obracunajPdv);
     }
 
     /// <summary>Preslikava zahtjev i izračunate zbrojeve u odgovor koji ide klijentu.</summary>
@@ -1068,7 +1069,7 @@ public sealed class TroskovnikService : ITroskovnikService
         {
             Stavke = stavkeRetci,
             UkupnoBodova = zbrojevi.UkupnoBodova,
-            BrojZastupanihOsoba = Math.Max(1, request.BrojZastupanihOsoba),
+            BrojZastupanihOsoba = zbrojevi.BrojZastupanihOsoba,
             PovisenjeViseOsobaPostotak = zbrojevi.PovisenjePostotak,
             OsnovicaTbr7 = request.OsnovicaTbr7,
             OsnovicaBodovi = kontekst.Osnovica.Bodovi,
@@ -1107,7 +1108,7 @@ public sealed class TroskovnikService : ITroskovnikService
                     Adresa = request.Stranke.Protustranka.Adresa
                 },
             ProtustrankaPolozaj = request.Stranke?.Protustranka?.Polozaj ?? request.ProtustrankaPolozaj,
-            IsPdvUkljucen = request.IsPdvUkljucen ?? request.HasVat,
+            IsPdvUkljucen = zbrojevi.ObracunajPdv,
             HasVat = request.HasVat,
             OpisPredmeta = request.OpisPredmeta,
             // Podaci o predmetu
@@ -1157,7 +1158,9 @@ public sealed class TroskovnikService : ITroskovnikService
         decimal Pdv,
         PristojbaOsnova PristojbaOsnova,
         decimal SudskaPristojba,
-        decimal SveukupniTrosak);
+        decimal SveukupniTrosak,
+        int BrojZastupanihOsoba,
+        bool ObracunajPdv);
 
     /// <summary>
     /// Jedino zaokruživanje u cijelom izračunu: novac, na dvije decimale, standardno.
