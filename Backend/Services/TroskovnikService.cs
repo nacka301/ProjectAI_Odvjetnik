@@ -7,8 +7,8 @@ namespace Backend.Services;
 /// i naknadi troškova za rad odvjetnika (NN 2023).
 /// Tbr. 54: Vrijednost boda = 2,00 EUR.
 /// </summary>
-public sealed class TroskovnikService
-:ITroskovnikService {
+public sealed class TroskovnikService : ITroskovnikService
+{
     // ── Tbr. 7, toč. 1 — base point lookup ───────────────────────
 
     // ── Osnovica: "Tbr. 7. toč. 1., 4., 7. i 8." ──────────────────
@@ -141,6 +141,12 @@ public sealed class TroskovnikService
     public static decimal Tbr41Udio(decimal povisenjePostotak, decimal snizenjePostotak)
         => (povisenjePostotak / 100m) - (snizenjePostotak / 100m);
 
+    /// <summary>Tbr. 41. toč. 1 — "tarifne stavke mogu se povisiti za 100%".</summary>
+    public const decimal Tbr41MaxPovisenje = 100m;
+
+    /// <summary>Tbr. 41. toč. 2 — "pojedine tarifne stavke odvjetnik može sniziti za 50%".</summary>
+    public const decimal Tbr41MaxSnizenje = 50m;
+
     /// <summary>
     /// Razrješava postotke Tbr. 41 za jednu stavku i provjerava ih.
     ///
@@ -175,12 +181,6 @@ public sealed class TroskovnikService
 
         return (povisenje, snizenje);
     }
-
-    /// <summary>Tbr. 41. toč. 1 — "tarifne stavke mogu se povisiti za 100%".</summary>
-    public const decimal Tbr41MaxPovisenje = 100m;
-
-    /// <summary>Tbr. 41. toč. 2 — "pojedine tarifne stavke odvjetnik može sniziti za 50%".</summary>
-    public const decimal Tbr41MaxSnizenje = 50m;
 
     /// <summary>Citat odredbe uz prilagođenu stavku; prazan kad Tbr. 41 nije primijenjen.</summary>
     private static string Tbr41Izvor(decimal povisenje, decimal snizenje)
@@ -758,6 +758,21 @@ public sealed class TroskovnikService
         return PristojbaOsnova.Puna;
     }
 
+    // ── Stjecaj i produljeno kazneno djelo (Tbr. 4. toč. 1 al. 6) ─
+
+    /// <summary>
+    /// Alineja 6 ne uvodi ni množitelj ni broj radnji — ona samo određuje KOJI se od
+    /// razreda iz alineja 1–5 uzima: onaj koji odgovara najtežoj kazni koja se u
+    /// postupku može izreći primjenom pravila o stjecaju. Nagrada ostaje jedna.
+    ///
+    /// Zato zastavica ne mijenja izračun, nego se bilježi uz troškovnik kako bi se
+    /// vidjelo zašto je odabran razred koji ne odgovara pojedinačnom djelu.
+    /// </summary>
+    public const string NapomenaZaStjecaj =
+        "Kaznena djela u stjecaju odnosno produljeno kazneno djelo: razred je odabran " +
+        "prema najtežoj kazni koja se u postupku može izreći primjenom odredbi o " +
+        "izricanju kazne za djela u stjecaju (Tbr. 4. toč. 1 al. 6).";
+
     public TroskovnikResponse Izracunaj(TroskovnikRequest request)
     {
         var catalogMap = _katalog.ToDictionary(s => s.Id);
@@ -959,9 +974,23 @@ public sealed class TroskovnikService
             UkupnoEurSPdv = ukupnoEur + pdv,
             Klijent = request.Klijent,
             // Map nested request Odvjetnik (naziv) into response party `ime` for compatibility
-            Odvjetnik = request.Odvjetnik is null ? null : new TroskovnikParty { Ime = request.Odvjetnik.Naziv ?? "", Oib = request.Odvjetnik.Oib, Adresa = request.Odvjetnik.Adresa },
+            Odvjetnik = request.Odvjetnik is null
+                ? null
+                : new TroskovnikParty
+                {
+                    Ime = request.Odvjetnik.Naziv ?? "",
+                    Oib = request.Odvjetnik.Oib,
+                    Adresa = request.Odvjetnik.Adresa
+                },
             // Map protustranka from nested stranke if present
-            Protustranka = request.Stranke?.Protustranka is null ? null : new TroskovnikParty { Ime = request.Stranke.Protustranka.Naziv ?? "", Oib = request.Stranke.Protustranka.Oib, Adresa = request.Stranke.Protustranka.Adresa },
+            Protustranka = request.Stranke?.Protustranka is null
+                ? null
+                : new TroskovnikParty
+                {
+                    Ime = request.Stranke.Protustranka.Naziv ?? "",
+                    Oib = request.Stranke.Protustranka.Oib,
+                    Adresa = request.Stranke.Protustranka.Adresa
+                },
             ProtustrankaPolozaj = request.Stranke?.Protustranka?.Polozaj ?? request.ProtustrankaPolozaj,
             IsPdvUkljucen = request.IsPdvUkljucen ?? request.HasVat,
             HasVat = request.HasVat,
@@ -990,21 +1019,6 @@ public sealed class TroskovnikService
             SveukupniTrosak = sveukupniTrosak
         };
     }
-
-    // ── Stjecaj i produljeno kazneno djelo (Tbr. 4. toč. 1 al. 6) ─
-
-    /// <summary>
-    /// Alineja 6 ne uvodi ni množitelj ni broj radnji — ona samo određuje KOJI se od
-    /// razreda iz alineja 1–5 uzima: onaj koji odgovara najtežoj kazni koja se u
-    /// postupku može izreći primjenom pravila o stjecaju. Nagrada ostaje jedna.
-    ///
-    /// Zato zastavica ne mijenja izračun, nego se bilježi uz troškovnik kako bi se
-    /// vidjelo zašto je odabran razred koji ne odgovara pojedinačnom djelu.
-    /// </summary>
-    public const string NapomenaZaStjecaj =
-        "Kaznena djela u stjecaju odnosno produljeno kazneno djelo: razred je odabran " +
-        "prema najtežoj kazni koja se u postupku može izreći primjenom odredbi o " +
-        "izricanju kazne za djela u stjecaju (Tbr. 4. toč. 1 al. 6).";
 
     // ── Zaokruživanje ─────────────────────────────────────────────
 
