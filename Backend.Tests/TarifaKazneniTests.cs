@@ -31,7 +31,7 @@ public class TarifaKazneniTests
     public void NijednaKaznenaStavka_NeOvisiOVps()
     {
         var servis = new TroskovnikService();
-        var kaznene = TroskovnikService.GetKatalog()
+        var kaznene = TroskovnikService.DohvatiKatalog()
             .Where(s => s.Kategorija == KategorijaKazneni)
             .ToList();
 

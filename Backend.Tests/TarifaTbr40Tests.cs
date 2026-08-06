@@ -87,7 +87,7 @@ public class TarifaTbr40Tests
     [Fact]
     public void StaraStavkaSNulaBodova_JeUklonjena()
     {
-        Assert.DoesNotContain(TroskovnikService.GetKatalog(), s => s.Id == "zaj_vise_osoba");
+        Assert.DoesNotContain(TroskovnikService.DohvatiKatalog(), s => s.Id == "zaj_vise_osoba");
     }
 
     /// <summary>

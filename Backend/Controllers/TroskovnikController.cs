@@ -24,9 +24,9 @@ public class TroskovnikController : ControllerBase
 
     /// <summary>GET /api/troskovnik/katalog — vraća katalog svih tarifnih stavki.</summary>
     [HttpGet("katalog")]
-    public IActionResult GetKatalog()
+    public IActionResult DohvatiKatalog()
     {
-        return Ok(TroskovnikService.GetKatalog());
+        return Ok(TroskovnikService.DohvatiKatalog());
     }
 
     /// <summary>POST /api/troskovnik/izracunaj — izračunava troškovnik.</summary>

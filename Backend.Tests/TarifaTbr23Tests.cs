@@ -73,7 +73,7 @@ public class TarifaTbr23Tests
     [InlineData("upr_obrana_prekrsaj_proc", "Tbr. 23.2")]
     public void Stavke_PostojeSTocnimTarifnimBrojem(string itemId, string tarifniBroj)
     {
-        var def = TroskovnikService.GetKatalog().Single(s => s.Id == itemId);
+        var def = TroskovnikService.DohvatiKatalog().Single(s => s.Id == itemId);
 
         Assert.Equal(tarifniBroj, def.TarifniBroj);
     }
@@ -94,7 +94,7 @@ public class TarifaTbr23Tests
     [InlineData("upr_obrana_prekrsaj_proc")]
     public void Tbr23_NijeUKazneojKategoriji(string itemId)
     {
-        var def = TroskovnikService.GetKatalog().Single(s => s.Id == itemId);
+        var def = TroskovnikService.DohvatiKatalog().Single(s => s.Id == itemId);
 
         Assert.Equal("Upravni postupak", def.Kategorija);
         Assert.NotEqual(TroskovnikService.KategorijaKazneni, def.Kategorija);

@@ -78,7 +78,7 @@ public class TarifaTbr1Tests
     [Fact]
     public void Toc1_NemaMinimumaKojiPonistavaUmanjenje()
     {
-        var def = TroskovnikService.GetKatalog().Single(s => s.Id == "kaz_privatna_tuzba");
+        var def = TroskovnikService.DohvatiKatalog().Single(s => s.Id == "kaz_privatna_tuzba");
         Assert.Null(def.MinBodova);
 
         // novčana kazna / do 3 godine = 100 bodova; po službenoj dužnosti → 50

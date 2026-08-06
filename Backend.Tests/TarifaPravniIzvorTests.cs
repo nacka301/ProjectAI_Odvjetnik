@@ -13,7 +13,7 @@ public class TarifaPravniIzvorTests
     [Fact]
     public void SvakaStavkaKataloga_ImaPravniIzvor()
     {
-        var bezIzvora = TroskovnikService.GetKatalog()
+        var bezIzvora = TroskovnikService.DohvatiKatalog()
             .Where(s => string.IsNullOrWhiteSpace(s.PravniIzvor))
             .Select(s => s.Id)
             .ToList();
@@ -32,7 +32,7 @@ public class TarifaPravniIzvorTests
     [Fact]
     public void PravniIzvor_ImenujePropisIVlastitiTarifniBroj()
     {
-        foreach (var stavka in TroskovnikService.GetKatalog())
+        foreach (var stavka in TroskovnikService.DohvatiKatalog())
         {
             Assert.Contains("Tarifa o nagradama", stavka.PravniIzvor);
             Assert.Contains(Normaliziraj(stavka.TarifniBroj), Normaliziraj(stavka.PravniIzvor));
@@ -51,7 +51,7 @@ public class TarifaPravniIzvorTests
     [InlineData("izv_pravni_lijek", "Tbr. 16")]                 // Tbr. 18.1 → Tbr. 16
     public void IzvedeneStavke_NavodeIzvorniTarifniBroj(string itemId, string ocekivaniUput)
     {
-        var stavka = TroskovnikService.GetKatalog().Single(s => s.Id == itemId);
+        var stavka = TroskovnikService.DohvatiKatalog().Single(s => s.Id == itemId);
 
         Assert.Contains(ocekivaniUput, stavka.PravniIzvor);
     }

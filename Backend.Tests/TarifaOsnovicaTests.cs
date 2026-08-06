@@ -213,7 +213,7 @@ public class TarifaOsnovicaTests
     [Fact]
     public void Tbr25_JavnaNabava_NeSmijePostojatiUKatalogu()
     {
-        var pogodci = TroskovnikService.GetKatalog()
+        var pogodci = TroskovnikService.DohvatiKatalog()
             .Where(s => s.TarifniBroj.StartsWith("Tbr. 25"))
             .Select(s => s.Id)
             .ToList();

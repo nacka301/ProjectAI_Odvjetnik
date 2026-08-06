@@ -156,25 +156,25 @@ public sealed class TroskovnikService : ITroskovnikService
     /// istovremeno navođenje značilo da nijedan razlog nije stvaran.
     /// </summary>
     private static (decimal Povisenje, decimal Snizenje) RazrijesiTbr41(
-        TroskovnikItemRequest stavka, TroskovnikRequest request, TarifnaStavka def)
+        TroskovnikItemRequest stavka, TroskovnikRequest request, TarifnaStavka definicija)
     {
         var povisenje = stavka.Tbr41PovisenjePostotak ?? request.Tbr41PovisenjePostotak;
         var snizenje = stavka.Tbr41SnizenjePostotak ?? request.Tbr41SnizenjePostotak;
 
         if (povisenje > 0m && snizenje > 0m)
             throw new TroskovnikValidationException(
-                $"Stavka \"{def.Opis}\" ima istovremeno povišenje ({povisenje} %) i sniženje " +
+                $"Stavka \"{definicija.Opis}\" ima istovremeno povišenje ({povisenje} %) i sniženje " +
                 $"({snizenje} %) po Tbr. 41. Toč. 1 i toč. 2 polaze od suprotnih razloga, pa se " +
                 "na istu stavku ne mogu primijeniti istovremeno.");
 
         if (povisenje < 0m || povisenje > Tbr41MaxPovisenje)
             throw new TroskovnikValidationException(
-                $"Povišenje po Tbr. 41. toč. 1 za stavku \"{def.Opis}\" iznosi {povisenje} %. " +
+                $"Povišenje po Tbr. 41. toč. 1 za stavku \"{definicija.Opis}\" iznosi {povisenje} %. " +
                 $"Tarifa dopušta najviše {Tbr41MaxPovisenje} %.");
 
         if (snizenje < 0m || snizenje > Tbr41MaxSnizenje)
             throw new TroskovnikValidationException(
-                $"Sniženje po Tbr. 41. toč. 2 za stavku \"{def.Opis}\" iznosi {snizenje} %. " +
+                $"Sniženje po Tbr. 41. toč. 2 za stavku \"{definicija.Opis}\" iznosi {snizenje} %. " +
                 $"Tarifa dopušta najviše {Tbr41MaxSnizenje} %.");
 
         return (povisenje, snizenje);
@@ -231,7 +231,7 @@ public sealed class TroskovnikService : ITroskovnikService
 
     // ── Katalog svih tarifnih stavki ──────────────────────────────
 
-    public static IReadOnlyList<TarifnaStavka> GetKatalog() => _katalog;
+    public static IReadOnlyList<TarifnaStavka> DohvatiKatalog() => _katalog;
 
     private static readonly List<TarifnaStavka> _katalog =
     [
@@ -784,15 +784,15 @@ public sealed class TroskovnikService : ITroskovnikService
         var odabraneDefinicije = new List<TarifnaStavka>();
         foreach (var stavka in request.Stavke)
         {
-            if (!katalogPoId.TryGetValue(stavka.ItemId, out var def))
+            if (!katalogPoId.TryGetValue(stavka.ItemId, out var definicija))
                 throw new TroskovnikValidationException(
                     $"Nepoznata tarifna stavka: \"{stavka.ItemId}\". Nije pronađena u katalogu.");
 
             if (stavka.Kolicina <= 0)
                 throw new TroskovnikValidationException(
-                    $"Stavka \"{def.Opis}\" ima količinu {stavka.Kolicina}. Količina mora biti veća od 0.");
+                    $"Stavka \"{definicija.Opis}\" ima količinu {stavka.Kolicina}. Količina mora biti veća od 0.");
 
-            odabraneDefinicije.Add(def);
+            odabraneDefinicije.Add(definicija);
         }
 
         var jeSamoKazneni = odabraneDefinicije.Count > 0
@@ -831,10 +831,10 @@ public sealed class TroskovnikService : ITroskovnikService
 
         foreach (var stavka in request.Stavke)
         {
-            var def = katalogPoId[stavka.ItemId];
+            var definicija = katalogPoId[stavka.ItemId];
 
             decimal bodovi;
-            if (def.PrekrsajOduzimanje)
+            if (definicija.PrekrsajOduzimanje)
             {
                 if (request.IsOduzimanjePrekrsaj)
                 {
@@ -854,46 +854,46 @@ public sealed class TroskovnikService : ITroskovnikService
                     bodovi = 100m;
                 }
             }
-            else if (def.KazneniBase)
+            else if (definicija.KazneniBase)
             {
-                bodovi = IzracunajKazneneBodove(def, kazneniRazredBodovi, request);
+                bodovi = IzracunajKazneneBodove(definicija, kazneniRazredBodovi, request);
             }
             else
             {
-                bodovi = IzracunajBodove(def, osnovica);
+                bodovi = IzracunajBodove(definicija, osnovica);
             }
 
             // Zaštitna mreža: nijedna stavka ne smije završiti na nula bodova.
             // Nula je u troškovniku neupotrebljiva — izgleda kao valjan iznos, a nije.
             if (bodovi <= 0)
                 throw new TroskovnikValidationException(
-                    $"Stavka \"{def.Opis}\" ({def.TarifniBroj}) daje 0 bodova. " +
+                    $"Stavka \"{definicija.Opis}\" ({definicija.TarifniBroj}) daje 0 bodova. " +
                     "Provjerite unesene parametre predmeta.");
 
             redniBroj++;
 
-            var ukupnoStavke = UkupnoBodovaZaStavku(def, bodovi, stavka.Kolicina);
+            var ukupnoStavke = UkupnoBodovaZaStavku(definicija, bodovi, stavka.Kolicina);
 
             // ── Tbr. 41 po POJEDINOJ stavci ──
             // Toč. 2 kaže "POJEDINE tarifne stavke odvjetnik može sniziti za 50%" —
             // riječ "pojedine" stoji samo ondje, pa se prilagodba veže uz stavku.
-            var (tbr41Povisenje, tbr41Snizenje) = RazrijesiTbr41(stavka, request, def);
+            var (tbr41Povisenje, tbr41Snizenje) = RazrijesiTbr41(stavka, request, definicija);
             var tbr41BodoviStavke = ukupnoStavke * Tbr41Udio(tbr41Povisenje, tbr41Snizenje);
 
             stavkeRetci.Add(new TroskovnikLineItem
             {
                 Rbr = redniBroj,
-                ItemId = def.Id,
-                Opis = def.Opis,
-                TarifniBroj = def.TarifniBroj,
-                PravniIzvor = def.PravniIzvor,
+                ItemId = definicija.Id,
+                Opis = definicija.Opis,
+                TarifniBroj = definicija.TarifniBroj,
+                PravniIzvor = definicija.PravniIzvor,
                 Kolicina = stavka.Kolicina,
                 BodovaPoJedinici = bodovi,
                 UkupnoBodova = ukupnoStavke,
                 // Redak se prikazuje u eurima, pa se ovdje zaokružuje. Zbrojevi niže
                 // računaju se iz nezaokruženih bodova, da se greška ne akumulira.
                 IznosEur = ZaokruziNovac(ukupnoStavke * TarifaConstants.BodValue),
-                IsJednokratna = def.JednokratnaNagrada,
+                IsJednokratna = definicija.JednokratnaNagrada,
                 Tbr41PovisenjePostotak = tbr41Povisenje,
                 Tbr41SnizenjePostotak = tbr41Snizenje,
                 Tbr41Bodovi = tbr41BodoviStavke,
@@ -1059,17 +1059,17 @@ public sealed class TroskovnikService : ITroskovnikService
     /// propisuje naknadu za daljnje radnje ("Za svaku daljnju radnju... 50 bodova"),
     /// dodaje se samo za radnje preko uključenog broja.
     /// </summary>
-    private static decimal UkupnoBodovaZaStavku(TarifnaStavka def, decimal bodovi, int kolicina)
+    private static decimal UkupnoBodovaZaStavku(TarifnaStavka definicija, decimal bodovi, int kolicina)
     {
-        if (!def.JednokratnaNagrada)
+        if (!definicija.JednokratnaNagrada)
             return bodovi * kolicina;
 
         var ukupno = bodovi;
 
-        if (def.UkljuceneRadnje.HasValue && def.DaljnjaRadnjaBodovi.HasValue)
+        if (definicija.UkljuceneRadnje.HasValue && definicija.DaljnjaRadnjaBodovi.HasValue)
         {
-            var daljnjeRadnje = Math.Max(0, kolicina - def.UkljuceneRadnje.Value);
-            ukupno += daljnjeRadnje * def.DaljnjaRadnjaBodovi.Value;
+            var daljnjeRadnje = Math.Max(0, kolicina - definicija.UkljuceneRadnje.Value);
+            ukupno += daljnjeRadnje * definicija.DaljnjaRadnjaBodovi.Value;
         }
 
         return ukupno;
@@ -1080,15 +1080,15 @@ public sealed class TroskovnikService : ITroskovnikService
     /// zaokruživanje bodova nigdje ne propisuje, a Math.Ceiling na svakom koraku
     /// sustavno je podizao iznose.
     /// </summary>
-    private static decimal IzracunajBodove(TarifnaStavka def, OsnovicaRezultat osnovica)
+    private static decimal IzracunajBodove(TarifnaStavka definicija, OsnovicaRezultat osnovica)
     {
         decimal bodovi;
 
-        if (def.FiksniBody.HasValue)
+        if (definicija.FiksniBody.HasValue)
         {
             // Iznos koji Tarifa određuje apsolutno (npr. Tbr. 7. toč. 10 = 250 bodova) —
             // ne ovisi ni o vrijednosti spora ni o osnovici.
-            bodovi = def.FiksniBody.Value;
+            bodovi = definicija.FiksniBody.Value;
         }
         else if (osnovica.FiksnoPoRadnji)
         {
@@ -1097,18 +1097,18 @@ public sealed class TroskovnikService : ITroskovnikService
             // to je upravo ono po čemu se to čitanje razlikuje od "kao osnovica".
             return osnovica.Bodovi;
         }
-        else if (def.Tbr71Postotak.HasValue)
+        else if (definicija.Tbr71Postotak.HasValue)
         {
-            bodovi = osnovica.Bodovi * def.Tbr71Postotak.Value;
-            if (def.Tbr71Povecanje.HasValue)
-                bodovi *= 1 + def.Tbr71Povecanje.Value;
+            bodovi = osnovica.Bodovi * definicija.Tbr71Postotak.Value;
+            if (definicija.Tbr71Povecanje.HasValue)
+                bodovi *= 1 + definicija.Tbr71Povecanje.Value;
         }
         else
         {
             bodovi = osnovica.Bodovi;
         }
 
-        return ClampBodovi(bodovi, def);
+        return ClampBodovi(bodovi, definicija);
     }
 
     /// <summary>
@@ -1118,7 +1118,7 @@ public sealed class TroskovnikService : ITroskovnikService
     ///   - IsZastupnikDjeteta → 70% od Tbr. 4.8 (= 70% × 50% = 35% baze)
     ///   - IsPoSluzbenojDuznosti / IsNaTeretProracuna → 50% umanjenje
     /// </summary>
-    private static decimal IzracunajKazneneBodove(TarifnaStavka def, int tierBodovi, TroskovnikRequest req)
+    private static decimal IzracunajKazneneBodove(TarifnaStavka definicija, int tierBodovi, TroskovnikRequest req)
     {
         decimal bodovi = tierBodovi;
 
@@ -1128,9 +1128,9 @@ public sealed class TroskovnikService : ITroskovnikService
         // trećim stupnjem kad je zapriječena kazna dugotrajni zatvor — tada se koristi
         // KazneniPovecanjeDugotrajni umjesto redovnog povišenja.
         var jeDugotrajni = req.ZaprijecenaKazna == ZaprijecenaKaznaTiers.DugotrajniZatvor;
-        var povecanje = jeDugotrajni && def.KazneniPovecanjeDugotrajni.HasValue
-            ? def.KazneniPovecanjeDugotrajni
-            : def.KazneniPovecanje;
+        var povecanje = jeDugotrajni && definicija.KazneniPovecanjeDugotrajni.HasValue
+            ? definicija.KazneniPovecanjeDugotrajni
+            : definicija.KazneniPovecanje;
 
         if (povecanje.HasValue)
             bodovi *= 1 + povecanje.Value;
@@ -1145,15 +1145,15 @@ public sealed class TroskovnikService : ITroskovnikService
         if (req.IsPoSluzbenojDuznosti || req.IsNaTeretProracuna)
             bodovi *= TarifaConstants.KazneniReductionRate;
 
-        return ClampBodovi(bodovi, def);
+        return ClampBodovi(bodovi, definicija);
     }
 
-    private static decimal ClampBodovi(decimal bodovi, TarifnaStavka def)
+    private static decimal ClampBodovi(decimal bodovi, TarifnaStavka definicija)
     {
-        if (def.MaxBodova.HasValue && bodovi > def.MaxBodova.Value)
-            bodovi = def.MaxBodova.Value;
-        if (def.MinBodova.HasValue && bodovi < def.MinBodova.Value)
-            bodovi = def.MinBodova.Value;
+        if (definicija.MaxBodova.HasValue && bodovi > definicija.MaxBodova.Value)
+            bodovi = definicija.MaxBodova.Value;
+        if (definicija.MinBodova.HasValue && bodovi < definicija.MinBodova.Value)
+            bodovi = definicija.MinBodova.Value;
 
         return bodovi;
     }

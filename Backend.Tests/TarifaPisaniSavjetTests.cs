@@ -75,7 +75,7 @@ public class TarifaPisaniSavjetTests
     [Fact]
     public void ProcjenjivaVarijanta_NemaMinBodova()
     {
-        var def = TroskovnikService.GetKatalog().Single(s => s.Id == "raz_pisani_savjet");
+        var def = TroskovnikService.DohvatiKatalog().Single(s => s.Id == "raz_pisani_savjet");
 
         Assert.Null(def.MinBodova);
     }

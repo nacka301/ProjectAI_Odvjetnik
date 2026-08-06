@@ -108,7 +108,7 @@ public class TarifaValidacijaTests
     {
         var servis = new TroskovnikService();
 
-        foreach (var def in TroskovnikService.GetKatalog())
+        foreach (var def in TroskovnikService.DohvatiKatalog())
         {
             var zahtjev = new TroskovnikRequest
             {

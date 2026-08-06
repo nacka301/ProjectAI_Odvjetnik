@@ -187,7 +187,7 @@ public class TarifaTbr29Tests
     [Fact]
     public void Skupstina_ImaJedinicuSat()
     {
-        Assert.Equal("sat", TroskovnikService.GetKatalog().Single(s => s.Id == "reg_skupstina").Jedinica);
+        Assert.Equal("sat", TroskovnikService.DohvatiKatalog().Single(s => s.Id == "reg_skupstina").Jedinica);
     }
 
     // ── Katalog ───────────────────────────────────────────────────────
@@ -196,7 +196,7 @@ public class TarifaTbr29Tests
     [Fact]
     public void Tbr29_Ima16StavkiURegistarskojKategoriji()
     {
-        var stavke = TroskovnikService.GetKatalog()
+        var stavke = TroskovnikService.DohvatiKatalog()
             .Where(s => s.TarifniBroj.StartsWith("Tbr. 29"))
             .ToList();
 
@@ -211,7 +211,7 @@ public class TarifaTbr29Tests
     [Fact]
     public void Tbr29_SvakaStavkaImaPravniIzvorSTockom()
     {
-        var stavke = TroskovnikService.GetKatalog()
+        var stavke = TroskovnikService.DohvatiKatalog()
             .Where(s => s.TarifniBroj.StartsWith("Tbr. 29"));
 
         Assert.All(stavke, s => Assert.Contains("Tbr. 29. toč.", s.PravniIzvor));

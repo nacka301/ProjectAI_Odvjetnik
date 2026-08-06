@@ -98,7 +98,7 @@ public class TarifaTbr7Tests
     [Fact]
     public void OpisStavke_NavodiIznimkuZaProcjenjiveRadneSporove()
     {
-        var def = TroskovnikService.GetKatalog().Single(s => s.Id == "par_tuzba_smetanje");
+        var def = TroskovnikService.DohvatiKatalog().Single(s => s.Id == "par_tuzba_smetanje");
 
         Assert.Contains("procjenjiv", def.Opis, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Tbr. 7. toč. 1", def.Opis);

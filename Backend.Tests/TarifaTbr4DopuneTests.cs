@@ -134,7 +134,7 @@ public class TarifaTbr4DopuneTests
     [Fact]
     public void Toc6_UpucujeNaTbr49()
     {
-        var def = TroskovnikService.GetKatalog().Single(s => s.Id == "kaz_ocevid_izvan_zgrade");
+        var def = TroskovnikService.DohvatiKatalog().Single(s => s.Id == "kaz_ocevid_izvan_zgrade");
 
         Assert.Contains("Tbr. 49", def.PravniIzvor);
         Assert.Contains("Tbr. 49", def.Opis);
@@ -195,7 +195,7 @@ public class TarifaTbr4DopuneTests
     [InlineData("Tbr. 4.8")]
     public void SvakaTockaTbr4_ImaBaremJednuStavku(string tarifniBroj)
     {
-        Assert.Contains(TroskovnikService.GetKatalog(), s => s.TarifniBroj == tarifniBroj);
+        Assert.Contains(TroskovnikService.DohvatiKatalog(), s => s.TarifniBroj == tarifniBroj);
     }
 
     /// <summary>
@@ -212,6 +212,6 @@ public class TarifaTbr4DopuneTests
     [InlineData("kaz_dodatni_sat")]                // završna rečenica toč. 1
     public void SvakaAlinejaToc1_ImaStavku(string itemId)
     {
-        Assert.Contains(TroskovnikService.GetKatalog(), s => s.Id == itemId);
+        Assert.Contains(TroskovnikService.DohvatiKatalog(), s => s.Id == itemId);
     }
 }

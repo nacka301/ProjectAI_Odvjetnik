@@ -132,7 +132,7 @@ public class TarifaKatalogDopunaTests
     [Fact]
     public void Tbr38_NijeStavkaKataloga()
     {
-        var pogodci = TroskovnikService.GetKatalog()
+        var pogodci = TroskovnikService.DohvatiKatalog()
             .Where(s => s.TarifniBroj.StartsWith("Tbr. 38"))
             .Select(s => s.Id)
             .ToList();
@@ -151,7 +151,7 @@ public class TarifaKatalogDopunaTests
     [Fact]
     public void SatneStavke_IzvodeIznosIzVlastiteOdredbe()
     {
-        var satne = TroskovnikService.GetKatalog()
+        var satne = TroskovnikService.DohvatiKatalog()
             .Where(s => s.Jedinica == "sat")
             .ToList();
 

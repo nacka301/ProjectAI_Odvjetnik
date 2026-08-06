@@ -83,7 +83,7 @@ public class TarifaTbr282Tests
     [InlineData("reg_isprave_neproc")]
     public void Stavke_PostojeURegistarskojKategoriji(string itemId)
     {
-        var def = TroskovnikService.GetKatalog().Single(s => s.Id == itemId);
+        var def = TroskovnikService.DohvatiKatalog().Single(s => s.Id == itemId);
 
         Assert.Equal("Tbr. 28.2", def.TarifniBroj);
         Assert.Equal("Registarski postupak", def.Kategorija);

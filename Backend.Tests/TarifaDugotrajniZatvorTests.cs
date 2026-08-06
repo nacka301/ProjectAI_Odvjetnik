@@ -73,7 +73,7 @@ public class TarifaDugotrajniZatvorTests
     [Fact]
     public void OpisStavke_SpominjeIDrugiITreciStupanj()
     {
-        var def = TroskovnikService.GetKatalog().Single(s => s.Id == "kaz_rasprava_drugostupanjska");
+        var def = TroskovnikService.DohvatiKatalog().Single(s => s.Id == "kaz_rasprava_drugostupanjska");
 
         Assert.Contains("trećeg", def.Opis);
     }

@@ -25,7 +25,7 @@ public class TarifaTbr8Tests
     [Fact]
     public void Tbr8Toc1_PostojiUKatalogu()
     {
-        var def = TroskovnikService.GetKatalog().SingleOrDefault(s => s.Id == "par_odgovor_tuzba");
+        var def = TroskovnikService.DohvatiKatalog().SingleOrDefault(s => s.Id == "par_odgovor_tuzba");
 
         Assert.NotNull(def);
         Assert.Equal("Tbr. 8.1", def.TarifniBroj);
@@ -69,7 +69,7 @@ public class TarifaTbr8Tests
     [Fact]
     public void Tbr8Toc3_OstajeNetaknut()
     {
-        var def = TroskovnikService.GetKatalog().Single(s => s.Id == "par_obrazlozeni_podnesak");
+        var def = TroskovnikService.DohvatiKatalog().Single(s => s.Id == "par_obrazlozeni_podnesak");
 
         Assert.Equal(0.5m, def.Tbr71Postotak);
         Assert.Equal(100, def.MaxBodova);

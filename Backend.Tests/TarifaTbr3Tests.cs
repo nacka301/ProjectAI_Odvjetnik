@@ -74,7 +74,7 @@ public class TarifaTbr3Tests
     [Fact]
     public void Toc2_UpucujeNaTbr49()
     {
-        var def = TroskovnikService.GetKatalog().Single(s => s.Id == "kaz_istraga_izvan_sjedista");
+        var def = TroskovnikService.DohvatiKatalog().Single(s => s.Id == "kaz_istraga_izvan_sjedista");
 
         Assert.Contains("Tbr. 49", def.PravniIzvor);
         Assert.Contains("Tbr. 49", def.Opis);
@@ -105,7 +105,7 @@ public class TarifaTbr3Tests
     [Fact]
     public void Toc4_UpucujeNaTbr49()
     {
-        var def = TroskovnikService.GetKatalog().Single(s => s.Id == "kaz_istraga_odgoda");
+        var def = TroskovnikService.DohvatiKatalog().Single(s => s.Id == "kaz_istraga_odgoda");
 
         Assert.Contains("Tbr. 49", def.PravniIzvor);
     }
