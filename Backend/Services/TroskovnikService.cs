@@ -203,7 +203,7 @@ public sealed class TroskovnikService : ITroskovnikService
     {
         if (vrijednost <= 0) return 25;
 
-        // Fixed bands
+        // Fiksni razredi
         if (vrijednost <= 332.00m) return 25;
         if (vrijednost <= 664.00m) return 50;
         if (vrijednost <= 1_327.00m) return 75;
@@ -211,7 +211,7 @@ public sealed class TroskovnikService : ITroskovnikService
         if (vrijednost <= 33_181.00m) return 250;
         if (vrijednost <= 66_361.00m) return 500;
 
-        // Progressive bands
+        // Progresivni razredi
         if (vrijednost <= 663_614.00m)
         {
             var extra = (int)Math.Ceiling((vrijednost - 66_361.00m) / 133.00m);
@@ -224,12 +224,12 @@ public sealed class TroskovnikService : ITroskovnikService
             return 4991 + extra;
         }
 
-        // Over 1,327,228 EUR
+        // Preko 1.327.228,00 EUR
         var extra3 = (int)Math.Ceiling((vrijednost - 1_327_228.00m) / 664.00m);
         return Math.Min(7496 + extra3, 10_000);
     }
 
-    // ── Catalog of all tariff items ───────────────────────────────
+    // ── Katalog svih tarifnih stavki ──────────────────────────────
 
     public static IReadOnlyList<TarifnaStavka> GetKatalog() => _katalog;
 
@@ -771,9 +771,9 @@ public sealed class TroskovnikService : ITroskovnikService
 
     public TroskovnikResponse Izracunaj(TroskovnikRequest request)
     {
-        var catalogMap = _katalog.ToDictionary(s => s.Id);
-        var lines = new List<TroskovnikLineItem>();
-        var rbr = 0;
+        var katalogPoId = _katalog.ToDictionary(s => s.Id);
+        var stavkeRetci = new List<TroskovnikLineItem>();
+        var redniBroj = 0;
 
         // ── Vrsta postupka ──────────────────────────────────────────
         // U kaznenom se postupku sve veže na zapriječenu kaznu (Tbr. 4. toč. 1),
@@ -784,7 +784,7 @@ public sealed class TroskovnikService : ITroskovnikService
         var odabraneDefinicije = new List<TarifnaStavka>();
         foreach (var stavka in request.Stavke)
         {
-            if (!catalogMap.TryGetValue(stavka.ItemId, out var def))
+            if (!katalogPoId.TryGetValue(stavka.ItemId, out var def))
                 throw new TroskovnikValidationException(
                     $"Nepoznata tarifna stavka: \"{stavka.ItemId}\". Nije pronađena u katalogu.");
 
@@ -795,43 +795,43 @@ public sealed class TroskovnikService : ITroskovnikService
             odabraneDefinicije.Add(def);
         }
 
-        var isSamoKazneni = odabraneDefinicije.Count > 0
+        var jeSamoKazneni = odabraneDefinicije.Count > 0
             && odabraneDefinicije.TrueForAll(d => d.Kategorija == KategorijaKazneni);
 
         // Jedina iznimka je Tbr. 4. toč. 1 al. 8 (prekršaj s oduzimanjem), koji ide po
         // Tbr. 7. toč. 1 prema vrijednosti ODUZETOG PREDMETA — to se računa zasebno niže.
-        var vrijednostSpora = isSamoKazneni ? 0m : EfektivniVps(request);
+        var vrijednostSpora = jeSamoKazneni ? 0m : EfektivniVps(request);
 
         // Osnovica na koju upućuju Tbr. 8. toč. 1, 3, 4 i Tbr. 9. toč. 1–6:
         // "Tbr. 7. toč. 1., 4., 7. i 8." — četiri varijante iste osnovice, ne četiri iznosa.
         // U kaznenom postupku vrijednost predmeta spora ne postoji, pa se osnovica ne razrješava.
-        var osnovica = isSamoKazneni
+        var osnovica = jeSamoKazneni
             ? new OsnovicaRezultat(Tbr71Bodovi(0m), "", false)
             : IzracunajOsnovicu(request);
 
         // ── Zapriječena kazna (Tbr. 4. toč. 1) ──
         // Kaznene stavke nemaju osnovicu bez nje, pa se traži samo kad je stvarno treba.
-        var trebaKazneniTier = odabraneDefinicije.Exists(d => d.KazneniBase);
-        int kazneniTierBodovi = 0;
+        var trebaKazneniRazred = odabraneDefinicije.Exists(d => d.KazneniBase);
+        int kazneniRazredBodovi = 0;
 
-        if (trebaKazneniTier)
+        if (trebaKazneniRazred)
         {
             if (string.IsNullOrWhiteSpace(request.ZaprijecenaKazna))
                 throw new TroskovnikValidationException(
                     "Odabrane su stavke iz kaznenog postupka, a nije odabrana zapriječena kazna. " +
                     "Tbr. 4. toč. 1 nagradu veže isključivo uz visinu zapriječene kazne.");
 
-            if (!ZaprijecenaKaznaTiers.Bodovi.TryGetValue(request.ZaprijecenaKazna, out var tierPts))
+            if (!ZaprijecenaKaznaTiers.Bodovi.TryGetValue(request.ZaprijecenaKazna, out var razredBodovi))
                 throw new TroskovnikValidationException(
                     $"Nepoznata zapriječena kazna: \"{request.ZaprijecenaKazna}\". " +
                     $"Dopuštene vrijednosti: {string.Join(", ", ZaprijecenaKaznaTiers.Bodovi.Keys)}.");
 
-            kazneniTierBodovi = tierPts;
+            kazneniRazredBodovi = razredBodovi;
         }
 
         foreach (var stavka in request.Stavke)
         {
-            var def = catalogMap[stavka.ItemId];
+            var def = katalogPoId[stavka.ItemId];
 
             decimal bodovi;
             if (def.PrekrsajOduzimanje)
@@ -856,7 +856,7 @@ public sealed class TroskovnikService : ITroskovnikService
             }
             else if (def.KazneniBase)
             {
-                bodovi = IzracunajKazneneBodove(def, kazneniTierBodovi, request);
+                bodovi = IzracunajKazneneBodove(def, kazneniRazredBodovi, request);
             }
             else
             {
@@ -870,7 +870,7 @@ public sealed class TroskovnikService : ITroskovnikService
                     $"Stavka \"{def.Opis}\" ({def.TarifniBroj}) daje 0 bodova. " +
                     "Provjerite unesene parametre predmeta.");
 
-            rbr++;
+            redniBroj++;
 
             var ukupnoStavke = UkupnoBodovaZaStavku(def, bodovi, stavka.Kolicina);
 
@@ -880,9 +880,9 @@ public sealed class TroskovnikService : ITroskovnikService
             var (tbr41Povisenje, tbr41Snizenje) = RazrijesiTbr41(stavka, request, def);
             var tbr41BodoviStavke = ukupnoStavke * Tbr41Udio(tbr41Povisenje, tbr41Snizenje);
 
-            lines.Add(new TroskovnikLineItem
+            stavkeRetci.Add(new TroskovnikLineItem
             {
-                Rbr = rbr,
+                Rbr = redniBroj,
                 ItemId = def.Id,
                 Opis = def.Opis,
                 TarifniBroj = def.TarifniBroj,
@@ -901,7 +901,7 @@ public sealed class TroskovnikService : ITroskovnikService
             });
         }
 
-        var osnovicaBodova = lines.Sum(l => l.UkupnoBodova);
+        var osnovicaBodova = stavkeRetci.Sum(redak => redak.UkupnoBodova);
 
         // ── Tbr. 40. toč. 1 — zastupanje više osoba ──
         var povisenjePostotak = PovisenjeViseOsobaPostotak(request.BrojZastupanihOsoba);
@@ -913,7 +913,7 @@ public sealed class TroskovnikService : ITroskovnikService
         // bi se složio na već prilagođenu osnovicu i ukupan bi se iznos promijenio —
         // vidi TarifaTbr41PoStavciTests.RegresijaSaTbr40_OstajeAditivna.
         // Sudska pristojba se ne dira jer nije odvjetnička nagrada.
-        var tbr41Bodovi = lines.Sum(l => l.Tbr41Bodovi);
+        var tbr41Bodovi = stavkeRetci.Sum(redak => redak.Tbr41Bodovi);
 
         var ukupnoBodova = osnovicaBodova + povisenjeBodovi + tbr41Bodovi;
 
@@ -932,8 +932,8 @@ public sealed class TroskovnikService : ITroskovnikService
         var nagradaPoOsobi = ZaokruziNovac(ukupnoEur / brojOsoba);
 
         decimal pdv = 0;
-        var useVat = request.IsPdvUkljucen ?? request.HasVat;
-        if (useVat)
+        var obracunajPdv = request.IsPdvUkljucen ?? request.HasVat;
+        if (obracunajPdv)
             pdv = ZaokruziNovac(ukupnoEur * TarifaConstants.PdvRate);
 
         // ── Sudska pristojba (Uredba o tarifi sudskih pristojbi, NN 37/2023) ──
@@ -947,7 +947,7 @@ public sealed class TroskovnikService : ITroskovnikService
 
         return new TroskovnikResponse
         {
-            Stavke = lines,
+            Stavke = stavkeRetci,
             UkupnoBodova = ukupnoBodova,
             BrojZastupanihOsoba = Math.Max(1, request.BrojZastupanihOsoba),
             PovisenjeViseOsobaPostotak = povisenjePostotak,
@@ -963,12 +963,13 @@ public sealed class TroskovnikService : ITroskovnikService
             BodoviPoOsobi = bodoviPoOsobi,
             NagradaPoOsobi = nagradaPoOsobi,
             VrijednostSpora = vrijednostSpora,
-            IsSamoKazneni = isSamoKazneni,
+            IsSamoKazneni = jeSamoKazneni,
             UkupnoEurBezPdv = ukupnoEur,
             Pdv = pdv,
             UkupnoEurSPdv = ukupnoEur + pdv,
             Klijent = request.Klijent,
-            // Map nested request Odvjetnik (naziv) into response party `ime` for compatibility
+            // Ugniježđeni odvjetnik iz zahtjeva preslikava se u stranku odgovora
+            // (naziv → ime), radi spojivosti sa starijim oblikom odgovora.
             Odvjetnik = request.Odvjetnik is null
                 ? null
                 : new TroskovnikParty
@@ -977,7 +978,7 @@ public sealed class TroskovnikService : ITroskovnikService
                     Oib = request.Odvjetnik.Oib,
                     Adresa = request.Odvjetnik.Adresa
                 },
-            // Map protustranka from nested stranke if present
+            // Protustranka se preuzima iz ugniježđenih stranaka, ako su poslane.
             Protustranka = request.Stranke?.Protustranka is null
                 ? null
                 : new TroskovnikParty
@@ -990,15 +991,15 @@ public sealed class TroskovnikService : ITroskovnikService
             IsPdvUkljucen = request.IsPdvUkljucen ?? request.HasVat,
             HasVat = request.HasVat,
             OpisPredmeta = request.OpisPredmeta,
-            // Enrich with predmet metadata
+            // Podaci o predmetu
             Sud = request.Predmet?.Sud,
             BrojPredmeta = request.Predmet?.PoslovniBroj ?? request.CaseId,
             DatumIzrade = DateTime.UtcNow,
-            // Nested objects (new schema) — pass through as-is for frontend consumption
+            // Ugniježđeni objekti (novi oblik) — prosljeđuju se nepromijenjeni sučelju.
             OdvjetnikInfo = request.Odvjetnik,
             PredmetInfo = request.Predmet,
             StrankeInfo = request.Stranke,
-            // Kazneni echo fields
+            // Kazneni parametri vraćeni natrag u odgovoru
             ZaprijecenaKazna = request.ZaprijecenaKazna,
             IsPoSluzbenojDuznosti = request.IsPoSluzbenojDuznosti,
             IsNaTeretProracuna = request.IsNaTeretProracuna,
