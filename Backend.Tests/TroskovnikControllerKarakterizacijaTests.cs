@@ -255,6 +255,105 @@ public class TroskovnikControllerKarakterizacijaTests
         Assert.IsType<TroskovnikResponse>(Svojstvo(odgovor.Value, "troskovnik"));
     }
 
+    // ── POST /api/troskovnik/spremi — razrješavanje klijenta ──────
+    //
+    // Ove grane prije koraka 10 nisu imale nijedan test, a upravo se one izdvajaju
+    // u RazrijesiKlijenta. Bilježi se zatečeno ponašanje, prije i poslije isto.
+
+    [Fact]
+    public async Task Spremi_ZadanClientId_KoristiGaINeDiraUpsert()
+    {
+        var klijenti = new FakeClientCaseService();
+        var kontroler = StvoriKontroler(klijenti);
+        var zahtjev = ValjanZahtjev();
+        zahtjev.ClientId = "postojeci-klijent";
+        zahtjev.AutoCreateClient = true;
+
+        var odgovor = Assert.IsType<OkObjectResult>(await kontroler.Spremi(zahtjev));
+
+        Assert.Null(klijenti.UpsertPozvanS);
+        Assert.Equal("postojeci-klijent", Svojstvo(odgovor.Value, "clientId"));
+        Assert.Null(Svojstvo(odgovor.Value, "createdClientId"));
+        Assert.Equal("postojeci-klijent", klijenti.SpremljeniTroskovnik!.ClientId);
+    }
+
+    [Fact]
+    public async Task Spremi_BezClientIdaIBezAutomatskogOtvaranja_NeDiraUpsert()
+    {
+        var klijenti = new FakeClientCaseService();
+        var kontroler = StvoriKontroler(klijenti);
+        var zahtjev = ValjanZahtjev();
+        zahtjev.AutoCreateClient = false;
+
+        var odgovor = Assert.IsType<OkObjectResult>(await kontroler.Spremi(zahtjev));
+
+        Assert.Null(klijenti.UpsertPozvanS);
+        Assert.Null(Svojstvo(odgovor.Value, "clientId"));
+    }
+
+    [Fact]
+    public async Task Spremi_AutomatskoOtvaranje_SaljeUpsertuPodatkeZastupaneStranke()
+    {
+        var klijenti = new FakeClientCaseService();
+        var kontroler = StvoriKontroler(klijenti);
+        var zahtjev = ValjanZahtjev();
+        zahtjev.AutoCreateClient = true;
+        zahtjev.ClientGrad = "Split";
+        zahtjev.Stranke = new StrankeRequest
+        {
+            ZastupanaStranka = new StrankaRequest
+            {
+                Naziv = "Ivan Horvat", Oib = "12345678901", Adresa = "Ilica 1"
+            }
+        };
+
+        var odgovor = Assert.IsType<OkObjectResult>(await kontroler.Spremi(zahtjev));
+
+        Assert.Equal(
+            (KorisnikId, "Ivan Horvat", "12345678901", "Ilica 1", "Split"),
+            klijenti.UpsertPozvanS);
+        Assert.Equal("klijent-1", Svojstvo(odgovor.Value, "clientId"));
+        Assert.Equal("klijent-1", Svojstvo(odgovor.Value, "createdClientId"));
+    }
+
+    [Fact]
+    public async Task Spremi_AutomatskoOtvaranjeBezZastupaneStranke_PovlaciSeNaStariKlijent()
+    {
+        var klijenti = new FakeClientCaseService { IshodUpserta = ("klijent-7", false) };
+        var kontroler = StvoriKontroler(klijenti);
+        var zahtjev = ValjanZahtjev();
+        zahtjev.AutoCreateClient = true;
+        zahtjev.Klijent = new TroskovnikParty
+        {
+            Ime = "Marija Kovač", Oib = "98765432109", Adresa = "Vukovarska 2", Grad = "Osijek"
+        };
+
+        var odgovor = Assert.IsType<OkObjectResult>(await kontroler.Spremi(zahtjev));
+
+        Assert.Equal(
+            (KorisnikId, "Marija Kovač", "98765432109", "Vukovarska 2", "Osijek"),
+            klijenti.UpsertPozvanS);
+
+        // Zatečeno ponašanje: klijent je pronađen, ne otvoren, pa createdClientId ostaje prazan.
+        Assert.Equal("klijent-7", Svojstvo(odgovor.Value, "clientId"));
+        Assert.Null(Svojstvo(odgovor.Value, "createdClientId"));
+    }
+
+    [Fact]
+    public async Task Spremi_AutomatskoOtvaranjeBezNaziva_NeDiraUpsert()
+    {
+        var klijenti = new FakeClientCaseService();
+        var kontroler = StvoriKontroler(klijenti);
+        var zahtjev = ValjanZahtjev();
+        zahtjev.AutoCreateClient = true;
+
+        var odgovor = Assert.IsType<OkObjectResult>(await kontroler.Spremi(zahtjev));
+
+        Assert.Null(klijenti.UpsertPozvanS);
+        Assert.Null(Svojstvo(odgovor.Value, "clientId"));
+        Assert.Null(Svojstvo(odgovor.Value, "createdClientId"));
+    }
+
     // ── GET /api/troskovnik/popis ─────────────────────────────────
 
     [Fact]
@@ -302,11 +401,21 @@ public class TroskovnikControllerKarakterizacijaTests
         public CaseReadRecord? Predmet { get; init; }
         public TroskovnikRecord? SpremljeniTroskovnik { get; private set; }
 
+        /// <summary>Što upsert vraća — null kao ClientId znači da klijent nije razriješen.</summary>
+        public (string? ClientId, bool WasCreated) IshodUpserta { get; init; } = ("klijent-1", true);
+
+        /// <summary>Argumenti zadnjeg poziva upserta; null ako pozvan nije bio.</summary>
+        public (string Korisnik, string? Naziv, string? Oib, string? Adresa, string? Grad)? UpsertPozvanS
+        { get; private set; }
+
         public Task<CaseReadRecord?> GetCaseByIdAsync(string id) => Task.FromResult(Predmet);
 
         public Task<(string? ClientId, bool WasCreated)> UpsertClientForTroskovnikAsync(
             string userId, string? naziv, string? oib, string? adresa, string? grad)
-            => Task.FromResult<(string?, bool)>(("klijent-1", true));
+        {
+            UpsertPozvanS = (userId, naziv, oib, adresa, grad);
+            return Task.FromResult(IshodUpserta);
+        }
 
         public Task<TroskovnikReadRecord?> SaveTroskovnikAsync(TroskovnikRecord record)
         {

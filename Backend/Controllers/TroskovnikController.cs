@@ -110,118 +110,148 @@ public class TroskovnikController : ControllerBase
             return BadRequest(new { error = ex.Message });
         }
 
-        // ═════════════════════════════════════════════════════════
-        //  SECURITY: Validate CaseId ownership before linking
-        // ═════════════════════════════════════════════════════════
-        if (!string.IsNullOrWhiteSpace(request.CaseId))
-        {
-            var cas = await _clientCaseService.GetCaseByIdAsync(request.CaseId);
-            if (cas == null || cas.UserId != userId)
-                return StatusCode(403, new { error = "Nemate pristup odabranom predmetu." });
-        }
+        // SECURITY: predmet se smije vezati samo ako pripada prijavljenom korisniku
+        if (!await SmijeVezatiPredmet(request.CaseId, userId))
+            return StatusCode(403, new { error = "Nemate pristup odabranom predmetu." });
 
-        // ═════════════════════════════════════════════════════════
-        //  CLIENT UPSERT LOGIC
-        //  1. If client_id provided → use it (existing client selected from combobox)
-        //  2. If auto_create_client && no client_id → find or create client
-        // ═════════════════════════════════════════════════════════
+        var klijent = await RazrijesiKlijenta(request, userId);
 
-        string? resolvedClientId = request.ClientId;
-        string? createdClientId = null;
+        var zapis = SastaviZapis(request, result, userId, klijent.Id);
 
-        if (string.IsNullOrWhiteSpace(resolvedClientId) && request.AutoCreateClient)
-        {
-            // Extract client data from stranke > zastupana_stranka (preferred) or legacy klijent
-            var clientNaziv = request.Stranke?.ZastupanaStranka?.Naziv
-                              ?? request.Klijent?.Ime;
-            var clientOib = request.Stranke?.ZastupanaStranka?.Oib
-                            ?? request.Klijent?.Oib;
-            var clientAdresa = request.Stranke?.ZastupanaStranka?.Adresa
-                               ?? request.Klijent?.Adresa;
-            var clientGrad = request.ClientGrad
-                             ?? request.Klijent?.Grad;
-
-            if (!string.IsNullOrWhiteSpace(clientNaziv))
-            {
-                var (upsertedId, wasCreated) = await _clientCaseService.UpsertClientForTroskovnikAsync(
-                    userId, clientNaziv, clientOib, clientAdresa, clientGrad
-                );
-
-                if (upsertedId != null)
-                {
-                    resolvedClientId = upsertedId;
-                    if (wasCreated) createdClientId = upsertedId;
-                }
-            }
-        }
-
-        var record = new TroskovnikRecord
-        {
-            UserId = userId,
-            ClientId = resolvedClientId,
-            CaseId = request.CaseId,
-            OpisPredmeta = request.OpisPredmeta,
-            // Iz rezultata, ne iz zahtjeva: u kaznenom predmetu VPS je izbačen iz izračuna
-            // pa ne smije završiti ni u spremljenom troškovniku (vidi TroskovnikService).
-            VrijednostSpora = result.VrijednostSpora,
-            UkupnoBodova = result.UkupnoBodova,
-            UkupnoEurBezPdv = result.UkupnoEurBezPdv,
-            Pdv = result.Pdv,
-            UkupnoEurSPdv = result.UkupnoEurSPdv,
-            // Nested objects — prefer new schema, fall back to legacy Klijent
-            Odvjetnik = request.Odvjetnik is null ? null : new OdvjetnikInfo
-            {
-                Naziv = request.Odvjetnik.Naziv,
-                Oib = request.Odvjetnik.Oib,
-                Adresa = request.Odvjetnik.Adresa,
-                Iban = request.Odvjetnik.Iban
-            },
-            Predmet = new PredmetInfo
-            {
-                Sud = request.Predmet?.Sud ?? request.OpisPredmeta,
-                PoslovniBroj = request.Predmet?.PoslovniBroj ?? request.CaseId
-            },
-            Stranke = new StrankeInfo
-            {
-                ZastupanaStranka = new StrankaInfo
-                {
-                    Polozaj = request.Stranke?.ZastupanaStranka?.Polozaj ?? "zastupana",
-                    Naziv = request.Stranke?.ZastupanaStranka?.Naziv ?? result.Klijent?.Ime,
-                    Oib = request.Stranke?.ZastupanaStranka?.Oib ?? result.Klijent?.Oib,
-                    Adresa = request.Stranke?.ZastupanaStranka?.Adresa ?? result.Klijent?.Adresa
-                },
-                Protustranka = request.Stranke?.Protustranka is null ? null : new StrankaInfo
-                {
-                    Polozaj = request.Stranke.Protustranka.Polozaj ?? request.ProtustrankaPolozaj,
-                    Naziv = request.Stranke.Protustranka.Naziv,
-                    Oib = request.Stranke.Protustranka.Oib,
-                    Adresa = request.Stranke.Protustranka.Adresa
-                }
-            },
-            // Save both flags for compatibility: prefer explicit IsPdvUkljucen if provided
-            IsPdvUkljucen = request.IsPdvUkljucen ?? request.HasVat,
-            HasVat = request.HasVat,
-            // Kazneni fields
-            ZaprijecenaKazna = request.ZaprijecenaKazna,
-            IsPoSluzbenojDuznosti = request.IsPoSluzbenojDuznosti,
-            IsNaTeretProracuna = request.IsNaTeretProracuna,
-            IsZastupnikDjeteta = request.IsZastupnikDjeteta,
-            IsStjecaj = request.IsStjecaj,
-            IsOduzimanjePrekrsaj = request.IsOduzimanjePrekrsaj,
-            VrijednostOduzimanja = request.VrijednostOduzimanja,
-            RawJsonOutput = result
-        };
-
-        var saved = await _clientCaseService.SaveTroskovnikAsync(record);
+        var saved = await _clientCaseService.SaveTroskovnikAsync(zapis);
 
         return Ok(new
         {
             troskovnik = result,
             savedId = saved?.Id,
-            clientId = resolvedClientId,
-            createdClientId
+            clientId = klijent.Id,
+            createdClientId = klijent.Kreirani
         });
     }
+
+    /// <summary>
+    /// Smije li se troškovnik vezati uz zadani predmet.
+    ///
+    /// Bez predmeta nema što provjeravati, pa je odgovor da. Inače predmet mora
+    /// postojati i pripadati prijavljenom korisniku.
+    /// </summary>
+    private async Task<bool> SmijeVezatiPredmet(string? caseId, string userId)
+    {
+        if (string.IsNullOrWhiteSpace(caseId))
+            return true;
+
+        var predmet = await _clientCaseService.GetCaseByIdAsync(caseId);
+        return predmet != null && predmet.UserId == userId;
+    }
+
+    /// <summary>
+    /// Utvrđuje uz kojeg se klijenta troškovnik veže.
+    ///
+    /// Ako je klijent izabran u sučelju, koristi se on. Ako nije, a zahtjev traži
+    /// automatsko otvaranje, klijent se traži po OIB-u ili nazivu i po potrebi
+    /// stvara. Podaci se čitaju iz stranke > zastupana_stranka, uz povlačenje na
+    /// stariju strukturu <c>klijent</c>.
+    /// </summary>
+    private async Task<RazrijeseniKlijent> RazrijesiKlijenta(TroskovnikRequest request, string userId)
+    {
+        if (!string.IsNullOrWhiteSpace(request.ClientId) || !request.AutoCreateClient)
+            return new RazrijeseniKlijent(request.ClientId, null);
+
+        var naziv = request.Stranke?.ZastupanaStranka?.Naziv ?? request.Klijent?.Ime;
+        if (string.IsNullOrWhiteSpace(naziv))
+            return new RazrijeseniKlijent(request.ClientId, null);
+
+        var (upsertedId, wasCreated) = await _clientCaseService.UpsertClientForTroskovnikAsync(
+            userId,
+            naziv,
+            request.Stranke?.ZastupanaStranka?.Oib ?? request.Klijent?.Oib,
+            request.Stranke?.ZastupanaStranka?.Adresa ?? request.Klijent?.Adresa,
+            request.ClientGrad ?? request.Klijent?.Grad
+        );
+
+        if (upsertedId is null)
+            return new RazrijeseniKlijent(request.ClientId, null);
+
+        return new RazrijeseniKlijent(upsertedId, wasCreated ? upsertedId : null);
+    }
+
+    /// <summary>
+    /// Klijent uz kojeg ide troškovnik. <paramref name="Kreirani"/> je popunjen samo
+    /// ako je klijent upravo otvoren, jer to sučelje javlja korisniku posebno.
+    /// </summary>
+    private sealed record RazrijeseniKlijent(string? Id, string? Kreirani);
+
+    /// <summary>
+    /// Sastavlja zapis za bazu iz zahtjeva i izračunatog troškovnika.
+    ///
+    /// Iznosi se uzimaju iz rezultata, a ne iz zahtjeva: u kaznenom predmetu VPS je
+    /// izbačen iz izračuna pa ne smije završiti ni u spremljenom troškovniku
+    /// (vidi TroskovnikService).
+    /// </summary>
+    private static TroskovnikRecord SastaviZapis(
+        TroskovnikRequest request, TroskovnikResponse result, string userId, string? clientId) => new()
+    {
+        UserId = userId,
+        ClientId = clientId,
+        CaseId = request.CaseId,
+        OpisPredmeta = request.OpisPredmeta,
+        VrijednostSpora = result.VrijednostSpora,
+        UkupnoBodova = result.UkupnoBodova,
+        UkupnoEurBezPdv = result.UkupnoEurBezPdv,
+        Pdv = result.Pdv,
+        UkupnoEurSPdv = result.UkupnoEurSPdv,
+        Odvjetnik = SastaviOdvjetnika(request),
+        Predmet = new PredmetInfo
+        {
+            Sud = request.Predmet?.Sud ?? request.OpisPredmeta,
+            PoslovniBroj = request.Predmet?.PoslovniBroj ?? request.CaseId
+        },
+        Stranke = SastaviStranke(request, result),
+        // Obje zastavice se spremaju radi kompatibilnosti: izričiti IsPdvUkljucen ima prednost
+        IsPdvUkljucen = request.IsPdvUkljucen ?? request.HasVat,
+        HasVat = request.HasVat,
+        // Kazneni postupak
+        ZaprijecenaKazna = request.ZaprijecenaKazna,
+        IsPoSluzbenojDuznosti = request.IsPoSluzbenojDuznosti,
+        IsNaTeretProracuna = request.IsNaTeretProracuna,
+        IsZastupnikDjeteta = request.IsZastupnikDjeteta,
+        IsStjecaj = request.IsStjecaj,
+        IsOduzimanjePrekrsaj = request.IsOduzimanjePrekrsaj,
+        VrijednostOduzimanja = request.VrijednostOduzimanja,
+        RawJsonOutput = result
+    };
+
+    /// <summary>Podaci odvjetnika za zaglavlje troškovnika; izostaju ako ih zahtjev nema.</summary>
+    private static OdvjetnikInfo? SastaviOdvjetnika(TroskovnikRequest request) =>
+        request.Odvjetnik is null ? null : new OdvjetnikInfo
+        {
+            Naziv = request.Odvjetnik.Naziv,
+            Oib = request.Odvjetnik.Oib,
+            Adresa = request.Odvjetnik.Adresa,
+            Iban = request.Odvjetnik.Iban
+        };
+
+    /// <summary>
+    /// Stranke postupka. Zastupana stranka se popunjava iz zahtjeva, a gdje podatka
+    /// nema povlači se iz izračuna. Protustranka izostaje ako je zahtjev ne navodi.
+    /// </summary>
+    private static StrankeInfo SastaviStranke(TroskovnikRequest request, TroskovnikResponse result) => new()
+    {
+        ZastupanaStranka = new StrankaInfo
+        {
+            Polozaj = request.Stranke?.ZastupanaStranka?.Polozaj ?? "zastupana",
+            Naziv = request.Stranke?.ZastupanaStranka?.Naziv ?? result.Klijent?.Ime,
+            Oib = request.Stranke?.ZastupanaStranka?.Oib ?? result.Klijent?.Oib,
+            Adresa = request.Stranke?.ZastupanaStranka?.Adresa ?? result.Klijent?.Adresa
+        },
+        Protustranka = request.Stranke?.Protustranka is null ? null : new StrankaInfo
+        {
+            Polozaj = request.Stranke.Protustranka.Polozaj ?? request.ProtustrankaPolozaj,
+            Naziv = request.Stranke.Protustranka.Naziv,
+            Oib = request.Stranke.Protustranka.Oib,
+            Adresa = request.Stranke.Protustranka.Adresa
+        }
+    };
 
     /// <summary>GET /api/troskovnik/popis — lista svih spremljenih troškovnika korisnika.</summary>
     [HttpGet("popis")]
