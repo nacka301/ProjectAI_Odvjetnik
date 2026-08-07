@@ -97,7 +97,7 @@ public class TarifaTbr23Tests
         var def = TroskovnikService.DohvatiKatalog().Single(s => s.Id == itemId);
 
         Assert.Equal("Upravni postupak", def.Kategorija);
-        Assert.NotEqual(TroskovnikService.KategorijaKazneni, def.Kategorija);
+        Assert.NotEqual(TarifaKatalog.KategorijaKazneni, def.Kategorija);
     }
 
     /// <summary>
