@@ -107,6 +107,8 @@ public static class DomainServiceCollectionExtensions
 
         services.AddHttpClient<ClientCaseService>();
         services.AddScoped<IClientCaseService>(sp => sp.GetRequiredService<ClientCaseService>());
+        // Usko sučelje za troškovnik — ista instanca, samo manji pogled na nju (ISP).
+        services.AddScoped<ITroskovnikSpremiste>(sp => sp.GetRequiredService<ClientCaseService>());
 
         // ── DataSeeder (admin-only, uses ClientCaseService) ──
         services.AddScoped<DataSeederService>();

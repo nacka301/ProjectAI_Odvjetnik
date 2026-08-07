@@ -11,9 +11,9 @@ namespace Backend.Controllers;
 public class TroskovnikController : ControllerBase
 {
     private readonly ITroskovnikService _service;
-    private readonly IClientCaseService _clientCaseService;
+    private readonly ITroskovnikSpremiste _clientCaseService;
 
-    public TroskovnikController(IClientCaseService clientCaseService, ITroskovnikService service)
+    public TroskovnikController(ITroskovnikSpremiste clientCaseService, ITroskovnikService service)
     {
         _clientCaseService = clientCaseService;
         _service = service;

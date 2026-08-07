@@ -102,6 +102,7 @@ public class DependencyInjectionTests
     [InlineData(typeof(ITroskovnikService))]
     [InlineData(typeof(ITroskovnikDocumentService))]
     [InlineData(typeof(IClientCaseService))]
+    [InlineData(typeof(ITroskovnikSpremiste))]
     public void TroskovnikOvisnosti_SuRegistrirane(Type sucelje)
     {
         using var provider = BuildProvider();

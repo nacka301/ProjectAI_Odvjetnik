@@ -290,14 +290,14 @@ public class TroskovnikControllerKarakterizacijaTests
     }
 
     /// <summary>
-    /// Ručno pisan dvojnik za IClientCaseService.
+    /// Ručno pisan dvojnik za ITroskovnikSpremiste.
     ///
-    /// Sučelje ima 31 člana, a kontroler troškovnika koristi četiri. Ostali bacaju
-    /// iznimku jer ih nijedan test ne smije nesvjesno pozvati. Sama činjenica da se
-    /// mora napisati 27 nekorištenih metoda je dokaz kršenja načela razdvajanja
-    /// sučelja (ISP) — bilježi se kao nalaz, ne popravlja u ovom koraku.
+    /// Dok je kontroler ovisio o cijelom IClientCaseService, ovaj je dvojnik morao
+    /// implementirati 31 članicu — 27 od njih samo je bacalo iznimku jer ih nijedan
+    /// test ne poziva. Nakon razdvajanja sučelja (ISP) ostale su četiri koje se
+    /// stvarno koriste.
     /// </summary>
-    private sealed class FakeClientCaseService : IClientCaseService
+    private sealed class FakeClientCaseService : ITroskovnikSpremiste
     {
         public CaseReadRecord? Predmet { get; init; }
         public TroskovnikRecord? SpremljeniTroskovnik { get; private set; }
@@ -316,38 +316,5 @@ public class TroskovnikControllerKarakterizacijaTests
 
         public Task<List<TroskovnikReadRecord>> GetTroskovniciByUserAsync(string userId)
             => Task.FromResult(new List<TroskovnikReadRecord>());
-
-        // ── Ostatak debelog sučelja — kontroler troškovnika ih ne koristi ──
-
-        private static Task<T> Neocekivano<T>([System.Runtime.CompilerServices.CallerMemberName] string ime = "")
-            => throw new NotSupportedException($"Dvojnik ne podržava {ime} — test ga ne bi smio pozvati.");
-
-        public Task<ClientReadRecord?> CreateClientAsync(ClientRecord record) => Neocekivano<ClientReadRecord?>();
-        public Task<List<ClientReadRecord>> GetClientsByUserAsync(string userId) => Neocekivano<List<ClientReadRecord>>();
-        public Task<ClientReadRecord?> GetClientByIdAsync(string id) => Neocekivano<ClientReadRecord?>();
-        public Task<ClientReadRecord?> UpdateClientAsync(string id, object patch) => Neocekivano<ClientReadRecord?>();
-        public Task<bool> DeleteClientAsync(string id) => Neocekivano<bool>();
-        public Task<ClientReadRecord?> FindClientByOibAsync(string userId, string oib) => Neocekivano<ClientReadRecord?>();
-        public Task<ClientReadRecord?> FindClientByNameAsync(string userId, string name) => Neocekivano<ClientReadRecord?>();
-        public Task<CaseReadRecord?> CreateCaseAsync(CaseRecord record) => Neocekivano<CaseReadRecord?>();
-        public Task<List<CaseReadRecord>> GetCasesByUserAsync(string userId) => Neocekivano<List<CaseReadRecord>>();
-        public Task<List<CaseReadRecord>> GetCasesByClientAsync(string clientId) => Neocekivano<List<CaseReadRecord>>();
-        public Task<List<CaseReadRecord>> GetDeletedCasesByUserAsync(string userId) => Neocekivano<List<CaseReadRecord>>();
-        public Task<CaseReadRecord?> UpdateCaseAsync(string id, object patch) => Neocekivano<CaseReadRecord?>();
-        public Task<CaseReadRecord?> SoftDeleteCaseAsync(string id) => Neocekivano<CaseReadRecord?>();
-        public Task<CaseReadRecord?> RestoreCaseAsync(string id) => Neocekivano<CaseReadRecord?>();
-        public Task<bool> DeleteCaseAsync(string id) => Neocekivano<bool>();
-        public Task<List<TroskovnikReadRecord>> GetTroskovniciByClientAsync(string clientId) => Neocekivano<List<TroskovnikReadRecord>>();
-        public Task<TroskovnikReadRecord?> GetTroskovnikByIdAsync(string id) => Neocekivano<TroskovnikReadRecord?>();
-        public Task<bool> DeleteTroskovnikAsync(string id) => Neocekivano<bool>();
-        public Task<ClientProfileResponse?> GetClientProfileAsync(string clientId) => Neocekivano<ClientProfileResponse?>();
-        public Task<CaseEventReadRecord?> CreateCaseEventAsync(CaseEventRecord record) => Neocekivano<CaseEventReadRecord?>();
-        public Task<List<CaseEventReadRecord>> GetCaseEventsByCaseAsync(string caseId, string userId) => Neocekivano<List<CaseEventReadRecord>>();
-        public Task<CaseEventReadRecord?> GetCaseEventByIdAsync(string id) => Neocekivano<CaseEventReadRecord?>();
-        public Task<CaseEventReadRecord?> UpdateCaseEventAsync(string id, object patch) => Neocekivano<CaseEventReadRecord?>();
-        public Task<bool> DeleteCaseEventAsync(string id) => Neocekivano<bool>();
-        public Task<List<CaseEventReadRecord>> GetBillableEventsForCaseAsync(string caseId, string userId) => Neocekivano<List<CaseEventReadRecord>>();
-        public Task<int> MarkEventsAsBilledAsync(IEnumerable<string> eventIds) => Neocekivano<int>();
-        public Task<List<CaseEventReadRecord>> GetCaseEventsByIdsAsync(IEnumerable<string> eventIds) => Neocekivano<List<CaseEventReadRecord>>();
     }
 }

@@ -7,8 +7,11 @@ namespace Backend.Services;
 
 /// <summary>
 /// Apstrakcija za ClientCaseService. Kreirano u svrhu Dependency Inversion principa.
+///
+/// Četiri članice koje treba troškovnik žive u <see cref="ITroskovnikSpremiste"/> i
+/// ovamo dolaze nasljeđivanjem — potrošači ovog sučelja i dalje vide sve.
 /// </summary>
-public interface IClientCaseService
+public interface IClientCaseService : ITroskovnikSpremiste
 {
     Task<ClientReadRecord?> CreateClientAsync(ClientRecord record) ;
 
@@ -32,17 +35,7 @@ public interface IClientCaseService
     /// </summary>
     Task<ClientReadRecord?> FindClientByNameAsync(string userId, string name) ;
 
-/// <summary>
-    /// Ensures a client exists for the given user. If a matching client is found
-    /// by OIB (preferred) or exact name, returns it. Otherwise creates a new one.
-    /// Returns (clientId, wasCreated).
-    /// </summary>
-    Task<(string? ClientId, bool WasCreated)> UpsertClientForTroskovnikAsync(
-        string userId,
-        string? naziv,
-        string? oib,
-        string? adresa,
-        string? grad) ;
+    // UpsertClientForTroskovnikAsync — u ITroskovnikSpremiste
 
     Task<CaseReadRecord?> CreateCaseAsync(CaseRecord record) ;
 
@@ -55,7 +48,7 @@ public interface IClientCaseService
 /// <summary>Soft-deleted cases for the trash view (owner only).</summary>
     Task<List<CaseReadRecord>> GetDeletedCasesByUserAsync(string userId) ;
 
-    Task<CaseReadRecord?> GetCaseByIdAsync(string id) ;
+    // GetCaseByIdAsync — u ITroskovnikSpremiste
 
     Task<CaseReadRecord?> UpdateCaseAsync(string id, object patch) ;
 
@@ -68,9 +61,7 @@ public interface IClientCaseService
 /// <summary>Hard-delete — kept for admin/cleanup scenarios.</summary>
     Task<bool> DeleteCaseAsync(string id) ;
 
-    Task<TroskovnikReadRecord?> SaveTroskovnikAsync(TroskovnikRecord record) ;
-
-    Task<List<TroskovnikReadRecord>> GetTroskovniciByUserAsync(string userId) ;
+    // SaveTroskovnikAsync, GetTroskovniciByUserAsync — u ITroskovnikSpremiste
 
     Task<List<TroskovnikReadRecord>> GetTroskovniciByClientAsync(string clientId) ;
 
