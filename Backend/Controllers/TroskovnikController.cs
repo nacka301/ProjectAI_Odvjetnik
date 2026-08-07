@@ -37,6 +37,31 @@ public class TroskovnikController : ControllerBase
             throw new TroskovnikValidationException("Morate odabrati barem jednu stavku.");
     }
 
+    /// <summary>
+    /// Provjerava zahtjev i računa troškovnik.
+    ///
+    /// Vraća <c>null</c> kad je sve u redu, a inače gotov odgovor 400 koji pozivatelj
+    /// samo proslijedi. Obje akcije koje računaju troškovnik radile su ovo istim
+    /// deseterorednim blokom, pa je pravilo „greška u izračunu je 400 s porukom
+    /// servisa" postojalo na dva mjesta i moglo se razići.
+    /// </summary>
+    private IActionResult? ProvjeriIIzracunaj(TroskovnikRequest zahtjev, out TroskovnikResponse rezultat)
+    {
+        rezultat = default!;
+        try
+        {
+            ProvjeriZahtjev(zahtjev);
+            rezultat = _servis.Izracunaj(zahtjev);
+            return null;
+        }
+        catch (TroskovnikValidationException ex)
+        {
+            // Troškovnik se ne može valjano izračunati — bolje jasna poruka nego
+            // stavka koja tiho nestane ili redak s 0,00 €.
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
     /// <summary>GET /api/troskovnik/katalog — vraća katalog svih tarifnih stavki.</summary>
     [HttpGet("katalog")]
     public IActionResult DohvatiKatalog()
@@ -48,18 +73,8 @@ public class TroskovnikController : ControllerBase
     [HttpPost("izracunaj")]
     public async Task<IActionResult> Izracunaj([FromBody] TroskovnikRequest zahtjev)
     {
-        TroskovnikResponse rezultat;
-        try
-        {
-            ProvjeriZahtjev(zahtjev);
-            rezultat = _servis.Izracunaj(zahtjev);
-        }
-        catch (TroskovnikValidationException ex)
-        {
-            // Troškovnik se ne može valjano izračunati — bolje jasna poruka nego
-            // stavka koja tiho nestane ili redak s 0,00 €.
-            return BadRequest(new { error = ex.Message });
-        }
+        if (ProvjeriIIzracunaj(zahtjev, out var rezultat) is { } greska)
+            return greska;
 
         // Ako je zadan predmet, odgovor se dopunjuje sudom i brojem predmeta.
         // SECURITY: dopunjuje se samo predmet koji pripada prijavljenom korisniku.
@@ -99,16 +114,8 @@ public class TroskovnikController : ControllerBase
         if (string.IsNullOrWhiteSpace(korisnikId))
             return Unauthorized(new { error = "Nedostaje x-user-id header." });
 
-        TroskovnikResponse rezultat;
-        try
-        {
-            ProvjeriZahtjev(zahtjev);
-            rezultat = _servis.Izracunaj(zahtjev);
-        }
-        catch (TroskovnikValidationException ex)
-        {
-            return BadRequest(new { error = ex.Message });
-        }
+        if (ProvjeriIIzracunaj(zahtjev, out var rezultat) is { } greska)
+            return greska;
 
         // SECURITY: predmet se smije vezati samo ako pripada prijavljenom korisniku
         if (!await SmijeVezatiPredmet(zahtjev.CaseId, korisnikId))
