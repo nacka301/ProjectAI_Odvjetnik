@@ -280,6 +280,19 @@ public sealed class TroskovnikService : ITroskovnikService
     /// </summary>
     public static IReadOnlyList<TarifnaStavka> DohvatiKatalog() => TarifaKatalog.Sve;
 
+    // ── Instancijski pristup istoj logici (DIP) ───────────────────
+    //
+    // Kontroler ne smije ovisiti o konkretnoj klasi, pa katalog i bodove Tbr. 7. toč. 1.
+    // dobiva kroz ITroskovnikService. Statičke inačice ostaju jer ih izravno zove
+    // 35 mjesta u testovima Tarife.
+    //
+    // Implementacija mora biti eksplicitna: C# ne dopušta statičku i instancijsku
+    // metodu istog potpisa u istoj klasi (CS0111).
+
+    IReadOnlyList<TarifnaStavka> ITroskovnikService.DohvatiKatalog() => DohvatiKatalog();
+
+    int ITroskovnikService.Tbr71Bodovi(decimal vrijednost) => Tbr71Bodovi(vrijednost);
+
     /// <summary>
     /// Određuje osnovu za obračun sudske pristojbe iz kategorija odabranih stavki.
     ///

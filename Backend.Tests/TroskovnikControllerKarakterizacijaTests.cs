@@ -61,6 +61,18 @@ public class TroskovnikControllerKarakterizacijaTests
         Assert.NotEmpty(katalog);
     }
 
+    [Fact]
+    public void DohvatiKatalog_SDvojnikomServisa_VracaKatalogIzDvojnika()
+    {
+        var servis = new FakeTroskovnikService();
+        var kontroler = StvoriKontroler(new FakeClientCaseService(), servis, korisnikId: null);
+
+        var odgovor = Assert.IsType<OkObjectResult>(kontroler.DohvatiKatalog());
+
+        var katalog = Assert.IsAssignableFrom<IReadOnlyList<TarifnaStavka>>(odgovor.Value);
+        Assert.Equal("izmisljena_stavka", Assert.Single(katalog).Id);
+    }
+
     // ── POST /api/troskovnik/izracunaj ────────────────────────────
 
     [Fact]
@@ -174,6 +186,20 @@ public class TroskovnikControllerKarakterizacijaTests
         Assert.NotNull(Svojstvo(odgovor.Value, "eurBezPdv"));
     }
 
+    [Fact]
+    public void Tbr71Lookup_SDvojnikomServisa_KoristiBodoveIzDvojnika()
+    {
+        var servis = new FakeTroskovnikService();
+        var kontroler = StvoriKontroler(new FakeClientCaseService(), servis);
+
+        var odgovor = Assert.IsType<OkObjectResult>(kontroler.Tbr71Lookup(50_000m));
+
+        Assert.Equal(FakeTroskovnikService.IzmisljeniBodovi, Svojstvo(odgovor.Value, "bodovi"));
+        Assert.Equal(
+            FakeTroskovnikService.IzmisljeniBodovi * TarifaConstants.BodValue,
+            Svojstvo(odgovor.Value, "eurBezPdv"));
+    }
+
     // ── POST /api/troskovnik/spremi ───────────────────────────────
 
     [Fact]
@@ -239,6 +265,28 @@ public class TroskovnikControllerKarakterizacijaTests
         var odgovor = Assert.IsType<UnauthorizedObjectResult>(await kontroler.Popis());
 
         Assert.Equal("Nedostaje x-user-id header.", Svojstvo(odgovor.Value, "error"));
+    }
+
+    /// <summary>
+    /// Ručno pisan dvojnik za ITroskovnikService.
+    ///
+    /// Postoji da dokaže učinak koraka 08: prije njega akcije /katalog i /tbr71 zvale
+    /// su TroskovnikService statički, pa im se rezultat nije mogao podmetnuti i testovi
+    /// su mogli tvrditi samo "nešto se vratilo". Sad idu kroz ubrizganu apstrakciju,
+    /// pa se može provjeriti da kontroler vraća baš ono što je servis dao.
+    /// </summary>
+    private sealed class FakeTroskovnikService : ITroskovnikService
+    {
+        /// <summary>Namjerno broj koji nijedan razred Tbr. 7. toč. 1. ne daje.</summary>
+        public const int IzmisljeniBodovi = 4242;
+
+        public IReadOnlyList<TarifnaStavka> DohvatiKatalog() =>
+            [new TarifnaStavka { Id = "izmisljena_stavka", Opis = "Stavka koja postoji samo u testu" }];
+
+        public int Tbr71Bodovi(decimal vrijednost) => IzmisljeniBodovi;
+
+        public TroskovnikResponse Izracunaj(TroskovnikRequest request) =>
+            throw new NotSupportedException("Dvojnik ne podržava Izracunaj — test ga ne bi smio pozvati.");
     }
 
     /// <summary>

@@ -41,7 +41,7 @@ public class TroskovnikController : ControllerBase
     [HttpGet("katalog")]
     public IActionResult DohvatiKatalog()
     {
-        return Ok(TroskovnikService.DohvatiKatalog());
+        return Ok(_service.DohvatiKatalog());
     }
 
     /// <summary>POST /api/troskovnik/izracunaj — izračunava troškovnik.</summary>
@@ -81,7 +81,7 @@ public class TroskovnikController : ControllerBase
     [HttpGet("tbr71")]
     public IActionResult Tbr71Lookup([FromQuery] decimal vrijednost = 0)
     {
-        var bodovi = TroskovnikService.Tbr71Bodovi(vrijednost);
+        var bodovi = _service.Tbr71Bodovi(vrijednost);
         return Ok(new
         {
             vrijednostSpora = vrijednost,
