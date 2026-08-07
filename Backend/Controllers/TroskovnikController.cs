@@ -10,17 +10,17 @@ namespace Backend.Controllers;
 [EnableRateLimiting("general")]
 public class TroskovnikController : ControllerBase
 {
-    private readonly ITroskovnikService _service;
-    private readonly ITroskovnikSpremiste _clientCaseService;
+    private readonly ITroskovnikService _servis;
+    private readonly ITroskovnikSpremiste _spremiste;
 
-    public TroskovnikController(ITroskovnikSpremiste clientCaseService, ITroskovnikService service)
+    public TroskovnikController(ITroskovnikSpremiste spremiste, ITroskovnikService servis)
     {
-        _clientCaseService = clientCaseService;
-        _service = service;
+        _spremiste = spremiste;
+        _servis = servis;
     }
 
-    // SECURITY: Verified user_id extracted from Supabase JWT by SupabaseJwtMiddleware
-    private string? GetUserId() => HttpContext.Items["AuthUserId"] as string;
+    // SECURITY: provjereni user_id koji je SupabaseJwtMiddleware izvadio iz Supabase JWT-a
+    private string? PrijavljeniKorisnik() => HttpContext.Items["AuthUserId"] as string;
 
     /// <summary>
     /// Provjere zajedničke akcijama koje računaju troškovnik.
@@ -28,12 +28,12 @@ public class TroskovnikController : ControllerBase
     /// Baca istu iznimku kojom se javlja i sam servis, pa obje akcije imaju jedno
     /// mjesto na kojem se validacijska greška pretvara u odgovor 400.
     /// </summary>
-    private static void ProvjeriZahtjev(TroskovnikRequest request)
+    private static void ProvjeriZahtjev(TroskovnikRequest zahtjev)
     {
-        if (request.VrijednostSpora < 0)
+        if (zahtjev.VrijednostSpora < 0)
             throw new TroskovnikValidationException("Vrijednost spora ne može biti negativna.");
 
-        if (request.Stavke is null || request.Stavke.Count == 0)
+        if (zahtjev.Stavke is null || zahtjev.Stavke.Count == 0)
             throw new TroskovnikValidationException("Morate odabrati barem jednu stavku.");
     }
 
@@ -41,18 +41,18 @@ public class TroskovnikController : ControllerBase
     [HttpGet("katalog")]
     public IActionResult DohvatiKatalog()
     {
-        return Ok(_service.DohvatiKatalog());
+        return Ok(_servis.DohvatiKatalog());
     }
 
     /// <summary>POST /api/troskovnik/izracunaj — izračunava troškovnik.</summary>
     [HttpPost("izracunaj")]
-    public async Task<IActionResult> Izracunaj([FromBody] TroskovnikRequest request)
+    public async Task<IActionResult> Izracunaj([FromBody] TroskovnikRequest zahtjev)
     {
-        TroskovnikResponse result;
+        TroskovnikResponse rezultat;
         try
         {
-            ProvjeriZahtjev(request);
-            result = _service.Izracunaj(request);
+            ProvjeriZahtjev(zahtjev);
+            rezultat = _servis.Izracunaj(zahtjev);
         }
         catch (TroskovnikValidationException ex)
         {
@@ -61,27 +61,27 @@ public class TroskovnikController : ControllerBase
             return BadRequest(new { error = ex.Message });
         }
 
-        // If a case id was provided, attempt to enrich the response with case metadata (sud, broj predmeta)
-        // SECURITY: Only enrich if the case belongs to the authenticated user
-        if (!string.IsNullOrEmpty(request.CaseId))
+        // Ako je zadan predmet, odgovor se dopunjuje sudom i brojem predmeta.
+        // SECURITY: dopunjuje se samo predmet koji pripada prijavljenom korisniku.
+        if (!string.IsNullOrEmpty(zahtjev.CaseId))
         {
-            var userId = GetUserId();
-            var cas = await _clientCaseService.GetCaseByIdAsync(request.CaseId);
-            if (cas != null && cas.UserId == userId)
+            var korisnikId = PrijavljeniKorisnik();
+            var predmet = await _spremiste.GetCaseByIdAsync(zahtjev.CaseId);
+            if (predmet != null && predmet.UserId == korisnikId)
             {
-                result.Sud = cas.Sud;
-                result.BrojPredmeta = cas.BrojPredmeta;
+                rezultat.Sud = predmet.Sud;
+                rezultat.BrojPredmeta = predmet.BrojPredmeta;
             }
         }
 
-        return Ok(result);
+        return Ok(rezultat);
     }
 
-    /// <summary>GET /api/troskovnik/tbr71?vrijednost=50000 — brzi lookup Tbr.7.1 bodova.</summary>
+    /// <summary>GET /api/troskovnik/tbr71?vrijednost=50000 — brzi upit za bodove po Tbr. 7. toč. 1.</summary>
     [HttpGet("tbr71")]
-    public IActionResult Tbr71Lookup([FromQuery] decimal vrijednost = 0)
+    public IActionResult Tbr71Bodovi([FromQuery] decimal vrijednost = 0)
     {
-        var bodovi = _service.Tbr71Bodovi(vrijednost);
+        var bodovi = _servis.Tbr71Bodovi(vrijednost);
         return Ok(new
         {
             vrijednostSpora = vrijednost,
@@ -93,17 +93,17 @@ public class TroskovnikController : ControllerBase
 
     /// <summary>POST /api/troskovnik/spremi — izračunava i trajno sprema troškovnik u bazu.</summary>
     [HttpPost("spremi")]
-    public async Task<IActionResult> Spremi([FromBody] TroskovnikRequest request)
+    public async Task<IActionResult> Spremi([FromBody] TroskovnikRequest zahtjev)
     {
-        var userId = GetUserId();
-        if (string.IsNullOrWhiteSpace(userId))
+        var korisnikId = PrijavljeniKorisnik();
+        if (string.IsNullOrWhiteSpace(korisnikId))
             return Unauthorized(new { error = "Nedostaje x-user-id header." });
 
-        TroskovnikResponse result;
+        TroskovnikResponse rezultat;
         try
         {
-            ProvjeriZahtjev(request);
-            result = _service.Izracunaj(request);
+            ProvjeriZahtjev(zahtjev);
+            rezultat = _servis.Izracunaj(zahtjev);
         }
         catch (TroskovnikValidationException ex)
         {
@@ -111,19 +111,19 @@ public class TroskovnikController : ControllerBase
         }
 
         // SECURITY: predmet se smije vezati samo ako pripada prijavljenom korisniku
-        if (!await SmijeVezatiPredmet(request.CaseId, userId))
+        if (!await SmijeVezatiPredmet(zahtjev.CaseId, korisnikId))
             return StatusCode(403, new { error = "Nemate pristup odabranom predmetu." });
 
-        var klijent = await RazrijesiKlijenta(request, userId);
+        var klijent = await RazrijesiKlijenta(zahtjev, korisnikId);
 
-        var zapis = SastaviZapis(request, result, userId, klijent.Id);
+        var zapis = SastaviZapis(zahtjev, rezultat, korisnikId, klijent.Id);
 
-        var saved = await _clientCaseService.SaveTroskovnikAsync(zapis);
+        var spremljeno = await _spremiste.SaveTroskovnikAsync(zapis);
 
         return Ok(new
         {
-            troskovnik = result,
-            savedId = saved?.Id,
+            troskovnik = rezultat,
+            savedId = spremljeno?.Id,
             clientId = klijent.Id,
             createdClientId = klijent.Kreirani
         });
@@ -135,13 +135,13 @@ public class TroskovnikController : ControllerBase
     /// Bez predmeta nema što provjeravati, pa je odgovor da. Inače predmet mora
     /// postojati i pripadati prijavljenom korisniku.
     /// </summary>
-    private async Task<bool> SmijeVezatiPredmet(string? caseId, string userId)
+    private async Task<bool> SmijeVezatiPredmet(string? predmetId, string korisnikId)
     {
-        if (string.IsNullOrWhiteSpace(caseId))
+        if (string.IsNullOrWhiteSpace(predmetId))
             return true;
 
-        var predmet = await _clientCaseService.GetCaseByIdAsync(caseId);
-        return predmet != null && predmet.UserId == userId;
+        var predmet = await _spremiste.GetCaseByIdAsync(predmetId);
+        return predmet != null && predmet.UserId == korisnikId;
     }
 
     /// <summary>
@@ -152,27 +152,27 @@ public class TroskovnikController : ControllerBase
     /// stvara. Podaci se čitaju iz stranke > zastupana_stranka, uz povlačenje na
     /// stariju strukturu <c>klijent</c>.
     /// </summary>
-    private async Task<RazrijeseniKlijent> RazrijesiKlijenta(TroskovnikRequest request, string userId)
+    private async Task<RazrijeseniKlijent> RazrijesiKlijenta(TroskovnikRequest zahtjev, string korisnikId)
     {
-        if (!string.IsNullOrWhiteSpace(request.ClientId) || !request.AutoCreateClient)
-            return new RazrijeseniKlijent(request.ClientId, null);
+        if (!string.IsNullOrWhiteSpace(zahtjev.ClientId) || !zahtjev.AutoCreateClient)
+            return new RazrijeseniKlijent(zahtjev.ClientId, null);
 
-        var naziv = request.Stranke?.ZastupanaStranka?.Naziv ?? request.Klijent?.Ime;
+        var naziv = zahtjev.Stranke?.ZastupanaStranka?.Naziv ?? zahtjev.Klijent?.Ime;
         if (string.IsNullOrWhiteSpace(naziv))
-            return new RazrijeseniKlijent(request.ClientId, null);
+            return new RazrijeseniKlijent(zahtjev.ClientId, null);
 
-        var (upsertedId, wasCreated) = await _clientCaseService.UpsertClientForTroskovnikAsync(
-            userId,
+        var (razrijeseniId, jeOtvoren) = await _spremiste.UpsertClientForTroskovnikAsync(
+            korisnikId,
             naziv,
-            request.Stranke?.ZastupanaStranka?.Oib ?? request.Klijent?.Oib,
-            request.Stranke?.ZastupanaStranka?.Adresa ?? request.Klijent?.Adresa,
-            request.ClientGrad ?? request.Klijent?.Grad
+            zahtjev.Stranke?.ZastupanaStranka?.Oib ?? zahtjev.Klijent?.Oib,
+            zahtjev.Stranke?.ZastupanaStranka?.Adresa ?? zahtjev.Klijent?.Adresa,
+            zahtjev.ClientGrad ?? zahtjev.Klijent?.Grad
         );
 
-        if (upsertedId is null)
-            return new RazrijeseniKlijent(request.ClientId, null);
+        if (razrijeseniId is null)
+            return new RazrijeseniKlijent(zahtjev.ClientId, null);
 
-        return new RazrijeseniKlijent(upsertedId, wasCreated ? upsertedId : null);
+        return new RazrijeseniKlijent(razrijeseniId, jeOtvoren ? razrijeseniId : null);
     }
 
     /// <summary>
@@ -189,67 +189,67 @@ public class TroskovnikController : ControllerBase
     /// (vidi TroskovnikService).
     /// </summary>
     private static TroskovnikRecord SastaviZapis(
-        TroskovnikRequest request, TroskovnikResponse result, string userId, string? clientId) => new()
+        TroskovnikRequest zahtjev, TroskovnikResponse rezultat, string korisnikId, string? klijentId) => new()
     {
-        UserId = userId,
-        ClientId = clientId,
-        CaseId = request.CaseId,
-        OpisPredmeta = request.OpisPredmeta,
-        VrijednostSpora = result.VrijednostSpora,
-        UkupnoBodova = result.UkupnoBodova,
-        UkupnoEurBezPdv = result.UkupnoEurBezPdv,
-        Pdv = result.Pdv,
-        UkupnoEurSPdv = result.UkupnoEurSPdv,
-        Odvjetnik = SastaviOdvjetnika(request),
+        UserId = korisnikId,
+        ClientId = klijentId,
+        CaseId = zahtjev.CaseId,
+        OpisPredmeta = zahtjev.OpisPredmeta,
+        VrijednostSpora = rezultat.VrijednostSpora,
+        UkupnoBodova = rezultat.UkupnoBodova,
+        UkupnoEurBezPdv = rezultat.UkupnoEurBezPdv,
+        Pdv = rezultat.Pdv,
+        UkupnoEurSPdv = rezultat.UkupnoEurSPdv,
+        Odvjetnik = SastaviOdvjetnika(zahtjev),
         Predmet = new PredmetInfo
         {
-            Sud = request.Predmet?.Sud ?? request.OpisPredmeta,
-            PoslovniBroj = request.Predmet?.PoslovniBroj ?? request.CaseId
+            Sud = zahtjev.Predmet?.Sud ?? zahtjev.OpisPredmeta,
+            PoslovniBroj = zahtjev.Predmet?.PoslovniBroj ?? zahtjev.CaseId
         },
-        Stranke = SastaviStranke(request, result),
+        Stranke = SastaviStranke(zahtjev, rezultat),
         // Obje zastavice se spremaju radi kompatibilnosti: izričiti IsPdvUkljucen ima prednost
-        IsPdvUkljucen = request.IsPdvUkljucen ?? request.HasVat,
-        HasVat = request.HasVat,
+        IsPdvUkljucen = zahtjev.IsPdvUkljucen ?? zahtjev.HasVat,
+        HasVat = zahtjev.HasVat,
         // Kazneni postupak
-        ZaprijecenaKazna = request.ZaprijecenaKazna,
-        IsPoSluzbenojDuznosti = request.IsPoSluzbenojDuznosti,
-        IsNaTeretProracuna = request.IsNaTeretProracuna,
-        IsZastupnikDjeteta = request.IsZastupnikDjeteta,
-        IsStjecaj = request.IsStjecaj,
-        IsOduzimanjePrekrsaj = request.IsOduzimanjePrekrsaj,
-        VrijednostOduzimanja = request.VrijednostOduzimanja,
-        RawJsonOutput = result
+        ZaprijecenaKazna = zahtjev.ZaprijecenaKazna,
+        IsPoSluzbenojDuznosti = zahtjev.IsPoSluzbenojDuznosti,
+        IsNaTeretProracuna = zahtjev.IsNaTeretProracuna,
+        IsZastupnikDjeteta = zahtjev.IsZastupnikDjeteta,
+        IsStjecaj = zahtjev.IsStjecaj,
+        IsOduzimanjePrekrsaj = zahtjev.IsOduzimanjePrekrsaj,
+        VrijednostOduzimanja = zahtjev.VrijednostOduzimanja,
+        RawJsonOutput = rezultat
     };
 
     /// <summary>Podaci odvjetnika za zaglavlje troškovnika; izostaju ako ih zahtjev nema.</summary>
-    private static OdvjetnikInfo? SastaviOdvjetnika(TroskovnikRequest request) =>
-        request.Odvjetnik is null ? null : new OdvjetnikInfo
+    private static OdvjetnikInfo? SastaviOdvjetnika(TroskovnikRequest zahtjev) =>
+        zahtjev.Odvjetnik is null ? null : new OdvjetnikInfo
         {
-            Naziv = request.Odvjetnik.Naziv,
-            Oib = request.Odvjetnik.Oib,
-            Adresa = request.Odvjetnik.Adresa,
-            Iban = request.Odvjetnik.Iban
+            Naziv = zahtjev.Odvjetnik.Naziv,
+            Oib = zahtjev.Odvjetnik.Oib,
+            Adresa = zahtjev.Odvjetnik.Adresa,
+            Iban = zahtjev.Odvjetnik.Iban
         };
 
     /// <summary>
     /// Stranke postupka. Zastupana stranka se popunjava iz zahtjeva, a gdje podatka
     /// nema povlači se iz izračuna. Protustranka izostaje ako je zahtjev ne navodi.
     /// </summary>
-    private static StrankeInfo SastaviStranke(TroskovnikRequest request, TroskovnikResponse result) => new()
+    private static StrankeInfo SastaviStranke(TroskovnikRequest zahtjev, TroskovnikResponse rezultat) => new()
     {
         ZastupanaStranka = new StrankaInfo
         {
-            Polozaj = request.Stranke?.ZastupanaStranka?.Polozaj ?? "zastupana",
-            Naziv = request.Stranke?.ZastupanaStranka?.Naziv ?? result.Klijent?.Ime,
-            Oib = request.Stranke?.ZastupanaStranka?.Oib ?? result.Klijent?.Oib,
-            Adresa = request.Stranke?.ZastupanaStranka?.Adresa ?? result.Klijent?.Adresa
+            Polozaj = zahtjev.Stranke?.ZastupanaStranka?.Polozaj ?? "zastupana",
+            Naziv = zahtjev.Stranke?.ZastupanaStranka?.Naziv ?? rezultat.Klijent?.Ime,
+            Oib = zahtjev.Stranke?.ZastupanaStranka?.Oib ?? rezultat.Klijent?.Oib,
+            Adresa = zahtjev.Stranke?.ZastupanaStranka?.Adresa ?? rezultat.Klijent?.Adresa
         },
-        Protustranka = request.Stranke?.Protustranka is null ? null : new StrankaInfo
+        Protustranka = zahtjev.Stranke?.Protustranka is null ? null : new StrankaInfo
         {
-            Polozaj = request.Stranke.Protustranka.Polozaj ?? request.ProtustrankaPolozaj,
-            Naziv = request.Stranke.Protustranka.Naziv,
-            Oib = request.Stranke.Protustranka.Oib,
-            Adresa = request.Stranke.Protustranka.Adresa
+            Polozaj = zahtjev.Stranke.Protustranka.Polozaj ?? zahtjev.ProtustrankaPolozaj,
+            Naziv = zahtjev.Stranke.Protustranka.Naziv,
+            Oib = zahtjev.Stranke.Protustranka.Oib,
+            Adresa = zahtjev.Stranke.Protustranka.Adresa
         }
     };
 
@@ -257,13 +257,11 @@ public class TroskovnikController : ControllerBase
     [HttpGet("popis")]
     public async Task<IActionResult> Popis()
     {
-        var userId = GetUserId();
-        if (string.IsNullOrWhiteSpace(userId))
+        var korisnikId = PrijavljeniKorisnik();
+        if (string.IsNullOrWhiteSpace(korisnikId))
             return Unauthorized(new { error = "Nedostaje x-user-id header." });
 
-        var list = await _clientCaseService.GetTroskovniciByUserAsync(userId);
-        return Ok(list);
+        var popis = await _spremiste.GetTroskovniciByUserAsync(korisnikId);
+        return Ok(popis);
     }
 }
-
-

@@ -174,11 +174,11 @@ public class TroskovnikControllerKarakterizacijaTests
     // ── GET /api/troskovnik/tbr71 ─────────────────────────────────
 
     [Fact]
-    public void Tbr71Lookup_ZadanaVrijednost_VracaCetiriPolja()
+    public void Tbr71Bodovi_ZadanaVrijednost_VracaCetiriPolja()
     {
         var kontroler = StvoriKontroler(new FakeClientCaseService());
 
-        var odgovor = Assert.IsType<OkObjectResult>(kontroler.Tbr71Lookup(50_000m));
+        var odgovor = Assert.IsType<OkObjectResult>(kontroler.Tbr71Bodovi(50_000m));
 
         Assert.Equal(50_000m, Svojstvo(odgovor.Value, "vrijednostSpora"));
         Assert.Equal(TroskovnikService.Tbr71Bodovi(50_000m), Svojstvo(odgovor.Value, "bodovi"));
@@ -187,12 +187,12 @@ public class TroskovnikControllerKarakterizacijaTests
     }
 
     [Fact]
-    public void Tbr71Lookup_SDvojnikomServisa_KoristiBodoveIzDvojnika()
+    public void Tbr71Bodovi_SDvojnikomServisa_KoristiBodoveIzDvojnika()
     {
         var servis = new FakeTroskovnikService();
         var kontroler = StvoriKontroler(new FakeClientCaseService(), servis);
 
-        var odgovor = Assert.IsType<OkObjectResult>(kontroler.Tbr71Lookup(50_000m));
+        var odgovor = Assert.IsType<OkObjectResult>(kontroler.Tbr71Bodovi(50_000m));
 
         Assert.Equal(FakeTroskovnikService.IzmisljeniBodovi, Svojstvo(odgovor.Value, "bodovi"));
         Assert.Equal(
