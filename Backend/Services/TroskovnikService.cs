@@ -293,35 +293,6 @@ public sealed class TroskovnikService : ITroskovnikService
 
     int ITroskovnikService.Tbr71Bodovi(decimal vrijednost) => Tbr71Bodovi(vrijednost);
 
-    /// <summary>
-    /// Određuje osnovu za obračun sudske pristojbe iz kategorija odabranih stavki.
-    ///
-    /// Uredba o tarifi sudskih pristojbi (NN 37/2023), Prilog, POGLAVLJE I.
-    /// "PARNIČNI I OVRŠNI POSTUPAK":
-    ///  - Tar. br. 1 st. 1 — puna pristojba na tužbu,
-    ///  - Tar. br. 1 st. 2 — "prijedlog za ovrhu, protuovrhu i osiguranje (...) žalbu,
-    ///    prijedlog za dopuštenje revizije i reviziju plaća se polovica pristojbe iz
-    ///    stavka 1. ovoga Tar. br.",
-    ///  - kazneni postupak u Uredbi ne postoji → nema pristojbe.
-    /// </summary>
-    private static PristojbaOsnova OdrediPristojbuOsnovu(List<TarifnaStavka> odabrane)
-    {
-        if (odabrane.Count == 0)
-            return PristojbaOsnova.Puna;
-
-        if (odabrane.TrueForAll(d => d.Kategorija == TarifaKatalog.KategorijaKazneni))
-            return PristojbaOsnova.Nema;
-
-        // Čisti ovršni postupak: ima ovršnih stavki, a nijedne parnične.
-        var imaOvrsnih = odabrane.Exists(d => d.Kategorija == TarifaKatalog.KategorijaOvrsni);
-        var imaParnicnih = odabrane.Exists(d => d.Kategorija == TarifaKatalog.KategorijaParnicni);
-
-        if (imaOvrsnih && !imaParnicnih)
-            return PristojbaOsnova.Polovica;
-
-        return PristojbaOsnova.Puna;
-    }
-
     // ── Stjecaj i produljeno kazneno djelo (Tbr. 4. toč. 1 al. 6) ─
 
     /// <summary>
@@ -566,18 +537,16 @@ public sealed class TroskovnikService : ITroskovnikService
         if (obracunajPdv)
             pdv = ZaokruziNovac(ukupnoEur * TarifaConstants.PdvRate);
 
-        // ── Sudska pristojba (Uredba o tarifi sudskih pristojbi, NN 37/2023) ──
-        var pristojbaOsnova = OdrediPristojbuOsnovu(odabraneDefinicije);
+        // Sudska pristojba je drugi propis (Uredba NN 37/2023) i cijela se računa ondje.
+        var pristojba = SudskePristojbeCalculator.Obracunaj(
+            kontekst.VrijednostSpora, odabraneDefinicije, request.IsOslobodjenPristojbi);
 
-        var sudskaPristojba = request.IsOslobodjenPristojbi
-            ? 0m
-            : SudskePristojbeCalculator.Izracunaj(kontekst.VrijednostSpora, pristojbaOsnova);
         var odvjetnickiTrosak = ukupnoEur + pdv;
-        var sveukupniTrosak = odvjetnickiTrosak + sudskaPristojba;
+        var sveukupniTrosak = odvjetnickiTrosak + pristojba.Iznos;
 
         return new Zbrojevi(
             ukupnoBodova, povisenjePostotak, povisenjeBodovi, tbr41Bodovi, ukupnoEur,
-            bodoviPoOsobi, nagradaPoOsobi, pdv, pristojbaOsnova, sudskaPristojba, sveukupniTrosak,
+            bodoviPoOsobi, nagradaPoOsobi, pdv, pristojba.Osnova, pristojba.Iznos, sveukupniTrosak,
             brojOsoba, obracunajPdv);
     }
 

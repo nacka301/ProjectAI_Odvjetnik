@@ -135,4 +135,64 @@ public class SudskePristojbeTests
         Assert.Equal(PristojbaOsnova.Puna, rezultat.PristojbaOsnova);
         Assert.Equal(546.45m, rezultat.SudskaPristojba);
     }
+
+    // ── OdrediOsnovu i Obracunaj — izravno, nakon koraka 15 ───────
+    //
+    // Odluka o osnovi bila je privatna metoda TroskovnikService.OdrediPristojbuOsnovu
+    // i nijedan je test nije dodirivao izravno. Preseljena je u kalkulator i sada je
+    // javna, pa se sve četiri grane provjeravaju bez zaobilaženja preko cijelog izračuna.
+
+    private static List<TarifnaStavka> Stavke(params string[] itemIds)
+        => [.. itemIds.Select(id => TarifaKatalog.Sve.Single(s => s.Id == id))];
+
+    [Fact]
+    public void OdrediOsnovu_BezStavaka_VracaPunu()
+    {
+        Assert.Equal(PristojbaOsnova.Puna, SudskePristojbeCalculator.OdrediOsnovu([]));
+    }
+
+    [Fact]
+    public void OdrediOsnovu_SamoKazneneStavke_VracaNema()
+    {
+        var osnova = SudskePristojbeCalculator.OdrediOsnovu(Stavke("kaz_privatna_tuzba"));
+
+        Assert.Equal(PristojbaOsnova.Nema, osnova);
+    }
+
+    [Fact]
+    public void OdrediOsnovu_CistiOvrsniPostupak_VracaPolovicu()
+    {
+        var osnova = SudskePristojbeCalculator.OdrediOsnovu(Stavke("ovr_prijedlog"));
+
+        Assert.Equal(PristojbaOsnova.Polovica, osnova);
+    }
+
+    [Fact]
+    public void OdrediOsnovu_OvrsnaIParnicnaStavka_VracaPunu()
+    {
+        var osnova = SudskePristojbeCalculator.OdrediOsnovu(Stavke("ovr_prijedlog", "par_tuzba"));
+
+        Assert.Equal(PristojbaOsnova.Puna, osnova);
+    }
+
+    [Fact]
+    public void Obracunaj_OslobodjenaStranka_NuliIznosAliZadrzavaOsnovu()
+    {
+        var rezultat = SudskePristojbeCalculator.Obracunaj(
+            3_000m, Stavke("ovr_prijedlog"), oslobodjen: true);
+
+        // Iznos pada na nulu, ali se i dalje vidi po čemu bi se pristojba obračunala.
+        Assert.Equal(0m, rezultat.Iznos);
+        Assert.Equal(PristojbaOsnova.Polovica, rezultat.Osnova);
+    }
+
+    [Fact]
+    public void Obracunaj_NijeOslobodjena_JednakoIzravnomIzracunu()
+    {
+        var rezultat = SudskePristojbeCalculator.Obracunaj(
+            3_000m, Stavke("ovr_prijedlog"), oslobodjen: false);
+
+        Assert.Equal(PristojbaOsnova.Polovica, rezultat.Osnova);
+        Assert.Equal(SudskePristojbeCalculator.Izracunaj(3_000m, PristojbaOsnova.Polovica), rezultat.Iznos);
+    }
 }

@@ -77,6 +77,51 @@ public static class SudskePristojbeCalculator
     }
 
     /// <summary>
+    /// Određuje osnovu za obračun sudske pristojbe iz kategorija odabranih stavki.
+    ///
+    /// Uredba o tarifi sudskih pristojbi (NN 37/2023), Prilog, POGLAVLJE I.
+    /// "PARNIČNI I OVRŠNI POSTUPAK":
+    ///  - Tar. br. 1 st. 1 — puna pristojba na tužbu,
+    ///  - Tar. br. 1 st. 2 — "prijedlog za ovrhu, protuovrhu i osiguranje (...) žalbu,
+    ///    prijedlog za dopuštenje revizije i reviziju plaća se polovica pristojbe iz
+    ///    stavka 1. ovoga Tar. br.",
+    ///  - kazneni postupak u Uredbi ne postoji → nema pristojbe.
+    /// </summary>
+    public static PristojbaOsnova OdrediOsnovu(List<TarifnaStavka> odabrane)
+    {
+        if (odabrane.Count == 0)
+            return PristojbaOsnova.Puna;
+
+        if (odabrane.TrueForAll(d => d.Kategorija == TarifaKatalog.KategorijaKazneni))
+            return PristojbaOsnova.Nema;
+
+        // Čisti ovršni postupak: ima ovršnih stavki, a nijedne parnične.
+        var imaOvrsnih = odabrane.Exists(d => d.Kategorija == TarifaKatalog.KategorijaOvrsni);
+        var imaParnicnih = odabrane.Exists(d => d.Kategorija == TarifaKatalog.KategorijaParnicni);
+
+        if (imaOvrsnih && !imaParnicnih)
+            return PristojbaOsnova.Polovica;
+
+        return PristojbaOsnova.Puna;
+    }
+
+    /// <summary>
+    /// Cijeli obračun sudske pristojbe na jednom mjestu: koja se osnova primjenjuje,
+    /// je li stranka oslobođena i koliko na kraju iznosi.
+    ///
+    /// Oslobođenje nuli iznos, ali NE mijenja osnovu — osnova ostaje u odgovoru da se
+    /// vidi po čemu bi se pristojba obračunala da oslobođenja nema.
+    /// </summary>
+    public static PristojbaRezultat Obracunaj(
+        decimal vrijednostSpora, List<TarifnaStavka> odabrane, bool oslobodjen)
+    {
+        var osnova = OdrediOsnovu(odabrane);
+        var iznos = oslobodjen ? 0m : Izracunaj(vrijednostSpora, osnova);
+
+        return new PristojbaRezultat(osnova, iznos);
+    }
+
+    /// <summary>
     /// Tar. br. 1 st. 1 — nezaokruženi iznos, da se zaokruživanje dogodi samo jednom,
     /// nakon eventualnog polovljenja po st. 2.
     /// </summary>

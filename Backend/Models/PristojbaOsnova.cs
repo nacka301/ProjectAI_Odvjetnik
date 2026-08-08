@@ -16,3 +16,8 @@ public enum PristojbaOsnova
     /// <summary>Uredba ne propisuje pristojbu za ovu vrstu postupka (npr. kazneni).</summary>
     Nema = 2
 }
+
+/// <summary>Ishod obračuna sudske pristojbe.</summary>
+/// <param name="Osnova">Po kojoj se osnovi pristojba obračunava; ostaje popunjena i kad je stranka oslobođena.</param>
+/// <param name="Iznos">Iznos u EUR; 0 kad je stranka oslobođena ili kad Uredba pristojbu ne propisuje.</param>
+public readonly record struct PristojbaRezultat(PristojbaOsnova Osnova, decimal Iznos);
