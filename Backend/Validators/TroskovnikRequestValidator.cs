@@ -4,8 +4,30 @@ using FluentValidation;
 namespace Backend.Validators;
 
 /// <summary>
-/// Validation rules for incoming TroskovnikRequest that validate the new nested schema.
-/// Registered automatically via AddValidatorsFromAssemblyContaining in Program.cs.
+/// UPOZORENJE: OVA SE PRAVILA TRENUTAČNO NE IZVRŠAVAJU.
+///
+/// Validacijska pravila za TroskovnikRequest. Napisana su, ali ih ništa ne poziva,
+/// pa nijedan zahtjev kroz njih ne prolazi. Tri stvari to zajedno uzrokuju:
+///
+///  1. Program.cs poziva AddValidatorsFromAssemblyContaining, što validator samo
+///     REGISTRIRA u DI spremnik. Registriran nije isto što i pozvan.
+///  2. Automatsku provjeru u MVC cjevovodu donosi paket FluentValidation.AspNetCore,
+///     a Backend.csproj referencira samo FluentValidation.DependencyInjectionExtensions.
+///  3. Nijedan kontroler ne traži IValidator&lt;TroskovnikRequest&gt; niti ga ručno
+///     pokreće. Jedini koji validator stvarno koristi je ValuationDraftController,
+///     i to za IValidator&lt;PropertyInputBase&gt;.
+///
+/// Posljedica: OIB od tri slova, povišenje po Tbr. 41 od 500 % i stavka bez item_id
+/// prolaze ovdje netaknuti. Dio toga TroskovnikService uhvati kasnije i baci
+/// TroskovnikValidationException, dio ne uhvati nitko.
+///
+/// Dva pravila su usto duplicirana u TroskovnikController.ProvjeriZahtjev, s
+/// različitim porukama: kontroler kaže „Vrijednost spora ne može biti negativna.",
+/// ovdje piše „Vrijednost spora mora biti veća ili jednaka 0.".
+///
+/// Uključivanje ovih pravila PROMIJENILO BI PONAŠANJE — zahtjevi koji danas prolaze
+/// počeli bi vraćati 400 — pa je to svjesna odluka za zaseban zadatak, s testovima,
+/// a ne usputna izmjena. Datoteka nema nijedan test.
 /// </summary>
 public sealed class TroskovnikRequestValidator : AbstractValidator<TroskovnikRequest>
 {
