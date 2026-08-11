@@ -116,6 +116,17 @@ public sealed class TroskovnikResponse
     [JsonPropertyName("datum_izrade")]
     public DateTime DatumIzrade { get; set; } = DateTime.UtcNow;
 
+    /// <summary>
+    /// Najraniji datum radnje u troškovniku (<c>gggg-mm-dd</c>), za zaglavlje ispisa
+    /// („Troškovnik za razdoblje …"). Null kad nijedna radnja nema datum.
+    /// </summary>
+    [JsonPropertyName("datum_od")]
+    public string? DatumOd { get; set; }
+
+    /// <summary>Najkasniji datum radnje u troškovniku (<c>gggg-mm-dd</c>).</summary>
+    [JsonPropertyName("datum_do")]
+    public string? DatumDo { get; set; }
+
     [JsonPropertyName("protustranka")]
     public TroskovnikParty? Protustranka { get; set; }
 
@@ -214,6 +225,10 @@ public sealed class TroskovnikLineItem
 
     [JsonPropertyName("kolicina")]
     public int Kolicina { get; set; }
+
+    /// <summary>Datum kad je radnja poduzeta (<c>gggg-mm-dd</c>), onakav kakav je stigao u zahtjevu.</summary>
+    [JsonPropertyName("datum")]
+    public string? Datum { get; set; }
 
     /// <summary>Bodovi po jedinici. Decimalno — Tarifa ne propisuje zaokruživanje bodova.</summary>
     [JsonPropertyName("bodova_po_jedinici")]

@@ -1,3 +1,4 @@
+using System.Globalization;
 using Backend.Models;
 
 namespace Backend.Services;
@@ -341,10 +342,57 @@ public sealed class TroskovnikService : ITroskovnikService
                 throw new TroskovnikValidationException(
                     $"Stavka \"{definicija.Opis}\" ima količinu {stavka.Kolicina}. Količina mora biti veća od 0.");
 
+            ProvjeriDatum(stavka, definicija);
+
             odabraneDefinicije.Add(definicija);
         }
 
         return odabraneDefinicije;
+    }
+
+    /// <summary>Oblik u kojem datum radnje putuje i sprema se — isti kao u upisniku radnji.</summary>
+    public const string OblikDatuma = "yyyy-MM-dd";
+
+    /// <summary>
+    /// Provjerava datum radnje.
+    ///
+    /// Prazan datum prolazi: obavezan je tek pri spremanju, jer odvjetnik smije vidjeti
+    /// iznos prije nego popuni datume. Ono što je uneseno mora biti datum — datum koji
+    /// se ne da pročitati tiho bi završio na troškovniku koji ide sudu.
+    ///
+    /// Datum u budućnosti je dopušten: troškovnik se legitimno slaže unaprijed za već
+    /// zakazano ročište.
+    /// </summary>
+    private static void ProvjeriDatum(TroskovnikItemRequest stavka, TarifnaStavka definicija)
+    {
+        if (string.IsNullOrWhiteSpace(stavka.Datum))
+            return;
+
+        if (!DateOnly.TryParseExact(
+                stavka.Datum, OblikDatuma, CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+            throw new TroskovnikValidationException(
+                $"Stavka \"{definicija.Opis}\" ima neispravan datum radnje: \"{stavka.Datum}\". " +
+                "Očekuje se oblik gggg-mm-dd.");
+    }
+
+    /// <summary>
+    /// Najraniji i najkasniji datum radnje — razdoblje koje troškovnik pokriva.
+    ///
+    /// Uzima se najmanji i najveći datum, a ne prvi i zadnji redak: korisnik zadržava
+    /// svoj redoslijed, pa zadnji redak ne mora biti i najkasniji.
+    /// </summary>
+    private static (string? Od, string? Do) RasponDatuma(List<TroskovnikLineItem> stavkeRetci)
+    {
+        var datumi = stavkeRetci
+            .Where(redak => !string.IsNullOrWhiteSpace(redak.Datum))
+            .Select(redak => DateOnly.ParseExact(redak.Datum!, OblikDatuma, CultureInfo.InvariantCulture))
+            .ToList();
+
+        if (datumi.Count == 0)
+            return (null, null);
+
+        return (datumi.Min().ToString(OblikDatuma, CultureInfo.InvariantCulture),
+                datumi.Max().ToString(OblikDatuma, CultureInfo.InvariantCulture));
     }
 
     /// <summary>
@@ -492,6 +540,7 @@ public sealed class TroskovnikService : ITroskovnikService
                 TarifniBroj = definicija.TarifniBroj,
                 PravniIzvor = definicija.PravniIzvor,
                 Kolicina = stavka.Kolicina,
+                Datum = string.IsNullOrWhiteSpace(stavka.Datum) ? null : stavka.Datum,
                 // Redak obuhvaćen tuđom jednokratnom nagradom ne smije pokazivati bodove
                 // po jedinici: na ispisu bi „250 bod./jed." uz iznos 0,00 € izgledalo
                 // kao greška u zbrajanju.
@@ -612,9 +661,13 @@ public sealed class TroskovnikService : ITroskovnikService
         Zbrojevi zbrojevi,
         KontekstIzracuna kontekst)
     {
+        var (datumOd, datumDo) = RasponDatuma(stavkeRetci);
+
         return new TroskovnikResponse
         {
             Stavke = stavkeRetci,
+            DatumOd = datumOd,
+            DatumDo = datumDo,
             UkupnoBodova = zbrojevi.UkupnoBodova,
             BrojZastupanihOsoba = zbrojevi.BrojZastupanihOsoba,
             PovisenjeViseOsobaPostotak = zbrojevi.PovisenjePostotak,

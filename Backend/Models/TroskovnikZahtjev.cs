@@ -212,6 +212,19 @@ public sealed class TroskovnikItemRequest
     public int Kolicina { get; set; } = 1;
 
     /// <summary>
+    /// Datum kad je radnja poduzeta, u obliku <c>gggg-mm-dd</c>.
+    ///
+    /// Troškovnik koji se predaje sudu mora uz svaku radnju imati datum, pa je pri
+    /// spremanju obavezan. Izračun radi i bez njega — odvjetnik smije vidjeti iznos
+    /// prije nego popuni datume.
+    ///
+    /// Tip je <c>string</c>, a ne <c>DateOnly</c>, radi jasne poruke o grešci: neispravan
+    /// datum inače ruši deserijalizaciju prije nego kod uopće dođe na red.
+    /// </summary>
+    [JsonPropertyName("datum")]
+    public string? Datum { get; set; }
+
+    /// <summary>
     /// Tbr. 41. toč. 1 — povišenje ove stavke, 0–100 %. Null znači „koristi postotak
     /// s razine zahtjeva" (prečac „primijeni na sve stavke").
     /// </summary>
