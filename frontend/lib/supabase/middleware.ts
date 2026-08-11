@@ -33,12 +33,21 @@ export async function createSupabaseMiddleware(request: NextRequest) {
     },
   );
 
-  // IMPORTANT: Do NOT call supabase.auth.getSession() here.
-  // getUser() sends a request to the Supabase Auth server to revalidate
-  // the token. getSession() only reads the JWT from the cookie (no validation).
+  // IMPORTANT: getUser() first, always. It asks the Supabase Auth server to
+  // revalidate the token; getSession() only reads the cookie, which can be forged.
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  return { user, supabaseResponse };
+  // Only now, on an already-validated identity, read the raw access token —
+  // the middleware forwards it to the backend to ask about this user's 2FA.
+  let accessToken: string | null = null;
+  if (user) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    accessToken = session?.access_token ?? null;
+  }
+
+  return { user, accessToken, supabaseResponse };
 }

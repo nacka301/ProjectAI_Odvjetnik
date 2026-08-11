@@ -14,7 +14,6 @@ import {
   Shield,
 } from "lucide-react";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
-import { API_BASE } from "@/lib/api";
 import {
   isEmailValid,
   isLockedOut,
@@ -57,12 +56,6 @@ function LoginContent() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // 2FA state
-  const [twoFAPending, setTwoFAPending] = useState(false);
-  const [twoFAToken, setTwoFAToken] = useState("");
-  const [twoFAUserId, setTwoFAUserId] = useState<string | null>(null);
-  const [twoFALoading, setTwoFALoading] = useState(false);
-
   // Rate limiting
   const [lockout, setLockout] = useState<{ locked: boolean; remainingSeconds: number }>({ locked: false, remainingSeconds: 0 });
 
@@ -103,55 +96,30 @@ function LoginContent() {
 
     setLoading(true);
     try {
-      const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password });
+      const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
 
       if (authError) {
+        // ANTI-ENUMERATION: one message for every failure mode. Distinguishing
+        // "email not confirmed" from "wrong password" told an attacker which
+        // lawyers have accounts here — for a legal app that is itself a leak.
+        // The "you signed up with Google" hint is gone for the same reason;
+        // if we want to keep helping that user, it has to go out by email.
         recordFailedAttempt();
         const remaining = attemptsRemaining();
-        if (remaining <= 0) {
-          setError("Račun je privremeno zaključan. Pokušajte za 15 minuta.");
-        } else if (authError.message.toLowerCase().includes("email not confirmed")) {
-          setError("Email adresa još nije potvrđena. Provjerite inbox.");
-        } else if (
-          authError.message.toLowerCase().includes("invalid login credentials") ||
-          authError.message.toLowerCase().includes("invalid credentials")
-        ) {
-          // OAuth collision hint: user may have signed up with Google (no password set)
-          setError(
-            `Pogrešna email adresa ili lozinka. Ako ste se registrirali putem Googlea, koristite gumb "Prijava putem Googlea" ili resetirajte lozinku. Preostalo pokušaja: ${remaining}`
-          );
-        } else {
-          setError(`Pogrešna email adresa ili lozinka. Preostalo pokušaja: ${remaining}`);
-        }
+        setError(
+          remaining <= 0
+            ? "Račun je privremeno zaključan. Pokušajte za 15 minuta."
+            : `Neispravan email ili lozinka. Preostalo pokušaja: ${remaining}`
+        );
         return;
       }
 
       clearAttempts();
 
-      // ── Check if 2FA is enabled for this user ──
-      const userId = data.user?.id;
-      if (userId) {
-        try {
-          const apiKey = process.env.NEXT_PUBLIC_API_KEY;
-          const headers: Record<string, string> = {};
-          if (apiKey) headers["X-API-Key"] = apiKey;
-
-          const res = await fetch(`${API_BASE}/api/2fa/status?userId=${encodeURIComponent(userId)}`, { headers });
-          if (res.ok) {
-            const status = await res.json();
-            if (status.enabled) {
-              // 2FA is required — show token input
-              setTwoFAPending(true);
-              setTwoFAUserId(userId);
-              setLoading(false);
-              return;
-            }
-          }
-        } catch {
-          // If 2FA check fails, allow login (don't lock out user due to backend issue)
-        }
-      }
-
+      // No 2FA check here any more. The gate lives in middleware.ts, so it also
+      // covers Google sign-in and anyone who types a URL instead of following
+      // the redirect — neither of which this component ever saw. If the account
+      // has TOTP enabled, the navigation below lands on /auth/2fa.
       router.push("/");
       router.refresh();
     } catch {
@@ -159,52 +127,6 @@ function LoginContent() {
     } finally {
       setLoading(false);
     }
-  };
-
-  // ── 2FA Token Validation ──
-  const handle2FAVerify = async () => {
-    setError(null);
-    if (!twoFAToken || !twoFAUserId) {
-      setError("Unesite 2FA kod.");
-      return;
-    }
-
-    setTwoFALoading(true);
-    try {
-      const apiKey = process.env.NEXT_PUBLIC_API_KEY;
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (apiKey) headers["X-API-Key"] = apiKey;
-
-      const res = await fetch(`${API_BASE}/api/2fa/validate`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ user_id: twoFAUserId, token: twoFAToken }),
-      });
-      const data = await res.json();
-
-      if (!data.success) {
-        setError(data.message || "Nevažeći 2FA kod.");
-        setTwoFAToken("");
-        return;
-      }
-
-      // 2FA valid — complete login
-      router.push("/");
-      router.refresh();
-    } catch {
-      setError("Greška pri provjeri 2FA koda.");
-    } finally {
-      setTwoFALoading(false);
-    }
-  };
-
-  // ── Cancel 2FA — sign out and return to login ──
-  const cancel2FA = async () => {
-    await supabase.auth.signOut();
-    setTwoFAPending(false);
-    setTwoFAUserId(null);
-    setTwoFAToken("");
-    setError(null);
   };
 
   // ── Google OAuth ──
@@ -247,19 +169,15 @@ function LoginContent() {
           className="w-11 h-11 rounded-xl flex items-center justify-center shadow-lg transition-all duration-500"
           style={{ background: "var(--auth-navy)", boxShadow: "0 4px 20px rgba(201,168,76,0.15)" }}
         >
-          {twoFAPending ? (
-            <Shield className="h-5 w-5" style={{ color: "var(--auth-gold)" }} />
-          ) : (
-            <Scale className="h-5 w-5" style={{ color: "var(--auth-gold)" }} />
-          )}
+          <Scale className="h-5 w-5" style={{ color: "var(--auth-gold)" }} />
         </div>
         <div>
           <h1 className="font-serif text-xl font-bold text-white tracking-tight">PravoTek</h1>
           <p
-            className="text-[10px] uppercase tracking-[0.2em] transition-all duration-300"
+            className="text-[10px] uppercase tracking-[0.2em]"
             style={{ color: "var(--auth-gold)" }}
           >
-            {twoFAPending ? "Dvofaktorska Provjera" : "Pravna Inteligencija"}
+            Pravna Inteligencija
           </p>
         </div>
       </div>
@@ -273,90 +191,6 @@ function LoginContent() {
           boxShadow: "0 25px 50px -12px rgba(0,0,0,0.4), 0 0 0 1px rgba(201,168,76,0.1)",
         }}
       >
-        {twoFAPending ? (
-          /* ── STEP 2: 2FA Token Input ── */
-          <div key="step-2fa" className="login-step-enter">
-            {/* Header */}
-            <div className="px-6 pt-6 pb-2 sm:px-8 sm:pt-8">
-              <div className="flex items-center gap-2 mb-1">
-                <div className="flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold text-white" style={{ background: "var(--auth-gold)" }}>2</div>
-                <h2 className="font-serif text-lg font-semibold text-slate-900">
-                  Dvofaktorska autentifikacija
-                </h2>
-              </div>
-              <p className="text-sm text-slate-500">
-                Unesite kod iz vaše authenticator aplikacije
-              </p>
-            </div>
-
-            {/* Body */}
-            <div className="px-6 pb-6 sm:px-8 sm:pb-8 space-y-5">
-              {/* Error */}
-              {error && (
-                <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700 login-step-enter">
-                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-red-500" />
-                  <span>{error}</span>
-                </div>
-              )}
-
-              {/* Icon + Input */}
-              <div className="flex flex-col items-center gap-4 py-2">
-                <div
-                  className="w-16 h-16 rounded-2xl flex items-center justify-center"
-                  style={{ background: "var(--auth-navy)" }}
-                >
-                  <Lock className="h-8 w-8" style={{ color: "var(--auth-gold)" }} />
-                </div>
-
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={8}
-                  value={twoFAToken}
-                  onChange={(e) => setTwoFAToken(e.target.value.replace(/[^A-Za-z0-9]/g, "").slice(0, 8))}
-                  placeholder="000000"
-                  className="w-48 text-center border border-slate-200 rounded-xl px-4 py-3 text-xl font-mono tracking-[0.3em] text-slate-900 placeholder:text-slate-300 focus:ring-2 outline-none transition"
-                  style={{ "--tw-ring-color": "var(--auth-gold)" } as React.CSSProperties}
-                  autoFocus
-                  onKeyDown={(e) => { if (e.key === "Enter") handle2FAVerify(); }}
-                />
-
-                <p className="text-xs text-slate-400 text-center leading-relaxed">
-                  Unesite 6-znamenkasti kod iz aplikacije<br />
-                  ili 8-znakovni kod za oporavak
-                </p>
-              </div>
-
-              {/* Submit */}
-              <button
-                onClick={handle2FAVerify}
-                disabled={twoFALoading || !twoFAToken}
-                className="w-full flex items-center justify-center gap-2 text-white text-sm font-semibold py-2.5 rounded-xl transition shadow-lg disabled:opacity-60 disabled:cursor-not-allowed hover:opacity-90"
-                style={{
-                  background: "var(--auth-navy)",
-                  boxShadow: "0 4px 14px rgba(27,42,74,0.4)",
-                }}
-              >
-                {twoFALoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Shield className="h-4 w-4" />
-                )}
-                {twoFALoading ? "Provjera..." : "Potvrdi prijavu"}
-              </button>
-
-              {/* Back link */}
-              <button
-                onClick={cancel2FA}
-                className="w-full flex items-center justify-center gap-1.5 text-xs font-medium transition py-2 rounded-lg hover:bg-slate-50"
-                style={{ color: "var(--auth-gold)" }}
-              >
-                ← Povratak nazad
-              </button>
-            </div>
-          </div>
-        ) : (
-          /* ── STEP 1: Email & Password ── */
           <div key="step-login" className="login-step-enter">
             {/* Header */}
             <div className="px-6 pt-6 pb-2 sm:px-8 sm:pt-8">
@@ -488,35 +322,25 @@ function LoginContent() {
               </div>
             </div>
           </div>
-        )}
       </div>
 
-      {/* Footer — contextual to current step */}
-      {twoFAPending ? (
-        <div className="flex items-center justify-center gap-2 mt-6 text-xs text-slate-500 login-step-enter">
-          <Shield className="h-3.5 w-3.5" style={{ color: "var(--auth-gold-muted, #B8A060)" }} />
-          <span>Zaštićeno dvofaktorskom autentifikacijom</span>
-        </div>
-      ) : (
-        <>
-          <p className="text-center text-sm text-slate-400 mt-6">
-            Nemate račun?{" "}
-            <Link
-              href="/auth/register"
-              className="font-semibold transition"
-              style={{ color: "var(--auth-gold)" }}
-            >
-              Zatražite pristup
-            </Link>
-          </p>
-          <div className="flex items-center justify-center gap-2 mt-4 text-xs text-slate-500">
-            <Lock className="h-3.5 w-3.5 text-slate-500" />
-            <span>
-              Kriptirani prijenos podataka (TLS 1.3). Obrada sukladna GDPR-u i odvjetničkoj tajni.
-            </span>
-          </div>
-        </>
-      )}
+      {/* Footer */}
+      <p className="text-center text-sm text-slate-400 mt-6">
+        Nemate račun?{" "}
+        <Link
+          href="/auth/register"
+          className="font-semibold transition"
+          style={{ color: "var(--auth-gold)" }}
+        >
+          Zatražite pristup
+        </Link>
+      </p>
+      <div className="flex items-center justify-center gap-2 mt-4 text-xs text-slate-500">
+        <Lock className="h-3.5 w-3.5 text-slate-500" />
+        <span>
+          Kriptirani prijenos podataka (TLS 1.3). Obrada sukladna GDPR-u i odvjetničkoj tajni.
+        </span>
+      </div>
     </>
   );
 }
