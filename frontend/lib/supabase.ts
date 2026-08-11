@@ -15,10 +15,45 @@ export const supabase =
     ? createBrowserClient(supabaseUrl, supabaseAnonKey)
     : null;
 
+const ZK_BUCKET = "zk-izvadci";
+
 /**
- * Upload a PDF to the 'zk-izvadci' Supabase Storage bucket.
- * Returns the public URL, or null if Supabase is not configured or bucket doesn't exist.
- * This is fully optional — the evaluation works without it.
+ * The signed-in user's law firm, read through RLS.
+ *
+ * Storage paths start with the firm id (migration 018), so uploads need it.
+ * Reading it from `user_profiles` rather than trusting anything client-held
+ * means a tampered value simply fails the storage policy.
+ */
+async function getUserFirmId(): Promise<string | null> {
+  if (!supabase) return null;
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data, error } = await supabase
+    .from("user_profiles")
+    .select("law_firm_id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (error) {
+    console.warn("Nije moguće odrediti ured korisnika:", error.message);
+    return null;
+  }
+
+  return (data?.law_firm_id as string | null) ?? null;
+}
+
+/**
+ * Upload a PDF to the private 'zk-izvadci' bucket.
+ *
+ * Returns the STORAGE PATH, not a URL. The bucket used to be public and this
+ * function handed back a permanent `getPublicUrl()` link — which made every
+ * land-registry extract readable by anyone who had, guessed, or was forwarded
+ * the address. Downloads now go through {@link getSignedPdfUrl}, which issues a
+ * link that expires.
+ *
+ * Still optional: a failure here does not block the valuation.
  */
 export async function uploadPdfToStorage(
   file: File
@@ -28,32 +63,60 @@ export async function uploadPdfToStorage(
   }
 
   try {
-    const timestamp = Date.now();
+    const firmId = await getUserFirmId();
+    if (!firmId) {
+      console.warn("PDF upload skipped: korisnik nije povezan s uredom.");
+      return null;
+    }
+
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const path = `${timestamp}_${safeName}`;
+    // {law_firm_id}/... — the policy compares the first path segment, so the
+    // prefix is what makes the file visible to the firm and nobody else.
+    const path = `${firmId}/${crypto.randomUUID()}-${safeName}`;
 
     const { error } = await supabase.storage
-      .from("zk-izvadci")
+      .from(ZK_BUCKET)
       .upload(path, file, {
         contentType: "application/pdf",
         upsert: false,
       });
 
     if (error) {
-      // Bucket might not exist yet — this is non-critical
       console.warn("PDF upload skipped:", error.message);
       return null;
     }
 
-    const {
-      data: { publicUrl },
-    } = supabase.storage.from("zk-izvadci").getPublicUrl(path);
-
-    return publicUrl;
+    return path;
   } catch {
     // Completely swallow — PDF upload is optional
     return null;
   }
+}
+
+/**
+ * Short-lived download link for a stored PDF.
+ *
+ * Sixty seconds is deliberate: long enough to click, short enough that a link
+ * pasted into a chat or left in browser history is useless by the time anyone
+ * else opens it. Returns null when the path belongs to another firm — RLS
+ * refuses to sign it.
+ */
+export async function getSignedPdfUrl(
+  path: string,
+  expiresInSeconds = 60,
+): Promise<string | null> {
+  if (!supabase || !path) return null;
+
+  const { data, error } = await supabase.storage
+    .from(ZK_BUCKET)
+    .createSignedUrl(path, expiresInSeconds);
+
+  if (error) {
+    console.warn("Nije moguće izdati privremeni link:", error.message);
+    return null;
+  }
+
+  return data?.signedUrl ?? null;
 }
 
 /**
@@ -65,6 +128,11 @@ export async function saveEvaluation(evaluation: {
   location: string;
   size_m2?: number;
   estimated_value: number;
+  /**
+   * Storage path inside the private bucket, e.g. `{law_firm_id}/{uuid}-name.pdf`.
+   * Since migration 018 this is no longer a URL — pass it through
+   * {@link getSignedPdfUrl} to get something openable.
+   */
   pdf_url?: string | null;
   raw_json_output: Record<string, unknown>;
 }): Promise<string | null> {
@@ -99,6 +167,7 @@ export interface EvaluationRow {
   location: string;
   size_m2: number | null;
   estimated_value: number;
+  /** Storage path, not a URL — see {@link getSignedPdfUrl}. */
   pdf_url: string | null;
   raw_json_output: Record<string, unknown>;
 }
