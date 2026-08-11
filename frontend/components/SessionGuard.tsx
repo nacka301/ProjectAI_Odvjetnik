@@ -8,13 +8,17 @@ import { ShieldAlert } from "lucide-react";
 // ═══════════════════════════════════════════════════════════
 //  SESSION GUARD — Idle Warning + Auto-Logout
 //
-//  - After 25 min idle → shows modal with 60-second countdown
+//  - After 14 min idle → shows modal with 60-second countdown
 //  - "Ostani prijavljen" resets the timer
 //  - If countdown reaches 0 → Supabase signOut → /auth/login
 //  - Cross-tab sync via localStorage
+//
+//  14 + 1 keeps the total at the 15 minutes the login screen promises, which
+//  is what the (now removed) AutoLogoutProvider enforced silently. The minute
+//  is spent warning instead of taken from the session.
 // ═══════════════════════════════════════════════════════════
 
-const IDLE_MS = 25 * 60 * 1000;       // 25 minutes until warning
+const IDLE_MS = 14 * 60 * 1000;       // 14 minutes until warning
 const COUNTDOWN_SEC = 60;              // 60 second countdown in modal
 const THROTTLE_MS = 30_000;            // Activity event throttle
 const STORAGE_KEY = "pravotek_last_activity";

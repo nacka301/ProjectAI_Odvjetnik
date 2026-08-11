@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Playfair_Display } from "next/font/google";
 import "./globals.css";
-import AutoLogoutProvider from "@/components/AutoLogoutProvider";
 import SessionGuard from "@/components/SessionGuard";
 import { ConditionalSecurityFooter } from "@/components/ConditionalFooter";
 import CommandPalette from "@/components/CommandPalette";
@@ -51,15 +50,18 @@ export default function RootLayout({
         suppressHydrationWarning
         className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} antialiased overflow-x-hidden min-h-screen flex flex-col`}
       >
-        <AutoLogoutProvider>
-          <SessionGuard>
-            <CreditProvider>
-              <CommandPalette />
-              <main className="flex-1">{children}</main>
-              <ConditionalSecurityFooter />
-            </CreditProvider>
-          </SessionGuard>
-        </AutoLogoutProvider>
+        {/* One idle timer. There used to be two — AutoLogoutProvider at 15 min
+            and SessionGuard at 25 — sharing a localStorage key. The shorter one
+            always won, so the warning modal never appeared and users were
+            dropped without notice. SessionGuard now owns the whole 15 minutes:
+            14 idle, then a 60-second countdown. */}
+        <SessionGuard>
+          <CreditProvider>
+            <CommandPalette />
+            <main className="flex-1">{children}</main>
+            <ConditionalSecurityFooter />
+          </CreditProvider>
+        </SessionGuard>
       </body>
     </html>
   );
