@@ -11,9 +11,10 @@ namespace Backend.Tests;
 /// model dirne, ovdje se zaključava iznos koji troškovnik daje danas, da se poslije
 /// vidi je li ga promjena pomaknula.
 ///
-/// Karakterizacijski test bilježi ZATEČENO ponašanje, kakvo god bilo. Jedan test
-/// ovdje bilježi ponašanje koje je pogrešno i koje se u sljedećem koraku namjerno
-/// mijenja — takav je izričito označen.
+/// Iznosi zabilježeni prije izmjene ostali su ovdje netaknuti i dalje ih drže isti
+/// testovi. Dva testa koja su bilježila umnožavanje jednokratne nagrade obrnuta su u
+/// tvrdnju kad je grupiranje uvedeno — jer to ponašanje više nije zatečeno, nego
+/// popravljeno.
 /// </summary>
 public class TroskovnikRedakPoRadnjiKarakterizacijaTests
 {
@@ -88,18 +89,13 @@ public class TroskovnikRedakPoRadnjiKarakterizacijaTests
     // ── Jednokratne nagrade: ovdje je zamka ───────────────────────
 
     /// <summary>
-    /// ZATEČENO PONAŠANJE, MIJENJA SE U SLJEDEĆEM KORAKU.
-    ///
     /// Tbr. 7. toč. 2 propisuje JEDNU nagradu od 250 bodova za cijeli prvostupanjski
-    /// postupak. `UkupnoBodovaZaStavku` tu nagradu vraća po SVAKOM retku, pa četiri
-    /// retka daju 1.000 bodova umjesto 250. Dok je stavka mogla postojati samo jednom
-    /// (sučelje je držalo mapu item_id → količina) to se nije moglo dogoditi.
-    ///
-    /// Uvođenjem retka po radnji postaje dostižno, pa se ovaj test u koraku
-    /// „grupiranje jednokratnih nagrada" obrće u tvrdnju da četiri retka daju 250.
+    /// postupak, "koja obuhvaća najviše do četiri radnje". Kako te četiri radnje stižu —
+    /// kao jedan redak s količinom četiri ili kao četiri retka s vlastitim datumima —
+    /// Tarifu se ne tiče, pa iznos mora biti isti.
     /// </summary>
     [Fact]
-    public void JednokratnaNagrada_CetiriRetka_ZasadUmnozavaNagradu()
+    public void JednokratnaNagrada_CetiriRetka_JednakoJednomRetkuSCetiri()
     {
         var jedanRedak = Izracunaj(Stavka("par_tuzba_smetanje", 4));
         var cetiriRetka = Izracunaj(
@@ -109,22 +105,80 @@ public class TroskovnikRedakPoRadnjiKarakterizacijaTests
             Stavka("par_tuzba_smetanje"));
 
         Assert.Equal(250m, jedanRedak.UkupnoBodova);
-        Assert.Equal(1_000m, cetiriRetka.UkupnoBodova);
-        Assert.NotEqual(jedanRedak.UkupnoBodova, cetiriRetka.UkupnoBodova);
+        Assert.Equal(250m, cetiriRetka.UkupnoBodova);
+
+        // Sve četiri radnje ostaju vidljive — nagradu nosi prva, ostale su obuhvaćene.
+        Assert.Equal(4, cetiriRetka.Stavke.Count);
+        Assert.Equal(250m, cetiriRetka.Stavke[0].UkupnoBodova);
+        Assert.All(cetiriRetka.Stavke.Skip(1), redak =>
+        {
+            Assert.True(redak.ObuhvacenoJednokratnom);
+            Assert.Equal(0m, redak.UkupnoBodova);
+            Assert.Equal(0m, redak.BodovaPoJedinici);
+            Assert.Equal(0m, redak.IznosEur);
+        });
+        Assert.False(cetiriRetka.Stavke[0].ObuhvacenoJednokratnom);
     }
 
     /// <summary>
-    /// Isti mehanizam s jednokratnom nagradom bez „daljnjih radnji" (Tbr. 7. toč. 9,
-    /// 50 bodova za cijeli postupak): količina ne mijenja ništa, ali broj redaka hoće.
+    /// Radnje preko uključene četiri nose svojih 50 bodova i kad stignu kao zasebni
+    /// retci: šest radnji je 250 + 2 × 50 = 350, isto kao jedan redak s količinom šest.
     /// </summary>
     [Fact]
-    public void JednokratnaNagradaBezDaljnjihRadnji_KolicinaNeMijenjaNista()
+    public void JednokratnaNagrada_DaljnjeRadnje_BrojeSeKrozCijeluGrupu()
+    {
+        var sestRedaka = Izracunaj(Enumerable
+            .Range(0, 6)
+            .Select(_ => Stavka("par_tuzba_smetanje"))
+            .ToArray());
+
+        Assert.Equal(350m, sestRedaka.UkupnoBodova);
+        Assert.Equal(Izracunaj(Stavka("par_tuzba_smetanje", 6)).UkupnoBodova, sestRedaka.UkupnoBodova);
+    }
+
+    /// <summary>
+    /// Jednokratna nagrada bez „daljnjih radnji" (Tbr. 7. toč. 9, 50 bodova za cijeli
+    /// postupak): ni količina ni broj redaka ne mijenjaju ništa.
+    /// </summary>
+    [Fact]
+    public void JednokratnaNagradaBezDaljnjihRadnji_NiKolicinaNiBrojRedakaNeMijenjajuNista()
     {
         Assert.Equal(50m, Izracunaj(Stavka("par_mali_spor", 1)).UkupnoBodova);
         Assert.Equal(50m, Izracunaj(Stavka("par_mali_spor", 7)).UkupnoBodova);
+        Assert.Equal(50m, Izracunaj(Stavka("par_mali_spor"), Stavka("par_mali_spor")).UkupnoBodova);
+    }
 
-        // ZATEČENO: dva retka daju dvostruko. Mijenja se u sljedećem koraku.
-        Assert.Equal(100m, Izracunaj(Stavka("par_mali_spor"), Stavka("par_mali_spor")).UkupnoBodova);
+    /// <summary>
+    /// Grupira se po tarifnoj stavci, ne po svim jednokratnima zajedno — dvije različite
+    /// jednokratne nagrade u istom troškovniku ostaju dvije nagrade.
+    /// </summary>
+    [Fact]
+    public void DvijeRazliciteJednokratneStavke_OstajuDvijeNagrade()
+    {
+        var rezultat = Izracunaj(
+            Stavka("par_tuzba_smetanje"),
+            Stavka("par_tuzba_obiteljski"),
+            Stavka("par_tuzba_smetanje"));
+
+        Assert.Equal(450m, rezultat.UkupnoBodova);   // 250 + 200
+    }
+
+    /// <summary>
+    /// Retci grupe ne moraju biti jedan do drugoga: nagradu nosi PRVI redak grupe, a
+    /// stavka između njih računa se posve neovisno.
+    /// </summary>
+    [Fact]
+    public void RetciGrupe_NeMorajuBitiSusjedni()
+    {
+        var rezultat = Izracunaj(
+            Stavka("par_tuzba_smetanje"),
+            Stavka("par_rociste_glavno"),
+            Stavka("par_tuzba_smetanje"));
+
+        Assert.Equal(250m + BodoviTbr71, rezultat.UkupnoBodova);
+        Assert.False(rezultat.Stavke[0].ObuhvacenoJednokratnom);
+        Assert.False(rezultat.Stavke[1].ObuhvacenoJednokratnom);
+        Assert.True(rezultat.Stavke[2].ObuhvacenoJednokratnom);
     }
 
     // ── Zbrojevi koji vise o bodovima ─────────────────────────────

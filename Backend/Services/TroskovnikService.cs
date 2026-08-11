@@ -401,6 +401,46 @@ public sealed class TroskovnikService : ITroskovnikService
         return razredBodovi;
     }
 
+    /// <summary>
+    /// Jednokratna nagrada raspoređena po retcima iste tarifne stavke.
+    ///
+    /// <paramref name="RedakSNagradom"/> je redni položaj retka koji nosi cijelu
+    /// nagradu, a <paramref name="UkupnaKolicina"/> zbroj količina svih njezinih redaka.
+    /// </summary>
+    private sealed record JednokratnaGrupa(int RedakSNagradom, int UkupnaKolicina);
+
+    /// <summary>
+    /// Grupira retke jednokratnih nagrada po tarifnoj stavci.
+    ///
+    /// Tbr. 7. toč. 2 i 3 te Tbr. 8. toč. 1 propisuju JEDNU nagradu za cijeli
+    /// prvostupanjski postupak, neovisno o broju obavljenih radnji. Otkako svaka radnja
+    /// nosi svoj datum, ista se stavka u zahtjevu pojavljuje više puta, pa se nagrada
+    /// mora izračunati jednom za sve njezine retke zajedno. Bez toga bi četiri radnje
+    /// poslane kao četiri retka dale četverostruku nagradu.
+    ///
+    /// Stavke koje nisu jednokratne ovdje ne ulaze — kod njih su bodovi umnožak
+    /// količine, pa je svejedno stiže li količina u jednom retku ili razlomljena.
+    /// </summary>
+    private static Dictionary<string, JednokratnaGrupa> GrupirajJednokratne(
+        TroskovnikRequest request, Dictionary<string, TarifnaStavka> katalogPoId)
+    {
+        var grupe = new Dictionary<string, JednokratnaGrupa>();
+
+        for (var polozaj = 0; polozaj < request.Stavke.Count; polozaj++)
+        {
+            var stavka = request.Stavke[polozaj];
+
+            if (!katalogPoId[stavka.ItemId].JednokratnaNagrada)
+                continue;
+
+            grupe[stavka.ItemId] = grupe.TryGetValue(stavka.ItemId, out var postojeca)
+                ? postojeca with { UkupnaKolicina = postojeca.UkupnaKolicina + stavka.Kolicina }
+                : new JednokratnaGrupa(polozaj, stavka.Kolicina);
+        }
+
+        return grupe;
+    }
+
     /// <summary>Sastavlja retke troškovnika, jedan po odabranoj stavci.</summary>
     private static List<TroskovnikLineItem> IzracunajRetke(
         TroskovnikRequest request,
@@ -408,10 +448,12 @@ public sealed class TroskovnikService : ITroskovnikService
         KontekstIzracuna kontekst)
     {
         var stavkeRetci = new List<TroskovnikLineItem>();
+        var jednokratneGrupe = GrupirajJednokratne(request, katalogPoId);
         var redniBroj = 0;
 
-        foreach (var stavka in request.Stavke)
+        for (var polozaj = 0; polozaj < request.Stavke.Count; polozaj++)
         {
+            var stavka = request.Stavke[polozaj];
             var definicija = katalogPoId[stavka.ItemId];
 
             var bodovi = BodoviZaStavku(definicija, request, kontekst);
@@ -425,7 +467,16 @@ public sealed class TroskovnikService : ITroskovnikService
 
             redniBroj++;
 
-            var ukupnoStavke = UkupnoBodovaZaStavku(definicija, bodovi, stavka.Kolicina);
+            // Jednokratnu nagradu nosi prvi redak svoje grupe, izračunata iz zbroja
+            // količina svih njezinih redaka. Ostali su njome obuhvaćeni: stoje u
+            // troškovniku sa svojim datumom, ali bez vlastitih bodova, jer bi ih inače
+            // svaki ponovio i nagrada bi se umnožila.
+            var jednokratna = jednokratneGrupe.TryGetValue(stavka.ItemId, out var grupa) ? grupa : null;
+            var obuhvacenJednokratnom = jednokratna is not null && jednokratna.RedakSNagradom != polozaj;
+
+            var ukupnoStavke = obuhvacenJednokratnom
+                ? 0m
+                : UkupnoBodovaZaStavku(definicija, bodovi, jednokratna?.UkupnaKolicina ?? stavka.Kolicina);
 
             // ── Tbr. 41 po POJEDINOJ stavci ──
             // Toč. 2 kaže "POJEDINE tarifne stavke odvjetnik može sniziti za 50%" —
@@ -441,12 +492,16 @@ public sealed class TroskovnikService : ITroskovnikService
                 TarifniBroj = definicija.TarifniBroj,
                 PravniIzvor = definicija.PravniIzvor,
                 Kolicina = stavka.Kolicina,
-                BodovaPoJedinici = bodovi,
+                // Redak obuhvaćen tuđom jednokratnom nagradom ne smije pokazivati bodove
+                // po jedinici: na ispisu bi „250 bod./jed." uz iznos 0,00 € izgledalo
+                // kao greška u zbrajanju.
+                BodovaPoJedinici = obuhvacenJednokratnom ? 0m : bodovi,
                 UkupnoBodova = ukupnoStavke,
                 // Redak se prikazuje u eurima, pa se ovdje zaokružuje. Zbrojevi niže
                 // računaju se iz nezaokruženih bodova, da se greška ne akumulira.
                 IznosEur = ZaokruziNovac(ukupnoStavke * TarifaConstants.BodValue),
                 IsJednokratna = definicija.JednokratnaNagrada,
+                ObuhvacenoJednokratnom = obuhvacenJednokratnom,
                 Tbr41PovisenjePostotak = tbr41Povisenje,
                 Tbr41SnizenjePostotak = tbr41Snizenje,
                 Tbr41Bodovi = tbr41BodoviStavke,

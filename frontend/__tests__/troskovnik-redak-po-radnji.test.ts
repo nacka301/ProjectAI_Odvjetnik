@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { ukupnoBodovaZaStavku, type TarifnaStavka } from "@/lib/tarifa";
+import {
+  grupirajJednokratne,
+  ukupnoBodovaZaStavku,
+  type RedakZaGrupiranje,
+  type TarifnaStavka,
+} from "@/lib/tarifa";
 
 /**
  * Karakterizacija pred uvođenje datuma uz radnju — parnjak
@@ -63,21 +68,94 @@ describe("obična stavka — redak po radnji ne mijenja iznos", () => {
   });
 });
 
-describe("jednokratna nagrada — zatečeno ponašanje, mijenja se u sljedećem koraku", () => {
+describe("jednokratna nagrada — bez grupiranja bi se umnožila", () => {
   /**
-   * ZATEČENO: nagrada se vraća po svakom retku, pa četiri retka daju 1.000 bodova
-   * umjesto propisanih 250 (Tbr. 7. toč. 2 — jedna nagrada za cijeli prvostupanjski
-   * postupak). Dok stavka može postojati samo jednom, ovo je nedostižno.
-   *
-   * Ovaj se test u koraku „grupiranje jednokratnih nagrada" obrće u tvrdnju da
-   * četiri retka daju 250.
+   * Pozvan jednom po retku, `ukupnoBodovaZaStavku` vraća nagradu svaki put, pa četiri
+   * retka daju 1.000 bodova umjesto propisanih 250 (Tbr. 7. toč. 2 — jedna nagrada za
+   * cijeli prvostupanjski postupak). Zato retke prije zbrajanja mora proći
+   * `grupirajJednokratne`; ovaj test drži razlog za njegovo postojanje.
    */
-  it("četiri retka zasad umnožavaju nagradu", () => {
+  it("naivan zbroj po retku umnožava nagradu", () => {
     expect(ukupnoBodovaZaStavku(tbr72, 250, 4)).toBe(250);
     expect(zbrojPoRetcima(tbr72, 250, [1, 1, 1, 1])).toBe(1000);
   });
 
   it("jedan redak s količinom i dalje računa po Tarifi", () => {
     expect(ukupnoBodovaZaStavku(tbr72, 250, 6)).toBe(350); // 250 + 2 × 50
+  });
+});
+
+// ── grupirajJednokratne — parnjak TroskovnikService.GrupirajJednokratne ──
+
+const jednokratne = new Set(["par_tuzba_smetanje", "par_tuzba_obiteljski", "par_mali_spor"]);
+const jeJednokratna = (itemId: string) => jednokratne.has(itemId);
+
+function retci(...parovi: [string, number][]): RedakZaGrupiranje[] {
+  return parovi.map(([itemId, kolicina]) => ({ itemId, kolicina }));
+}
+
+/** Zbroj kakav `liveCalc` dobiva kad retke prvo provuče kroz grupiranje. */
+function zbrojSGrupiranjem(def: TarifnaStavka, bodovi: number, kolicine: number[]): number {
+  const ulaz = retci(...kolicine.map((kol) => [def.id, kol] as [string, number]));
+
+  return grupirajJednokratne(ulaz, jeJednokratna).reduce(
+    (zbroj, udio) => zbroj + (udio.nosiNagradu ? ukupnoBodovaZaStavku(def, bodovi, udio.kolicina) : 0),
+    0,
+  );
+}
+
+describe("grupirajJednokratne", () => {
+  it("četiri retka daju jednu nagradu, kao jedan redak s količinom četiri", () => {
+    expect(zbrojSGrupiranjem(tbr72, 250, [1, 1, 1, 1])).toBe(250);
+    expect(zbrojSGrupiranjem(tbr72, 250, [1, 1, 1, 1])).toBe(ukupnoBodovaZaStavku(tbr72, 250, 4));
+  });
+
+  it("radnje preko uključene četiri broje se kroz cijelu grupu", () => {
+    expect(zbrojSGrupiranjem(tbr72, 250, [1, 1, 1, 1, 1, 1])).toBe(350); // 250 + 2 × 50
+  });
+
+  it("nagradu nosi prvi redak grupe, ostali su njome obuhvaćeni", () => {
+    const udjeli = grupirajJednokratne(
+      retci(["par_tuzba_smetanje", 1], ["par_tuzba_smetanje", 1], ["par_tuzba_smetanje", 1]),
+      jeJednokratna,
+    );
+
+    expect(udjeli.map((u) => u.nosiNagradu)).toEqual([true, false, false]);
+    expect(udjeli[0].kolicina).toBe(3);
+  });
+
+  it("retci grupe ne moraju biti susjedni", () => {
+    const udjeli = grupirajJednokratne(
+      retci(["par_tuzba_smetanje", 1], ["par_rociste_glavno", 2], ["par_tuzba_smetanje", 1]),
+      jeJednokratna,
+    );
+
+    expect(udjeli.map((u) => u.nosiNagradu)).toEqual([true, true, false]);
+    expect(udjeli[0].kolicina).toBe(2); // zbroj obaju redaka jednokratne stavke
+  });
+
+  it("dvije različite jednokratne stavke ostaju dvije nagrade", () => {
+    const udjeli = grupirajJednokratne(
+      retci(["par_tuzba_smetanje", 1], ["par_tuzba_obiteljski", 1], ["par_tuzba_smetanje", 1]),
+      jeJednokratna,
+    );
+
+    expect(udjeli.map((u) => u.nosiNagradu)).toEqual([true, true, false]);
+  });
+
+  it("obične stavke prolaze nedirnute", () => {
+    const udjeli = grupirajJednokratne(
+      retci(["par_rociste_glavno", 1], ["par_rociste_glavno", 1]),
+      jeJednokratna,
+    );
+
+    expect(udjeli).toEqual([
+      { nosiNagradu: true, kolicina: 1 },
+      { nosiNagradu: true, kolicina: 1 },
+    ]);
+  });
+
+  it("prazan popis daje prazan rezultat", () => {
+    expect(grupirajJednokratne([], jeJednokratna)).toEqual([]);
   });
 });

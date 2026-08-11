@@ -233,6 +233,14 @@ public sealed class TroskovnikLineItem
     [JsonPropertyName("is_jednokratna")]
     public bool IsJednokratna { get; set; }
 
+    /// <summary>
+    /// True kad je ova radnja obuhvaćena jednokratnom nagradom nekog ranijeg retka iste
+    /// tarifne stavke. Takav redak stoji u troškovniku sa svojim datumom, ali bez bodova
+    /// i bez iznosa — nagrada je već obračunata jednom, za sve radnje zajedno.
+    /// </summary>
+    [JsonPropertyName("obuhvaceno_jednokratnom")]
+    public bool ObuhvacenoJednokratnom { get; set; }
+
     // ── Tbr. 41 po pojedinoj stavci ───────────────────────────────
 
     /// <summary>Tbr. 41. toč. 1 — primijenjeno povišenje ove stavke u postotku (0–100).</summary>

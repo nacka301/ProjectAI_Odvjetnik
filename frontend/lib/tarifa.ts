@@ -719,6 +719,65 @@ export function ukupnoBodovaZaStavku(
   return ukupno;
 }
 
+// ── Jednokratne nagrade kroz više redaka ─────────────────────────
+
+/** Redak troškovnika onoliko koliko grupiranje jednokratnih nagrada treba znati. */
+export interface RedakZaGrupiranje {
+  itemId: string;
+  kolicina: number;
+}
+
+/** Kako se jedan redak ponaša unutar svoje jednokratne grupe. */
+export interface UdioURedu {
+  /** Nosi li ovaj redak nagradu cijele grupe. */
+  nosiNagradu: boolean;
+  /** Količina s kojom se nagrada računa — zbroj cijele grupe za redak koji je nosi. */
+  kolicina: number;
+}
+
+/**
+ * Raspoređuje jednokratnu nagradu po retcima iste tarifne stavke.
+ *
+ * Tbr. 7. toč. 2 i 3 te Tbr. 8. toč. 1 propisuju JEDNU nagradu za cijeli
+ * prvostupanjski postupak, neovisno o broju obavljenih radnji. Otkako svaka radnja
+ * nosi svoj datum, ista se stavka pojavljuje u više redaka, pa se nagrada mora
+ * izračunati jednom za sve njih zajedno — inače četiri radnje poslane kao četiri
+ * retka daju četverostruku nagradu.
+ *
+ * Nagradu nosi PRVI redak grupe, s količinom koja je zbroj cijele grupe; ostali su
+ * njome obuhvaćeni i stoje u troškovniku bez vlastitih bodova. Stavke koje nisu
+ * jednokratne prolaze nedirnute — kod njih su bodovi umnožak količine.
+ *
+ * Parnjak: TroskovnikService.GrupirajJednokratne.
+ */
+export function grupirajJednokratne(
+  retci: RedakZaGrupiranje[],
+  jeJednokratna: (itemId: string) => boolean,
+): UdioURedu[] {
+  const grupe = new Map<string, { nositelj: number; kolicina: number }>();
+
+  retci.forEach((redak, polozaj) => {
+    if (!jeJednokratna(redak.itemId)) return;
+
+    const postojeca = grupe.get(redak.itemId);
+    grupe.set(
+      redak.itemId,
+      postojeca
+        ? { ...postojeca, kolicina: postojeca.kolicina + redak.kolicina }
+        : { nositelj: polozaj, kolicina: redak.kolicina },
+    );
+  });
+
+  return retci.map((redak, polozaj) => {
+    const grupa = grupe.get(redak.itemId);
+    if (!grupa) return { nosiNagradu: true, kolicina: redak.kolicina };
+
+    return grupa.nositelj === polozaj
+      ? { nosiNagradu: true, kolicina: grupa.kolicina }
+      : { nosiNagradu: false, kolicina: redak.kolicina };
+  });
+}
+
 // ── Sudske pristojbe (Uredba NN 37/2023) ─────────────────────────
 
 /**
