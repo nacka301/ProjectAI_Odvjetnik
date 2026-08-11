@@ -28,6 +28,18 @@ public sealed class TroskovnikDocumentService
     /// </summary>
     private string FormatBodovi(decimal value) => value.ToString("0.###", _hr);
 
+    /// <summary>
+    /// Datum radnje za ispis: ISO <c>gggg-mm-dd</c> → hrvatski <c>dd.MM.gggg.</c>
+    ///
+    /// Prazan ili neispravan datum daje prazno polje — na troškovniku koji ide sudu ne
+    /// smije stajati ni „Invalid Date" ni sirovi ISO oblik.
+    /// </summary>
+    private static string FormatDatum(string? iso)
+        => DateOnly.TryParseExact(iso, TroskovnikService.OblikDatuma,
+               CultureInfo.InvariantCulture, DateTimeStyles.None, out var datum)
+            ? datum.ToString("dd.MM.yyyy.", CultureInfo.InvariantCulture)
+            : "";
+
     /// <summary>Isto zaokruživanje kao u motoru: novac, dvije decimale, od nule.</summary>
     private static decimal ZaokruziNovac(decimal iznos)
         => Math.Round(iznos, 2, MidpointRounding.AwayFromZero);
@@ -129,9 +141,19 @@ public sealed class TroskovnikDocumentService
             sb.AppendLine($"<p style=\"margin-top:12px;font-size:11px;color:#555\"><em>{System.Net.WebUtility.HtmlEncode(resp.NapomenaStjecaj)}</em></p>");
         }
 
+        // Razdoblje koje troškovnik pokriva — sud gleda uz koje se radnje trošak veže.
+        if (!string.IsNullOrWhiteSpace(resp.DatumOd) || !string.IsNullOrWhiteSpace(resp.DatumDo))
+        {
+            var razdoblje = resp.DatumOd == resp.DatumDo
+                ? $"Radnja od {FormatDatum(resp.DatumOd)}"
+                : $"Za razdoblje {FormatDatum(resp.DatumOd)} – {FormatDatum(resp.DatumDo)}";
+
+            sb.AppendLine($"<p style=\"margin-top:8px;font-weight:600\">{System.Net.WebUtility.HtmlEncode(razdoblje)}</p>");
+        }
+
         // Line items (if any)
         sb.AppendLine("<h3>Stavke</h3>");
-        sb.AppendLine("<table><tr><th>#</th><th>Opis</th><th>Tarifni broj</th><th>Pravni izvor</th><th>Količina</th><th>Bod/jed</th><th>Ukupno bodova</th><th>Iznos (EUR)</th></tr>");
+        sb.AppendLine("<table><tr><th>#</th><th>Datum</th><th>Opis</th><th>Tarifni broj</th><th>Pravni izvor</th><th>Količina</th><th>Bod/jed</th><th>Ukupno bodova</th><th>Iznos (EUR)</th></tr>");
 
         foreach (var l in resp.Stavke ?? new List<TroskovnikLineItem>())
         {
@@ -153,14 +175,20 @@ public sealed class TroskovnikDocumentService
             var ukupnoSTbr41 = l.UkupnoBodova + l.Tbr41Bodovi;
             var iznosSTbr41 = ZaokruziNovac(ukupnoSTbr41 * TarifaConstants.BodValue);
 
-            sb.AppendLine($"<tr><td>{l.Rbr}</td><td>{System.Net.WebUtility.HtmlEncode(l.Opis)}{tbr41}</td><td>{System.Net.WebUtility.HtmlEncode(l.TarifniBroj)}</td><td style=\"font-size:10px;color:#555\">{System.Net.WebUtility.HtmlEncode(izvor)}</td><td>{l.Kolicina}</td><td>{FormatBodovi(l.BodovaPoJedinici)}</td><td>{FormatBodovi(ukupnoSTbr41)}</td><td style=\"text-align:right\">{FormatCurrency(iznosSTbr41)}</td></tr>");
+            // Radnja obuhvaćena tuđom jednokratnom nagradom stoji u troškovniku sa svojim
+            // datumom, ali bez bodova — razlog mora pisati, inače 0,00 € izgleda kao greška.
+            var napomena = l.ObuhvacenoJednokratnom
+                ? "<br/><span style=\"font-size:10px;color:#555\">obuhvaćeno jednokratnom nagradom</span>"
+                : "";
+
+            sb.AppendLine($"<tr><td>{l.Rbr}</td><td>{FormatDatum(l.Datum)}</td><td>{System.Net.WebUtility.HtmlEncode(l.Opis)}{napomena}{tbr41}</td><td>{System.Net.WebUtility.HtmlEncode(l.TarifniBroj)}</td><td style=\"font-size:10px;color:#555\">{System.Net.WebUtility.HtmlEncode(izvor)}</td><td>{l.Kolicina}</td><td>{FormatBodovi(l.BodovaPoJedinici)}</td><td>{FormatBodovi(ukupnoSTbr41)}</td><td style=\"text-align:right\">{FormatCurrency(iznosSTbr41)}</td></tr>");
         }
 
         // Tbr. 40 — povišenje za zastupanje više osoba, kao vlastiti redak.
         if (resp.PovisenjeViseOsobaPostotak > 0)
         {
             var povisenjeIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 40. toč. 1 — 10% za drugu i svaku sljedeću osobu, najviše 50%";
-            sb.AppendLine($"<tr><td></td><td>Povišenje za zastupanje {resp.BrojZastupanihOsoba} osoba</td><td>Tbr. 40</td><td style=\"font-size:10px;color:#555\">{System.Net.WebUtility.HtmlEncode(povisenjeIzvor)}</td><td></td><td>{resp.PovisenjeViseOsobaPostotak:P0}</td><td>{FormatBodovi(resp.PovisenjeViseOsobaBodovi)}</td><td style=\"text-align:right\">{FormatCurrency(resp.PovisenjeViseOsobaBodovi * TarifaConstants.BodValue)}</td></tr>");
+            sb.AppendLine($"<tr><td></td><td></td><td>Povišenje za zastupanje {resp.BrojZastupanihOsoba} osoba</td><td>Tbr. 40</td><td style=\"font-size:10px;color:#555\">{System.Net.WebUtility.HtmlEncode(povisenjeIzvor)}</td><td></td><td>{resp.PovisenjeViseOsobaPostotak:P0}</td><td>{FormatBodovi(resp.PovisenjeViseOsobaBodovi)}</td><td style=\"text-align:right\">{FormatCurrency(resp.PovisenjeViseOsobaBodovi * TarifaConstants.BodValue)}</td></tr>");
         }
 
         sb.AppendLine("</table>");
