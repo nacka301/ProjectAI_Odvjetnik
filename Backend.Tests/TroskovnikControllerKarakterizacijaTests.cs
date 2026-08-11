@@ -38,10 +38,14 @@ public class TroskovnikControllerKarakterizacijaTests
         return kontroler;
     }
 
+    /// <summary>
+    /// Datum uz radnju popunjen je jer ga <c>Spremi</c> od uvođenja datuma traži.
+    /// Testovi koji provjeravaju druge grane ne smiju padati na njemu.
+    /// </summary>
     private static TroskovnikRequest ValjanZahtjev() => new()
     {
         VrijednostSpora = 50_000m,
-        Stavke = [new TroskovnikItemRequest { ItemId = "par_tuzba", Kolicina = 1 }]
+        Stavke = [new TroskovnikItemRequest { ItemId = "par_tuzba", Kolicina = 1, Datum = "2025-03-12" }]
     };
 
     /// <summary>Čita svojstvo anonimnog ili konkretnog objekta po imenu.</summary>
@@ -364,6 +368,82 @@ public class TroskovnikControllerKarakterizacijaTests
         var odgovor = Assert.IsType<UnauthorizedObjectResult>(await kontroler.Popis());
 
         Assert.Equal("Nedostaje x-user-id header.", Svojstvo(odgovor.Value, "error"));
+    }
+
+    // ── POST /api/troskovnik/spremi — datum uz radnju ─────────────
+    //
+    // Ovo nije karakterizacija nego novo pravilo: troškovnik koji se predaje sudu mora
+    // uz svaku radnju imati datum. Provjera stoji samo na spremanju — /izracunaj i
+    // dalje radi bez datuma, da odvjetnik vidi iznos prije nego ih popuni.
+
+    [Fact]
+    public async Task Spremi_RadnjaBezDatuma_Vraca400IneSprema()
+    {
+        var klijenti = new FakeClientCaseService();
+        var kontroler = StvoriKontroler(klijenti);
+        var zahtjev = ValjanZahtjev();
+        zahtjev.Stavke[0].Datum = null;
+
+        var odgovor = Assert.IsType<BadRequestObjectResult>(await kontroler.Spremi(zahtjev));
+
+        Assert.Null(klijenti.SpremljeniTroskovnik);
+        var poruka = Assert.IsType<string>(Svojstvo(odgovor.Value, "error"));
+        Assert.Contains("bez datuma", poruka);
+    }
+
+    /// <summary>
+    /// U dugom troškovniku mora se vidjeti KOJI redak nema datum, pa poruka nabraja
+    /// radnje s njihovim rednim brojem.
+    /// </summary>
+    [Fact]
+    public async Task Spremi_PorukaImenujeRadnjeBezDatuma()
+    {
+        var kontroler = StvoriKontroler(new FakeClientCaseService());
+        var zahtjev = ValjanZahtjev();
+        zahtjev.Stavke =
+        [
+            new TroskovnikItemRequest { ItemId = "par_tuzba", Kolicina = 1, Datum = "2025-03-12" },
+            new TroskovnikItemRequest { ItemId = "par_rociste_glavno", Kolicina = 1 },
+            new TroskovnikItemRequest { ItemId = "par_ocevid", Kolicina = 1 }
+        ];
+
+        var odgovor = Assert.IsType<BadRequestObjectResult>(await kontroler.Spremi(zahtjev));
+
+        var poruka = Assert.IsType<string>(Svojstvo(odgovor.Value, "error"));
+        Assert.Contains("2. Ročište", poruka);
+        Assert.Contains("3. Nazočnost očevidu", poruka);
+        Assert.DoesNotContain("1. Tužba", poruka);
+    }
+
+    [Fact]
+    public async Task Spremi_SvakaRadnjaImaDatum_Sprema()
+    {
+        var klijenti = new FakeClientCaseService();
+        var kontroler = StvoriKontroler(klijenti);
+        var zahtjev = ValjanZahtjev();
+        zahtjev.Stavke =
+        [
+            new TroskovnikItemRequest { ItemId = "par_tuzba", Kolicina = 1, Datum = "2025-03-12" },
+            new TroskovnikItemRequest { ItemId = "par_rociste_glavno", Kolicina = 1, Datum = "2025-05-19" }
+        ];
+
+        Assert.IsType<OkObjectResult>(await kontroler.Spremi(zahtjev));
+
+        Assert.NotNull(klijenti.SpremljeniTroskovnik);
+    }
+
+    /// <summary>Izračun bez datuma i dalje prolazi — ograničenje je samo na spremanju.</summary>
+    [Fact]
+    public async Task Izracunaj_BezDatuma_IdaljeVraca200()
+    {
+        var kontroler = StvoriKontroler(new FakeClientCaseService());
+        var zahtjev = ValjanZahtjev();
+        zahtjev.Stavke[0].Datum = null;
+
+        var odgovor = Assert.IsType<OkObjectResult>(await kontroler.Izracunaj(zahtjev));
+
+        var troskovnik = Assert.IsType<TroskovnikResponse>(odgovor.Value);
+        Assert.Null(troskovnik.Stavke[0].Datum);
     }
 
     /// <summary>

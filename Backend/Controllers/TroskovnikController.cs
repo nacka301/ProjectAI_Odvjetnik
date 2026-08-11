@@ -117,6 +117,9 @@ public class TroskovnikController : ControllerBase
         if (ProvjeriIIzracunaj(zahtjev, out var rezultat) is { } greska)
             return greska;
 
+        if (ProvjeriDatumeRadnji(rezultat) is { } nedostajuDatumi)
+            return nedostajuDatumi;
+
         // SECURITY: predmet se smije vezati samo ako pripada prijavljenom korisniku
         if (!await SmijeVezatiPredmet(zahtjev.CaseId, korisnikId))
             return StatusCode(403, new { error = "Nemate pristup odabranom predmetu." });
@@ -133,6 +136,34 @@ public class TroskovnikController : ControllerBase
             savedId = spremljeno?.Id,
             clientId = klijent.Id,
             createdClientId = klijent.Kreirani
+        });
+    }
+
+    /// <summary>
+    /// Datum uz svaku radnju — provjerava se samo pri spremanju.
+    ///
+    /// Troškovnik koji se predaje sudu mora uz svaku radnju imati datum kada je
+    /// poduzeta; bez toga je u praksi neupotrebljiv. Izračun namjerno prolazi i bez
+    /// datuma, jer odvjetnik smije vidjeti iznos prije nego ih popuni — zato provjera
+    /// stoji ovdje, a ne u <c>ProvjeriZahtjev</c>.
+    ///
+    /// Poruka imenuje radnje kojima datum nedostaje, s rednim brojem, da se u dugom
+    /// troškovniku odmah vidi koji redak treba popraviti.
+    /// </summary>
+    private IActionResult? ProvjeriDatumeRadnji(TroskovnikResponse rezultat)
+    {
+        var bezDatuma = rezultat.Stavke
+            .Where(redak => string.IsNullOrWhiteSpace(redak.Datum))
+            .Select(redak => $"{redak.Rbr}. {redak.Opis}")
+            .ToList();
+
+        if (bezDatuma.Count == 0)
+            return null;
+
+        return BadRequest(new
+        {
+            error = "Troškovnik se ne može spremiti bez datuma uz svaku radnju. " +
+                    $"Nedostaje datum uz: {string.Join("; ", bezDatuma)}."
         });
     }
 
