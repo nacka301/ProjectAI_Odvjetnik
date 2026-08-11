@@ -17,7 +17,7 @@ public class AdminUserDto
     [JsonPropertyName("email")]         public string Email { get; set; } = "";
     [JsonPropertyName("full_name")]     public string FullName { get; set; } = "";
     [JsonPropertyName("phone_number")]  public string? PhoneNumber { get; set; }
-    [JsonPropertyName("role")]          public string Role { get; set; } = "admin";
+    [JsonPropertyName("role")]          public string Role { get; set; } = "lawyer";
     [JsonPropertyName("totp_enabled")]  public bool TotpEnabled { get; set; }
     [JsonPropertyName("created_at")]    public string CreatedAt { get; set; } = "";
     [JsonPropertyName("last_sign_in")]  public string? LastSignIn { get; set; }
@@ -85,6 +85,29 @@ public class AdminController : ControllerBase
     private string? GetUserId() => HttpContext.Items["AuthUserId"] as string;
     private string? GetTenantId() => HttpContext.Items["AuthTenantId"] as string;
 
+    /// <summary>
+    /// Reads totp_enabled out of the embedded user_mfa resource. PostgREST
+    /// returns an object for a one-to-one embed and an array otherwise, and a
+    /// user who never enrolled has no user_mfa row at all — all three shapes
+    /// mean "2FA off" rather than an error.
+    /// </summary>
+    private static bool ReadTotpEnabled(JsonElement profile)
+    {
+        if (!profile.TryGetProperty("user_mfa", out var mfa))
+            return false;
+
+        var row = mfa.ValueKind switch
+        {
+            JsonValueKind.Object => mfa,
+            JsonValueKind.Array when mfa.GetArrayLength() > 0 => mfa[0],
+            _ => default
+        };
+
+        return row.ValueKind == JsonValueKind.Object
+            && row.TryGetProperty("totp_enabled", out var enabled)
+            && enabled.ValueKind == JsonValueKind.True;
+    }
+
     // ═══════════════════════════════════════════════════════════
     //  GET /api/admin/users — structured user overview
     // ═══════════════════════════════════════════════════════════
@@ -146,8 +169,10 @@ public class AdminController : ControllerBase
             }
 
             // 2) Fetch user_profiles with embedded law_firms → subscriptions + firm_usage + tenant_usage_stats
+            // totp_enabled moved off user_profiles into user_mfa (migration 017),
+            // so it now comes in as an embedded resource rather than a column.
             var profilesUrl = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/user_profiles" +
-                "?select=user_id,full_name,phone_number,role,totp_enabled,created_at," +
+                "?select=user_id,full_name,phone_number,role,created_at,user_mfa(totp_enabled)," +
                 "law_firms(id,name,oib,tenant_subscriptions(plan_id,status,valid_until,price_eur,max_cases,max_invoices,ai_credits_limit),firm_usage(module_name,used_credits,max_credits),tenant_usage_stats(ai_credits_used,period_start))";
             var profilesReq = CreateRequest(HttpMethod.Get, profilesUrl);
             var profilesRes = await _httpClient.SendAsync(profilesReq);
@@ -166,8 +191,8 @@ public class AdminController : ControllerBase
                         UserId = userId,
                         FullName = p.TryGetProperty("full_name", out var fn) ? fn.GetString() ?? "" : "",
                         PhoneNumber = p.TryGetProperty("phone_number", out var ph) ? ph.GetString() : null,
-                        Role = p.TryGetProperty("role", out var r) ? r.GetString() ?? "admin" : "admin",
-                        TotpEnabled = p.TryGetProperty("totp_enabled", out var tp) && tp.GetBoolean(),
+                        Role = p.TryGetProperty("role", out var r) ? r.GetString() ?? "lawyer" : "lawyer",
+                        TotpEnabled = ReadTotpEnabled(p),
                         CreatedAt = p.TryGetProperty("created_at", out var ca) ? ca.GetString() ?? "" : "",
                     };
 

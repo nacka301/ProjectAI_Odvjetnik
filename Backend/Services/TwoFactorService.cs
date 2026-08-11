@@ -26,6 +26,15 @@ public class TwoFactorService
     private readonly bool _isConfigured;
 
     private const string Issuer = "PravoTek";
+
+    /// <summary>
+    /// Dedicated table for MFA material (migration 017). It has RLS on and no
+    /// policy for `authenticated`, so the secret is reachable only with the
+    /// service_role key. It used to live on `user_profiles`, which colleagues
+    /// in the same firm are allowed to read.
+    /// </summary>
+    private const string MfaTable = "user_mfa";
+
     private const int SecretSize = 20; // 160-bit secret (RFC 6238 recommended)
     private const int RecoveryCodeCount = 8;
     private const int RecoveryCodeLength = 8;
@@ -409,8 +418,7 @@ public class TwoFactorService
 
         try
         {
-            // Upsert into user_profiles
-            var url = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/user_profiles";
+            var url = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/{MfaTable}";
             var record = new
             {
                 user_id = userId,
@@ -454,7 +462,7 @@ public class TwoFactorService
         try
         {
             var safeId = Uri.EscapeDataString(userId);
-            var url = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/user_profiles?user_id=eq.{safeId}&select=user_id,totp_secret_encrypted,totp_enabled,recovery_codes_encrypted,totp_enabled_at&limit=1";
+            var url = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/{MfaTable}?user_id=eq.{safeId}&select=user_id,totp_secret_encrypted,totp_enabled,recovery_codes_encrypted,totp_enabled_at&limit=1";
 
             var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.Add("apikey", _serviceKey);
@@ -486,7 +494,7 @@ public class TwoFactorService
         try
         {
             var safeId = Uri.EscapeDataString(userId);
-            var url = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/user_profiles?user_id=eq.{safeId}";
+            var url = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/{MfaTable}?user_id=eq.{safeId}";
 
             var record = new
             {
@@ -522,7 +530,7 @@ public class TwoFactorService
         try
         {
             var safeId = Uri.EscapeDataString(userId);
-            var url = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/user_profiles?user_id=eq.{safeId}";
+            var url = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/{MfaTable}?user_id=eq.{safeId}";
 
             var payload = JsonSerializer.Serialize(new { recovery_codes_encrypted = encryptedCodes });
             var request = new HttpRequestMessage(HttpMethod.Patch, url)

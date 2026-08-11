@@ -15,21 +15,13 @@ public class TwoFactorSetupResponse
     public string ManualEntryKey { get; set; } = "";
 }
 
-/// <summary>Request body for POST /api/2fa/setup — provides user email for QR label.</summary>
-public class TwoFactorSetupRequest
-{
-    public string Email { get; set; } = "";
-}
+// NOTE: none of these carry a UserId or Email any more. The acting user is
+// taken from the verified JWT in TwoFactorController — a client-supplied
+// identity here would be an account-takeover vector.
 
 /// <summary>Request body for POST /api/2fa/verify-setup — confirms first token after QR scan.</summary>
 public class TwoFactorVerifySetupRequest
 {
-    /// <summary>Supabase user ID.</summary>
-    public string UserId { get; set; } = "";
-
-    /// <summary>User email (for logging).</summary>
-    public string Email { get; set; } = "";
-
     /// <summary>6-digit TOTP code from the authenticator app.</summary>
     public string Token { get; set; } = "";
 
@@ -37,14 +29,11 @@ public class TwoFactorVerifySetupRequest
     public string Secret { get; set; } = "";
 }
 
-/// <summary>Request body for POST /api/2fa/validate — validates token during login.</summary>
+/// <summary>Request body for POST /api/2fa/validate and /api/2fa/disable.</summary>
 public class TwoFactorValidateRequest
 {
-    /// <summary>6-digit TOTP code from the authenticator app.</summary>
+    /// <summary>6-digit TOTP code, or an 8-character recovery code.</summary>
     public string Token { get; set; } = "";
-
-    /// <summary>User ID to look up the stored secret.</summary>
-    public string UserId { get; set; } = "";
 }
 
 /// <summary>Generic 2FA operation response.</summary>

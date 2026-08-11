@@ -12,7 +12,7 @@ public class ProfileResponse
     public string FullName { get; set; } = "";
     public string? PhoneNumber { get; set; }
     public string? Email { get; set; }
-    public string Role { get; set; } = "admin";
+    public string Role { get; set; } = "lawyer";
     public string? LawFirmId { get; set; }
 }
 

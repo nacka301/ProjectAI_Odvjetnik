@@ -6,10 +6,12 @@ namespace Backend.Controllers;
 
 /// <summary>
 /// Two-Factor Authentication (TOTP) Controller.
-/// 
-/// All endpoints require the user to be authenticated via Supabase Auth.
-/// The user's ID and email are passed via request headers set by the frontend.
-/// 
+///
+/// SECURITY: the acting user is taken ONLY from the verified Supabase JWT
+/// (HttpContext.Items, populated by SupabaseJwtMiddleware). Any user_id or
+/// email in the request body is ignored — previously these endpoints trusted
+/// the body, which let anyone enrol, probe or disable 2FA for another account.
+///
 /// Endpoints:
 ///   POST /api/2fa/setup       → Generate TOTP secret + QR URI
 ///   POST /api/2fa/verify-setup→ Verify first token, enable 2FA
@@ -30,21 +32,24 @@ public class TwoFactorController : ControllerBase
         _logger = logger;
     }
 
+    // SECURITY: verified identity from the Supabase JWT — never from the request.
+    private string? GetUserId() => HttpContext.Items["AuthUserId"] as string;
+    private string? GetEmail() => HttpContext.Items["AuthEmail"] as string;
+
     // ─────────────────────────────────────────────────────────
     //  POST /api/2fa/setup
-    //  Body: { "email": "user@example.com" }
+    //  Body ignored — enrols the caller, using the email from their token.
     // ─────────────────────────────────────────────────────────
     [HttpPost("setup")]
-    public IActionResult Setup([FromBody] TwoFactorSetupRequest request)
+    public IActionResult Setup()
     {
-        if (string.IsNullOrWhiteSpace(request?.Email))
-        {
-            return BadRequest(new { error = "Email je obavezan." });
-        }
+        var email = GetEmail();
+        if (string.IsNullOrWhiteSpace(email))
+            return Unauthorized(new { error = "Neautorizirani pristup." });
 
         try
         {
-            var result = _service.GenerateSetup(request.Email);
+            var result = _service.GenerateSetup(email);
             return Ok(result);
         }
         catch (Exception ex)
@@ -56,70 +61,74 @@ public class TwoFactorController : ControllerBase
 
     // ─────────────────────────────────────────────────────────
     //  POST /api/2fa/verify-setup
-    //  Body: { "user_id": "...", "email": "...", "secret": "BASE32", "token": "123456" }
+    //  Body: { "secret": "BASE32", "token": "123456" }
+    //  user_id / email from the body are ignored.
     // ─────────────────────────────────────────────────────────
     [HttpPost("verify-setup")]
     public async Task<IActionResult> VerifySetup([FromBody] TwoFactorVerifySetupRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request?.UserId) ||
-            string.IsNullOrWhiteSpace(request?.Email) ||
-            string.IsNullOrWhiteSpace(request?.Secret) ||
+        var userId = GetUserId();
+        var email = GetEmail();
+        if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(email))
+            return Unauthorized(new { error = "Neautorizirani pristup." });
+
+        if (string.IsNullOrWhiteSpace(request?.Secret) ||
             string.IsNullOrWhiteSpace(request?.Token))
         {
-            return BadRequest(new { error = "Sva polja su obavezna." });
+            return BadRequest(new { error = "Tajna i kod su obavezni." });
         }
 
         try
         {
-            var result = await _service.VerifySetupAsync(request.UserId, request.Email, request.Secret, request.Token);
+            var result = await _service.VerifySetupAsync(userId, email, request.Secret, request.Token);
             if (result.Success)
                 return Ok(result);
             return BadRequest(result);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error verifying 2FA setup for user {UserId}", request.UserId);
+            _logger.LogError(ex, "Error verifying 2FA setup for user {UserId}", userId);
             return StatusCode(500, new { error = "Greška pri potvrdi 2FA." });
         }
     }
 
     // ─────────────────────────────────────────────────────────
     //  POST /api/2fa/validate
-    //  Body: { "user_id": "...", "token": "123456" }
+    //  Body: { "token": "123456" } — user_id from the body is ignored.
     // ─────────────────────────────────────────────────────────
     [HttpPost("validate")]
     public async Task<IActionResult> Validate([FromBody] TwoFactorValidateRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request?.UserId) ||
-            string.IsNullOrWhiteSpace(request?.Token))
-        {
-            return BadRequest(new { error = "User ID i token su obavezni." });
-        }
+        var userId = GetUserId();
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized(new { error = "Neautorizirani pristup." });
+
+        if (string.IsNullOrWhiteSpace(request?.Token))
+            return BadRequest(new { error = "Kod je obavezan." });
 
         try
         {
-            var result = await _service.ValidateTokenAsync(request.UserId, request.Token);
+            var result = await _service.ValidateTokenAsync(userId, request.Token);
             if (result.Success)
                 return Ok(result);
             return Unauthorized(result);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error validating 2FA token for user {UserId}", request.UserId);
+            _logger.LogError(ex, "Error validating 2FA token for user {UserId}", userId);
             return StatusCode(500, new { error = "Greška pri validaciji 2FA." });
         }
     }
 
     // ─────────────────────────────────────────────────────────
-    //  GET /api/2fa/status?userId=...
+    //  GET /api/2fa/status — status of the caller, no query param.
     // ─────────────────────────────────────────────────────────
     [HttpGet("status")]
-    public async Task<IActionResult> Status([FromQuery] string userId)
+    public async Task<IActionResult> Status()
     {
+        var userId = GetUserId();
         if (string.IsNullOrWhiteSpace(userId))
-        {
-            return BadRequest(new { error = "User ID je obavezan." });
-        }
+            return Unauthorized(new { error = "Neautorizirani pristup." });
 
         try
         {
@@ -135,27 +144,28 @@ public class TwoFactorController : ControllerBase
 
     // ─────────────────────────────────────────────────────────
     //  POST /api/2fa/disable
-    //  Body: { "user_id": "...", "token": "123456" }
+    //  Body: { "token": "123456" } — user_id from the body is ignored.
     // ─────────────────────────────────────────────────────────
     [HttpPost("disable")]
     public async Task<IActionResult> Disable([FromBody] TwoFactorValidateRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request?.UserId) ||
-            string.IsNullOrWhiteSpace(request?.Token))
-        {
-            return BadRequest(new { error = "User ID i trenutni kod su obavezni." });
-        }
+        var userId = GetUserId();
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized(new { error = "Neautorizirani pristup." });
+
+        if (string.IsNullOrWhiteSpace(request?.Token))
+            return BadRequest(new { error = "Trenutni kod je obavezan." });
 
         try
         {
-            var result = await _service.DisableTwoFactorAsync(request.UserId, request.Token);
+            var result = await _service.DisableTwoFactorAsync(userId, request.Token);
             if (result.Success)
                 return Ok(result);
             return BadRequest(result);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error disabling 2FA for user {UserId}", request.UserId);
+            _logger.LogError(ex, "Error disabling 2FA for user {UserId}", userId);
             return StatusCode(500, new { error = "Greška pri deaktivaciji 2FA." });
         }
     }

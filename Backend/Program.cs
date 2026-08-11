@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
@@ -180,7 +178,7 @@ app.UseCors("Frontend");
 // ── Supabase JWT Authentication Middleware ──
 // Verifies Bearer token, extracts user_id/email from JWT claims.
 // Resolves TenantId via ITenantResolver (cached).
-// In dev (no SUPABASE_JWT_SECRET): falls back to x-user-id header.
+// Fails closed: anything outside its public allowlist is 401 without a valid token.
 app.UseMiddleware<SupabaseJwtMiddleware>();
 
 // ── Admin Guard Middleware — blocks non-admin users from /api/rag/, /api/admin/, etc. ──
@@ -192,37 +190,10 @@ app.UseMiddleware<AdminGuardMiddleware>();
 // NEVER logs request/response bodies (GDPR + attorney-client privilege).
 app.UseMiddleware<AuditLoggingMiddleware>();
 
-// ── API Key Authentication Middleware (optional, activate via API_KEY env var) ──
-var apiKey = Environment.GetEnvironmentVariable("API_KEY");
-if (!string.IsNullOrWhiteSpace(apiKey))
-{
-    Console.WriteLine("[AUTH] API_KEY middleware is ACTIVE — all requests (except health/OPTIONS) require X-API-Key header");
-    app.Use(async (context, next) =>
-    {
-        var path = context.Request.Path.Value ?? "";
-
-        // Skip auth for health check and CORS preflight
-        if (path.StartsWith("/api/health", StringComparison.OrdinalIgnoreCase)
-            || context.Request.Method == "OPTIONS")
-        {
-            await next();
-            return;
-        }
-
-        if (!context.Request.Headers.TryGetValue("X-API-Key", out var providedKey)
-            || !CryptographicOperations.FixedTimeEquals(
-                Encoding.UTF8.GetBytes(providedKey.ToString()),
-                Encoding.UTF8.GetBytes(apiKey)))
-        {
-            context.Response.StatusCode = 401;
-            context.Response.ContentType = "application/json";
-            await context.Response.WriteAsync("{\"error\":\"Nevaljan ili nedostaje API ključ.\"}");
-            return;
-        }
-
-        await next();
-    });
-}
+// NOTE: the former X-API-Key middleware has been removed. The only client is the
+// browser, so the key had to ship as NEXT_PUBLIC_API_KEY — i.e. inside the JS
+// bundle — which made it a shared public secret rather than a control. Requests
+// are authenticated by SupabaseJwtMiddleware, which fails closed.
 
 app.UseRateLimiter();
 

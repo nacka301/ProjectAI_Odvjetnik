@@ -4,10 +4,13 @@ using Microsoft.AspNetCore.Mvc.Filters;
 namespace Backend.Filters;
 
 /// <summary>
-/// Action filter that restricts access to users whose firm-level role is "admin" or "owner".
+/// Action filter that restricts access to users whose firm-level role is "owner".
 /// Reads "AuthFirmRole" from HttpContext.Items (set by SupabaseJwtMiddleware via ITenantResolver).
 ///
 /// Returns 403 Forbidden if the role is not one of the allowed values.
+///
+/// Roles are constrained by the database to owner/lawyer/paralegal/readonly
+/// (migration 015); the legacy "admin" value was migrated to "owner" there.
 ///
 /// Usage:
 ///   [RequireFirmOwner]
@@ -18,7 +21,6 @@ public sealed class RequireFirmOwnerAttribute : ActionFilterAttribute
 {
     private static readonly HashSet<string> AllowedRoles = new(StringComparer.OrdinalIgnoreCase)
     {
-        "admin",
         "owner"
     };
 

@@ -8,21 +8,38 @@ namespace Backend.Middleware;
 /// <summary>
 /// Verifies Supabase JWT access tokens on every API request.
 /// Extracts and stores in HttpContext.Items:
-///   • "AuthUserId"   — sub claim (UUID)
-///   • "AuthEmail"    — email claim (string)
-///   • "AuthTenantId" — resolved via ITenantResolver (law_firm_id)
+///   • "AuthUserId"      — sub claim (UUID)
+///   • "AuthEmail"       — email claim (string)
+///   • "AuthAccessToken" — the raw Bearer token, so data services can forward it
+///                         to PostgREST and let RLS evaluate auth.uid()
+///   • "AuthTenantId"    — resolved via ITenantResolver (law_firm_id)
 ///
-/// Security model:
-///   - Production: SUPABASE_JWT_SECRET must be set. Every request must include
-///     a valid "Authorization: Bearer {access_token}" header.
-///   - Development: If SUPABASE_JWT_SECRET is not set, falls back to x-user-id
-///     header (trusted, for local dev only). Logs a warning on startup.
+/// Security model — FAIL CLOSED:
+///   SUPABASE_JWT_SECRET is mandatory; without it the host refuses to start.
+///   Every request outside <see cref="PublicPaths"/> must carry a valid
+///   "Authorization: Bearer {access_token}" header, otherwise it is rejected
+///   with 401 before it ever reaches a controller.
+///
+///   There is deliberately NO x-user-id fallback and NO unverified-JWT path.
+///   Both existed as dev conveniences and both turned into full authentication
+///   bypasses the moment the secret was missing in a deployed environment.
 /// </summary>
 public sealed class SupabaseJwtMiddleware
 {
     private readonly RequestDelegate _next;
-    private readonly byte[]? _jwtSecret;
-    private readonly bool _enforceJwt;
+    private readonly byte[] _jwtSecret;
+
+    /// <summary>
+    /// The only endpoints reachable without a token. Anything not listed here
+    /// requires a verified JWT — new controllers are protected by default.
+    /// </summary>
+    private static readonly string[] PublicPaths =
+    [
+        "/api/health",
+        "/api/auth/register",
+        "/api/auth/verify",
+        "/swagger",
+    ];
 
     public SupabaseJwtMiddleware(RequestDelegate next, IConfiguration config, ILogger<SupabaseJwtMiddleware> logger)
     {
@@ -31,94 +48,66 @@ public sealed class SupabaseJwtMiddleware
         var secret = Environment.GetEnvironmentVariable("SUPABASE_JWT_SECRET")
             ?? config["Supabase:JwtSecret"];
 
-        if (!string.IsNullOrWhiteSpace(secret))
-        {
-            _jwtSecret = Encoding.UTF8.GetBytes(secret);
-            _enforceJwt = true;
-            logger.LogInformation("Supabase JWT verification ENABLED — all requests must include valid Bearer token");
-        }
-        else
-        {
-            _jwtSecret = null;
-            _enforceJwt = false;
-            logger.LogWarning("SUPABASE_JWT_SECRET not configured — falling back to x-user-id header (DEVELOPMENT ONLY)");
-        }
+        if (string.IsNullOrWhiteSpace(secret))
+            throw new InvalidOperationException(
+                "SUPABASE_JWT_SECRET nije postavljen. Bez njega se tokeni ne mogu verificirati " +
+                "i backend bi prihvaćao neautentificirane zahtjeve. Postavite varijablu okoline " +
+                "SUPABASE_JWT_SECRET (Supabase → Settings → API → JWT Secret).");
+
+        _jwtSecret = Encoding.UTF8.GetBytes(secret);
+        logger.LogInformation("Supabase JWT verification ENABLED — all requests must include valid Bearer token");
     }
 
     public async Task InvokeAsync(HttpContext context)
     {
         var path = context.Request.Path.Value ?? "";
 
-        // Skip auth for: health check, CORS preflight, Swagger
-        if (path.StartsWith("/api/health", StringComparison.OrdinalIgnoreCase)
-            || context.Request.Method == "OPTIONS"
-            || path.StartsWith("/swagger", StringComparison.OrdinalIgnoreCase))
+        // CORS preflight never carries an Authorization header.
+        if (context.Request.Method == "OPTIONS" || IsPublicPath(path))
         {
             await _next(context);
             return;
         }
 
-        // Try JWT verification first
         var authHeader = context.Request.Headers.Authorization.FirstOrDefault();
-        if (!string.IsNullOrEmpty(authHeader) && authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrEmpty(authHeader)
+            || !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
         {
-            var token = authHeader["Bearer ".Length..].Trim();
-
-            if (_jwtSecret != null)
-            {
-                var claims = VerifyJwtAndExtractClaims(token);
-                if (claims != null)
-                {
-                    SetContextItems(context, claims.Value);
-                    await ResolveTenantIdAsync(context, claims.Value.UserId);
-                    await _next(context);
-                    return;
-                }
-
-                // JWT present but invalid
-                context.Response.StatusCode = 401;
-                context.Response.ContentType = "application/json";
-                await context.Response.WriteAsync("{\"error\":\"Nevazeci ili istekli token.\"}");
-                return;
-            }
-            else
-            {
-                // Dev mode — extract claims from JWT payload without verification
-                var claims = ExtractClaimsWithoutVerification(token);
-                if (claims != null)
-                {
-                    SetContextItems(context, claims.Value);
-                    await ResolveTenantIdAsync(context, claims.Value.UserId);
-                    await _next(context);
-                    return;
-                }
-            }
+            await RejectAsync(context, "Nedostaje pristupni token.");
+            return;
         }
 
-        // Fallback: x-user-id header (only in dev mode)
-        if (!_enforceJwt)
+        var token = authHeader["Bearer ".Length..].Trim();
+        var claims = VerifyJwtAndExtractClaims(token);
+        if (claims == null)
         {
-            if (context.Request.Headers.TryGetValue("x-user-id", out var userIdHeader))
-            {
-                var raw = userIdHeader.FirstOrDefault();
-                if (!string.IsNullOrWhiteSpace(raw) && raw.Length <= 40 && Guid.TryParse(raw, out _))
-                {
-                    context.Items["AuthUserId"] = raw;
-                    await ResolveTenantIdAsync(context, raw);
-                }
-            }
+            await RejectAsync(context, "Nevazeci ili istekli token.");
+            return;
         }
 
+        SetContextItems(context, claims.Value, token);
+        await ResolveTenantIdAsync(context, claims.Value.UserId);
         await _next(context);
+    }
+
+    private static bool IsPublicPath(string path) =>
+        PublicPaths.Any(p => path.StartsWith(p, StringComparison.OrdinalIgnoreCase));
+
+    private static async Task RejectAsync(HttpContext context, string message)
+    {
+        context.Response.StatusCode = 401;
+        context.Response.ContentType = "application/json";
+        await context.Response.WriteAsync($"{{\"error\":\"{message}\"}}");
     }
 
     // ── Claims DTO ──
 
     private readonly record struct JwtClaims(string UserId, string? Email, string? Role);
 
-    private static void SetContextItems(HttpContext context, JwtClaims claims)
+    private static void SetContextItems(HttpContext context, JwtClaims claims, string accessToken)
     {
         context.Items["AuthUserId"] = claims.UserId;
+        context.Items["AuthAccessToken"] = accessToken;
         if (claims.Email != null)
             context.Items["AuthEmail"] = claims.Email;
         if (claims.Role != null)
@@ -160,7 +149,7 @@ public sealed class SupabaseJwtMiddleware
 
             // Verify HS256 signature
             var signatureInput = $"{parts[0]}.{parts[1]}";
-            using var hmac = new HMACSHA256(_jwtSecret!);
+            using var hmac = new HMACSHA256(_jwtSecret);
             var computedSig = Base64UrlEncode(hmac.ComputeHash(Encoding.UTF8.GetBytes(signatureInput)));
 
             if (!CryptographicOperations.FixedTimeEquals(
@@ -174,17 +163,6 @@ public sealed class SupabaseJwtMiddleware
         {
             return null;
         }
-    }
-
-    private static JwtClaims? ExtractClaimsWithoutVerification(string token)
-    {
-        try
-        {
-            var parts = token.Split('.');
-            if (parts.Length != 3) return null;
-            return ExtractClaimsFromPayload(parts[1]);
-        }
-        catch { return null; }
     }
 
     private static JwtClaims? ExtractClaimsFromPayload(string base64Payload)
