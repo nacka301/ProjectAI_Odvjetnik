@@ -233,6 +233,10 @@ public class TroskovnikController : ControllerBase
         ClientId = klijentId,
         CaseId = zahtjev.CaseId,
         OpisPredmeta = zahtjev.OpisPredmeta,
+        // Razdoblje se uzima iz rezultata, kao i iznosi: ondje je već izračunato kao
+        // najraniji i najkasniji datum radnje, a ne kao prvi i zadnji redak.
+        DatumOd = rezultat.DatumOd,
+        DatumDo = rezultat.DatumDo,
         VrijednostSpora = rezultat.VrijednostSpora,
         UkupnoBodova = rezultat.UkupnoBodova,
         UkupnoEurBezPdv = rezultat.UkupnoEurBezPdv,

@@ -85,6 +85,15 @@ public sealed class TroskovnikRecord
     public string? ClientId { get; set; }
     public string? CaseId { get; set; }
     public string? OpisPredmeta { get; set; }
+
+    /// <summary>
+    /// Razdoblje koje troškovnik pokriva — najraniji i najkasniji datum radnje
+    /// (<c>gggg-mm-dd</c>). Pojedinačni datumi ostaju u <see cref="RawJsonOutput"/>.
+    /// </summary>
+    public string? DatumOd { get; set; }
+
+    /// <inheritdoc cref="DatumOd"/>
+    public string? DatumDo { get; set; }
     public decimal VrijednostSpora { get; set; }
     public decimal UkupnoBodova { get; set; }
     public decimal UkupnoEurBezPdv { get; set; }
@@ -115,6 +124,12 @@ public sealed class TroskovnikReadRecord
     public string? ClientId { get; set; }
     public string? CaseId { get; set; }
     public string? OpisPredmeta { get; set; }
+
+    /// <summary>Razdoblje koje troškovnik pokriva; NULL za zapise od prije uvođenja datuma uz radnju.</summary>
+    public string? DatumOd { get; set; }
+
+    /// <inheritdoc cref="DatumOd"/>
+    public string? DatumDo { get; set; }
     public decimal VrijednostSpora { get; set; }
     public decimal UkupnoBodova { get; set; }
     public decimal UkupnoEurBezPdv { get; set; }

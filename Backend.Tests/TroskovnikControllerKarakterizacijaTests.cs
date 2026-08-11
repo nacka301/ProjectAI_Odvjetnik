@@ -432,6 +432,29 @@ public class TroskovnikControllerKarakterizacijaTests
         Assert.NotNull(klijenti.SpremljeniTroskovnik);
     }
 
+    /// <summary>
+    /// Uz zapis se sprema i razdoblje koje troškovnik pokriva, da se troškovnici mogu
+    /// tražiti po datumu radnje bez pretraživanja JSON-a. Uzima se najraniji i
+    /// najkasniji datum, ne prvi i zadnji redak.
+    /// </summary>
+    [Fact]
+    public async Task Spremi_ZapisNosiRazdobljeRadnji()
+    {
+        var klijenti = new FakeClientCaseService();
+        var kontroler = StvoriKontroler(klijenti);
+        var zahtjev = ValjanZahtjev();
+        zahtjev.Stavke =
+        [
+            new TroskovnikItemRequest { ItemId = "par_rociste_glavno", Kolicina = 1, Datum = "2025-05-19" },
+            new TroskovnikItemRequest { ItemId = "par_tuzba", Kolicina = 1, Datum = "2025-03-12" }
+        ];
+
+        Assert.IsType<OkObjectResult>(await kontroler.Spremi(zahtjev));
+
+        Assert.Equal("2025-03-12", klijenti.SpremljeniTroskovnik!.DatumOd);
+        Assert.Equal("2025-05-19", klijenti.SpremljeniTroskovnik.DatumDo);
+    }
+
     /// <summary>Izračun bez datuma i dalje prolazi — ograničenje je samo na spremanju.</summary>
     [Fact]
     public async Task Izracunaj_BezDatuma_IdaljeVraca200()
