@@ -586,6 +586,7 @@ public class AuditController : ControllerBase
         var record = new AuditResultRecord
         {
             UserId = GetUserId(),
+            LawFirmId = this.FirmId(),
             EvaluationId = result.EvaluationId,
             Verdict = result.Verdict.ToString(),
             OverallConfidence = result.OverallConfidence,

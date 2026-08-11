@@ -253,6 +253,7 @@ public class ZkUnifiedController : ControllerBase
             zkAnalysisId = await _supabaseService.SaveZkAnalysisAsync(new ZkAnalysisRecord
             {
                 UserId = GetUserId(),
+                LawFirmId = this.FirmId(),
                 PropertyId = zkResult.PropertyId,
                 CadastralMunicipality = zkResult.CadastralMunicipality,
                 ParcelNumber = zkResult.ParcelNumber,
@@ -281,6 +282,7 @@ public class ZkUnifiedController : ControllerBase
             await _supabaseService.SaveAuditLogAsync(new AuditLogRecord
             {
                 UserId = GetUserId(),
+                LawFirmId = this.FirmId(),
                 Module = "zk_analysis",
                 AnalysisId = zkAnalysisId,
                 Step = 1,
@@ -591,6 +593,7 @@ public class ZkUnifiedController : ControllerBase
             var evaluationId = await _supabaseService.SaveEvaluationAsync(new EvaluationRecord
             {
                 UserId = GetUserId(),
+                LawFirmId = this.FirmId(),
                 PropertyType = marketData.DetectedPropertyType,
                 Location = property.Location,
                 SizeM2 = property.SizeM2 > 0 ? property.SizeM2 : null,
@@ -606,6 +609,7 @@ public class ZkUnifiedController : ControllerBase
                 await _supabaseService.SaveAuditLogAsync(new AuditLogRecord
                 {
                     UserId = GetUserId(),
+                    LawFirmId = this.FirmId(),
                     Module = "valuation_zk",
                     AnalysisId = evaluationId,
                     Step = 1,

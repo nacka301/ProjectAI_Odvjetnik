@@ -10,6 +10,13 @@ public static class DomainServiceCollectionExtensions
 {
     public static IServiceCollection AddDomainServices(this IServiceCollection services)
     {
+        // ── Supabase pristupni kontekst ──
+        // Odlucuje ide li PostgREST poziv s korisnikovim tokenom (RLS vrijedi)
+        // ili sa service_role kljucem (RLS se zaobilazi). Scoped je jer token
+        // pripada zahtjevu.
+        services.AddHttpContextAccessor();
+        services.AddScoped<ISupabaseRequestContext, SupabaseRequestContext>();
+
         // Konkretni tip + sučelje pokazuju na istu registraciju: dio kontrolera
         // još uvijek injektira konkretne klase, a dio sučelja uvedena commitom c04aeeb.
         services.AddScoped<PdfService>();

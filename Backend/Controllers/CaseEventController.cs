@@ -126,6 +126,7 @@ public class CaseEventController : ControllerBase
             CaseId = request.CaseId,
             UserId = userId,
             TenantId = GetTenantId(),
+            LawFirmId = this.FirmId(),
             EventDate = request.EventDate ?? DateTimeOffset.UtcNow.ToString("o"),
             EventType = request.EventType,
             Description = request.Description,

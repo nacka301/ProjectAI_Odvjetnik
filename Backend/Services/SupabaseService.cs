@@ -13,8 +13,8 @@ namespace Backend.Services;
 public class SupabaseService
 :ISupabaseService {
     private readonly HttpClient _httpClient;
+    private readonly ISupabaseRequestContext _supabase;
     private readonly string? _supabaseUrl;
-    private readonly string? _serviceKey;
     private readonly ILogger<SupabaseService> _logger;
     private readonly bool _isConfigured;
 
@@ -24,29 +24,35 @@ public class SupabaseService
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
     };
 
-    public SupabaseService(HttpClient httpClient, IConfiguration config, ILogger<SupabaseService> logger)
+    public SupabaseService(
+        HttpClient httpClient,
+        ISupabaseRequestContext supabase,
+        ILogger<SupabaseService> logger)
     {
         _httpClient = httpClient;
+        _supabase = supabase;
         _logger = logger;
 
-        _supabaseUrl = Environment.GetEnvironmentVariable("SUPABASE_URL")
-            ?? config["Supabase:Url"];
-        _serviceKey = Environment.GetEnvironmentVariable("SUPABASE_SERVICE_KEY")
-            ?? config["Supabase:ServiceKey"];
-
-        _isConfigured = !string.IsNullOrWhiteSpace(_supabaseUrl) &&
-                        !string.IsNullOrWhiteSpace(_serviceKey);
+        _supabaseUrl = supabase.Url;
+        _isConfigured = supabase.IsConfigured;
 
         if (!_isConfigured)
         {
             _logger.LogWarning("Supabase is not configured. Data saving is disabled. " +
-                "Set SUPABASE_URL and SUPABASE_SERVICE_KEY environment variables to enable.");
+                "Set SUPABASE_URL, SUPABASE_ANON_KEY and SUPABASE_SERVICE_KEY to enable.");
         }
     }
 
     // ── Generic insert into any table ──
 
-    private async Task<string?> InsertAsync(string table, object record)
+    /// <param name="asService">
+    /// True only for append-only audit writes. Migration 016 gives `audit_logs`
+    /// a SELECT policy for the firm owner and no INSERT policy at all — the log
+    /// must not be writable (or forgeable) by the account it describes, so those
+    /// rows go in with the service key. Everything else goes in as the user, so
+    /// RLS rejects a row aimed at another firm.
+    /// </param>
+    private async Task<string?> InsertAsync(string table, object record, bool asService = false)
     {
         if (!_isConfigured)
         {
@@ -64,8 +70,9 @@ public class SupabaseService
                 Content = new StringContent(payload, Encoding.UTF8, "application/json")
             };
 
-            request.Headers.Add("apikey", _serviceKey);
-            request.Headers.Add("Authorization", $"Bearer {_serviceKey}");
+            if (asService) _supabase.ApplyServiceAuth(request);
+            else           _supabase.ApplyUserAuth(request);
+
             request.Headers.Add("Prefer", "return=representation");
 
             var response = await _httpClient.SendAsync(request);
@@ -125,7 +132,7 @@ public class SupabaseService
         => InsertAsync("zk_analyses", record);
 
     public Task<string?> SaveAuditLogAsync(AuditLogRecord record)
-        => InsertAsync("audit_logs", record);
+        => InsertAsync("audit_logs", record, asService: true);
 
     /// <summary>Save multiple audit log entries in a single batch POST to PostgREST.</summary>
     public async Task SaveAuditLogBatchAsync(IEnumerable<AuditLogRecord> records)
@@ -149,8 +156,9 @@ public class SupabaseService
                 Content = new StringContent(payload, Encoding.UTF8, "application/json")
             };
 
-            request.Headers.Add("apikey", _serviceKey);
-            request.Headers.Add("Authorization", $"Bearer {_serviceKey}");
+            // Same reasoning as InsertAsync(asService: true) — audit_logs has no
+            // INSERT policy, deliberately.
+            _supabase.ApplyServiceAuth(request);
 
             var response = await _httpClient.SendAsync(request);
             if (!response.IsSuccessStatusCode)
@@ -196,8 +204,12 @@ public class SupabaseService
             var safeId = Uri.EscapeDataString(evaluationId);
             var url = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/evaluations?id=eq.{safeId}&select=*&limit=1";
             var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.Add("apikey", _serviceKey);
-            request.Headers.Add("Authorization", $"Bearer {_serviceKey}");
+
+            // User-scoped on purpose. With the service key this method returned any
+            // evaluation by id, and POST /api/audit/single never checked ownership —
+            // so one firm could audit, and read back, another firm's valuation.
+            // Under RLS an id from outside the caller's firm simply yields no row.
+            _supabase.ApplyUserAuth(request);
 
             var response = await _httpClient.SendAsync(request);
             var body = await response.Content.ReadAsStringAsync();
@@ -221,6 +233,12 @@ public class SupabaseService
 
     /// <summary>
     /// Fetch recent evaluations that have NOT been audited yet.
+    ///
+    /// Scoped to the caller's firm by RLS. It used to run on the service key with
+    /// no filter, so `POST /api/audit/batch` with an empty id list would pull the
+    /// newest evaluations across every firm on the platform and audit them on the
+    /// caller's behalf. That endpoint is not admin-guarded, so any signed-in user
+    /// could do it.
     /// </summary>
     public async Task<List<EvaluationReadRecord>> GetUnauditedEvaluationsAsync(int limit = 20)
     {
@@ -232,8 +250,7 @@ public class SupabaseService
             // Fetch recent evaluations
             var url = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/evaluations?select=*&order=created_at.desc&limit={limit}";
             var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.Add("apikey", _serviceKey);
-            request.Headers.Add("Authorization", $"Bearer {_serviceKey}");
+            _supabase.ApplyUserAuth(request);
 
             var response = await _httpClient.SendAsync(request);
             var body = await response.Content.ReadAsStringAsync();
@@ -254,8 +271,7 @@ public class SupabaseService
             if (string.IsNullOrEmpty(evalIds)) return evals;
             var auditUrl = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/valuation_audits?select=evaluation_id&evaluation_id=in.({evalIds})";
             var auditReq = new HttpRequestMessage(HttpMethod.Get, auditUrl);
-            auditReq.Headers.Add("apikey", _serviceKey);
-            auditReq.Headers.Add("Authorization", $"Bearer {_serviceKey}");
+            _supabase.ApplyUserAuth(auditReq);
 
             var auditResp = await _httpClient.SendAsync(auditReq);
             var auditBody = await auditResp.Content.ReadAsStringAsync();

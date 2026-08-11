@@ -5,9 +5,10 @@ using System.Text.RegularExpressions;
 namespace Backend.Models;
 
 /// <summary>Record written to zk_analyses table.</summary>
-public class ZkAnalysisRecord
+public class ZkAnalysisRecord : IFirmScoped
 {
     public string? UserId { get; set; }
+    public string? LawFirmId { get; set; }
     public string PropertyId { get; set; } = "";
     public string? CadastralMunicipality { get; set; }
     public string? ParcelNumber { get; set; }

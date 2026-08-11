@@ -8,11 +8,12 @@ namespace Backend.Models;
 // ═══════════════════════════════════════════════════════════
 
 /// <summary>Write model for INSERT (no Id/CreatedAt — DB generates those).</summary>
-public sealed class CaseEventRecord
+public sealed class CaseEventRecord : IFirmScoped
 {
     public string? CaseId { get; set; }
     public string? UserId { get; set; }
     public string? TenantId { get; set; }
+    public string? LawFirmId { get; set; }
     public string? EventDate { get; set; }
     public string EventType { get; set; } = "Ostalo";
     public string Description { get; set; } = "";

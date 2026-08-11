@@ -9,9 +9,10 @@ namespace Backend.Models;
 // ═══════════════════════════════════════════════════════════
 
 /// <summary>Record written to valuation_audits table.</summary>
-public class AuditResultRecord
+public class AuditResultRecord : IFirmScoped
 {
     public string? UserId { get; set; }
+    public string? LawFirmId { get; set; }
     public string EvaluationId { get; set; } = "";
     public string Verdict { get; set; } = "";
     public int OverallConfidence { get; set; }

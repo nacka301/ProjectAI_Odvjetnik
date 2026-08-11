@@ -4,9 +4,10 @@ using System.Text.RegularExpressions;
 
 namespace Backend.Models;
 
-public class ContractAnalysisRecord
+public class ContractAnalysisRecord : IFirmScoped
 {
     public string? UserId { get; set; }
+    public string? LawFirmId { get; set; }
     public string DocumentType { get; set; } = "";
     public string Summary { get; set; } = "";
     public string OverallRisk { get; set; } = "";

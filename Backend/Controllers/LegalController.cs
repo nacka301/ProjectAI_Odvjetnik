@@ -127,9 +127,11 @@ public class LegalController : ControllerBase
     private async Task SaveStrategyAsync(LegalStrategyResult result, string clientPosition)
     {
         var userId = GetUserId();
+        var firmId = this.FirmId();
         var id = await _supabaseService.SaveLegalStrategyAsync(new LegalStrategyRecord
         {
             UserId = userId,
+            LawFirmId = firmId,
             KeyLegalIssue = result.KeyLegalIssue,
             ClientPosition = clientPosition,
             WinProbability = result.WinProbability,
@@ -145,6 +147,7 @@ public class LegalController : ControllerBase
             new()
             {
                 UserId = userId,
+                LawFirmId = firmId,
                 Module = "legal_strategy",
                 AnalysisId = id,
                 Step = 1,
@@ -165,6 +168,7 @@ public class LegalController : ControllerBase
             auditLogs.Add(new AuditLogRecord
             {
                 UserId = userId,
+                LawFirmId = firmId,
                 Module = "legal_strategy",
                 AnalysisId = id,
                 Step = step++,

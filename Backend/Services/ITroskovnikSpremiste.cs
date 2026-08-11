@@ -23,9 +23,14 @@ public interface ITroskovnikSpremiste
     /// Ensures a client exists for the given user. If a matching client is found
     /// by OIB (preferred) or exact name, returns it. Otherwise creates a new one.
     /// Returns (clientId, wasCreated).
+    ///
+    /// <paramref name="uredId"/> is required when a client has to be created:
+    /// clients are firm-owned since migration 015, and the RLS check rejects an
+    /// insert without it.
     /// </summary>
     Task<(string? ClientId, bool WasCreated)> UpsertClientForTroskovnikAsync(
         string userId,
+        string? uredId,
         string? naziv,
         string? oib,
         string? adresa,

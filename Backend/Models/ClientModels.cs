@@ -4,9 +4,15 @@ namespace Backend.Models;
 //  Client (Stranka) — Central entity for client management
 // ══════════════════════════════════════════════════════════════
 
-public sealed class ClientRecord
+// NOTE on LawFirmId (migracija 015/016): vlasništvo nad zapisom pripada uredu,
+// autorstvo osobi. UserId govori tko je zapis stvorio; LawFirmId odlučuje tko ga
+// smije vidjeti. RLS politika `WITH CHECK (law_firm_id = user_firm_id())` odbija
+// INSERT bez njega, pa ga kontroleri moraju popuniti iz provjerenog tokena.
+
+public sealed class ClientRecord : IFirmScoped
 {
     public string? UserId { get; set; }
+    public string? LawFirmId { get; set; }
     public string ImeNaziv { get; set; } = "";
     public string? Oib { get; set; }
     public string? Adresa { get; set; }
@@ -24,6 +30,7 @@ public sealed class ClientReadRecord
     public string CreatedAt { get; set; } = "";
     public string UpdatedAt { get; set; } = "";
     public string UserId { get; set; } = "";
+    public string? LawFirmId { get; set; }
     public string ImeNaziv { get; set; } = "";
     public string? Oib { get; set; }
     public string? Adresa { get; set; }
@@ -39,9 +46,10 @@ public sealed class ClientReadRecord
 //  Case (Predmet) — Legal cases linked to clients
 // ══════════════════════════════════════════════════════════════
 
-public sealed class CaseRecord
+public sealed class CaseRecord : IFirmScoped
 {
     public string? UserId { get; set; }
+    public string? LawFirmId { get; set; }
     public string? ClientId { get; set; }
     public string BrojPredmeta { get; set; } = "";
     public string Naziv { get; set; } = "";
@@ -61,6 +69,7 @@ public sealed class CaseReadRecord
     public string CreatedAt { get; set; } = "";
     public string UpdatedAt { get; set; } = "";
     public string UserId { get; set; } = "";
+    public string? LawFirmId { get; set; }
     public string? ClientId { get; set; }
     public string BrojPredmeta { get; set; } = "";
     public string Naziv { get; set; } = "";
@@ -79,9 +88,10 @@ public sealed class CaseReadRecord
 //  Troškovnik persistence record
 // ══════════════════════════════════════════════════════════════
 
-public sealed class TroskovnikRecord
+public sealed class TroskovnikRecord : IFirmScoped
 {
     public string? UserId { get; set; }
+    public string? LawFirmId { get; set; }
     public string? ClientId { get; set; }
     public string? CaseId { get; set; }
     public string? OpisPredmeta { get; set; }
@@ -112,6 +122,7 @@ public sealed class TroskovnikReadRecord
     public string Id { get; set; } = "";
     public string CreatedAt { get; set; } = "";
     public string UserId { get; set; } = "";
+    public string? LawFirmId { get; set; }
     public string? ClientId { get; set; }
     public string? CaseId { get; set; }
     public string? OpisPredmeta { get; set; }

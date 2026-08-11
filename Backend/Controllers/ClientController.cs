@@ -31,7 +31,7 @@ public class ClientController : ControllerBase
     {
         var userId = GetUserId();
         if (string.IsNullOrWhiteSpace(userId))
-            return Unauthorized(new { error = "Nedostaje x-user-id header." });
+            return Unauthorized(new { error = "Neautorizirani pristup." });
 
         var clients = await _service.GetClientsByUserAsync(userId);
         return Ok(clients);
@@ -43,7 +43,7 @@ public class ClientController : ControllerBase
     {
         var userId = GetUserId();
         if (string.IsNullOrWhiteSpace(userId))
-            return Unauthorized(new { error = "Nedostaje x-user-id header." });
+            return Unauthorized(new { error = "Neautorizirani pristup." });
 
         var client = await _service.GetClientByIdAsync(id);
         if (client == null) return NotFound(new { error = "Stranka nije pronađena." });
@@ -61,7 +61,7 @@ public class ClientController : ControllerBase
     {
         var userId = GetUserId();
         if (string.IsNullOrWhiteSpace(userId))
-            return Unauthorized(new { error = "Nedostaje x-user-id header." });
+            return Unauthorized(new { error = "Neautorizirani pristup." });
 
         var profile = await _service.GetClientProfileAsync(id);
         if (profile == null) return NotFound(new { error = "Stranka nije pronađena." });
@@ -79,7 +79,7 @@ public class ClientController : ControllerBase
     {
         var userId = GetUserId();
         if (string.IsNullOrWhiteSpace(userId))
-            return Unauthorized(new { error = "Nedostaje x-user-id header." });
+            return Unauthorized(new { error = "Neautorizirani pristup." });
 
         if (string.IsNullOrWhiteSpace(request.ImeNaziv))
             return BadRequest(new { error = "Ime/naziv stranke je obavezan." });
@@ -102,6 +102,9 @@ public class ClientController : ControllerBase
             Napomena = request.Napomena
         };
 
+        if (!this.ScopeToFirm(record))
+            return this.NoFirmResult();
+
         var created = await _service.CreateClientAsync(record);
         if (created == null)
             return StatusCode(500, new { error = "Greška pri spremanju stranke." });
@@ -115,7 +118,7 @@ public class ClientController : ControllerBase
     {
         var userId = GetUserId();
         if (string.IsNullOrWhiteSpace(userId))
-            return Unauthorized(new { error = "Nedostaje x-user-id header." });
+            return Unauthorized(new { error = "Neautorizirani pristup." });
 
         // SECURITY: verify ownership before allowing update
         var existing = await _service.GetClientByIdAsync(id);
@@ -133,7 +136,7 @@ public class ClientController : ControllerBase
     {
         var userId = GetUserId();
         if (string.IsNullOrWhiteSpace(userId))
-            return Unauthorized(new { error = "Nedostaje x-user-id header." });
+            return Unauthorized(new { error = "Neautorizirani pristup." });
 
         // SECURITY: verify ownership before allowing delete
         var existing = await _service.GetClientByIdAsync(id);

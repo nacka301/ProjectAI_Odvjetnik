@@ -5,9 +5,10 @@ using System.Text.RegularExpressions;
 namespace Backend.Models;
 
 /// <summary>Record written to audit_logs table (EU AI Act Article 13 compliance).</summary>
-public class AuditLogRecord
+public class AuditLogRecord : IFirmScoped
 {
     public string? UserId { get; set; }
+    public string? LawFirmId { get; set; }
     public string Module { get; set; } = "";
     public string? AnalysisId { get; set; }
     public int Step { get; set; } = 1;

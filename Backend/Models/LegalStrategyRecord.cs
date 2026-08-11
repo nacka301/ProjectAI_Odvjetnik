@@ -4,9 +4,10 @@ using System.Text.RegularExpressions;
 
 namespace Backend.Models;
 
-public class LegalStrategyRecord
+public class LegalStrategyRecord : IFirmScoped
 {
     public string? UserId { get; set; }
+    public string? LawFirmId { get; set; }
     public string KeyLegalIssue { get; set; } = "";
     public string ClientPosition { get; set; } = "kupac";
     public int WinProbability { get; set; }

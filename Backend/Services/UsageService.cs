@@ -12,8 +12,8 @@ namespace Backend.Services;
 public sealed class UsageService
 :IUsageService {
     private readonly HttpClient _httpClient;
+    private readonly ISupabaseRequestContext _supabase;
     private readonly string? _supabaseUrl;
-    private readonly string? _serviceKey;
     private readonly ILogger<UsageService> _logger;
     private readonly bool _isConfigured;
 
@@ -27,18 +27,17 @@ public sealed class UsageService
     private static readonly ConcurrentDictionary<string, (TenantSnapshot Snap, DateTime Expiry)> _cache = new();
     private static readonly TimeSpan CacheTtl = TimeSpan.FromSeconds(60);
 
-    public UsageService(HttpClient httpClient, IConfiguration config, ILogger<UsageService> logger)
+    public UsageService(
+        HttpClient httpClient,
+        ISupabaseRequestContext supabase,
+        ILogger<UsageService> logger)
     {
         _httpClient = httpClient;
+        _supabase = supabase;
         _logger = logger;
 
-        _supabaseUrl = Environment.GetEnvironmentVariable("SUPABASE_URL")
-                    ?? config["Supabase:Url"];
-        _serviceKey  = Environment.GetEnvironmentVariable("SUPABASE_SERVICE_KEY")
-                    ?? config["Supabase:ServiceKey"];
-
-        _isConfigured = !string.IsNullOrWhiteSpace(_supabaseUrl)
-                     && !string.IsNullOrWhiteSpace(_serviceKey);
+        _supabaseUrl = supabase.Url;
+        _isConfigured = supabase.IsConfigured;
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -250,11 +249,16 @@ public sealed class UsageService
     //  HTTP helper
     // ═══════════════════════════════════════════════════════════
 
+    /// <summary>
+    /// service_role, same reasoning as CreditService: plan limits and usage
+    /// counters are the thing being enforced, so the enforced party must not be
+    /// able to influence what the query returns. The tenant is fixed from the
+    /// verified token before any call is made.
+    /// </summary>
     private HttpRequestMessage BuildRequest(HttpMethod method, string url, string? body = null)
     {
         var req = new HttpRequestMessage(method, url);
-        req.Headers.Add("apikey", _serviceKey);
-        req.Headers.Add("Authorization", $"Bearer {_serviceKey}");
+        _supabase.ApplyServiceAuth(req);
         req.Headers.Add("Prefer", "return=representation");
         if (body != null)
             req.Content = new System.Net.Http.StringContent(body, System.Text.Encoding.UTF8, "application/json");

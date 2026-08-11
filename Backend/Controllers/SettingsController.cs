@@ -190,18 +190,19 @@ public class SettingsController : ControllerBase
     // ─────────────────────────────────────────────────────────
     //  POST /api/settings/register-firm
     //  Body: { "full_name": "...", "firm_name": "...", "firm_oib": "..." }
-    //  Called after Supabase Auth signup — userId from JWT (fallback to body for signup edge case).
+    //  Called after Supabase Auth signup — userId comes from the JWT only.
+    //  The body user_id used to be accepted as a fallback, which let anyone
+    //  create or overwrite the firm of an arbitrary account.
     // ─────────────────────────────────────────────────────────
     [HttpPost("register-firm")]
     public async Task<IActionResult> RegisterFirm([FromBody] RegisterFirmRequest request)
     {
-        // Prefer JWT userId; fall back to body for signup edge case when JWT might not be set yet
-        var userId = GetUserId() ?? request?.UserId;
-        if (string.IsNullOrWhiteSpace(userId))
+        var userId = GetUserId();
+        if (string.IsNullOrWhiteSpace(userId) || request == null)
             return Unauthorized(new { error = "Neautorizirani pristup." });
 
-        // Override body userId with resolved identity
-        request!.UserId = userId;
+        // Override body userId with the verified identity
+        request.UserId = userId;
 
         if (string.IsNullOrWhiteSpace(request.FirmName))
             return BadRequest(new { error = "Naziv ureda je obavezan." });

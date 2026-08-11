@@ -112,7 +112,7 @@ public class TroskovnikController : ControllerBase
     {
         var korisnikId = PrijavljeniKorisnik();
         if (string.IsNullOrWhiteSpace(korisnikId))
-            return Unauthorized(new { error = "Nedostaje x-user-id header." });
+            return Unauthorized(new { error = "Neautorizirani pristup." });
 
         if (ProvjeriIIzracunaj(zahtjev, out var rezultat) is { } greska)
             return greska;
@@ -121,9 +121,13 @@ public class TroskovnikController : ControllerBase
         if (!await SmijeVezatiPredmet(zahtjev.CaseId, korisnikId))
             return StatusCode(403, new { error = "Nemate pristup odabranom predmetu." });
 
-        var klijent = await RazrijesiKlijenta(zahtjev, korisnikId);
+        var uredId = this.FirmId();
+        if (string.IsNullOrWhiteSpace(uredId))
+            return this.NoFirmResult();
 
-        var zapis = SastaviZapis(zahtjev, rezultat, korisnikId, klijent.Id);
+        var klijent = await RazrijesiKlijenta(zahtjev, korisnikId, uredId);
+
+        var zapis = SastaviZapis(zahtjev, rezultat, korisnikId, uredId, klijent.Id);
 
         var spremljeno = await _spremiste.SaveTroskovnikAsync(zapis);
 
@@ -159,7 +163,8 @@ public class TroskovnikController : ControllerBase
     /// stvara. Podaci se čitaju iz stranke > zastupana_stranka, uz povlačenje na
     /// stariju strukturu <c>klijent</c>.
     /// </summary>
-    private async Task<RazrijeseniKlijent> RazrijesiKlijenta(TroskovnikRequest zahtjev, string korisnikId)
+    private async Task<RazrijeseniKlijent> RazrijesiKlijenta(
+        TroskovnikRequest zahtjev, string korisnikId, string? uredId)
     {
         if (!string.IsNullOrWhiteSpace(zahtjev.ClientId) || !zahtjev.AutoCreateClient)
             return new RazrijeseniKlijent(zahtjev.ClientId, null);
@@ -170,6 +175,7 @@ public class TroskovnikController : ControllerBase
 
         var (razrijeseniId, jeOtvoren) = await _spremiste.UpsertClientForTroskovnikAsync(
             korisnikId,
+            uredId,
             naziv,
             zahtjev.Stranke?.ZastupanaStranka?.Oib ?? zahtjev.Klijent?.Oib,
             zahtjev.Stranke?.ZastupanaStranka?.Adresa ?? zahtjev.Klijent?.Adresa,
@@ -196,9 +202,11 @@ public class TroskovnikController : ControllerBase
     /// (vidi TroskovnikService).
     /// </summary>
     private static TroskovnikRecord SastaviZapis(
-        TroskovnikRequest zahtjev, TroskovnikResponse rezultat, string korisnikId, string? klijentId) => new()
+        TroskovnikRequest zahtjev, TroskovnikResponse rezultat,
+        string korisnikId, string? uredId, string? klijentId) => new()
     {
         UserId = korisnikId,
+        LawFirmId = uredId,
         ClientId = klijentId,
         CaseId = zahtjev.CaseId,
         OpisPredmeta = zahtjev.OpisPredmeta,
@@ -266,7 +274,7 @@ public class TroskovnikController : ControllerBase
     {
         var korisnikId = PrijavljeniKorisnik();
         if (string.IsNullOrWhiteSpace(korisnikId))
-            return Unauthorized(new { error = "Nedostaje x-user-id header." });
+            return Unauthorized(new { error = "Neautorizirani pristup." });
 
         var popis = await _spremiste.GetTroskovniciByUserAsync(korisnikId);
         return Ok(popis);

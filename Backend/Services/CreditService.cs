@@ -18,8 +18,8 @@ namespace Backend.Services;
 public sealed class CreditService
 :ICreditService {
     private readonly HttpClient _httpClient;
+    private readonly ISupabaseRequestContext _supabase;
     private readonly string? _supabaseUrl;
-    private readonly string? _serviceKey;
     private readonly ILogger<CreditService> _logger;
     private readonly bool _isConfigured;
     private readonly ISettingsService _settingsService;
@@ -37,34 +37,39 @@ public sealed class CreditService
 
     public CreditService(
         HttpClient httpClient,
-        IConfiguration config,
+        ISupabaseRequestContext supabase,
         ILogger<CreditService> logger,
         ISettingsService settingsService,
         IUsageService usageService)
     {
         _httpClient = httpClient;
+        _supabase = supabase;
         _logger = logger;
         _settingsService = settingsService;
         _usageService = usageService;
 
-        _supabaseUrl = Environment.GetEnvironmentVariable("SUPABASE_URL")
-            ?? config["Supabase:Url"];
-        _serviceKey = Environment.GetEnvironmentVariable("SUPABASE_SERVICE_KEY")
-            ?? config["Supabase:ServiceKey"];
-
-        _isConfigured = !string.IsNullOrWhiteSpace(_supabaseUrl) &&
-                        !string.IsNullOrWhiteSpace(_serviceKey);
+        _supabaseUrl = supabase.Url;
+        _isConfigured = supabase.IsConfigured;
     }
 
     // ═══════════════════════════════════════════════════════════
     //  Helpers
     // ═══════════════════════════════════════════════════════════
 
+    /// <summary>
+    /// Quota bookkeeping runs as service_role, reads included — deliberately.
+    ///
+    /// `firm_usage` is SELECT-only for users, so the writes need it anyway. The
+    /// reads need it too, and for a sharper reason: this service reads a usage
+    /// row and creates a fresh one at zero when it finds none. Under RLS an
+    /// unexpected empty read would look identical to "no row yet", so a user who
+    /// could suppress the read would get their quota reset. The firm is derived
+    /// from the verified token before any query runs, which is what scopes this.
+    /// </summary>
     private HttpRequestMessage CreateRequest(HttpMethod method, string url, string? body = null)
     {
         var request = new HttpRequestMessage(method, url);
-        request.Headers.Add("apikey", _serviceKey);
-        request.Headers.Add("Authorization", $"Bearer {_serviceKey}");
+        _supabase.ApplyServiceAuth(request);
         request.Headers.Add("Prefer", "return=representation");
 
         if (body != null)

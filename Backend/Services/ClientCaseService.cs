@@ -7,13 +7,18 @@ namespace Backend.Services;
 
 /// <summary>
 /// Service for managing Clients (Stranke), Cases (Predmeti), and persisted Troškovnici.
-/// Uses Supabase PostgREST API with service_role key.
+///
+/// Every call travels with the CALLER'S access token, not the service_role key,
+/// so Postgres evaluates the firm policies from migration 016 and a query can
+/// only ever see or touch the caller's own firm. The ownership checks the
+/// controllers still perform are now a second line of defence rather than the
+/// only one — before this, a missing `if` in a controller meant full exposure.
 /// </summary>
 public sealed class ClientCaseService
 :IClientCaseService {
     private readonly HttpClient _httpClient;
+    private readonly ISupabaseRequestContext _supabase;
     private readonly string? _supabaseUrl;
-    private readonly string? _serviceKey;
     private readonly ILogger<ClientCaseService> _logger;
     private readonly bool _isConfigured;
 
@@ -33,18 +38,17 @@ public sealed class ClientCaseService
     private static string? SanitizeOib(string? oib)
         => !string.IsNullOrWhiteSpace(oib) && OibRegex.IsMatch(oib) ? oib : null;
 
-    public ClientCaseService(HttpClient httpClient, IConfiguration config, ILogger<ClientCaseService> logger)
+    public ClientCaseService(
+        HttpClient httpClient,
+        ISupabaseRequestContext supabase,
+        ILogger<ClientCaseService> logger)
     {
         _httpClient = httpClient;
+        _supabase = supabase;
         _logger = logger;
 
-        _supabaseUrl = Environment.GetEnvironmentVariable("SUPABASE_URL")
-            ?? config["Supabase:Url"];
-        _serviceKey = Environment.GetEnvironmentVariable("SUPABASE_SERVICE_KEY")
-            ?? config["Supabase:ServiceKey"];
-
-        _isConfigured = !string.IsNullOrWhiteSpace(_supabaseUrl) &&
-                        !string.IsNullOrWhiteSpace(_serviceKey);
+        _supabaseUrl = supabase.Url;
+        _isConfigured = supabase.IsConfigured;
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -54,8 +58,7 @@ public sealed class ClientCaseService
     private HttpRequestMessage CreateRequest(HttpMethod method, string url, string? body = null)
     {
         var request = new HttpRequestMessage(method, url);
-        request.Headers.Add("apikey", _serviceKey);
-        request.Headers.Add("Authorization", $"Bearer {_serviceKey}");
+        _supabase.ApplyUserAuth(request);
         request.Headers.Add("Prefer", "return=representation");
 
         if (body != null)
@@ -230,6 +233,7 @@ public sealed class ClientCaseService
     /// </summary>
     public async Task<(string? ClientId, bool WasCreated)> UpsertClientForTroskovnikAsync(
         string userId,
+        string? uredId,
         string? naziv,
         string? oib,
         string? adresa,
@@ -263,6 +267,7 @@ public sealed class ClientCaseService
         var record = new ClientRecord
         {
             UserId = userId,
+            LawFirmId = uredId,
             ImeNaziv = naziv,
             Oib = SanitizeOib(oib),
             Adresa = adresa,

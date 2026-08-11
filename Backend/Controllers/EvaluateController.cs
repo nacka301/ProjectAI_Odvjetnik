@@ -719,6 +719,7 @@ public class EvaluateController : ControllerBase
             var evaluationId = await _supabaseService.SaveEvaluationAsync(new EvaluationRecord
             {
                 UserId = GetUserId(),
+                LawFirmId = this.FirmId(),
                 PropertyType = marketData.DetectedPropertyType,
                 Location = property.Location,
                 SizeM2 = property.SizeM2 > 0 ? property.SizeM2 : null,
@@ -734,6 +735,7 @@ public class EvaluateController : ControllerBase
                 await _supabaseService.SaveAuditLogAsync(new AuditLogRecord
                 {
                     UserId = GetUserId(),
+                    LawFirmId = this.FirmId(),
                     Module = "valuation",
                     AnalysisId = evaluationId,
                     Step = 1,

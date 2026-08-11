@@ -203,6 +203,7 @@ public class ChronologyController : ControllerBase
             var id = await _supabaseService.SaveChronologyAsync(new ChronologyRecord
             {
                 UserId = GetUserId(),
+                LawFirmId = this.FirmId(),
                 TotalDocuments = processed,
                 TotalEvents = allEvents.Count,
                 DateRange = dateRange,
@@ -211,6 +212,7 @@ public class ChronologyController : ControllerBase
             await _supabaseService.SaveAuditLogAsync(new AuditLogRecord
             {
                 UserId = GetUserId(),
+                LawFirmId = this.FirmId(),
                 Module = "chronology",
                 AnalysisId = id,
                 Step = 1,

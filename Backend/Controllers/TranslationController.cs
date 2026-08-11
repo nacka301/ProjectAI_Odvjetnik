@@ -103,6 +103,7 @@ public class TranslationController : ControllerBase
                 await _supabaseService.SaveAuditLogAsync(new AuditLogRecord
                 {
                     UserId = GetUserId(),
+                    LawFirmId = this.FirmId(),
                     Module = "translation",
                     Step = 1,
                     Action = $"Prijevod: {result.Mode}, {result.SourceCharCount}→{result.TranslatedCharCount} znakova, {result.ProcessingTimeMs}ms",

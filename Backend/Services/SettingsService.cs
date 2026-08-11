@@ -7,13 +7,20 @@ namespace Backend.Services;
 
 /// <summary>
 /// Service for managing enterprise settings: user profiles, law firms, subscriptions.
-/// Uses Supabase PostgREST API with service_role key (bypasses RLS).
+///
+/// Reads and edits run as the CALLER (RLS applies): a member sees their firm's
+/// profiles and only an owner may edit the firm, per migration 016.
+///
+/// Provisioning runs as service_role, because it creates rows no user policy
+/// permits: `law_firms` has no INSERT policy (firms are born from the signup
+/// trigger or from here), and `tenant_subscriptions` is read-only to users so
+/// nobody can raise their own plan limits.
 /// </summary>
 public sealed class SettingsService
 :ISettingsService {
     private readonly HttpClient _httpClient;
+    private readonly ISupabaseRequestContext _supabase;
     private readonly string? _supabaseUrl;
-    private readonly string? _serviceKey;
     private readonly ILogger<SettingsService> _logger;
     private readonly bool _isConfigured;
 
@@ -27,29 +34,41 @@ public sealed class SettingsService
         @"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
         RegexOptions.Compiled);
 
-    public SettingsService(HttpClient httpClient, IConfiguration config, ILogger<SettingsService> logger)
+    public SettingsService(
+        HttpClient httpClient,
+        ISupabaseRequestContext supabase,
+        ILogger<SettingsService> logger)
     {
         _httpClient = httpClient;
+        _supabase = supabase;
         _logger = logger;
 
-        _supabaseUrl = Environment.GetEnvironmentVariable("SUPABASE_URL")
-            ?? config["Supabase:Url"];
-        _serviceKey = Environment.GetEnvironmentVariable("SUPABASE_SERVICE_KEY")
-            ?? config["Supabase:ServiceKey"];
-
-        _isConfigured = !string.IsNullOrWhiteSpace(_supabaseUrl) &&
-                        !string.IsNullOrWhiteSpace(_serviceKey);
+        _supabaseUrl = supabase.Url;
+        _isConfigured = supabase.IsConfigured;
     }
 
     // ═══════════════════════════════════════════════════════════
     //  Helpers
     // ═══════════════════════════════════════════════════════════
 
+    /// <summary>Request that runs as the caller — RLS decides what it can touch.</summary>
     private HttpRequestMessage CreateRequest(HttpMethod method, string url, string? body = null)
+        => BuildRequest(method, url, body, asService: false);
+
+    /// <summary>
+    /// Request that bypasses RLS. Only for provisioning rows no user policy
+    /// allows; state which one at the call site.
+    /// </summary>
+    private HttpRequestMessage CreateServiceRequest(HttpMethod method, string url, string? body = null)
+        => BuildRequest(method, url, body, asService: true);
+
+    private HttpRequestMessage BuildRequest(HttpMethod method, string url, string? body, bool asService)
     {
         var request = new HttpRequestMessage(method, url);
-        request.Headers.Add("apikey", _serviceKey);
-        request.Headers.Add("Authorization", $"Bearer {_serviceKey}");
+
+        if (asService) _supabase.ApplyServiceAuth(request);
+        else           _supabase.ApplyUserAuth(request);
+
         request.Headers.Add("Prefer", "return=representation");
 
         if (body != null)
@@ -112,7 +131,7 @@ public sealed class SettingsService
                 phone_number = req.PhoneNumber?.Trim()
             }, JsonOpts);
 
-            // Use PATCH to update (service_role bypasses RLS)
+            // PATCH as the caller — profiles_update_own limits this to their own row.
             var request = CreateRequest(HttpMethod.Patch, url, payload);
             var response = await _httpClient.SendAsync(request);
             var body = await response.Content.ReadAsStringAsync();
@@ -144,6 +163,16 @@ public sealed class SettingsService
         }
     }
 
+    /// <summary>
+    /// Fallback for a user who somehow has no profile row.
+    ///
+    /// Runs as service_role: `user_profiles` deliberately has no INSERT policy,
+    /// and PostgREST's merge-duplicates upsert needs one even when the row
+    /// already exists. This path should be dead for accounts created after
+    /// migration 015 — the signup trigger makes the row — and it stays as a
+    /// repair route for older ones. It cannot set law_firm_id, so a profile
+    /// created here still needs a firm before the user can save anything.
+    /// </summary>
     private async Task<ProfileResponse?> UpsertProfileAsync(ProfileUpdateRequest req)
     {
         try
@@ -157,7 +186,7 @@ public sealed class SettingsService
                 phone_number = req.PhoneNumber?.Trim()
             }, JsonOpts);
 
-            var request = CreateRequest(HttpMethod.Post, url, payload);
+            var request = CreateServiceRequest(HttpMethod.Post, url, payload);
             // Upsert on conflict
             request.Headers.Remove("Prefer");
             request.Headers.Add("Prefer", "return=representation,resolution=merge-duplicates");
@@ -363,7 +392,9 @@ public sealed class SettingsService
             iban = iban?.Trim()
         }, JsonOpts);
 
-        var firmRequest = CreateRequest(HttpMethod.Post, firmUrl, firmPayload);
+        // service_role: law_firms has no INSERT policy — a user must not be able
+        // to conjure firms, only to be placed in one.
+        var firmRequest = CreateServiceRequest(HttpMethod.Post, firmUrl, firmPayload);
         var firmResponse = await _httpClient.SendAsync(firmRequest);
         var firmBody = await firmResponse.Content.ReadAsStringAsync();
 
@@ -386,8 +417,9 @@ public sealed class SettingsService
             law_firm_id = firm.Id
         }, JsonOpts);
 
-        // Try PATCH first, then upsert if profile doesn't exist
-        var linkRequest = CreateRequest(HttpMethod.Patch, profileUrl, linkPayload);
+        // service_role: profiles_update_own forbids moving yourself between firms,
+        // which is exactly what this link does — legitimately, at provisioning time.
+        var linkRequest = CreateServiceRequest(HttpMethod.Patch, profileUrl, linkPayload);
         var linkResponse = await _httpClient.SendAsync(linkRequest);
         var linkBody = await linkResponse.Content.ReadAsStringAsync();
 
@@ -395,7 +427,7 @@ public sealed class SettingsService
         {
             // Upsert - profile row might not exist yet
             var upsertUrl = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/user_profiles";
-            var upsertRequest = CreateRequest(HttpMethod.Post, upsertUrl, linkPayload);
+            var upsertRequest = CreateServiceRequest(HttpMethod.Post, upsertUrl, linkPayload);
             upsertRequest.Headers.Remove("Prefer");
             upsertRequest.Headers.Add("Prefer", "return=representation,resolution=merge-duplicates");
             await _httpClient.SendAsync(upsertRequest);
@@ -424,7 +456,9 @@ public sealed class SettingsService
                 ai_credits_limit = 5
             }, JsonOpts);
 
-            var request = CreateRequest(HttpMethod.Post, url, payload);
+            // service_role: tenant_subscriptions is SELECT-only for users, so a
+            // firm cannot raise its own plan limits.
+            var request = CreateServiceRequest(HttpMethod.Post, url, payload);
             // Upsert — the trigger may have beaten us to it
             request.Headers.Remove("Prefer");
             request.Headers.Add("Prefer", "return=representation,resolution=merge-duplicates");

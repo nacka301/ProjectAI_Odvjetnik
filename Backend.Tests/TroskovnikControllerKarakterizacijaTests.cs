@@ -24,15 +24,24 @@ public class TroskovnikControllerKarakterizacijaTests
 {
     private const string KorisnikId = "korisnik-1";
     private const string TudjiKorisnikId = "korisnik-2";
+    private const string UredId = "ured-1";
 
     private static TroskovnikController StvoriKontroler(
-        FakeClientCaseService klijenti, ITroskovnikService? servis = null, string? korisnikId = KorisnikId)
+        FakeClientCaseService klijenti,
+        ITroskovnikService? servis = null,
+        string? korisnikId = KorisnikId,
+        string? uredId = UredId)
     {
         var kontroler = new TroskovnikController(klijenti, servis ?? new TroskovnikService());
         var kontekst = new DefaultHttpContext();
 
         if (korisnikId is not null)
             kontekst.Items["AuthUserId"] = korisnikId;
+
+        // Ured koji SupabaseJwtMiddleware inace razrijesi preko ITenantResolver-a.
+        // Bez njega Spremi vraca 403 jer se troskovnik ne moze vezati ni na koji ured.
+        if (uredId is not null)
+            kontekst.Items["AuthTenantId"] = uredId;
 
         kontroler.ControllerContext = new ControllerContext { HttpContext = kontekst };
         return kontroler;
@@ -209,7 +218,7 @@ public class TroskovnikControllerKarakterizacijaTests
 
         var odgovor = Assert.IsType<UnauthorizedObjectResult>(await kontroler.Spremi(ValjanZahtjev()));
 
-        Assert.Equal("Nedostaje x-user-id header.", Svojstvo(odgovor.Value, "error"));
+        Assert.Equal("Neautorizirani pristup.", Svojstvo(odgovor.Value, "error"));
     }
 
     [Fact]
@@ -310,7 +319,7 @@ public class TroskovnikControllerKarakterizacijaTests
         var odgovor = Assert.IsType<OkObjectResult>(await kontroler.Spremi(zahtjev));
 
         Assert.Equal(
-            (KorisnikId, "Ivan Horvat", "12345678901", "Ilica 1", "Split"),
+            (KorisnikId, UredId, "Ivan Horvat", "12345678901", "Ilica 1", "Split"),
             klijenti.UpsertPozvanS);
         Assert.Equal("klijent-1", Svojstvo(odgovor.Value, "clientId"));
         Assert.Equal("klijent-1", Svojstvo(odgovor.Value, "createdClientId"));
@@ -331,7 +340,7 @@ public class TroskovnikControllerKarakterizacijaTests
         var odgovor = Assert.IsType<OkObjectResult>(await kontroler.Spremi(zahtjev));
 
         Assert.Equal(
-            (KorisnikId, "Marija Kovač", "98765432109", "Vukovarska 2", "Osijek"),
+            (KorisnikId, UredId, "Marija Kovač", "98765432109", "Vukovarska 2", "Osijek"),
             klijenti.UpsertPozvanS);
 
         // Zatečeno ponašanje: klijent je pronađen, ne otvoren, pa createdClientId ostaje prazan.
@@ -363,7 +372,7 @@ public class TroskovnikControllerKarakterizacijaTests
 
         var odgovor = Assert.IsType<UnauthorizedObjectResult>(await kontroler.Popis());
 
-        Assert.Equal("Nedostaje x-user-id header.", Svojstvo(odgovor.Value, "error"));
+        Assert.Equal("Neautorizirani pristup.", Svojstvo(odgovor.Value, "error"));
     }
 
     /// <summary>
@@ -405,15 +414,15 @@ public class TroskovnikControllerKarakterizacijaTests
         public (string? ClientId, bool WasCreated) IshodUpserta { get; init; } = ("klijent-1", true);
 
         /// <summary>Argumenti zadnjeg poziva upserta; null ako pozvan nije bio.</summary>
-        public (string Korisnik, string? Naziv, string? Oib, string? Adresa, string? Grad)? UpsertPozvanS
+        public (string Korisnik, string? Ured, string? Naziv, string? Oib, string? Adresa, string? Grad)? UpsertPozvanS
         { get; private set; }
 
         public Task<CaseReadRecord?> GetCaseByIdAsync(string id) => Task.FromResult(Predmet);
 
         public Task<(string? ClientId, bool WasCreated)> UpsertClientForTroskovnikAsync(
-            string userId, string? naziv, string? oib, string? adresa, string? grad)
+            string userId, string? uredId, string? naziv, string? oib, string? adresa, string? grad)
         {
-            UpsertPozvanS = (userId, naziv, oib, adresa, grad);
+            UpsertPozvanS = (userId, uredId, naziv, oib, adresa, grad);
             return Task.FromResult(IshodUpserta);
         }
 

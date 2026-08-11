@@ -31,7 +31,7 @@ public class CaseController : ControllerBase
     {
         var userId = GetUserId();
         if (string.IsNullOrWhiteSpace(userId))
-            return Unauthorized(new { error = "Nedostaje x-user-id header." });
+            return Unauthorized(new { error = "Neautorizirani pristup." });
 
         var cases = await _service.GetCasesByUserAsync(userId);
         return Ok(cases);
@@ -43,7 +43,7 @@ public class CaseController : ControllerBase
     {
         var userId = GetUserId();
         if (string.IsNullOrWhiteSpace(userId))
-            return Unauthorized(new { error = "Nedostaje x-user-id header." });
+            return Unauthorized(new { error = "Neautorizirani pristup." });
 
         // SECURITY: verify the client belongs to this user before returning its cases
         var client = await _service.GetClientByIdAsync(clientId);
@@ -61,7 +61,7 @@ public class CaseController : ControllerBase
     {
         var userId = GetUserId();
         if (string.IsNullOrWhiteSpace(userId))
-            return Unauthorized(new { error = "Nedostaje x-user-id header." });
+            return Unauthorized(new { error = "Neautorizirani pristup." });
 
         var deleted = await _service.GetDeletedCasesByUserAsync(userId);
         return Ok(deleted);
@@ -73,7 +73,7 @@ public class CaseController : ControllerBase
     {
         var userId = GetUserId();
         if (string.IsNullOrWhiteSpace(userId))
-            return Unauthorized(new { error = "Nedostaje x-user-id header." });
+            return Unauthorized(new { error = "Neautorizirani pristup." });
 
         var caseRecord = await _service.GetCaseByIdAsync(id);
         if (caseRecord == null) return NotFound(new { error = "Predmet nije pronađen." });
@@ -92,7 +92,7 @@ public class CaseController : ControllerBase
     {
         var userId = GetUserId();
         if (string.IsNullOrWhiteSpace(userId))
-            return Unauthorized(new { error = "Nedostaje x-user-id header." });
+            return Unauthorized(new { error = "Neautorizirani pristup." });
 
         if (string.IsNullOrWhiteSpace(request.Naziv))
             return BadRequest(new { error = "Naziv predmeta je obavezan." });
@@ -121,6 +121,9 @@ public class CaseController : ControllerBase
             DatumZatvaranja = request.DatumZatvaranja
         };
 
+        if (!this.ScopeToFirm(record))
+            return this.NoFirmResult();
+
         var created = await _service.CreateCaseAsync(record);
         if (created == null)
             return StatusCode(500, new { error = "Greška pri spremanju predmeta." });
@@ -134,7 +137,7 @@ public class CaseController : ControllerBase
     {
         var userId = GetUserId();
         if (string.IsNullOrWhiteSpace(userId))
-            return Unauthorized(new { error = "Nedostaje x-user-id header." });
+            return Unauthorized(new { error = "Neautorizirani pristup." });
 
         // SECURITY: verify ownership before allowing update
         var existing = await _service.GetCaseByIdAsync(id);
@@ -152,7 +155,7 @@ public class CaseController : ControllerBase
     {
         var userId = GetUserId();
         if (string.IsNullOrWhiteSpace(userId))
-            return Unauthorized(new { error = "Nedostaje x-user-id header." });
+            return Unauthorized(new { error = "Neautorizirani pristup." });
 
         // SECURITY: verify ownership before allowing delete
         var existing = await _service.GetCaseByIdAsync(id);
@@ -171,7 +174,7 @@ public class CaseController : ControllerBase
     {
         var userId = GetUserId();
         if (string.IsNullOrWhiteSpace(userId))
-            return Unauthorized(new { error = "Nedostaje x-user-id header." });
+            return Unauthorized(new { error = "Neautorizirani pristup." });
 
         var existing = await _service.GetCaseByIdAsync(id);
         if (existing == null || existing.UserId != userId)
