@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Calculator,
+  CalendarDays,
   ChevronDown,
   ChevronRight,
   ClipboardList,
@@ -30,7 +31,7 @@ import { API_BASE } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
 import { useCredits, getModuleQuota } from "@/lib/useCredits";
 import { CreditQuotaBadge, CreditExhaustedWarning } from "@/components/CreditQuotaBadge";
-import { formatEur, formatNumber, formatThreshold } from "@/lib/format";
+import { formatEur, formatNumber, formatThreshold, formatirajDatum } from "@/lib/format";
 import {
   BOD_VALUE,
   KATEGORIJA_KAZNENI,
@@ -55,6 +56,8 @@ import {
   efektivniVps,
   grupirajJednokratne,
   izracunajOsnovicu,
+  nedostatakDatuma,
+  poredajPoDatumu,
   odrediPristojbuOsnovu,
   podijeliPoOsobama,
   povisenjeViseOsobaPostotak,
@@ -104,11 +107,15 @@ interface TroskovnikLineItem {
   /** Propis i tarifni broj iz kojeg redak proizlazi. */
   pravni_izvor?: string;
   kolicina: number;
+  /** Datum kad je radnja poduzeta, gggg-mm-dd. */
+  datum?: string | null;
   bodova_po_jedinici: number;
   ukupno_bodova: number;
   iznos_eur: number;
   /** Tbr. 7. toč. 2 i 3, Tbr. 8. toč. 1 — ukupno ≠ bodova_po_jedinici × kolicina. */
   is_jednokratna?: boolean;
+  /** Radnja obuhvaćena jednokratnom nagradom ranijeg retka — bez vlastitih bodova. */
+  obuhvaceno_jednokratnom?: boolean;
   // Tbr. 41 po pojedinoj stavci
   tbr41_povisenje_postotak?: number;
   tbr41_snizenje_postotak?: number;
@@ -151,6 +158,9 @@ interface TroskovnikResponse {
   has_vat?: boolean;
   opis_predmeta: string | null;
   datum_izrade: string;
+  /** Razdoblje koje troškovnik pokriva — najraniji i najkasniji datum radnje. */
+  datum_od?: string | null;
+  datum_do?: string | null;
   sud?: string | null;
   broj_predmeta?: string | null;
   // Nested objects (new schema)
@@ -503,6 +513,18 @@ function TroskovnikContent() {
     [nedostaci, nedostaciTbr41],
   );
 
+  // Datum se traži za spremanje i ispis, ali NE za izračun — zato stoji odvojeno od
+  // `sviNedostaci`, koji zaključava i gumb za izračun.
+  const nedostajuDatumi = useMemo(() => {
+    const catalogMap = new Map(katalog.map((s) => [s.id, s]));
+    return nedostatakDatuma(
+      odabraneRadnje.map((radnja) => ({
+        datum: radnja.datum,
+        opis: catalogMap.get(radnja.itemId)?.opis ?? radnja.itemId,
+      })),
+    );
+  }, [odabraneRadnje, katalog]);
+
   // Tbr. 7. toč. 9 — upozorenje, ne greška: odvjetnik stavku bira sam.
   const upozorenjeSpor = useMemo(
     () => upozorenjeMaliSpor(odabraneDefinicije, vrijednostNum, osnovicaTbr7),
@@ -709,6 +731,11 @@ function TroskovnikContent() {
       next.delete(redakId);
       return next;
     });
+  }, []);
+
+  /** Kronološki poredak na zahtjev — zadano korisnik zadržava svoj redoslijed. */
+  const poredajRadnje = useCallback(() => {
+    setOdabraneRadnje((prev) => poredajPoDatumu(prev));
   }, []);
 
   /** Sve radnje iste tarifne stavke — katalog na njima pokazuje koliko ih je dodano. */
@@ -1773,12 +1800,22 @@ function TroskovnikContent() {
                     <span className="text-sm font-bold text-white">Troškovnik</span>
                   </div>
                   {odabraneRadnje.length > 0 && (
-                    <button
-                      onClick={clearAll}
-                      className="text-[10px] text-indigo-200 hover:text-white transition"
-                    >
-                      Očisti sve
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={poredajRadnje}
+                        className="flex items-center gap-1 text-[10px] text-indigo-200 hover:text-white transition"
+                        title="Kronološki; radnje bez datuma idu na dno"
+                      >
+                        <CalendarDays className="h-3 w-3" />
+                        Poredaj po datumu
+                      </button>
+                      <button
+                        onClick={clearAll}
+                        className="text-[10px] text-indigo-200 hover:text-white transition"
+                      >
+                        Očisti sve
+                      </button>
+                    </div>
                   )}
                 </div>
 
@@ -2028,6 +2065,15 @@ function TroskovnikContent() {
                         ))}
                       </div>
                     )}
+                    {/* Datum ne blokira izračun — samo spremanje i ispis. */}
+                    {nedostajuDatumi && (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                        <p className="flex items-start gap-1.5 text-[11px] text-amber-800 leading-snug">
+                          <CalendarDays className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                          <span>{nedostajuDatumi}</span>
+                        </p>
+                      </div>
+                    )}
                     <CreditQuotaBadge quota={troskovnikQuota} loading={creditsLoading} className="mb-1" />
                     <button
                       onClick={handleCalculate}
@@ -2044,7 +2090,7 @@ function TroskovnikContent() {
                     {userId && (
                       <button
                         onClick={handleSave}
-                        disabled={saving || sviNedostaci.length > 0}
+                        disabled={saving || sviNedostaci.length > 0 || nedostajuDatumi !== null}
                         className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white text-sm font-semibold py-2.5 rounded-lg transition"
                       >
                         {saving ? (
@@ -2076,7 +2122,9 @@ function TroskovnikContent() {
                       </button>
                       <button
                         onClick={handlePrint}
-                        className="flex-1 flex items-center justify-center gap-1.5 text-xs text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 py-2 rounded-lg transition"
+                        disabled={nedostajuDatumi !== null}
+                        title={nedostajuDatumi ?? undefined}
+                        className="flex-1 flex items-center justify-center gap-1.5 text-xs text-slate-600 hover:text-slate-800 disabled:text-slate-300 bg-slate-100 hover:bg-slate-200 disabled:hover:bg-slate-100 py-2 rounded-lg transition"
                       >
                         <Printer className="h-3.5 w-3.5" />
                         Ispis
@@ -2130,6 +2178,13 @@ function TroskovnikContent() {
                 <CheckCircle className="h-6 w-6 text-indigo-200" />
                 <div>
                   <h2 className="text-white font-bold text-lg">Troškovnik</h2>
+                  {(result.datum_od || result.datum_do) && (
+                    <p className="text-white text-xs font-semibold">
+                      {result.datum_od === result.datum_do
+                        ? `Radnja od ${formatirajDatum(result.datum_od)}`
+                        : `Za razdoblje ${formatirajDatum(result.datum_od)} – ${formatirajDatum(result.datum_do)}`}
+                    </p>
+                  )}
                   <p className="text-indigo-200 text-xs">
                     {new Date(result.datum_izrade).toLocaleDateString("hr-HR")}
                     {result.is_samo_kazneni
@@ -2255,6 +2310,7 @@ function TroskovnikContent() {
                   <thead>
                     <tr className="border-b-2 border-indigo-200">
                       <th className="text-left py-2 px-2 text-xs font-semibold text-slate-500 w-10">Rbr.</th>
+                      <th className="text-left py-2 px-2 text-xs font-semibold text-slate-500 w-24">Datum</th>
                       <th className="text-left py-2 px-2 text-xs font-semibold text-slate-500">Opis</th>
                       <th className="text-left py-2 px-2 text-xs font-semibold text-slate-500 w-20">Tar. br.</th>
                       <th className="text-center py-2 px-2 text-xs font-semibold text-slate-500 w-16">Kol.</th>
@@ -2267,9 +2323,12 @@ function TroskovnikContent() {
                     {result.stavke.map((line) => (
                       <tr key={line.rbr} className="border-b border-slate-100 hover:bg-slate-50">
                         <td className="py-2 px-2 text-slate-400">{line.rbr}.</td>
+                        <td className="py-2 px-2 text-slate-600 whitespace-nowrap">{formatirajDatum(line.datum)}</td>
                         <td className="py-2 px-2 text-slate-800">
                           {line.opis}
-                          {line.is_jednokratna && (
+                          {line.obuhvaceno_jednokratnom ? (
+                            <span className="ml-1.5 text-[10px] font-semibold text-slate-500">(obuhvaćeno jednokratnom nagradom)</span>
+                          ) : line.is_jednokratna && (
                             <span className="ml-1.5 text-[10px] font-semibold text-emerald-700">(jednokratna nagrada)</span>
                           )}
                           {line.tbr41_pravni_izvor && (
@@ -2304,7 +2363,7 @@ function TroskovnikContent() {
                   <tfoot>
                     {(result.povisenje_vise_osoba_postotak ?? 0) > 0 && (
                       <tr className="border-t border-slate-200">
-                        <td colSpan={5} className="py-2 px-2 text-right text-xs text-slate-500">
+                        <td colSpan={6} className="py-2 px-2 text-right text-xs text-slate-500">
                           Zastupanje {result.broj_zastupanih_osoba} osoba (Tbr. 40) — povišenje{" "}
                           {Math.round((result.povisenje_vise_osoba_postotak ?? 0) * 100)} %
                         </td>
@@ -2318,7 +2377,7 @@ function TroskovnikContent() {
                     )}
                     {(result.tbr41_bodovi ?? 0) !== 0 && (
                       <tr className="border-t border-slate-200">
-                        <td colSpan={5} className="py-2 px-2 text-right text-xs text-slate-500">
+                        <td colSpan={6} className="py-2 px-2 text-right text-xs text-slate-500">
                           Tbr. 41 — povišenje {result.tbr41_povisenje_postotak ?? 0} %, sniženje{" "}
                           {result.tbr41_snizenje_postotak ?? 0} %
                         </td>
@@ -2331,7 +2390,7 @@ function TroskovnikContent() {
                       </tr>
                     )}
                     <tr className="border-t-2 border-indigo-200">
-                      <td colSpan={5} className="py-2 px-2 text-right text-xs text-slate-500 font-semibold">Ukupno bodova</td>
+                      <td colSpan={6} className="py-2 px-2 text-right text-xs text-slate-500 font-semibold">Ukupno bodova</td>
                       <td className="py-2 px-2 text-right font-bold text-indigo-700">{fmtNum(result.ukupno_bodova)}</td>
                       <td className="py-2 px-2 text-right font-bold text-indigo-700">{fmtEur(result.ukupno_eur_bez_pdv)}</td>
                     </tr>
@@ -2348,17 +2407,17 @@ function TroskovnikContent() {
                           {isPdv && (
                             <>
                               <tr>
-                                <td colSpan={5} className="py-1 px-2 text-right text-xs text-slate-500">Osnovica (bez PDV)</td>
+                                <td colSpan={6} className="py-1 px-2 text-right text-xs text-slate-500">Osnovica (bez PDV)</td>
                                 <td />
                                 <td className="py-1 px-2 text-right text-sm text-slate-600">{fmtEur(base)}</td>
                               </tr>
                               <tr>
-                                <td colSpan={5} className="py-1 px-2 text-right text-xs text-slate-500">PDV (25%)</td>
+                                <td colSpan={6} className="py-1 px-2 text-right text-xs text-slate-500">PDV (25%)</td>
                                 <td />
                                 <td className="py-1 px-2 text-right text-sm text-slate-600">{fmtEur(pdvCalc)}</td>
                               </tr>
                               <tr>
-                                <td colSpan={5} className="py-1 px-2 text-right text-xs font-semibold text-indigo-700">Odvjetnički trošak s PDV-om</td>
+                                <td colSpan={6} className="py-1 px-2 text-right text-xs font-semibold text-indigo-700">Odvjetnički trošak s PDV-om</td>
                                 <td />
                                 <td className="py-1 px-2 text-right text-sm font-semibold text-indigo-700">{fmtEur(odvjetnickiTrosak)}</td>
                               </tr>
@@ -2366,13 +2425,13 @@ function TroskovnikContent() {
                           )}
                           {!isPdv && (
                             <tr>
-                              <td colSpan={5} className="py-1 px-2 text-right text-xs font-semibold text-indigo-700">Odvjetnički trošak</td>
+                              <td colSpan={6} className="py-1 px-2 text-right text-xs font-semibold text-indigo-700">Odvjetnički trošak</td>
                               <td />
                               <td className="py-1 px-2 text-right text-sm font-semibold text-indigo-700">{fmtEur(base)}</td>
                             </tr>
                           )}
                           <tr>
-                            <td colSpan={5} className="py-1 px-2 text-right text-xs text-slate-500">
+                            <td colSpan={6} className="py-1 px-2 text-right text-xs text-slate-500">
                               Sudska pristojba (Tar. br. 1)
                               {result.is_oslobodjen_pristojbi && <span className="ml-1 text-amber-600">(oslobođeno)</span>}
                               <span className="block text-[10px] text-slate-400">
@@ -2385,13 +2444,13 @@ function TroskovnikContent() {
                             </td>
                           </tr>
                           <tr className="bg-indigo-50">
-                            <td colSpan={5} className="py-3 px-2 text-right text-sm font-bold text-indigo-800">SVEUKUPNI TROŠAK</td>
+                            <td colSpan={6} className="py-3 px-2 text-right text-sm font-bold text-indigo-800">SVEUKUPNI TROŠAK</td>
                             <td />
                             <td className="py-3 px-2 text-right text-lg font-bold text-indigo-800">{fmtEur(sveukupni)}</td>
                           </tr>
                           {(result.broj_zastupanih_osoba ?? 1) > 1 && (
                             <tr>
-                              <td colSpan={5} className="py-2 px-2 text-right text-xs text-slate-500">
+                              <td colSpan={6} className="py-2 px-2 text-right text-xs text-slate-500">
                                 Nagrada po osobi ({result.broj_zastupanih_osoba} branjenika)
                                 <span className="block text-[10px] text-slate-400">
                                   Tbr. 40. toč. 1 — dioba na jednake dijelove; bez PDV-a i pristojbe

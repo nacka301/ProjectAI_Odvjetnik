@@ -778,6 +778,49 @@ export function grupirajJednokratne(
   });
 }
 
+// ── Datum radnje ─────────────────────────────────────────────────
+
+/**
+ * Slaže radnje kronološki.
+ *
+ * Radnje bez datuma idu na dno — nisu „najstarije", nego nedovršene, pa ne smiju
+ * upasti među popunjene. Redoslijed je inače stabilan: radnje istog datuma zadržavaju
+ * poredak kojim ih je odvjetnik unio.
+ *
+ * Ne poziva se sam od sebe — korisnik zadržava svoj redoslijed dok ne zatraži drukčije.
+ */
+export function poredajPoDatumu<T extends { datum: string }>(retci: T[]): T[] {
+  return [...retci].sort((a, b) => {
+    if (!a.datum && !b.datum) return 0;
+    if (!a.datum) return 1;
+    if (!b.datum) return -1;
+    return a.datum.localeCompare(b.datum);
+  });
+}
+
+/**
+ * Poruka o radnjama kojima nedostaje datum, ili null kad su svi popunjeni.
+ *
+ * Troškovnik koji se predaje sudu mora uz svaku radnju imati datum, pa se ovo traži
+ * pri spremanju i ispisu. Izračun namjerno prolazi i bez datuma.
+ *
+ * Nabraja radnje s rednim brojem, kao i poruka s poslužitelja, da se u dugom
+ * troškovniku odmah vidi koji redak treba popraviti.
+ */
+export function nedostatakDatuma(retci: { datum: string; opis: string }[]): string | null {
+  const bezDatuma = retci
+    .map((redak, polozaj) => ({ ...redak, rbr: polozaj + 1 }))
+    .filter((redak) => !redak.datum)
+    .map((redak) => `${redak.rbr}. ${redak.opis}`);
+
+  if (bezDatuma.length === 0) return null;
+
+  return (
+    "Troškovnik se ne može spremiti ni ispisati bez datuma uz svaku radnju. " +
+    `Nedostaje datum uz: ${bezDatuma.join("; ")}.`
+  );
+}
+
 // ── Sudske pristojbe (Uredba NN 37/2023) ─────────────────────────
 
 /**
