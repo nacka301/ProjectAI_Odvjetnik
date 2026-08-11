@@ -13,7 +13,6 @@ import {
   Euro,
   FileText,
   Loader2,
-  Minus,
   Plus,
   Printer,
   Save,
@@ -54,6 +53,7 @@ import {
   TBR45_NACIN,
   TBR45_NACIN_LABELE,
   efektivniVps,
+  grupirajJednokratne,
   izracunajOsnovicu,
   odrediPristojbuOsnovu,
   podijeliPoOsobama,
@@ -78,9 +78,22 @@ import {
 
 // ── Types (mirror backend models) ──
 
-interface SelectedItem {
+/**
+ * Jedna radnja u troškovniku — vlastiti redak s vlastitim datumom.
+ *
+ * Prije uvođenja datuma odabir je bio mapa item_id → količina, pa je tarifna stavka
+ * mogla postojati najviše jednom: tri ročišta bila su jedan redak s količinom tri.
+ * Datum se veže uz pojedinu radnju, pa su to sada tri retka.
+ *
+ * `redakId` je stabilan ključ (brojač, ne item_id) jer ista se stavka ponavlja.
+ * `kolicina` ostaje — za jedinice „sat" i „stranica" i dalje je množitelj.
+ */
+interface OdabranaRadnja {
+  redakId: string;
   itemId: string;
   kolicina: number;
+  /** Datum radnje u obliku gggg-mm-dd; prazan niz dok nije unesen. */
+  datum: string;
 }
 
 interface TroskovnikLineItem {
@@ -225,7 +238,9 @@ function TroskovnikContent() {
   // ── Form state ──
   const [vrijednostSpora, setVrijednostSpora] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedItems, setSelectedItems] = useState<Map<string, number>>(new Map());
+  const [odabraneRadnje, setOdabraneRadnje] = useState<OdabranaRadnja[]>([]);
+  // Brojač, ne nasumičan ključ: projekt nema uuid biblioteku, a brojač je predvidiv.
+  const sljedeciRedakId = useRef(0);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
 
   // ── Party info ──
@@ -403,12 +418,14 @@ function TroskovnikContent() {
   // ── Derived values ──
 
   // Odabrane definicije iz kataloga — osnova za određivanje vrste postupka.
+  // Jedna definicija po tarifnoj stavci, koliko god redaka ona imala: provjere i
+  // upozorenja govore o stavci, pa se ne smiju ponoviti onoliko puta koliko je radnji.
   const odabraneDefinicije = useMemo(() => {
     const catalogMap = new Map(katalog.map((s) => [s.id, s]));
-    return Array.from(selectedItems.keys())
+    return Array.from(new Set(odabraneRadnje.map((radnja) => radnja.itemId)))
       .map((id) => catalogMap.get(id))
       .filter((d): d is TarifnaStavka => d !== undefined);
-  }, [selectedItems, katalog]);
+  }, [odabraneRadnje, katalog]);
 
   // Bilo koja kaznena stavka → prikaži panel s parametrima kaznenog postupka.
   const isKazneniMode = odabraneDefinicije.some((d) => d.kategorija === KATEGORIJA_KAZNENI);
@@ -458,20 +475,28 @@ function TroskovnikContent() {
   );
 
   // Tbr. 41 — povišenje i sniženje ne mogu stajati na istoj stavci.
-  const nedostaciTbr41 = useMemo(
-    () =>
-      odabraneDefinicije
-        .map((def) => {
-          const { povisenje, snizenje } = razrijesiTbr41(
-            tbr41PoStavci.get(def.id) ?? {},
-            tbr41Povisenje,
-            tbr41Snizenje,
-          );
-          return provjeriTbr41Stavku(def.opis, povisenje, snizenje);
-        })
-        .filter((p): p is string => p !== null),
-    [odabraneDefinicije, tbr41PoStavci, tbr41Povisenje, tbr41Snizenje],
-  );
+  // Prilagodba se veže uz redak, pa se i provjerava po retku.
+  const nedostaciTbr41 = useMemo(() => {
+    const catalogMap = new Map(katalog.map((s) => [s.id, s]));
+
+    return Array.from(
+      new Set(
+        odabraneRadnje
+          .map((radnja) => {
+            const def = catalogMap.get(radnja.itemId);
+            if (!def) return null;
+
+            const { povisenje, snizenje } = razrijesiTbr41(
+              tbr41PoStavci.get(radnja.redakId) ?? {},
+              tbr41Povisenje,
+              tbr41Snizenje,
+            );
+            return provjeriTbr41Stavku(def.opis, povisenje, snizenje);
+          })
+          .filter((p): p is string => p !== null && p !== undefined),
+      ),
+    );
+  }, [odabraneRadnje, katalog, tbr41PoStavci, tbr41Povisenje, tbr41Snizenje]);
 
   const sviNedostaci = useMemo(
     () => [...nedostaci, ...nedostaciTbr41],
@@ -529,8 +554,11 @@ function TroskovnikContent() {
       iznos_eur: number;
       jedinica: string;
       is_jednokratna: boolean;
+      obuhvaceno_jednokratnom: boolean;
       pravni_izvor: string;
       item_id: string;
+      redak_id: string;
+      datum: string;
       tbr41_povisenje: number;
       tbr41_snizenje: number;
       tbr41_bodovi: number;
@@ -538,7 +566,15 @@ function TroskovnikContent() {
     }[] = [];
     const catalogMap = new Map(katalog.map((s) => [s.id, s]));
 
-    selectedItems.forEach((kol, itemId) => {
+    // Jednokratna nagrada (Tbr. 7. toč. 2 i 3, Tbr. 8. toč. 1) pripada cijelom postupku,
+    // ne pojedinoj radnji — računa se jednom za sve retke iste stavke, kao na poslužitelju.
+    const udjeli = grupirajJednokratne(
+      odabraneRadnje.map((radnja) => ({ itemId: radnja.itemId, kolicina: radnja.kolicina })),
+      (itemId) => catalogMap.get(itemId)?.jednokratna_nagrada === true,
+    );
+
+    odabraneRadnje.forEach((radnja, polozaj) => {
+      const { itemId, kolicina: kol } = radnja;
       const def = catalogMap.get(itemId);
       if (!def || kol <= 0) return;
 
@@ -564,11 +600,15 @@ function TroskovnikContent() {
       // Razlog stoji u `nedostaci`, iznad gumba za izračun.
       if (bodovi <= 0) return;
 
-      const ukupnoStavke = ukupnoBodovaZaStavku(def, bodovi, kol);
+      // Nagradu nosi prvi redak grupe, s količinom cijele grupe; ostali stoje u
+      // troškovniku sa svojim datumom, ali bez bodova.
+      const udio = udjeli[polozaj];
+      const obuhvacen = !udio.nosiNagradu;
+      const ukupnoStavke = obuhvacen ? 0 : ukupnoBodovaZaStavku(def, bodovi, udio.kolicina);
 
-      // Tbr. 41 po pojedinoj stavci; bez vlastitog postotka vrijedi prečac.
+      // Tbr. 41 po pojedinom retku; bez vlastitog postotka vrijedi prečac.
       const { povisenje, snizenje } = razrijesiTbr41(
-        tbr41PoStavci.get(itemId) ?? {},
+        tbr41PoStavci.get(radnja.redakId) ?? {},
         tbr41Povisenje,
         tbr41Snizenje,
       );
@@ -578,13 +618,18 @@ function TroskovnikContent() {
         opis: def.opis,
         tarifni_broj: def.tarifni_broj,
         kolicina: kol,
-        bodova_po_jedinici: bodovi,
+        // Bodovi po jedinici na obuhvaćenom retku su 0: „250 bod./jed." uz iznos
+        // 0,00 € izgleda kao greška u zbrajanju.
+        bodova_po_jedinici: obuhvacen ? 0 : bodovi,
         ukupno_bodova: ukupnoStavke,
         iznos_eur: zaokruziNovac((ukupnoStavke + tbr41BodoviStavke) * BOD_VALUE),
         jedinica: def.jedinica,
         is_jednokratna: def.jednokratna_nagrada === true,
+        obuhvaceno_jednokratnom: obuhvacen,
         pravni_izvor: def.pravni_izvor ?? def.tarifni_broj,
         item_id: itemId,
+        redak_id: radnja.redakId,
+        datum: radnja.datum,
         tbr41_povisenje: povisenje,
         tbr41_snizenje: snizenje,
         tbr41_bodovi: tbr41BodoviStavke,
@@ -621,7 +666,7 @@ function TroskovnikContent() {
     const nagradaPoOsobi = zaokruziNovac(podijeliPoOsobama(ukupnoEur, brojZastupanihOsoba));
 
     return { lines, osnovicaBodova, povisenjePostotak, povisenjeBodovi, tbr41Postotak, tbr41Bodovi, ukupnoBodova, bodoviPoOsobi, nagradaPoOsobi, ukupnoEur, pdv, ukupnoSPdv: ukupnoEur + pdv, sudskaPristojba, sveukupniTrosak };
-  }, [selectedItems, katalog, osnovica, isPdvUkljucen, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, isOduzimanjePrekrsaj, parsedVrijednostOduzimanja, isOslobodjenPristojbi, vrijednostNum, pristojbaOsnova, brojZastupanihOsoba, zaprijecenaKazna, tbr41Povisenje, tbr41Snizenje, tbr41PoStavci]);
+  }, [odabraneRadnje, katalog, osnovica, isPdvUkljucen, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, isOduzimanjePrekrsaj, parsedVrijednostOduzimanja, isOslobodjenPristojbi, vrijednostNum, pristojbaOsnova, brojZastupanihOsoba, zaprijecenaKazna, tbr41Povisenje, tbr41Snizenje, tbr41PoStavci]);
 
   // ── Handlers ──
   const toggleCategory = useCallback((cat: string) => {
@@ -633,45 +678,63 @@ function TroskovnikContent() {
     });
   }, []);
 
-  const addItem = useCallback((itemId: string) => {
-    setSelectedItems((prev) => {
+  /** Svaki klik na „Dodaj" otvara NOVU radnju — istu stavku odvjetnik poduzima više puta. */
+  const dodajRadnju = useCallback((itemId: string) => {
+    setOdabraneRadnje((prev) => [
+      ...prev,
+      { redakId: `r${sljedeciRedakId.current++}`, itemId, kolicina: 1, datum: "" },
+    ]);
+  }, []);
+
+  const postaviKolicinu = useCallback((redakId: string, kolicina: number) => {
+    setOdabraneRadnje((prev) =>
+      kolicina <= 0
+        ? prev.filter((radnja) => radnja.redakId !== redakId)
+        : prev.map((radnja) => (radnja.redakId === redakId ? { ...radnja, kolicina } : radnja)),
+    );
+  }, []);
+
+  const postaviDatum = useCallback((redakId: string, datum: string) => {
+    setOdabraneRadnje((prev) =>
+      prev.map((radnja) => (radnja.redakId === redakId ? { ...radnja, datum } : radnja)),
+    );
+  }, []);
+
+  const ukloniRadnju = useCallback((redakId: string) => {
+    setOdabraneRadnje((prev) => prev.filter((radnja) => radnja.redakId !== redakId));
+    // Prilagodba po Tbr. 41 vezana je uz redak; bez retka nema što prilagođavati.
+    setTbr41PoStavci((prev) => {
+      if (!prev.has(redakId)) return prev;
       const next = new Map(prev);
-      next.set(itemId, (next.get(itemId) || 0) + 1);
+      next.delete(redakId);
       return next;
     });
   }, []);
 
-  const setItemQty = useCallback((itemId: string, qty: number) => {
-    setSelectedItems((prev) => {
-      const next = new Map(prev);
-      if (qty <= 0) next.delete(itemId);
-      else next.set(itemId, qty);
-      return next;
-    });
-  }, []);
-
-  const removeItem = useCallback((itemId: string) => {
-    setSelectedItems((prev) => {
-      const next = new Map(prev);
-      next.delete(itemId);
-      return next;
-    });
-  }, []);
+  /** Sve radnje iste tarifne stavke — katalog na njima pokazuje koliko ih je dodano. */
+  const brojRadnjiPoStavci = useMemo(() => {
+    const broj = new Map<string, number>();
+    odabraneRadnje.forEach((radnja) => broj.set(radnja.itemId, (broj.get(radnja.itemId) ?? 0) + 1));
+    return broj;
+  }, [odabraneRadnje]);
 
   /**
-   * Tbr. 41 za pojedinu stavku. Vrijednost je "p<postotak>" za povišenje po toč. 1,
+   * Tbr. 41 za pojedini redak. Vrijednost je "p<postotak>" za povišenje po toč. 1,
    * "s<postotak>" za sniženje po toč. 2, prazno za nasljeđivanje prečaca.
+   *
+   * Veže se uz redak, ne uz tarifnu stavku: dvije radnje iste stavke mogu tražiti
+   * različitu prilagodbu (toč. 2 govori o „pojedinim tarifnim stavkama").
    */
-  const postaviTbr41ZaStavku = useCallback((itemId: string, vrijednost: string) => {
+  const postaviTbr41ZaStavku = useCallback((redakId: string, vrijednost: string) => {
     setTbr41PoStavci((prev) => {
       const next = new Map(prev);
       if (!vrijednost) {
         // Izričita nula, ne nasljeđivanje — inače bi prečac vratio postotak natrag.
-        next.set(itemId, { povisenje: 0, snizenje: 0 });
+        next.set(redakId, { povisenje: 0, snizenje: 0 });
       } else if (vrijednost.startsWith("p")) {
-        next.set(itemId, { povisenje: Number(vrijednost.slice(1)), snizenje: 0 });
+        next.set(redakId, { povisenje: Number(vrijednost.slice(1)), snizenje: 0 });
       } else {
-        next.set(itemId, { povisenje: 0, snizenje: Number(vrijednost.slice(1)) });
+        next.set(redakId, { povisenje: 0, snizenje: Number(vrijednost.slice(1)) });
       }
       return next;
     });
@@ -683,14 +746,16 @@ function TroskovnikContent() {
   }, []);
 
   const clearAll = useCallback(() => {
-    setSelectedItems(new Map());
+    setOdabraneRadnje([]);
+    // Prilagodbe po Tbr. 41 ključem su vezane uz retke kojih više nema.
+    setTbr41PoStavci(new Map());
     setResult(null);
     setCalcError(null);
   }, []);
 
   // ── Submit to backend ──
   const handleCalculate = async () => {
-    if (selectedItems.size === 0) {
+    if (odabraneRadnje.length === 0) {
       setCalcError("Morate odabrati barem jednu stavku.");
       return;
     }
@@ -700,11 +765,13 @@ function TroskovnikContent() {
     try {
       const body = {
         vrijednost_spora: vrijednostNum,
-        stavke: Array.from(selectedItems.entries()).map(([itemId, kolicina]) => {
-          const vlastiti = tbr41PoStavci.get(itemId);
+        stavke: odabraneRadnje.map((radnja) => {
+          const vlastiti = tbr41PoStavci.get(radnja.redakId);
           return {
-            item_id: itemId,
-            kolicina,
+            item_id: radnja.itemId,
+            kolicina: radnja.kolicina,
+            // Prazan datum se ne šalje — izračun ga ne traži, spremanje hoće.
+            datum: radnja.datum || undefined,
             // null → stavka nasljeđuje postotak s razine troškovnika (prečac)
             tbr41_povisenje_postotak: vlastiti?.povisenje ?? null,
             tbr41_snizenje_postotak: vlastiti?.snizenje ?? null,
@@ -773,7 +840,7 @@ function TroskovnikContent() {
 
   // ── Save to database ──
   const handleSave = async () => {
-    if (selectedItems.size === 0) {
+    if (odabraneRadnje.length === 0) {
       setCalcError("Morate odabrati barem jednu stavku.");
       return;
     }
@@ -788,11 +855,13 @@ function TroskovnikContent() {
     try {
       const body = {
         vrijednost_spora: vrijednostNum,
-        stavke: Array.from(selectedItems.entries()).map(([itemId, kolicina]) => {
-          const vlastiti = tbr41PoStavci.get(itemId);
+        stavke: odabraneRadnje.map((radnja) => {
+          const vlastiti = tbr41PoStavci.get(radnja.redakId);
           return {
-            item_id: itemId,
-            kolicina,
+            item_id: radnja.itemId,
+            kolicina: radnja.kolicina,
+            // Prazan datum se ne šalje — izračun ga ne traži, spremanje hoće.
+            datum: radnja.datum || undefined,
             // null → stavka nasljeđuje postotak s razine troškovnika (prečac)
             tbr41_povisenje_postotak: vlastiti?.povisenje ?? null,
             tbr41_snizenje_postotak: vlastiti?.snizenje ?? null,
@@ -1343,7 +1412,7 @@ function TroskovnikContent() {
             {filteredCategories.map(([cat, items]) => {
               const color = getCatColor(cat);
               const isExpanded = expandedCategories.has(cat) || searchTerm.trim().length > 0;
-              const selectedInCat = items.filter((i) => selectedItems.has(i.id)).length;
+              const selectedInCat = items.filter((i) => brojRadnjiPoStavci.has(i.id)).length;
 
               return (
                 <div key={cat} className={`rounded-xl border ${color.border} overflow-hidden shadow-sm`}>
@@ -1372,7 +1441,7 @@ function TroskovnikContent() {
                   {isExpanded && (
                     <div className="bg-white divide-y divide-slate-100">
                       {items.map((item) => {
-                        const qty = selectedItems.get(item.id) || 0;
+                        const brojRadnji = brojRadnjiPoStavci.get(item.id) ?? 0;
                         const bodovi = item.prekrsaj_oduzimanje
                           ? (isOduzimanjePrekrsaj && parsedVrijednostOduzimanja > 0
                               ? tbr71Bodovi(parsedVrijednostOduzimanja)
@@ -1388,7 +1457,7 @@ function TroskovnikContent() {
                           <div
                             key={item.id}
                             className={`px-4 py-3 flex items-center gap-3 hover:bg-slate-50 transition ${
-                              qty > 0 ? "bg-indigo-50/40" : ""
+                              brojRadnji > 0 ? "bg-indigo-50/40" : ""
                             }`}
                           >
                             {/* Info */}
@@ -1429,44 +1498,22 @@ function TroskovnikContent() {
                               </p>
                             </div>
 
-                            {/* Quantity controls */}
-                            {qty === 0 ? (
+                            {/* Dodavanje radnje — svaki klik otvara novi redak s vlastitim datumom.
+                                Količina, datum i brisanje uređuju se na retku, u popisu desno. */}
+                            <div className="shrink-0 flex items-center gap-2">
+                              {brojRadnji > 0 && (
+                                <span className="text-[10px] font-bold bg-indigo-600 text-white px-2 py-0.5 rounded-full">
+                                  {brojRadnji}×
+                                </span>
+                              )}
                               <button
-                                onClick={() => addItem(item.id)}
-                                className="shrink-0 flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition"
+                                onClick={() => dodajRadnju(item.id)}
+                                className="flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition"
                               >
                                 <Plus className="h-3.5 w-3.5" />
                                 Dodaj
                               </button>
-                            ) : (
-                              <div className="shrink-0 flex items-center gap-1">
-                                <button
-                                  onClick={() => setItemQty(item.id, qty - 1)}
-                                  className="w-7 h-7 rounded-md bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition"
-                                >
-                                  <Minus className="h-3 w-3 text-slate-600" />
-                                </button>
-                                <input
-                                  type="number"
-                                  min={0}
-                                  value={qty}
-                                  onChange={(e) => setItemQty(item.id, parseInt(e.target.value) || 0)}
-                                  className="w-12 text-center text-sm border border-slate-200 rounded-md py-1 focus:ring-1 focus:ring-indigo-400 outline-none"
-                                />
-                                <button
-                                  onClick={() => setItemQty(item.id, qty + 1)}
-                                  className="w-7 h-7 rounded-md bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition"
-                                >
-                                  <Plus className="h-3 w-3 text-slate-600" />
-                                </button>
-                                <button
-                                  onClick={() => removeItem(item.id)}
-                                  className="w-7 h-7 rounded-md bg-red-50 hover:bg-red-100 flex items-center justify-center transition ml-1"
-                                >
-                                  <Trash2 className="h-3 w-3 text-red-500" />
-                                </button>
-                              </div>
-                            )}
+                            </div>
                           </div>
                         );
                       })}
@@ -1725,7 +1772,7 @@ function TroskovnikContent() {
                     <ClipboardList className="h-4 w-4 text-indigo-200" />
                     <span className="text-sm font-bold text-white">Troškovnik</span>
                   </div>
-                  {selectedItems.size > 0 && (
+                  {odabraneRadnje.length > 0 && (
                     <button
                       onClick={clearAll}
                       className="text-[10px] text-indigo-200 hover:text-white transition"
@@ -1736,7 +1783,7 @@ function TroskovnikContent() {
                 </div>
 
                 <div className="p-4">
-                  {selectedItems.size === 0 ? (
+                  {odabraneRadnje.length === 0 ? (
                     <div className="text-center py-8 text-slate-400">
                       <FileText className="h-8 w-8 mx-auto mb-2 opacity-40" />
                       <p className="text-sm">Odaberite stavke iz tarife</p>
@@ -1744,14 +1791,16 @@ function TroskovnikContent() {
                     </div>
                   ) : (
                     <div className="space-y-2 max-h-[40vh] overflow-y-auto">
-                      {liveCalc.lines.map((line, i) => (
-                        <div key={i} className="flex items-start justify-between gap-2 py-1.5 border-b border-slate-100 last:border-0">
+                      {liveCalc.lines.map((line) => (
+                        <div key={line.redak_id} className="flex items-start justify-between gap-2 py-1.5 border-b border-slate-100 last:border-0">
                           <div className="min-w-0 flex-1">
                             <p className="text-xs text-slate-700 leading-snug truncate" title={line.opis}>
                               {line.opis}
                             </p>
                             <p className="text-[10px] text-slate-400 mt-0.5">
-                              {line.is_jednokratna
+                              {line.obuhvaceno_jednokratnom
+                                ? "obuhvaćeno jednokratnom nagradom"
+                                : line.is_jednokratna
                                 ? `jednokratno · ${line.kolicina} ${line.kolicina === 1 ? "radnja" : "radnji"} = ${fmtNum(line.ukupno_bodova)} bod.`
                                 : `${line.kolicina} × ${fmtNum(line.bodova_po_jedinici)} bod.`}
                             </p>
@@ -1759,8 +1808,34 @@ function TroskovnikContent() {
                               {line.pravni_izvor}
                             </p>
 
+                            {/* Uređivanje retka — na papir ne ide, ondje stoje gotove vrijednosti. */}
+                            <div className="flex items-center gap-1.5 mt-1 print:hidden">
+                              <input
+                                type="date"
+                                value={line.datum}
+                                onChange={(e) => postaviDatum(line.redak_id, e.target.value)}
+                                className="text-[10px] px-1.5 py-0.5 border border-slate-200 rounded bg-white outline-none focus:ring-1 focus:ring-indigo-500"
+                                title="Datum kad je radnja poduzeta — obavezan za spremanje i ispis"
+                              />
+                              <input
+                                type="number"
+                                min={1}
+                                value={line.kolicina}
+                                onChange={(e) => postaviKolicinu(line.redak_id, parseInt(e.target.value) || 0)}
+                                className="w-12 text-[10px] px-1.5 py-0.5 border border-slate-200 rounded bg-white outline-none focus:ring-1 focus:ring-indigo-500"
+                                title={`Količina (${line.jedinica})`}
+                              />
+                              <button
+                                onClick={() => ukloniRadnju(line.redak_id)}
+                                className="w-6 h-6 rounded bg-red-50 hover:bg-red-100 flex items-center justify-center transition"
+                                title="Ukloni ovu radnju"
+                              >
+                                <Trash2 className="h-3 w-3 text-red-500" />
+                              </button>
+                            </div>
+
                             {/* Tbr. 41 — prilagodba ove stavke (toč. 2: "pojedine tarifne stavke") */}
-                            <div className="flex items-center gap-1.5 mt-1">
+                            <div className="flex items-center gap-1.5 mt-1 print:hidden">
                               <select
                                 value={
                                   line.tbr41_povisenje > 0
@@ -1769,7 +1844,7 @@ function TroskovnikContent() {
                                       ? `s${line.tbr41_snizenje}`
                                       : ""
                                 }
-                                onChange={(e) => postaviTbr41ZaStavku(line.item_id, e.target.value)}
+                                onChange={(e) => postaviTbr41ZaStavku(line.redak_id, e.target.value)}
                                 className="text-[10px] px-1.5 py-0.5 border border-slate-200 rounded bg-white outline-none focus:ring-1 focus:ring-indigo-500"
                                 title="Tbr. 41 — povišenje (toč. 1) ili sniženje (toč. 2) ove stavke"
                               >
@@ -1800,7 +1875,7 @@ function TroskovnikContent() {
                   )}
 
                   {/* Totals */}
-                  {selectedItems.size > 0 && (
+                  {odabraneRadnje.length > 0 && (
                     <div className="mt-4 pt-3 border-t border-slate-200 space-y-1.5">
                       {(liveCalc.povisenjePostotak > 0 || liveCalc.tbr41Postotak !== 0) && (
                         <div className="flex justify-between text-xs text-slate-500">
@@ -1933,7 +2008,7 @@ function TroskovnikContent() {
                 </div>
 
                 {/* Action buttons */}
-                {selectedItems.size > 0 && (
+                {odabraneRadnje.length > 0 && (
                   <div className="px-4 pb-4 space-y-2">
                     {upozorenjeSpor && (
                       <div className="rounded-lg border border-sky-200 bg-sky-50 p-3">
