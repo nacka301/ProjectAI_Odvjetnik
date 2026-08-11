@@ -74,6 +74,10 @@ public static class DomainServiceCollectionExtensions
         services.AddHttpClient<AuditLogService>();
         services.AddScoped<IAuditLogService>(sp => sp.GetRequiredService<AuditLogService>());
 
+        // ── Brisanje racuna i izvoz podataka (GDPR cl. 17 i cl. 20) ──
+        services.AddHttpClient<AccountService>();
+        services.AddScoped<IAccountService>(sp => sp.GetRequiredService<AccountService>());
+
         // ── Tenant resolution (user → law_firm, cached 5 min) ──
         services.AddHttpClient<TenantResolver>();
         services.AddScoped<ITenantResolver>(sp => sp.GetRequiredService<TenantResolver>());

@@ -698,7 +698,7 @@ export default function PostavkePage() {
 
               {/* ═══ TAB: Privatnost i podaci ═══ */}
               {activeTab === "privatnost" && userId && (
-                <PrivacyPanel userId={userId} userEmail={userEmail ?? ""} />
+                <PrivacyPanel userEmail={userEmail ?? ""} />
               )}
             </div>
 
