@@ -16,7 +16,6 @@ import {
   Building2,
 } from "lucide-react";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
-import { API_BASE } from "@/lib/api";
 import {
   isEmailValid,
   isPasswordValid,
@@ -88,42 +87,33 @@ export default function RegisterPage() {
 
     setLoading(true);
     try {
-      const { data, error: authError } = await supabase.auth.signUp({
+      // Firm details travel as signup metadata. The `handle_new_user` DB trigger
+      // (migration 015) reads them and creates the firm + profile — for email
+      // signup and Google alike. Nothing here depends on a follow-up HTTP call.
+      const { error: authError } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          data: { full_name: name.trim() },
+          data: {
+            full_name: name.trim(),
+            firm_name: firmName.trim(),
+            firm_oib: firmOib.trim() || null,
+          },
           emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/auth/callback`,
         },
       });
 
+      // ANTI-ENUMERATION: an existing address must look exactly like a new one.
+      // Supabase already sends "someone tried to register your address" to a
+      // taken email, so the real owner still learns about it — the person at
+      // the form does not.
       if (authError) {
         if (authError.message.toLowerCase().includes("already registered")) {
-          setError("Korisnik s ovim emailom već postoji. Pokušajte se prijaviti.");
-        } else {
-          setError(authError.message);
+          setSuccess(true);
+          return;
         }
+        setError("Registracija trenutno nije moguća. Pokušajte ponovo.");
         return;
-      }
-
-      // Register law firm + profile in backend (fire-and-forget, no block on signup)
-      if (data?.user?.id) {
-        const apiHeaders: Record<string, string> = { "Content-Type": "application/json" };
-        const apiKey = process.env.NEXT_PUBLIC_API_KEY;
-        if (apiKey) apiHeaders["X-API-Key"] = apiKey;
-
-        fetch(`${API_BASE}/api/settings/register-firm`, {
-          method: "POST",
-          headers: apiHeaders,
-          body: JSON.stringify({
-            user_id: data.user.id,
-            full_name: name.trim(),
-            firm_name: firmName.trim(),
-            firm_oib: firmOib.trim() || null,
-          }),
-        }).catch(() => {
-          // Non-blocking — firm can be set up later in Settings
-        });
       }
 
       setSuccess(true);

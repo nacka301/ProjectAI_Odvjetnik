@@ -88,6 +88,10 @@ export default function ResetPasswordPage() {
         return;
       }
 
+      // Kick every other session out — if an attacker was already inside with
+      // the old password, changing it has to evict them too.
+      await supabase.auth.signOut({ scope: "others" });
+
       setSuccess(true);
       // Redirect to login after 3s
       setTimeout(() => {

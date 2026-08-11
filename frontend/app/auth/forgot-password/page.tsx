@@ -33,15 +33,12 @@ export default function ForgotPasswordPage() {
     setLoading(true);
     try {
       const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
-      const { error: authError } = await supabase.auth.resetPasswordForEmail(email, {
+      await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${siteUrl}/auth/callback`,
       });
 
-      if (authError) {
-        setError(authError.message);
-        return;
-      }
-
+      // ANTI-ENUMERATION: always the same screen. Surfacing Supabase's error
+      // text here could distinguish an unknown address from a rate-limited one.
       setSuccess(true);
     } catch {
       setError("Greška pri povezivanju sa serverom. Pokušajte ponovo.");

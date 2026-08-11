@@ -5,8 +5,8 @@ import { createSupabaseBrowser } from "@/lib/supabase/client";
 
 /**
  * Hook that returns the current authenticated user's ID.
- * Used to pass `x-user-id` header to the backend so records are
- * scoped per user via RLS.
+ * For display and client-side scoping only — the backend derives identity
+ * from the Bearer token, never from anything the client asserts.
  */
 export function useUserId(): string | null {
   const [userId, setUserId] = useState<string | null>(null);

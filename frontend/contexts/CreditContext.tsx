@@ -100,8 +100,6 @@ export function CreditProvider({ children }: { children: ReactNode }) {
         Authorization: bearerToken,
         "Content-Type": "application/json",
       };
-      const apiKey = process.env.NEXT_PUBLIC_API_KEY;
-      if (apiKey) hdrs["X-API-Key"] = apiKey;
 
       const res = await fetch(`${API_BASE}/api/settings/credits`, {
         headers: hdrs,

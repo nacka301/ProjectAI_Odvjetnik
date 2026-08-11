@@ -64,10 +64,17 @@ const SIDEBAR_ITEMS: { id: SettingsTab; label: string; icon: React.ElementType }
 ];
 
 // ── Helpers ──
-function apiHeaders(): Record<string, string> {
+/**
+ * Auth headers for backend calls. Reads the token straight from the session
+ * on every call rather than from React state — the 2FA fetches fire right
+ * after mount, before a state-based hook would have settled.
+ */
+async function apiHeaders(
+  supabase: ReturnType<typeof createSupabaseBrowser>,
+): Promise<Record<string, string>> {
+  const { data: { session } } = await supabase.auth.getSession();
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  const apiKey = process.env.NEXT_PUBLIC_API_KEY;
-  if (apiKey) headers["X-API-Key"] = apiKey;
+  if (session) headers["Authorization"] = `Bearer ${session.access_token}`;
   return headers;
 }
 
@@ -126,8 +133,9 @@ export default function PostavkePage() {
     if (!userId) return;
     setStatusLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/2fa/status?userId=${encodeURIComponent(userId)}`, {
-        headers: apiHeaders(),
+      // No userId in the query — the backend answers for the token holder.
+      const res = await fetch(`${API_BASE}/api/2fa/status`, {
+        headers: await apiHeaders(supabase),
       });
       if (res.ok) {
         const data: StatusResponse = await res.json();
@@ -138,7 +146,7 @@ export default function PostavkePage() {
     } finally {
       setStatusLoading(false);
     }
-  }, [userId]);
+  }, [userId, supabase]);
 
   useEffect(() => {
     if (userId) checkStatus();
@@ -150,10 +158,10 @@ export default function PostavkePage() {
     setSuccess(null);
     setActionLoading(true);
     try {
+      // Email comes from the token on the backend — nothing to send.
       const res = await fetch(`${API_BASE}/api/2fa/setup`, {
         method: "POST",
-        headers: apiHeaders(),
-        body: JSON.stringify({ email: userEmail }),
+        headers: await apiHeaders(supabase),
       });
       if (!res.ok) throw new Error("Greška pri generiranju 2FA.");
       const data: SetupResponse = await res.json();
@@ -179,10 +187,8 @@ export default function PostavkePage() {
     try {
       const res = await fetch(`${API_BASE}/api/2fa/verify-setup`, {
         method: "POST",
-        headers: apiHeaders(),
+        headers: await apiHeaders(supabase),
         body: JSON.stringify({
-          user_id: userId,
-          email: userEmail,
           secret: secretForVerify,
           token: verifyToken,
         }),
@@ -217,11 +223,8 @@ export default function PostavkePage() {
     try {
       const res = await fetch(`${API_BASE}/api/2fa/disable`, {
         method: "POST",
-        headers: apiHeaders(),
-        body: JSON.stringify({
-          user_id: userId,
-          token: disableToken,
-        }),
+        headers: await apiHeaders(supabase),
+        body: JSON.stringify({ token: disableToken }),
       });
       const data: VerifyResponse = await res.json();
       if (!data.success) {

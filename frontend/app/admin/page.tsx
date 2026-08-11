@@ -163,9 +163,12 @@ function SubStatusBadge({ status, validUntil }: { status: string | null; validUn
 }
 
 function RoleBadge({ role }: { role: string }) {
+  // Firm roles, per migration 015. The legacy "admin"/"member" pair is gone.
   const colors: Record<string, string> = {
-    admin: "bg-violet-50 text-violet-700 ring-violet-200",
-    member: "bg-slate-50 text-slate-600 ring-slate-200",
+    owner: "bg-violet-50 text-violet-700 ring-violet-200",
+    lawyer: "bg-blue-50 text-blue-700 ring-blue-200",
+    paralegal: "bg-slate-50 text-slate-600 ring-slate-200",
+    readonly: "bg-amber-50 text-amber-700 ring-amber-200",
   };
   return (
     <span

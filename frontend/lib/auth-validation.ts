@@ -1,16 +1,20 @@
 // ── Password validation ─────────────────────────────────────────
-// Min 8 chars, 1 uppercase, 1 number, 1 special char
+// Min 12 chars, 1 uppercase, 1 number, 1 special char.
+// 12 is the floor for attorney-client data; the same minimum must also be set
+// in Supabase → Authentication → Providers → Email, since this check is only UX.
 
 export interface PasswordCheck {
   label: string;
   met: boolean;
 }
 
+const MIN_PASSWORD_LENGTH = 12;
+
 const SPECIAL_CHARS = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/;
 
 export function validatePassword(pw: string): PasswordCheck[] {
   return [
-    { label: "Minimalno 8 znakova", met: pw.length >= 8 },
+    { label: `Minimalno ${MIN_PASSWORD_LENGTH} znakova`, met: pw.length >= MIN_PASSWORD_LENGTH },
     { label: "Jedno veliko slovo", met: /[A-Z]/.test(pw) },
     { label: "Jedan broj", met: /[0-9]/.test(pw) },
     { label: "Jedan specijalni znak (!@#$...)", met: SPECIAL_CHARS.test(pw) },
