@@ -971,9 +971,12 @@ function TroskovnikContent() {
   };
 
   // ── Print ──
+  // Ispis je zaključan dok ijedna radnja nema datum — troškovnik bez datuma sud ne
+  // prihvaća. Provjera stoji ovdje, a ne samo na gumbu, jer gumba za ispis ima više.
   const handlePrint = useCallback(() => {
+    if (nedostajuDatumi) return;
     window.print();
-  }, []);
+  }, [nedostajuDatumi]);
 
   // ── CSV export ──
   const handleExportCsv = useCallback(() => {
@@ -1055,7 +1058,9 @@ function TroskovnikContent() {
                 </button>
                 <button
                   onClick={handlePrint}
-                  className="hidden sm:flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 transition px-2.5 py-1.5 rounded-lg hover:bg-slate-100"
+                  disabled={nedostajuDatumi !== null}
+                  title={nedostajuDatumi ?? undefined}
+                  className="hidden sm:flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 disabled:text-slate-300 disabled:hover:bg-transparent transition px-2.5 py-1.5 rounded-lg hover:bg-slate-100"
                 >
                   <Printer className="h-3.5 w-3.5" />
                   Ispis
