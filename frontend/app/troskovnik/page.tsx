@@ -304,7 +304,17 @@ function TroskovnikContent() {
   const printRef = useRef<HTMLDivElement>(null);
 
   // ── Load catalog ──
+  // Waits for userId, exactly like the client fetch below. useAuth() fills
+  // authHeaders asynchronously, so firing on mount alone sent this request
+  // before the token existed — no Authorization header, and the backend
+  // answered 401 with "Nedostaje pristupni token".
+  //
+  // The guard is on userId rather than authHeaders because the two are set
+  // together, and userId is a string: authHeaders is a fresh object on every
+  // auth event, which would refetch the catalog on each token refresh.
   useEffect(() => {
+    if (!userId) return;
+
     (async () => {
       try {
         const res = await fetch(`${API_BASE}/api/troskovnik/katalog`, {
@@ -319,7 +329,7 @@ function TroskovnikContent() {
         setLoadingKatalog(false);
       }
     })();
-  }, []);
+  }, [userId]);
 
   // ── Load user's clients for picker ──
   useEffect(() => {
