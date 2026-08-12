@@ -17,6 +17,13 @@ public static class DomainServiceCollectionExtensions
         services.AddHttpContextAccessor();
         services.AddScoped<ISupabaseRequestContext, SupabaseRequestContext>();
 
+        // ── Supabase JWKS (javni kljucevi za ES256 tokene) ──
+        // Singleton jer je cijela poanta kes: bez njega bi svaki zahtjev povlacio
+        // kljuceve s Supabasea. Kratak timeout — visi ispod provjere tokena.
+        services.AddHttpClient(SupabaseJwksProvider.HttpClientName,
+            client => client.Timeout = TimeSpan.FromSeconds(5));
+        services.AddSingleton<ISupabaseJwksProvider, SupabaseJwksProvider>();
+
         // Konkretni tip + sučelje pokazuju na istu registraciju: dio kontrolera
         // još uvijek injektira konkretne klase, a dio sučelja uvedena commitom c04aeeb.
         services.AddScoped<PdfService>();

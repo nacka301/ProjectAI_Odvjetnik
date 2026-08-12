@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Backend.Services;
+using Backend.Utils;
 
 namespace Backend.Middleware;
 
@@ -14,11 +15,23 @@ namespace Backend.Middleware;
 ///                         to PostgREST and let RLS evaluate auth.uid()
 ///   • "AuthTenantId"    — resolved via ITenantResolver (law_firm_id)
 ///
+/// Supports both signature algorithms Supabase issues:
+///   • HS256 — the legacy shared secret (SUPABASE_JWT_SECRET)
+///   • ES256 — asymmetric signing keys, verified against the project's published
+///             JWKS. Supabase migrated projects to these, and a HS256-only
+///             verifier rejects every one of those tokens with 401.
+/// Both are kept so a key rotation does not require a synchronised deploy.
+///
 /// Security model — FAIL CLOSED:
-///   SUPABASE_JWT_SECRET is mandatory; without it the host refuses to start.
-///   Every request outside <see cref="PublicPaths"/> must carry a valid
-///   "Authorization: Bearer {access_token}" header, otherwise it is rejected
-///   with 401 before it ever reaches a controller.
+///   At least one verification method must be configured; with neither the host
+///   refuses to start. Every request outside <see cref="PublicPaths"/> must carry
+///   a valid "Authorization: Bearer {access_token}" header, otherwise it is
+///   rejected with 401 before it ever reaches a controller.
+///
+///   The algorithm is matched strictly against the key type — HS256 only against
+///   the shared secret, ES256 only against a JWKS key. Anything else, "none"
+///   included, is rejected outright; accepting the token's own claim about how to
+///   verify it is the classic alg-confusion bypass.
 ///
 ///   There is deliberately NO x-user-id fallback and NO unverified-JWT path.
 ///   Both existed as dev conveniences and both turned into full authentication
@@ -27,7 +40,8 @@ namespace Backend.Middleware;
 public sealed class SupabaseJwtMiddleware
 {
     private readonly RequestDelegate _next;
-    private readonly byte[] _jwtSecret;
+    private readonly byte[]? _jwtSecret;
+    private readonly ISupabaseJwksProvider _jwks;
 
     /// <summary>
     /// The only endpoints reachable without a token. Anything not listed here
@@ -41,21 +55,32 @@ public sealed class SupabaseJwtMiddleware
         "/swagger",
     ];
 
-    public SupabaseJwtMiddleware(RequestDelegate next, IConfiguration config, ILogger<SupabaseJwtMiddleware> logger)
+    public SupabaseJwtMiddleware(
+        RequestDelegate next,
+        IConfiguration config,
+        ISupabaseJwksProvider jwks,
+        ILogger<SupabaseJwtMiddleware> logger)
     {
         _next = next;
+        _jwks = jwks;
 
         var secret = Environment.GetEnvironmentVariable("SUPABASE_JWT_SECRET")
             ?? config["Supabase:JwtSecret"];
 
-        if (string.IsNullOrWhiteSpace(secret))
-            throw new InvalidOperationException(
-                "SUPABASE_JWT_SECRET nije postavljen. Bez njega se tokeni ne mogu verificirati " +
-                "i backend bi prihvaćao neautentificirane zahtjeve. Postavite varijablu okoline " +
-                "SUPABASE_JWT_SECRET (Supabase → Settings → API → JWT Secret).");
+        _jwtSecret = string.IsNullOrWhiteSpace(secret) ? null : Encoding.UTF8.GetBytes(secret);
 
-        _jwtSecret = Encoding.UTF8.GetBytes(secret);
-        logger.LogInformation("Supabase JWT verification ENABLED — all requests must include valid Bearer token");
+        // The secret alone is no longer required — a project on asymmetric signing
+        // keys has no use for it. What must hold is that *some* way to verify a
+        // signature exists, otherwise every request would be unauthenticated.
+        if (_jwtSecret == null && !jwks.IsConfigured)
+            throw new InvalidOperationException(
+                "Nema nacina za verifikaciju tokena: ni SUPABASE_JWT_SECRET ni SUPABASE_URL nisu " +
+                "postavljeni. Bez toga bi backend prihvacao neautentificirane zahtjeve. Postavite " +
+                "SUPABASE_URL (za ES256 preko JWKS-a) ili SUPABASE_JWT_SECRET (legacy HS256).");
+
+        logger.LogInformation(
+            "Supabase JWT verification ENABLED — HS256: {Hs256}, ES256 via JWKS: {Es256}",
+            _jwtSecret != null, jwks.IsConfigured);
     }
 
     public async Task InvokeAsync(HttpContext context)
@@ -78,7 +103,7 @@ public sealed class SupabaseJwtMiddleware
         }
 
         var token = authHeader["Bearer ".Length..].Trim();
-        var claims = VerifyJwtAndExtractClaims(token);
+        var claims = await VerifyJwtAndExtractClaimsAsync(token, context.RequestAborted);
         if (claims == null)
         {
             await RejectAsync(context, "Nevazeci ili istekli token.");
@@ -140,22 +165,31 @@ public sealed class SupabaseJwtMiddleware
 
     // ── JWT verification + claims extraction ──
 
-    private JwtClaims? VerifyJwtAndExtractClaims(string token)
+    private readonly record struct JwtHeader(string Alg, string? Kid);
+
+    private async Task<JwtClaims?> VerifyJwtAndExtractClaimsAsync(string token, CancellationToken ct)
     {
         try
         {
             var parts = token.Split('.');
             if (parts.Length != 3) return null;
 
-            // Verify HS256 signature
-            var signatureInput = $"{parts[0]}.{parts[1]}";
-            using var hmac = new HMACSHA256(_jwtSecret);
-            var computedSig = Base64UrlEncode(hmac.ComputeHash(Encoding.UTF8.GetBytes(signatureInput)));
+            var header = ParseHeader(parts[0]);
+            if (header == null) return null;
 
-            if (!CryptographicOperations.FixedTimeEquals(
-                Encoding.UTF8.GetBytes(computedSig),
-                Encoding.UTF8.GetBytes(parts[2])))
-                return null;
+            var signingInput = $"{parts[0]}.{parts[1]}";
+
+            // The token names its own algorithm, so each branch is pinned to one
+            // key type. An unrecognised alg — "none" above all — falls through to
+            // false rather than to a default.
+            var signatureValid = header.Value.Alg switch
+            {
+                "HS256" => VerifyHs256(signingInput, parts[2]),
+                "ES256" => await VerifyEs256Async(signingInput, parts[2], header.Value.Kid, ct),
+                _ => false,
+            };
+
+            if (!signatureValid) return null;
 
             return ExtractClaimsFromPayload(parts[1]);
         }
@@ -165,9 +199,60 @@ public sealed class SupabaseJwtMiddleware
         }
     }
 
+    private static JwtHeader? ParseHeader(string base64Header)
+    {
+        var json = Encoding.UTF8.GetString(Base64Url.Decode(base64Header));
+        using var doc = JsonDocument.Parse(json);
+
+        if (!doc.RootElement.TryGetProperty("alg", out var algProp)) return null;
+
+        var alg = algProp.GetString();
+        if (string.IsNullOrWhiteSpace(alg)) return null;
+
+        var kid = doc.RootElement.TryGetProperty("kid", out var kidProp)
+            ? kidProp.GetString()
+            : null;
+
+        return new JwtHeader(alg, kid);
+    }
+
+    private bool VerifyHs256(string signingInput, string providedSignature)
+    {
+        if (_jwtSecret == null) return false;
+
+        using var hmac = new HMACSHA256(_jwtSecret);
+        var computedSig = Base64Url.Encode(hmac.ComputeHash(Encoding.UTF8.GetBytes(signingInput)));
+
+        return CryptographicOperations.FixedTimeEquals(
+            Encoding.UTF8.GetBytes(computedSig),
+            Encoding.UTF8.GetBytes(providedSignature));
+    }
+
+    private async Task<bool> VerifyEs256Async(
+        string signingInput, string providedSignature, string? kid, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(kid)) return false;
+
+        var signature = Base64Url.Decode(providedSignature);
+
+        // JWS carries ES256 as raw r||s (IEEE P1363), 32 bytes each — which is
+        // also the format ECDsa.VerifyData expects by default. A DER-wrapped
+        // signature of another length is not a P-256 JWS signature.
+        if (signature.Length != 64) return false;
+
+        var key = await _jwks.GetEcKeyAsync(kid, ct);
+        if (key == null) return false;
+
+        using var ecdsa = ECDsa.Create(key.Value);
+        return ecdsa.VerifyData(
+            Encoding.UTF8.GetBytes(signingInput),
+            signature,
+            HashAlgorithmName.SHA256);
+    }
+
     private static JwtClaims? ExtractClaimsFromPayload(string base64Payload)
     {
-        var payloadJson = Encoding.UTF8.GetString(Base64UrlDecode(base64Payload));
+        var payloadJson = Encoding.UTF8.GetString(Base64Url.Decode(base64Payload));
         using var doc = JsonDocument.Parse(payloadJson);
         var payload = doc.RootElement;
 
@@ -200,24 +285,5 @@ public sealed class SupabaseJwtMiddleware
             role = roleProp.GetString();
 
         return new JwtClaims(userId, email, role);
-    }
-
-    private static byte[] Base64UrlDecode(string input)
-    {
-        var base64 = input.Replace('-', '+').Replace('_', '/');
-        switch (base64.Length % 4)
-        {
-            case 2: base64 += "=="; break;
-            case 3: base64 += "="; break;
-        }
-        return Convert.FromBase64String(base64);
-    }
-
-    private static string Base64UrlEncode(byte[] input)
-    {
-        return Convert.ToBase64String(input)
-            .TrimEnd('=')
-            .Replace('+', '-')
-            .Replace('/', '_');
     }
 }

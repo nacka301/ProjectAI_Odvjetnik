@@ -85,6 +85,11 @@ public class TwoFactorController : ControllerBase
                 return Ok(result);
             return BadRequest(result);
         }
+        catch (TwoFactorStoreUnavailableException ex)
+        {
+            _logger.LogError(ex, "2FA store unavailable while verifying setup for user {UserId}", userId);
+            return StatusCode(503, new { error = "Aktivacija 2FA trenutno nije moguća." });
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error verifying 2FA setup for user {UserId}", userId);
@@ -113,6 +118,12 @@ public class TwoFactorController : ControllerBase
                 return Ok(result);
             return Unauthorized(result);
         }
+        catch (TwoFactorStoreUnavailableException ex)
+        {
+            // Not 401: a code we could not check is not a code that was wrong.
+            _logger.LogError(ex, "2FA store unavailable while validating token for user {UserId}", userId);
+            return StatusCode(503, new { error = "Provjera koda trenutno nije moguća." });
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error validating 2FA token for user {UserId}", userId);
@@ -134,6 +145,14 @@ public class TwoFactorController : ControllerBase
         {
             var enabled = await _service.IsTwoFactorEnabledAsync(userId);
             return Ok(new TwoFactorStatusResponse { Enabled = enabled });
+        }
+        catch (TwoFactorStoreUnavailableException ex)
+        {
+            // 503, never 200 {"enabled": false}. The frontend gate decides whether
+            // to let someone in from this answer, so "ne znam" has to look
+            // different from "nema 2FA" on the wire.
+            _logger.LogError(ex, "2FA store unavailable while checking status for user {UserId}", userId);
+            return StatusCode(503, new { error = "Provjera 2FA trenutno nije moguća." });
         }
         catch (Exception ex)
         {
@@ -162,6 +181,11 @@ public class TwoFactorController : ControllerBase
             if (result.Success)
                 return Ok(result);
             return BadRequest(result);
+        }
+        catch (TwoFactorStoreUnavailableException ex)
+        {
+            _logger.LogError(ex, "2FA store unavailable while disabling 2FA for user {UserId}", userId);
+            return StatusCode(503, new { error = "Deaktivacija 2FA trenutno nije moguća." });
         }
         catch (Exception ex)
         {

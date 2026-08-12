@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase/server";
+import { API_BASE } from "@/lib/api";
 import {
   MFA_COOKIE,
-  MFA_TTL_SECONDS,
+  mfaCookieOptions,
   signMfaCookie,
 } from "@/lib/mfa-cookie";
 
@@ -47,11 +48,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unesite kod." }, { status: 400 });
   }
 
-  const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5078";
-
   let backendResponse: Response;
   try {
-    backendResponse = await fetch(`${apiBase}/api/2fa/validate`, {
+    backendResponse = await fetch(`${API_BASE}/api/2fa/validate`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -76,13 +75,7 @@ export async function POST(request: Request) {
   }
 
   const response = NextResponse.json({ success: true });
-  response.cookies.set(MFA_COOKIE, await signMfaCookie(user.id), {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: MFA_TTL_SECONDS,
-  });
+  response.cookies.set(MFA_COOKIE, await signMfaCookie(user.id), mfaCookieOptions());
 
   return response;
 }

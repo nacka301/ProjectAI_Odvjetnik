@@ -19,6 +19,21 @@ export const MFA_COOKIE = "pt_mfa";
 /** How long a passed second factor stays valid. */
 export const MFA_TTL_SECONDS = 12 * 60 * 60;
 
+/**
+ * Cookie attributes shared by every place that mints the marker. Kept in one
+ * place because a single missing `httpOnly` in one of them would hand the
+ * browser a cookie it can read and reuse.
+ */
+export function mfaCookieOptions() {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax" as const,
+    path: "/",
+    maxAge: MFA_TTL_SECONDS,
+  };
+}
+
 function secret(): string {
   const value = process.env.MFA_COOKIE_SECRET;
   if (!value) {

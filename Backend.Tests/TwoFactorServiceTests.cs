@@ -166,6 +166,35 @@ public class TwoFactorServiceTests
     }
 
     // ═══════════════════════════════════════════════════════════
+    //  STORE AVAILABILITY — "ne znam" must not be answered as "no 2FA"
+    // ═══════════════════════════════════════════════════════════
+
+    [Fact]
+    public async Task IsTwoFactorEnabled_WhenStoreUnreachable_Throws_InsteadOfReportingDisabled()
+    {
+        // An unconfigured service cannot read user_mfa. It used to answer false,
+        // which the middleware gate reads as "let them in" — a database outage
+        // would have switched 2FA off for everyone who had it on.
+        var url = Environment.GetEnvironmentVariable("SUPABASE_URL");
+        var key = Environment.GetEnvironmentVariable("SUPABASE_SERVICE_KEY");
+        Environment.SetEnvironmentVariable("SUPABASE_URL", null);
+        Environment.SetEnvironmentVariable("SUPABASE_SERVICE_KEY", null);
+
+        try
+        {
+            var service = CreateService();
+
+            await Assert.ThrowsAsync<TwoFactorStoreUnavailableException>(
+                () => service.IsTwoFactorEnabledAsync(Guid.NewGuid().ToString()));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SUPABASE_URL", url);
+            Environment.SetEnvironmentVariable("SUPABASE_SERVICE_KEY", key);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
     //  MODEL VALIDATION TESTS
     // ═══════════════════════════════════════════════════════════
 

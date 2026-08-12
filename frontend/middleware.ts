@@ -1,9 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseMiddleware } from "@/lib/supabase/middleware";
-import { API_BASE } from "@/lib/api";
+import { checkSecondFactor } from "@/lib/second-factor";
 import {
   MFA_COOKIE,
-  MFA_TTL_SECONDS,
+  mfaCookieOptions,
   signMfaCookie,
   verifyMfaCookie,
 } from "@/lib/mfa-cookie";
@@ -19,7 +19,14 @@ import {
  */
 
 /** Auth pages an already-signed-in user is still allowed to reach. */
-const SIGNED_IN_AUTH_ROUTES = ["/auth/callback", "/auth/reset-password", "/auth/2fa"];
+const SIGNED_IN_AUTH_ROUTES = [
+  "/auth/callback",
+  "/auth/reset-password",
+  "/auth/2fa",
+  // Without this the gate would redirect here and the signed-in rule below would
+  // bounce the user straight back to "/", looping forever.
+  "/auth/nedostupno",
+];
 
 export async function middleware(request: NextRequest) {
   const { user, accessToken, supabaseResponse } = await createSupabaseMiddleware(request);
@@ -64,9 +71,9 @@ export async function middleware(request: NextRequest) {
     );
 
     if (!alreadyVerified) {
-      const required = await isSecondFactorRequired(accessToken);
+      const check = await checkSecondFactor(accessToken);
 
-      if (required) {
+      if (check.outcome === "required") {
         const url = request.nextUrl.clone();
         url.pathname = "/auth/2fa";
         url.search = "";
@@ -74,15 +81,26 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(url);
       }
 
+      if (check.outcome === "unknown") {
+        // Still fail-closed: no cookie is minted and the user does not get in.
+        // But we do not demand a code either — we could not establish that one
+        // exists, and asking for one the account may never have had is what
+        // locked people out with no way forward.
+        const url = request.nextUrl.clone();
+        url.pathname = "/auth/nedostupno";
+        url.search = "";
+        url.searchParams.set("next", pathname);
+        url.searchParams.set("razlog", check.reason);
+        return NextResponse.redirect(url);
+      }
+
       // 2FA is off for this account — remember it so the next navigation does
       // not ask the backend again.
-      supabaseResponse.cookies.set(MFA_COOKIE, await signMfaCookie(user.id), {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/",
-        maxAge: MFA_TTL_SECONDS,
-      });
+      supabaseResponse.cookies.set(
+        MFA_COOKIE,
+        await signMfaCookie(user.id),
+        mfaCookieOptions(),
+      );
     }
   }
 
@@ -117,32 +135,6 @@ export async function middleware(request: NextRequest) {
   response.headers.set("Pragma", "no-cache");
   response.headers.set("Expires", "0");
   return response;
-}
-
-/**
- * Asks the backend whether this account has TOTP enabled.
- *
- * Fails CLOSED: if the token is missing or the backend is unreachable, the
- * answer is "yes, ask for a code". The previous implementation did the opposite
- * — it swallowed the error and let the user in — which meant a backend outage
- * silently turned two-factor authentication off for everyone.
- */
-async function isSecondFactorRequired(accessToken: string | null): Promise<boolean> {
-  if (!accessToken) return true;
-
-  try {
-    const res = await fetch(`${API_BASE}/api/2fa/status`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-      cache: "no-store",
-    });
-
-    if (!res.ok) return true;
-
-    const status = await res.json();
-    return status?.enabled === true;
-  } catch {
-    return true;
-  }
 }
 
 export const config = {

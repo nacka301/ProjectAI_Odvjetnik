@@ -137,6 +137,22 @@ public class TwoFactorService
             return new TwoFactorResponse { Success = false, Message = "Unesite ispravan 6-znamenkasti kod." };
         }
 
+        // Enrolling replaces whatever secret is on the account, so an account that
+        // already has 2FA must not be re-enrolled by someone holding only a
+        // session. Otherwise a stolen session is upgraded into permanent access:
+        // register your own authenticator, and the real owner's is gone.
+        // Changing devices goes through disable (which demands a current code) first.
+        var existing = await GetTwoFactorRecordAsync(userId);
+        if (existing?.TotpEnabled == true)
+        {
+            _logger.LogWarning("Rejected 2FA re-enrolment for already-enrolled user {UserId}", userId);
+            return new TwoFactorResponse
+            {
+                Success = false,
+                Message = "2FA je već aktiviran na ovom računu. Za promjenu uređaja prvo isključite 2FA trenutnim kodom."
+            };
+        }
+
         // Remove spaces/dashes from manual entry format
         var cleanSecret = base32Secret.Replace(" ", "").Replace("-", "");
 
@@ -455,9 +471,21 @@ public class TwoFactorService
         }
     }
 
+    /// <summary>
+    /// Returns the caller's MFA row, or null when they genuinely have none.
+    ///
+    /// Throws <see cref="TwoFactorStoreUnavailableException"/> when the answer is
+    /// unknown. Returning null in that case would be a lie with real consequences:
+    /// every caller reads null as "2FA is off".
+    /// </summary>
     private async Task<UserTwoFactorRecord?> GetTwoFactorRecordAsync(string userId)
     {
-        if (!_isConfigured) return null;
+        if (!_isConfigured)
+            throw new TwoFactorStoreUnavailableException(
+                "Supabase nije konfiguriran (SUPABASE_URL / SUPABASE_SERVICE_KEY).");
+
+        HttpResponseMessage response;
+        string body;
 
         try
         {
@@ -468,22 +496,33 @@ public class TwoFactorService
             request.Headers.Add("apikey", _serviceKey);
             request.Headers.Add("Authorization", $"Bearer {_serviceKey}");
 
-            var response = await _httpClient.SendAsync(request);
-            var body = await response.Content.ReadAsStringAsync();
-
-            if (!response.IsSuccessStatusCode)
-            {
-                _logger.LogError("Failed to fetch 2FA record for user {UserId}: {Body}", userId, body);
-                return null;
-            }
-
-            var rows = JsonSerializer.Deserialize<List<UserTwoFactorRecord>>(body, JsonOpts);
-            return rows?.FirstOrDefault();
+            response = await _httpClient.SendAsync(request);
+            body = await response.Content.ReadAsStringAsync();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error fetching 2FA record for user {UserId}", userId);
-            return null;
+            throw new TwoFactorStoreUnavailableException("Citanje MFA zapisa nije uspjelo.", ex);
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogError("Failed to fetch 2FA record for user {UserId}: {Body}", userId, body);
+            throw new TwoFactorStoreUnavailableException(
+                $"PostgREST je vratio {(int)response.StatusCode} pri citanju MFA zapisa.");
+        }
+
+        try
+        {
+            var rows = JsonSerializer.Deserialize<List<UserTwoFactorRecord>>(body, JsonOpts);
+
+            // An empty array is the one case that really does mean "no 2FA here".
+            return rows?.FirstOrDefault();
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "Malformed MFA record payload for user {UserId}", userId);
+            throw new TwoFactorStoreUnavailableException("MFA zapis nije u ocekivanom formatu.", ex);
         }
     }
 
