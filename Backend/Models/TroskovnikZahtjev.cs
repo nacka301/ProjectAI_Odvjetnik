@@ -101,6 +101,43 @@ public sealed class TroskovnikRequest
     [JsonPropertyName("is_oslobodjen_pristojbi")]
     public bool IsOslobodjenPristojbi { get; set; }
 
+    // ── Prijelazna odredba, čl. 2 Uredbe NN 50/2026 ───────────────
+    //
+    // Dva datuma, a ne jedan zajednički: čl. 2 imenuje točno dvije situacije u kojima
+    // se primjenjuje stara Uredba, pa jedan predmet može imati star odgovor na tužbu i
+    // novu žalbu istodobno. Null znači „nije prijelazni slučaj" → nova Uredba.
+
+    /// <summary>
+    /// Datum podnošenja odgovora na tužbu. Ako je prije 1.6.2026., pristojba za odgovor
+    /// na tužbu utvrđuje se po NN 37/2023.
+    /// </summary>
+    [JsonPropertyName("datum_podnosenja_odgovora_na_tuzbu")]
+    public DateOnly? DatumPodnosenjaOdgovoraNaTuzbu { get; set; }
+
+    /// <summary>
+    /// Datum pokretanja upravnog spora. Ako je prije 1.6.2026., pristojbe u tom sporu
+    /// utvrđuju se po NN 37/2023 — i tužba i odluka, ne samo tužba.
+    /// </summary>
+    [JsonPropertyName("datum_pokretanja_upravnog_spora")]
+    public DateOnly? DatumPokretanjaUpravnogSpora { get; set; }
+
+    /// <summary>
+    /// Pristojbe koje korisnik dodaje sam, izvan onih izvedenih iz tarifnih stavaka.
+    /// Velik dio Uredbe (ovjere, etažiranje, upis broda, polog, e-Notar) nema svoju
+    /// odvjetničku tarifnu stavku iz koje bi se mogao izvesti.
+    /// </summary>
+    [JsonPropertyName("pristojbe_dodane")]
+    public List<RucnaPristojbaRequest> PristojbeDodane { get; set; } = [];
+
+    /// <summary>
+    /// Ključevi odredbi koje se ne naplaćuju, iako bi ih odabrane stavke povukle.
+    /// Postoji jer je nekoliko stavaka kataloga dvoznačno (dioba/ostavina,
+    /// stečaj/predstečaj, revizija protiv presude ili rješenja), pa automatski izvedeni
+    /// redak mora biti moguće maknuti.
+    /// </summary>
+    [JsonPropertyName("pristojbe_iskljucene")]
+    public List<string> PristojbeIskljucene { get; set; } = [];
+
     /// <summary>
     /// Broj osoba koje odvjetnik brani ili zastupa u istom postupku (Tbr. 40. toč. 1).
     /// Vrijednosti manje od 2 znače da nema povišenja.
@@ -224,6 +261,24 @@ public sealed class TroskovnikItemRequest
     /// </summary>
     [JsonPropertyName("tbr41_snizenje_postotak")]
     public decimal? Tbr41SnizenjePostotak { get; set; }
+}
+
+/// <summary>Ručno dodana sudska pristojba — vidi <see cref="RucnaPristojba"/>.</summary>
+public sealed class RucnaPristojbaRequest
+{
+    /// <summary>Ključ odredbe iz Uredbe, npr. „tbr11" ili „tbr15_etaziranje".</summary>
+    [JsonPropertyName("odredba_id")]
+    public string OdredbaId { get; set; } = "";
+
+    /// <summary>
+    /// Vrijednost na koju se odredba primjenjuje (čista ostavina, diobna masa, broj
+    /// etažnih dijelova…). Kad je null, uzima se vrijednost predmeta spora.
+    /// </summary>
+    [JsonPropertyName("osnovica")]
+    public decimal? Osnovica { get; set; }
+
+    [JsonPropertyName("kolicina")]
+    public int Kolicina { get; set; } = 1;
 }
 
 public sealed class TroskovnikParty

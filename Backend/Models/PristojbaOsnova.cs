@@ -1,23 +1,25 @@
 namespace Backend.Models;
 
 /// <summary>
-/// Osnova za obračun sudske pristojbe prema Uredbi o tarifi sudskih pristojbi
-/// (NN 37/2023). Prilog, POGLAVLJE I. nosi naslov "PARNIČNI I OVRŠNI POSTUPAK" —
-/// izvan tog poglavlja Tar. br. 1 se ne primjenjuje.
+/// Naslijeđena oznaka osnove za obračun sudske pristojbe.
+///
+/// Potječe iz vremena kad je troškovnik nosio jednu pristojbu pa je jedna oznaka mogla
+/// opisati cijeli obračun. Od prelaska na NN 50/2026 pristojbi je više — svaka radnja
+/// nosi svoju — i ishod je lista u <see cref="PristojbeRezultat"/>.
+///
+/// Enum je zadržan samo zato što spremljeni troškovnici u bazi nose polje
+/// <c>pristojba_osnova</c> i moraju se i dalje moći pročitati. Za nove izračune koristi
+/// <see cref="PristojbenaStavka"/>; ondje se iz oznake tarifnog broja vidi točno koja je
+/// odredba primijenjena, umjesto grube podjele na „puna / polovica".
 /// </summary>
 public enum PristojbaOsnova
 {
-    /// <summary>Tar. br. 1 st. 1 — puni iznos.</summary>
+    /// <summary>Pristojba se obračunava u punom iznosu (Tar. br. 1 st. 1).</summary>
     Puna = 0,
 
-    /// <summary>Tar. br. 1 st. 2 — polovica iznosa iz st. 1 (prijedlog za ovrhu, žalba, revizija...).</summary>
+    /// <summary>Pristojba je polovica iznosa iz Tar. br. 1 st. 1 (st. 2).</summary>
     Polovica = 1,
 
-    /// <summary>Uredba ne propisuje pristojbu za ovu vrstu postupka (npr. kazneni).</summary>
+    /// <summary>Uredba za odabrane radnje ne propisuje pristojbu.</summary>
     Nema = 2
 }
-
-/// <summary>Ishod obračuna sudske pristojbe.</summary>
-/// <param name="Osnova">Po kojoj se osnovi pristojba obračunava; ostaje popunjena i kad je stranka oslobođena.</param>
-/// <param name="Iznos">Iznos u EUR; 0 kad je stranka oslobođena ili kad Uredba pristojbu ne propisuje.</param>
-public readonly record struct PristojbaRezultat(PristojbaOsnova Osnova, decimal Iznos);

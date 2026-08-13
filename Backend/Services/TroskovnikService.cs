@@ -1,4 +1,5 @@
 using Backend.Models;
+using Backend.Services.Pristojbe;
 
 namespace Backend.Services;
 
@@ -537,17 +538,46 @@ public sealed class TroskovnikService : ITroskovnikService
         if (obracunajPdv)
             pdv = ZaokruziNovac(ukupnoEur * TarifaConstants.PdvRate);
 
-        // Sudska pristojba je drugi propis (Uredba NN 37/2023) i cijela se računa ondje.
-        var pristojba = SudskePristojbeCalculator.Obracunaj(
-            kontekst.VrijednostSpora, odabraneDefinicije, request.IsOslobodjenPristojbi);
+        // Sudske pristojbe su drugi propis (Uredba NN 50/2026) i cijele se računaju ondje.
+        var pristojbe = SudskePristojbeCalculator.Obracunaj(
+            kontekst.VrijednostSpora, odabraneDefinicije, request.IsOslobodjenPristojbi,
+            PristojbeOpcijeIz(request));
 
         var odvjetnickiTrosak = ukupnoEur + pdv;
-        var sveukupniTrosak = odvjetnickiTrosak + pristojba.Iznos;
+        var sveukupniTrosak = odvjetnickiTrosak + pristojbe.Ukupno;
 
         return new Zbrojevi(
             ukupnoBodova, povisenjePostotak, povisenjeBodovi, tbr41Bodovi, ukupnoEur,
-            bodoviPoOsobi, nagradaPoOsobi, pdv, pristojba.Osnova, pristojba.Iznos, sveukupniTrosak,
+            bodoviPoOsobi, nagradaPoOsobi, pdv, pristojbe, sveukupniTrosak,
             brojOsoba, obracunajPdv);
+    }
+
+    /// <summary>
+    /// Prijelazni datumi iz čl. 2 i ručne izmjene liste pristojbi, izdvojeni iz zahtjeva.
+    /// </summary>
+    private static PristojbeOpcije PristojbeOpcijeIz(TroskovnikRequest request) => new(
+        DatumPodnosenjaOdgovoraNaTuzbu: request.DatumPodnosenjaOdgovoraNaTuzbu,
+        DatumPokretanjaUpravnogSpora: request.DatumPokretanjaUpravnogSpora,
+        Dodane: [.. request.PristojbeDodane
+            .Where(p => !string.IsNullOrWhiteSpace(p.OdredbaId))
+            .Select(p => new RucnaPristojba(p.OdredbaId, p.Osnovica, p.Kolicina))],
+        Iskljucene: request.PristojbeIskljucene.ToHashSet());
+
+    /// <summary>
+    /// Naslijeđena oznaka osnove, izvedena iz gotove liste pristojbi.
+    ///
+    /// Postoji samo zbog spremljenih troškovnika koji nose polje `pristojba_osnova`.
+    /// Lista je bogatija od oznake, pa je preslikavanje nužno grubo: bez ijedne
+    /// pristojbe „Nema", inače se gleda je li prvi redak polovica iz Tar. br. 1 st. 2.
+    /// </summary>
+    private static PristojbaOsnova NaslijedenaOsnova(PristojbeRezultat pristojbe)
+    {
+        if (pristojbe.Stavke.Count == 0)
+            return PristojbaOsnova.Nema;
+
+        return pristojbe.Stavke[0].OdredbaId == PristojbeTarifaNn50_2026.Tbr1St2
+            ? PristojbaOsnova.Polovica
+            : PristojbaOsnova.Puna;
     }
 
     /// <summary>Preslikava zahtjev i izračunate zbrojeve u odgovor koji ide klijentu.</summary>
@@ -621,8 +651,9 @@ public sealed class TroskovnikService : ITroskovnikService
             IsOduzimanjePrekrsaj = request.IsOduzimanjePrekrsaj,
             VrijednostOduzimanja = request.VrijednostOduzimanja,
             // Sudske pristojbe
-            SudskaPristojba = zbrojevi.SudskaPristojba,
-            PristojbaOsnova = zbrojevi.PristojbaOsnova,
+            PristojbeneStavke = [.. zbrojevi.Pristojbe.Stavke.Select(PristojbenaStavkaUOdgovor)],
+            SudskaPristojba = zbrojevi.Pristojbe.Ukupno,
+            PristojbaOsnova = NaslijedenaOsnova(zbrojevi.Pristojbe),
             IsOslobodjenPristojbi = request.IsOslobodjenPristojbi,
             SveukupniTrosak = zbrojevi.SveukupniTrosak
         };
@@ -648,11 +679,26 @@ public sealed class TroskovnikService : ITroskovnikService
         decimal BodoviPoOsobi,
         decimal NagradaPoOsobi,
         decimal Pdv,
-        PristojbaOsnova PristojbaOsnova,
-        decimal SudskaPristojba,
+        PristojbeRezultat Pristojbe,
         decimal SveukupniTrosak,
         int BrojZastupanihOsoba,
         bool ObracunajPdv);
+
+    /// <summary>Pristojbena stavka u izlazni oblik: enum poglavlja i verzije postaju tekst.</summary>
+    private static PristojbenaStavkaDto PristojbenaStavkaUOdgovor(PristojbenaStavka stavka) => new()
+    {
+        OdredbaId = stavka.OdredbaId,
+        TarifniBroj = stavka.TarifniBroj,
+        Poglavlje = PoglavljeNazivi.Naziv(stavka.Poglavlje),
+        Opis = stavka.Opis,
+        Osnovica = stavka.Osnovica,
+        Kolicina = stavka.Kolicina,
+        IznosPoJedinici = stavka.IznosPoJedinici,
+        Iznos = stavka.Iznos,
+        Uredba = stavka.Verzija == UredbaVerzija.Nn37_2023 ? "NN 37/2023" : "NN 50/2026",
+        PravniIzvor = stavka.PravniIzvor,
+        Automatski = stavka.Automatski
+    };
 
     /// <summary>
     /// Jedino zaokruživanje u cijelom izračunu: novac, na dvije decimale, standardno.
