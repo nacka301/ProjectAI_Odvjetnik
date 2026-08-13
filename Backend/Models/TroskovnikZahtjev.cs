@@ -53,15 +53,25 @@ public sealed class TroskovnikRequest
     [JsonPropertyName("zaprijecena_kazna")]
     public string? ZaprijecenaKazna { get; set; }
 
-    /// <summary>Obrana po službenoj dužnosti – 50% umanjenje.</summary>
+    /// <summary>
+    /// Obrana po službenoj dužnosti – 50% nagrade za pojedinu radnju prema Tarifi
+    /// (Pravilnik NN 22/2022 br. 271, čl. 1). Isključuje IsZastupnikDjeteta.
+    /// </summary>
     [JsonPropertyName("is_po_sluzbenoj_duznosti")]
     public bool IsPoSluzbenojDuznosti { get; set; }
 
-    /// <summary>Obrana na teret proračuna – 50% umanjenje.</summary>
+    /// <summary>
+    /// Obrana na teret proračunskih sredstava – 50% nagrade za pojedinu radnju prema
+    /// Tarifi (isti Pravilnik, čl. 1). Isključuje IsZastupnikDjeteta.
+    /// </summary>
     [JsonPropertyName("is_na_teret_proracuna")]
     public bool IsNaTeretProracuna { get; set; }
 
-    /// <summary>Zastupnik djeteta – 70% od Tbr. 4.</summary>
+    /// <summary>
+    /// Opunomoćenik djeteta žrtve kaznenog djela – 70% nagrade za pojedinu radnju prema
+    /// Tarifi (isti Pravilnik, čl. 2). Isključuje obje zastavice iz čl. 1 — isti odvjetnik
+    /// ne može u istom postupku braniti okrivljenika i zastupati dijete žrtvu.
+    /// </summary>
     [JsonPropertyName("is_zastupnik_djeteta")]
     public bool IsZastupnikDjeteta { get; set; }
 

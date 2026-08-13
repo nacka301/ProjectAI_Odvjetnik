@@ -31,17 +31,14 @@ export const PDV_RATE = 0.25;
 export const KAZNENO_UMANJENJE_STOPA = 0.5;
 
 /**
- * Tbr. 4. toč. 8: odvjetniku koji zastupa oštećenika pripada 50% nagrade iz Tbr. 4.
- */
-export const TBR_4_8_STOPA = 0.5;
-
-/**
- * Opunomoćenik djeteta žrtve kaznenog djela — 70% od nagrade iz Tbr. 4. toč. 8.
+ * Opunomoćenik djeteta žrtve kaznenog djela — 70% pune tarife.
  *
  * Izvor stope: Pravilnik, Narodne novine 22/2022, br. 271, čl. 2.
  * https://narodne-novine.nn.hr/clanci/sluzbeni/2022_02_22_271.html
  *
- * Efektivno je to 0,50 × 0,70 = 35% pune tarife, ne 70%.
+ * Osnovica je ista kao u čl. 1 — nagrada za pojedinu radnju prema Tarifi. Čl. 2 se ne
+ * poziva na Tbr. 4. toč. 8, pa se te dvije stope ne množe: 70% je 70%. Umanjenje iz
+ * Tbr. 4. toč. 8 (zastupanje oštećenika) nosi sama stavka u katalogu.
  */
 export const ZASTUPNIK_DJETETA_STOPA = 0.7;
 
@@ -526,14 +523,15 @@ export function izracunajKazneneBodove(
     bodovi *= 1 + povecanje;
   }
 
-  // Opunomoćenik djeteta žrtve kaznenog djela: 70% od nagrade iz Tbr. 4. toč. 8,
-  // a toč. 8 je već 50% nagrade iz Tbr. 4 → efektivno 35% pune tarife, ne 70%.
+  // Pravilnik NN 22/2022 br. 271 — obje stope idu od iste osnovice: nagrade koja bi
+  // odvjetniku pripadala za pojedinu radnju prema Tarifi. Ne množe se međusobno.
+  //   čl. 1 — obrana po sl. dužnosti / na teret proračuna → 50%
+  //   čl. 2 — opunomoćenik djeteta žrtve kaznenog djela  → 70%
+  // Uloge se isključuju (obrana okrivljenika vs. zastupanje djeteta žrtve), pa se
+  // primjenjuje najviše jedna stopa i kad ipak stignu obje zastavice.
   if (isZastupnikDjeteta) {
-    bodovi *= TBR_4_8_STOPA * ZASTUPNIK_DJETETA_STOPA;
-  }
-
-  // Branitelj po službenoj dužnosti / na teret proračunskih sredstava → 50%.
-  if (isPoSluzbenojDuznosti || isNaTeretProracuna) {
+    bodovi *= ZASTUPNIK_DJETETA_STOPA;
+  } else if (isPoSluzbenojDuznosti || isNaTeretProracuna) {
     bodovi *= KAZNENO_UMANJENJE_STOPA;
   }
 
