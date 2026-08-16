@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { classifySecondFactor } from "@/lib/second-factor";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { checkSecondFactor, classifySecondFactor } from "@/lib/second-factor";
 
 /**
  * This function decides who gets into the application, so every branch gets a
@@ -94,5 +94,135 @@ describe("classifySecondFactor", () => {
 
       expect(classifySecondFactor(200, { enabled: false }).outcome).toBe("not-enrolled");
     });
+  });
+});
+
+/**
+ * The retry policy. What went wrong in production was not only the verdict but
+ * how few chances the backend got to give a good one: a cold Render instance
+ * needs longer than a single attempt, and a backend that answers "I cannot
+ * check right now" was never asked twice.
+ */
+describe("checkSecondFactor", () => {
+  const TOKEN = "a.token.value";
+
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  /** Queues one outcome per call: a status+body, or "throw" for a dead network. */
+  function respondWith(...turns: Array<{ status: number; body: unknown } | "throw">) {
+    let call = 0;
+    fetchMock.mockImplementation(async () => {
+      const turn = turns[Math.min(call++, turns.length - 1)];
+      if (turn === "throw") throw new Error("network down");
+      return {
+        status: turn.status,
+        json: async () => turn.body,
+      } as Response;
+    });
+  }
+
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    // The gate logs every refusal; keep the test output readable.
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("asks nobody when there is no token", async () => {
+    await expect(checkSecondFactor(null)).resolves.toEqual({
+      outcome: "unknown",
+      reason: "no-session",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("takes a real verdict on the first answer", async () => {
+    respondWith({ status: 200, body: { enabled: false } });
+
+    await expect(checkSecondFactor(TOKEN)).resolves.toEqual({ outcome: "not-enrolled" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("asks again after a 503 and takes the second answer", async () => {
+    // The case this exists for: the backend could not verify the signature yet
+    // — its signing keys were not loaded — and said so. One retry is the whole
+    // difference between a locked-out lawyer and a two-second delay.
+    respondWith({ status: 503, body: { error: "nije moguce" } }, { status: 200, body: { enabled: false } });
+
+    await expect(checkSecondFactor(TOKEN)).resolves.toEqual({ outcome: "not-enrolled" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([429, 502, 503, 504])("retries a %i", async (status) => {
+    respondWith({ status, body: {} }, { status: 200, body: { enabled: true } });
+
+    await expect(checkSecondFactor(TOKEN)).resolves.toEqual({ outcome: "required" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not retry a 401 — the token answered for itself", async () => {
+    // Now that the backend says 503 when it cannot verify, a 401 is a verdict on
+    // the token. Asking again with the same token would only burn a second.
+    respondWith({ status: 401, body: null });
+
+    await expect(checkSecondFactor(TOKEN)).resolves.toEqual({
+      outcome: "unknown",
+      reason: "rejected",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries a network failure", async () => {
+    respondWith("throw", { status: 200, body: { enabled: false } });
+
+    await expect(checkSecondFactor(TOKEN)).resolves.toEqual({ outcome: "not-enrolled" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports unreachable only when neither attempt landed", async () => {
+    respondWith("throw", "throw");
+
+    await expect(checkSecondFactor(TOKEN)).resolves.toEqual({
+      outcome: "unknown",
+      reason: "unreachable",
+    });
+  });
+
+  it("keeps the first real answer when the retry gets nowhere", async () => {
+    // A 503 followed by a dead network is still a backend that told us something.
+    // Calling that "unreachable" would throw away the more accurate diagnosis.
+    respondWith({ status: 503, body: { error: "nije moguce" } }, "throw");
+
+    await expect(checkSecondFactor(TOKEN)).resolves.toEqual({
+      outcome: "unknown",
+      reason: "backend",
+    });
+  });
+
+  it("logs every refusal, without the token", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    respondWith({ status: 401, body: null });
+
+    await checkSecondFactor(TOKEN);
+
+    expect(logged).toHaveBeenCalledOnce();
+    const line = logged.mock.calls[0].join(" ");
+    expect(line).toContain("rejected");
+    expect(line).toContain("401");
+    expect(line).not.toContain(TOKEN);
+  });
+
+  it("logs nothing when the user is simply let through", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    respondWith({ status: 200, body: { enabled: false } });
+
+    await checkSecondFactor(TOKEN);
+
+    expect(logged).not.toHaveBeenCalled();
   });
 });

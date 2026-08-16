@@ -61,6 +61,20 @@ export function classifySecondFactor(status: number, body: unknown): SecondFacto
   return { outcome: "unknown", reason: "malformed" };
 }
 
+/**
+ * Statuses that mean "not now", not "no".
+ *
+ * 503 is the backend saying it could not check — either the MFA store or, since
+ * the sign-in outage, the JWT verifier itself. Those recover on their own, often
+ * within a second or two, so they are worth one more ask. A 401 is not on this
+ * list: now that the backend answers 503 when it cannot verify a signature, a
+ * 401 genuinely means the token did not hold up, and asking again with the same
+ * token would only produce the same answer.
+ */
+function isTransient(status: number): boolean {
+  return status === 429 || status === 502 || status === 503 || status === 504;
+}
+
 type Attempt =
   | { reached: true; status: number; body: unknown }
   | { reached: false };
@@ -94,19 +108,60 @@ export async function checkSecondFactor(
   accessToken: string | null,
 ): Promise<SecondFactorResult> {
   if (!accessToken) {
-    return { outcome: "unknown", reason: "no-session" };
+    return report({ outcome: "unknown", reason: "no-session" });
   }
 
   const first = await attempt(accessToken, FIRST_ATTEMPT_TIMEOUT_MS);
-  if (first.reached) {
-    return classifySecondFactor(first.status, first.body);
+
+  // A backend that gave a real verdict has answered. One that timed out, threw,
+  // or said "not now" is worth asking again — a cold Render instance takes over
+  // ten seconds to serve its first request, which is longer than one attempt.
+  if (first.reached && !isTransient(first.status)) {
+    return report(classifySecondFactor(first.status, first.body), first);
   }
 
-  // Only network failures are retried; a backend that answered has answered.
   const second = await attempt(accessToken, RETRY_TIMEOUT_MS);
   if (second.reached) {
-    return classifySecondFactor(second.status, second.body);
+    return report(classifySecondFactor(second.status, second.body), second);
   }
 
-  return { outcome: "unknown", reason: "unreachable" };
+  // The retry got nowhere, but the first attempt did produce a real answer —
+  // reporting "unreachable" would throw away what we actually learned.
+  if (first.reached) {
+    return report(classifySecondFactor(first.status, first.body), first);
+  }
+
+  return report({ outcome: "unknown", reason: "unreachable" });
+}
+
+/**
+ * Leaves a trace whenever someone is stopped at the gate.
+ *
+ * This runs in the edge middleware and in the gate-status route, so the line
+ * lands in the platform's runtime logs for both — which is the only reason the
+ * next lockout will be visible without a user writing in to say they cannot get
+ * in. Deliberately `console.error`, so it can be filtered by level.
+ *
+ * Never logs the token, and never logs a claim from it. The status, the reason
+ * and the backend's own error string are enough to name the branch.
+ */
+function report(result: SecondFactorResult, attempted?: Attempt): SecondFactorResult {
+  if (result.outcome !== "unknown") return result;
+
+  const backendError =
+    attempted?.reached &&
+    typeof (attempted.body as { error?: unknown } | null)?.error === "string"
+      ? (attempted.body as { error: string }).error
+      : null;
+
+  console.error(
+    "[2fa-gate] pristup zaustavljen",
+    JSON.stringify({
+      reason: result.reason,
+      status: attempted?.reached ? attempted.status : null,
+      backendError,
+    }),
+  );
+
+  return result;
 }

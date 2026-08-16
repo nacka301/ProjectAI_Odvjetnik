@@ -28,8 +28,30 @@ public class SupabaseJwtMiddlewareTests
     {
         public bool IsConfigured => kid != null;
 
-        public Task<ECParameters?> GetEcKeyAsync(string requestedKid, CancellationToken ct = default)
-            => Task.FromResult(requestedKid == kid ? key : null);
+        public Task<JwksLookup> LookupAsync(string requestedKid, CancellationToken ct = default) =>
+            Task.FromResult(
+                kid == null ? JwksLookup.Unavailable()
+                : requestedKid == kid && key != null ? JwksLookup.Found(key.Value)
+                : JwksLookup.UnknownKid());
+
+        public Task<bool> EnsureLoadedAsync(CancellationToken ct = default)
+            => Task.FromResult(kid != null);
+    }
+
+    /// <summary>
+    /// Configured, but the key set could never be fetched — the backend that
+    /// cannot reach Supabase. Its answers must not look like the answers given to
+    /// a forged token.
+    /// </summary>
+    private sealed class UnreachableJwks : ISupabaseJwksProvider
+    {
+        public bool IsConfigured => true;
+
+        public Task<JwksLookup> LookupAsync(string kid, CancellationToken ct = default)
+            => Task.FromResult(JwksLookup.Unavailable());
+
+        public Task<bool> EnsureLoadedAsync(CancellationToken ct = default)
+            => Task.FromResult(false);
     }
 
     private static FakeJwks NoJwks() => new(null, null);
@@ -71,6 +93,15 @@ public class SupabaseJwtMiddlewareTests
 
     /// <summary>Returns true when the request reached the next middleware, i.e. the token was accepted.</summary>
     private static async Task<bool> AcceptsAsync(ISupabaseJwksProvider jwks, string? secret, string token)
+        => (await CallAsync(jwks, secret, token)).Accepted;
+
+    /// <summary>
+    /// Both halves of the answer. The status matters on its own: refusing is not
+    /// enough if "your token is bad" and "we cannot check right now" leave through
+    /// the same door.
+    /// </summary>
+    private static async Task<(bool Accepted, int Status)> CallAsync(
+        ISupabaseJwksProvider jwks, string? secret, string token)
     {
         var middleware = Build(jwks, secret, out var reachedNext);
 
@@ -81,7 +112,7 @@ public class SupabaseJwtMiddlewareTests
 
         await middleware.InvokeAsync(context);
 
-        return reachedNext();
+        return (reachedNext(), context.Response.StatusCode);
     }
 
     private static SupabaseJwtMiddleware Build(
@@ -166,6 +197,115 @@ public class SupabaseJwtMiddlewareTests
                       $"\"exp\":{DateTimeOffset.UtcNow.AddHours(-1).ToUnixTimeSeconds()}}}";
 
         Assert.False(await AcceptsAsync(jwks, TestSecret, Es256Token(key, TestKid, expired)));
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  "Cannot verify" is not "invalid" — 503, never 401
+    //
+    //  This is the split the outage turned on. A backend that could not fetch
+    //  the JWKS answered 401, identically to a backend looking at a forgery, so
+    //  the gate told users their sign-in had been refused and offered them a
+    //  retry that could not help. From the outside the two were the same event.
+    // ═══════════════════════════════════════════════════════════
+
+    [Fact]
+    public async Task WhenJwksIsUnreachable_AValidTokenGets503_Not401()
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+
+        var (accepted, status) = await CallAsync(
+            new UnreachableJwks(), TestSecret, Es256Token(key, TestKid));
+
+        Assert.False(accepted);          // still fail-closed: nobody gets in
+        Assert.Equal(503, status);       // but this is our outage, not their token
+    }
+
+    [Fact]
+    public async Task WhenSupabaseUrlIsMissing_Es256Gets503_Not401()
+    {
+        // The exact production misconfiguration: no SUPABASE_URL, so no key can
+        // ever be fetched, so every ES256 token — i.e. every token this project
+        // issues — is refused. That has to be legible as a deployment fault.
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+
+        var (accepted, status) = await CallAsync(NoJwks(), TestSecret, Es256Token(key, TestKid));
+
+        Assert.False(accepted);
+        Assert.Equal(503, status);
+    }
+
+    [Fact]
+    public async Task UnknownKid_Gets401_NotAnOutage()
+    {
+        // We hold the key set and this kid is not in it. That is a claim about the
+        // token, and it must not be reported as the backend being down — otherwise
+        // a forged kid would be enough to make the API look broken.
+        var (key, jwks) = EcKeyPair();
+        using var _ = key;
+
+        var (accepted, status) = await CallAsync(jwks, TestSecret, Es256Token(key, "forged-kid"));
+
+        Assert.False(accepted);
+        Assert.Equal(401, status);
+    }
+
+    [Fact]
+    public async Task ForgedSignature_Gets401_NotAnOutage()
+    {
+        var (_, jwks) = EcKeyPair();
+        using var attacker = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+
+        var (accepted, status) = await CallAsync(jwks, TestSecret, Es256Token(attacker, TestKid));
+
+        Assert.False(accepted);
+        Assert.Equal(401, status);
+    }
+
+    [Fact]
+    public async Task ExpiredToken_Gets401_NotAnOutage()
+    {
+        var (key, jwks) = EcKeyPair();
+        using var _ = key;
+
+        var expired = $"{{\"sub\":\"{Guid.NewGuid()}\",\"email\":\"a@b.hr\"," +
+                      $"\"exp\":{DateTimeOffset.UtcNow.AddHours(-1).ToUnixTimeSeconds()}}}";
+
+        var (accepted, status) = await CallAsync(jwks, TestSecret, Es256Token(key, TestKid, expired));
+
+        Assert.False(accepted);
+        Assert.Equal(401, status);
+    }
+
+    [Fact]
+    public async Task AnHs256TokenWithNoSecretConfigured_Gets401_NotAnOutage()
+    {
+        // A deployment with no secret has chosen not to accept HS256. Answering
+        // 503 here would let any anonymous caller make the API report itself down.
+        var (key, jwks) = EcKeyPair();
+        using var _ = key;
+
+        var (accepted, status) = await CallAsync(jwks, null, Hs256Token("whatever-secret"));
+
+        Assert.False(accepted);
+        Assert.Equal(401, status);
+    }
+
+    [Fact]
+    public async Task AnOutageNeverGrantsAccess()
+    {
+        // The whole point of 503 is that it changes the diagnosis, not the answer.
+        using var attacker = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var jwks = new UnreachableJwks();
+
+        foreach (var token in new[]
+                 {
+                     Es256Token(attacker, TestKid),
+                     Es256Token(attacker, "any-kid"),
+                     "not.a.jwt",
+                 })
+        {
+            Assert.False(await AcceptsAsync(jwks, TestSecret, token));
+        }
     }
 
     // ═══════════════════════════════════════════════════════════

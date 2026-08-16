@@ -24,6 +24,11 @@ public static class DomainServiceCollectionExtensions
             client => client.Timeout = TimeSpan.FromSeconds(5));
         services.AddSingleton<ISupabaseJwksProvider, SupabaseJwksProvider>();
 
+        // Dohvaca kljuceve pri startu umjesto na prvom zahtjevu. Na svjeze
+        // pokrenutom Render kontejneru taj prvi dohvat traje ~3,6 s uz timeout od
+        // 5 s — izgubljena utrka znaci da prva prijava dobiva odbijenicu.
+        services.AddHostedService<SupabaseJwksWarmUp>();
+
         // Konkretni tip + sučelje pokazuju na istu registraciju: dio kontrolera
         // još uvijek injektira konkretne klase, a dio sučelja uvedena commitom c04aeeb.
         services.AddScoped<PdfService>();
