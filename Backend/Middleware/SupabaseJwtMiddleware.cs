@@ -110,7 +110,10 @@ public sealed class SupabaseJwtMiddleware
         if (string.IsNullOrEmpty(authHeader)
             || !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
         {
-            _logger.LogWarning("Zahtjev bez Bearer tokena na {Path}.", path);
+            // Information, not Warning: a request with no token at all is what
+            // every port scanner produces, and at Warning it would bury the
+            // rejections that involve a real session.
+            _logger.LogInformation("Zahtjev bez Bearer tokena na {Path}.", path);
             await RespondAsync(context, 401, "Nedostaje pristupni token.");
             return;
         }
