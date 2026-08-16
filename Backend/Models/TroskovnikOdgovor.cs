@@ -101,6 +101,29 @@ public sealed class TroskovnikResponse
     [JsonPropertyName("ukupno_eur_s_pdv")]
     public decimal UkupnoEurSPdv { get; set; }
 
+    // ── Naknada troškova (Tbr. 48.-51.) — ulazi u osnovicu ─────────
+
+    /// <summary>Echo unesenih stavki, s razriješenim pravnim izvorom za ispis.</summary>
+    [JsonPropertyName("naknada_troskova_stavke")]
+    public List<NaknadaTroskovaStavkaResponse> NaknadaTroskovaStavke { get; set; } = [];
+
+    /// <summary>Zbroj naknade troškova — uključen u <see cref="UkupnoEurBezPdv"/>.</summary>
+    [JsonPropertyName("naknada_troskova_ukupno")]
+    public decimal NaknadaTroskovaUkupno { get; set; }
+
+    // ── Predujam — prolazna stavka, NE ulazi u osnovicu ────────────
+
+    /// <summary>Echo unesenih predujmova.</summary>
+    [JsonPropertyName("predujmovi")]
+    public List<PredujamStavkaResponse> Predujmovi { get; set; } = [];
+
+    /// <summary>
+    /// Zbroj predujmova — nikad se ne oporezuje, dodaje se u <see cref="SveukupniTrosak"/>
+    /// tek nakon PDV-a i sudske pristojbe.
+    /// </summary>
+    [JsonPropertyName("predujmovi_ukupno")]
+    public decimal PredujmoviUkupno { get; set; }
+
     [JsonPropertyName("vrijednost_boda")]
     public decimal VrijednostBoda { get; set; } = TarifaConstants.BodValue;
 
@@ -256,4 +279,31 @@ public sealed class TroskovnikLineItem
     /// </summary>
     [JsonPropertyName("tbr41_pravni_izvor")]
     public string Tbr41PravniIzvor { get; set; } = "";
+}
+
+/// <summary>Echo jedne stavke naknade troškova, s razriješenim pravnim izvorom.</summary>
+public sealed class NaknadaTroskovaStavkaResponse
+{
+    [JsonPropertyName("vrsta")]
+    public string Vrsta { get; set; } = "";
+
+    [JsonPropertyName("opis")]
+    public string? Opis { get; set; }
+
+    [JsonPropertyName("iznos")]
+    public decimal Iznos { get; set; }
+
+    /// <summary>Odredba Tarife uz vrstu izdatka — vidi <see cref="VrstaTroska.PravniIzvor"/>.</summary>
+    [JsonPropertyName("pravni_izvor")]
+    public string PravniIzvor { get; set; } = "";
+}
+
+/// <summary>Echo jednog predujma.</summary>
+public sealed class PredujamStavkaResponse
+{
+    [JsonPropertyName("opis")]
+    public string? Opis { get; set; }
+
+    [JsonPropertyName("iznos")]
+    public decimal Iznos { get; set; }
 }

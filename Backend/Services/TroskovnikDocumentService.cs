@@ -69,6 +69,8 @@ public sealed class TroskovnikDocumentService
                 UkupnoEurBezPdv = record.UkupnoEurBezPdv,
                 Pdv = record.Pdv,
                 UkupnoEurSPdv = record.UkupnoEurSPdv,
+                NaknadaTroskovaUkupno = record.NaknadaTroskovaUkupno,
+                PredujmoviUkupno = record.PredujmoviUkupno,
                 HasVat = record.HasVat,
                 IsPdvUkljucen = record.IsPdvUkljucen,
                 Klijent = null,
@@ -165,19 +167,43 @@ public sealed class TroskovnikDocumentService
 
         sb.AppendLine("</table>");
 
+        // Naknada troškova (Tbr. 48.-51.) — vlastiti trošak odvjetnika, ulazi u osnovicu.
+        if (resp.NaknadaTroskovaStavke is { Count: > 0 })
+        {
+            sb.AppendLine("<h3>Naknada troškova (Tbr. 48.-51.)</h3>");
+            sb.AppendLine("<table><tr><th>Vrsta</th><th>Opis</th><th>Pravni izvor</th><th>Iznos (EUR)</th></tr>");
+            foreach (var n in resp.NaknadaTroskovaStavke)
+            {
+                var naziv = n.Vrsta switch
+                {
+                    Backend.Models.VrstaTroska.Prijevoz => "Prijevoz",
+                    Backend.Models.VrstaTroska.Dnevnica => "Dnevnica",
+                    Backend.Models.VrstaTroska.HotelskiSmjestaj => "Hotelski smještaj",
+                    Backend.Models.VrstaTroska.OstaliIzdaci => "Ostali izdaci",
+                    _ => n.Vrsta
+                };
+                sb.AppendLine($"<tr><td>{System.Net.WebUtility.HtmlEncode(naziv)}</td><td>{System.Net.WebUtility.HtmlEncode(n.Opis ?? "")}</td><td style=\"font-size:10px;color:#555\">{System.Net.WebUtility.HtmlEncode(n.PravniIzvor)}</td><td style=\"text-align:right\">{FormatCurrency(n.Iznos)}</td></tr>");
+            }
+            sb.AppendLine("</table>");
+        }
+
         // Totals
         sb.AppendLine("<h3>Ukupno</h3>");
         sb.AppendLine("<table style=\"width:320px;float:right;\">");
 
+        var napomenaNaknade = resp.NaknadaTroskovaUkupno > 0
+            ? $"<br/><span style=\"font-size:10px;color:#555\">uključuje naknadu troškova (Tbr. 48.-51.): {FormatCurrency(resp.NaknadaTroskovaUkupno)}</span>"
+            : "";
+
         if (includeVat)
         {
-            sb.AppendLine($"<tr><td>Osnovica (bez PDV)</td><td style=\"text-align:right\">{FormatCurrency(resp.UkupnoEurBezPdv)}</td></tr>");
+            sb.AppendLine($"<tr><td>Osnovica (bez PDV) — nagrada + naknada troškova{napomenaNaknade}</td><td style=\"text-align:right\">{FormatCurrency(resp.UkupnoEurBezPdv)}</td></tr>");
             sb.AppendLine($"<tr><td>PDV (25%)</td><td style=\"text-align:right\">{FormatCurrency(resp.Pdv)}</td></tr>");
             sb.AppendLine($"<tr><th>Odvjetnički trošak s PDV-om</th><th style=\"text-align:right\">{FormatCurrency(resp.UkupnoEurSPdv)}</th></tr>");
         }
         else
         {
-            sb.AppendLine($"<tr><th>Odvjetnički trošak</th><th style=\"text-align:right\">{FormatCurrency(resp.UkupnoEurBezPdv)}</th></tr>");
+            sb.AppendLine($"<tr><th>Odvjetnički trošak — nagrada + naknada troškova{napomenaNaknade}</th><th style=\"text-align:right\">{FormatCurrency(resp.UkupnoEurBezPdv)}</th></tr>");
         }
 
         // Sudska pristojba — s razlogom kad je nema, da "0,00 €" ne izgleda kao greška.
@@ -192,6 +218,13 @@ public sealed class TroskovnikDocumentService
         };
 
         sb.AppendLine($"<tr><td>Sudska pristojba{(resp.IsOslobodjenPristojbi ? " (oslobođeno)" : "")}<br/><span style=\"font-size:10px;color:#555\">{System.Net.WebUtility.HtmlEncode(pristojbaObrazlozenje)}</span></td><td style=\"text-align:right\">{FormatCurrency(resp.SudskaPristojba)}</td></tr>");
+
+        // Predujam — prolazna stavka, izuzeta iz PDV osnovice (čl. 33. Zakona o PDV-u).
+        if (resp.PredujmoviUkupno > 0)
+        {
+            sb.AppendLine($"<tr><td>Predujam<br/><span style=\"font-size:10px;color:#555\">Prolazna stavka — plaća se u ime i za račun stranke (čl. 33. Zakona o PDV-u), izuzeta iz PDV osnovice</span></td><td style=\"text-align:right\">{FormatCurrency(resp.PredujmoviUkupno)}</td></tr>");
+        }
+
         sb.AppendLine($"<tr><th>SVEUKUPNI TROŠAK</th><th style=\"text-align:right\">{FormatCurrency(resp.SveukupniTrosak)}</th></tr>");
 
         // Tbr. 40. toč. 1, drugi odlomak — "Iznos povišene nagrade dijeli se na jednake

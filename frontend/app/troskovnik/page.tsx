@@ -53,6 +53,8 @@ import {
   TBR41_MAX_SNIZENJE,
   TBR45_NACIN,
   TBR45_NACIN_LABELE,
+  VRSTA_TROSKA,
+  VRSTA_TROSKA_LABELE,
   efektivniVps,
   izracunajOsnovicu,
   odrediPristojbuOsnovu,
@@ -74,6 +76,7 @@ import {
   type TarifnaStavka,
   type Tbr41Stavka,
   type Tbr45Nacin,
+  type VrstaTroska,
 } from "@/lib/tarifa";
 
 // ── Types (mirror backend models) ──
@@ -129,6 +132,12 @@ interface TroskovnikResponse {
   ukupno_eur_bez_pdv: number;
   pdv: number;
   ukupno_eur_s_pdv: number;
+  // Naknada troškova (Tbr. 48.-51.) — ulazi u osnovicu (uključena u ukupno_eur_bez_pdv)
+  naknada_troskova_stavke?: { vrsta: string; opis?: string | null; iznos: number; pravni_izvor: string }[];
+  naknada_troskova_ukupno?: number;
+  // Predujam — prolazna stavka, NE ulazi u osnovicu
+  predujmovi?: { opis?: string | null; iznos: number }[];
+  predujmovi_ukupno?: number;
   vrijednost_boda: number;
   klijent: { ime: string; oib?: string; adresa?: string; grad?: string } | null;
   odvjetnik: { ime: string; oib?: string; adresa?: string; grad?: string; iban?: string } | null;
@@ -165,6 +174,11 @@ interface TroskovnikResponse {
 }
 
 // ── Format helpers ──
+
+/** Hrvatski format broja ("1.234,56") → number. Isti obrazac kao vrijednostOduzimanja/rentaIznos. */
+function parseHrNumber(s: string): number {
+  return parseFloat(s.replace(/\./g, "").replace(",", ".")) || 0;
+}
 
 function fmtEur(n: number) {
   return n.toLocaleString("hr-HR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
@@ -244,6 +258,19 @@ function TroskovnikContent() {
   // New field for PDV toggle and party data
   // Explicit flag: whether the entity is in the VAT system (preferred by backend)
   const [isPdvUkljucen, setIsPdvUkljucen] = useState(false);
+  // True nakon što je korisnik ručno dirao checkbox — sprječava da dohvat postavke
+  // ureda kasnije pregazi izbor koji je korisnik već napravio za ovaj dokument.
+  const pdvManuallySet = useRef(false);
+  const handlePdvToggle = useCallback((checked: boolean) => {
+    pdvManuallySet.current = true;
+    setIsPdvUkljucen(checked);
+  }, []);
+  // ── Naknada troškova (Tbr. 48.-51.) — ulazi u PDV osnovicu ──
+  const [naknadaTroskovaStavke, setNaknadaTroskovaStavke] = useState<
+    { vrsta: VrstaTroska; opis: string; iznos: string }[]
+  >([]);
+  // ── Predujam (npr. za vještačenje) — prolazna stavka, ne ulazi u osnovicu ──
+  const [predujmovi, setPredujmovi] = useState<{ opis: string; iznos: string }[]>([]);
   const [odvjetnikIban, setOdvjetnikIban] = useState("");
   const [protustrankaIme, setProtustrankaIme] = useState("");
   const [protustrankaOib, setProtustrankaOib] = useState("");
@@ -329,6 +356,23 @@ function TroskovnikContent() {
         setLoadingKatalog(false);
       }
     })();
+  }, [userId]);
+
+  // ── Zadana vrijednost PDV prekidača iz postavki ureda ──
+  // Samo predlaže vrijednost pri prvom učitavanju; ako je korisnik već ručno
+  // dirao checkbox (npr. jer je stigao fetch nakon što je već odgovorio),
+  // dohvat ovdje ništa ne mijenja. Neuspjeh fetcha tiho zadržava default false —
+  // ovo je samo prijedlog, ne kritična funkcionalnost.
+  useEffect(() => {
+    if (!userId) return;
+    fetch(`${API_BASE}/api/settings/firm`, { headers: authHeaders })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { pdv_obveznik?: boolean } | null) => {
+        if (data && !pdvManuallySet.current) {
+          setIsPdvUkljucen(Boolean(data.pdv_obveznik));
+        }
+      })
+      .catch(() => {});
   }, [userId]);
 
   // ── Load user's clients for picker ──
@@ -617,21 +661,41 @@ function TroskovnikContent() {
 
     // Bodovi su do ovdje ostali decimalni; tek se gotov iznos zaokružuje, jednom.
     const ukupnoEur = zaokruziNovac(ukupnoBodova * BOD_VALUE);
-    const pdv = isPdvUkljucen ? zaokruziNovac(ukupnoEur * PDV_RATE) : 0;
-    const odvjetnickiTrosak = ukupnoEur + pdv;
+
+    // Naknada troškova (Tbr. 48.-51.) — vlastiti trošak odvjetnika, ULAZI u osnovicu.
+    const naknadaTroskovaUkupno = zaokruziNovac(
+      naknadaTroskovaStavke.reduce((s, r) => s + parseHrNumber(r.iznos), 0)
+    );
+    const osnovicaSaNaknadom = ukupnoEur + naknadaTroskovaUkupno;
+
+    const pdv = isPdvUkljucen ? zaokruziNovac(osnovicaSaNaknadom * PDV_RATE) : 0;
+    const odvjetnickiTrosak = osnovicaSaNaknadom + pdv;
 
     // Sudske pristojbe (Uredba NN 37/2023, Tar. br. 1)
     const sudskaPristojba = isOslobodjenPristojbi
       ? 0
       : izracunajSudskuPristojbu(vrijednostNum, pristojbaOsnova);
-    const sveukupniTrosak = odvjetnickiTrosak + sudskaPristojba;
+
+    // Predujam (npr. za vještačenje) — prolazna stavka, nikad se ne oporezuje,
+    // dodaje se tek nakon PDV-a i sudske pristojbe.
+    const predujmoviUkupno = zaokruziNovac(
+      predujmovi.reduce((s, r) => s + parseHrNumber(r.iznos), 0)
+    );
+
+    const sveukupniTrosak = odvjetnickiTrosak + sudskaPristojba + predujmoviUkupno;
 
     // Tbr. 40. toč. 1, drugi odlomak — dioba na jednake dijelove po zastupanoj osobi.
+    // Dijeli se NAGRADA (ukupnoEur) — naknada troškova nije odvjetnička nagrada.
     const bodoviPoOsobi = podijeliPoOsobama(ukupnoBodova, brojZastupanihOsoba);
     const nagradaPoOsobi = zaokruziNovac(podijeliPoOsobama(ukupnoEur, brojZastupanihOsoba));
 
-    return { lines, osnovicaBodova, povisenjePostotak, povisenjeBodovi, tbr41Postotak, tbr41Bodovi, ukupnoBodova, bodoviPoOsobi, nagradaPoOsobi, ukupnoEur, pdv, ukupnoSPdv: ukupnoEur + pdv, sudskaPristojba, sveukupniTrosak };
-  }, [selectedItems, katalog, osnovica, isPdvUkljucen, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, isOduzimanjePrekrsaj, parsedVrijednostOduzimanja, isOslobodjenPristojbi, vrijednostNum, pristojbaOsnova, brojZastupanihOsoba, zaprijecenaKazna, tbr41Povisenje, tbr41Snizenje, tbr41PoStavci]);
+    return {
+      lines, osnovicaBodova, povisenjePostotak, povisenjeBodovi, tbr41Postotak, tbr41Bodovi,
+      ukupnoBodova, bodoviPoOsobi, nagradaPoOsobi, ukupnoEur, naknadaTroskovaUkupno,
+      osnovicaSaNaknadom, pdv, ukupnoSPdv: osnovicaSaNaknadom + pdv, sudskaPristojba,
+      predujmoviUkupno, sveukupniTrosak,
+    };
+  }, [selectedItems, katalog, osnovica, isPdvUkljucen, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, isOduzimanjePrekrsaj, parsedVrijednostOduzimanja, isOslobodjenPristojbi, vrijednostNum, pristojbaOsnova, brojZastupanihOsoba, zaprijecenaKazna, tbr41Povisenje, tbr41Snizenje, tbr41PoStavci, naknadaTroskovaStavke, predujmovi]);
 
   // ── Handlers ──
   const toggleCategory = useCallback((cat: string) => {
@@ -694,8 +758,39 @@ function TroskovnikContent() {
 
   const clearAll = useCallback(() => {
     setSelectedItems(new Map());
+    setNaknadaTroskovaStavke([]);
+    setPredujmovi([]);
     setResult(null);
     setCalcError(null);
+  }, []);
+
+  // ── Naknada troškova (Tbr. 48.-51.) — dodaj/uredi/ukloni redak ──
+  const addNaknadaTroskova = useCallback(() => {
+    setNaknadaTroskovaStavke((prev) => [...prev, { vrsta: VRSTA_TROSKA.Prijevoz, opis: "", iznos: "" }]);
+  }, []);
+
+  const updateNaknadaTroskova = useCallback(
+    (index: number, patch: Partial<{ vrsta: VrstaTroska; opis: string; iznos: string }>) => {
+      setNaknadaTroskovaStavke((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)));
+    },
+    []
+  );
+
+  const removeNaknadaTroskova = useCallback((index: number) => {
+    setNaknadaTroskovaStavke((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
+  // ── Predujam — dodaj/uredi/ukloni redak ──
+  const addPredujam = useCallback(() => {
+    setPredujmovi((prev) => [...prev, { opis: "", iznos: "" }]);
+  }, []);
+
+  const updatePredujam = useCallback((index: number, patch: Partial<{ opis: string; iznos: string }>) => {
+    setPredujmovi((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)));
+  }, []);
+
+  const removePredujam = useCallback((index: number) => {
+    setPredujmovi((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
   // ── Submit to backend ──
@@ -759,6 +854,14 @@ function TroskovnikContent() {
         // Tbr. 41 — povisivanje i snižavanje tarifnih stavaka
         tbr41_povisenje_postotak: tbr41Povisenje,
         tbr41_snizenje_postotak: tbr41Snizenje,
+        // Naknada troškova (Tbr. 48.-51.) — ulazi u osnovicu
+        naknada_troskova_stavke: naknadaTroskovaStavke
+          .filter((r) => parseHrNumber(r.iznos) > 0)
+          .map((r) => ({ vrsta: r.vrsta, opis: r.opis || undefined, iznos: parseHrNumber(r.iznos) })),
+        // Predujam — prolazna stavka, ne ulazi u osnovicu
+        predujmovi: predujmovi
+          .filter((r) => parseHrNumber(r.iznos) > 0)
+          .map((r) => ({ opis: r.opis || undefined, iznos: parseHrNumber(r.iznos) })),
       };
 
       const res = await fetch(`${API_BASE}/api/troskovnik/izracunaj`, {
@@ -846,6 +949,14 @@ function TroskovnikContent() {
         // Tbr. 41 — povisivanje i snižavanje tarifnih stavaka
         tbr41_povisenje_postotak: tbr41Povisenje,
         tbr41_snizenje_postotak: tbr41Snizenje,
+        // Naknada troškova (Tbr. 48.-51.) — ulazi u osnovicu
+        naknada_troskova_stavke: naknadaTroskovaStavke
+          .filter((r) => parseHrNumber(r.iznos) > 0)
+          .map((r) => ({ vrsta: r.vrsta, opis: r.opis || undefined, iznos: parseHrNumber(r.iznos) })),
+        // Predujam — prolazna stavka, ne ulazi u osnovicu
+        predujmovi: predujmovi
+          .filter((r) => parseHrNumber(r.iznos) > 0)
+          .map((r) => ({ opis: r.opis || undefined, iznos: parseHrNumber(r.iznos) })),
         client_id: selectedClientId || undefined,
         // Signal backend to auto-create client from stranke data if no client_id
         auto_create_client: !selectedClientId && !!klijentIme.trim(),
@@ -905,19 +1016,23 @@ function TroskovnikContent() {
 
     // Conditionally include PDV rows in CSV based on toggle
     const csvPdvActive = result ? (result.is_pdv_ukljucen ?? result.has_vat ?? isPdvUkljucen) : isPdvUkljucen;
+    const csvNaknada = result?.naknada_troskova_ukupno ?? liveCalc.naknadaTroskovaUkupno;
     const csvPristojba = result?.sudska_pristojba ?? liveCalc.sudskaPristojba;
+    const csvPredujam = result?.predujmovi_ukupno ?? liveCalc.predujmoviUkupno;
     const csvSveukupni = result?.sveukupni_trosak ?? liveCalc.sveukupniTrosak;
+    const naknadaRedak = csvNaknada > 0 ? `\n;;;;;;Naknada troškova (Tbr. 48.-51.);${formatNumber(csvNaknada)}` : "";
+    const predujamRedak = csvPredujam > 0 ? `\n;;;;;;Predujam;${formatNumber(csvPredujam)}` : "";
     let totals: string;
     if (csvPdvActive) {
-      const base = result ? result.ukupno_eur_bez_pdv : liveCalc.ukupnoEur;
+      const base = result ? result.ukupno_eur_bez_pdv : liveCalc.ukupnoEur + liveCalc.naknadaTroskovaUkupno;
       const pdvAmt = result ? result.pdv : liveCalc.pdv;
       const grand = result ? result.ukupno_eur_s_pdv : liveCalc.ukupnoSPdv;
       const bodova = result ? result.ukupno_bodova : liveCalc.ukupnoBodova;
-      totals = `\n\n;;;;;;Ukupno bodova;${bodova}\n;;;;;;Osnovica (bez PDV);${formatNumber(base)}\n;;;;;;PDV (25%);${formatNumber(pdvAmt)}\n;;;;;;Odvjetnički trošak s PDV-om;${formatNumber(grand)}\n;;;;;;Sudska pristojba (Tar. br. 1);${formatNumber(csvPristojba)}\n;;;;;;SVEUKUPNI TROŠAK;${formatNumber(csvSveukupni)}`;
+      totals = `\n\n;;;;;;Ukupno bodova;${bodova}${naknadaRedak}\n;;;;;;Osnovica (bez PDV);${formatNumber(base)}\n;;;;;;PDV (25%);${formatNumber(pdvAmt)}\n;;;;;;Odvjetnički trošak s PDV-om;${formatNumber(grand)}\n;;;;;;Sudska pristojba (Tar. br. 1);${formatNumber(csvPristojba)}${predujamRedak}\n;;;;;;SVEUKUPNI TROŠAK;${formatNumber(csvSveukupni)}`;
     } else {
-      const base = result ? result.ukupno_eur_bez_pdv : liveCalc.ukupnoEur;
+      const base = result ? result.ukupno_eur_bez_pdv : liveCalc.ukupnoEur + liveCalc.naknadaTroskovaUkupno;
       const bodova = result ? result.ukupno_bodova : liveCalc.ukupnoBodova;
-      totals = `\n\n;;;;;;Ukupno bodova;${bodova}\n;;;;;;Odvjetnički trošak;${formatNumber(base)}\n;;;;;;Sudska pristojba (Tar. br. 1);${formatNumber(csvPristojba)}\n;;;;;;SVEUKUPNI TROŠAK;${formatNumber(csvSveukupni)}`;
+      totals = `\n\n;;;;;;Ukupno bodova;${bodova}${naknadaRedak}\n;;;;;;Odvjetnički trošak;${formatNumber(base)}\n;;;;;;Sudska pristojba (Tar. br. 1);${formatNumber(csvPristojba)}${predujamRedak}\n;;;;;;SVEUKUPNI TROŠAK;${formatNumber(csvSveukupni)}`;
     }
 
     const bom = "\uFEFF";
@@ -1850,7 +1965,7 @@ function TroskovnikContent() {
                             <input
                               type="checkbox"
                               checked={isPdvUkljucen}
-                              onChange={(e) => setIsPdvUkljucen(e.target.checked)}
+                              onChange={(e) => handlePdvToggle(e.target.checked)}
                               className="h-4 w-4 rounded border-slate-200 text-indigo-600 focus:ring-indigo-500"
                             />
                             <span className="text-xs">U sustavu PDV-a</span>
@@ -1859,11 +1974,61 @@ function TroskovnikContent() {
                         <span className="font-semibold">{isPdvUkljucen ? 'PDV 25%' : 'PDV 0%'}</span>
                       </div>
 
+                      {/* ── Naknada troškova (Tbr. 48.-51.) — ulazi u osnovicu ── */}
+                      <div className="pt-2 mt-1 border-t border-dashed border-slate-200 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold text-slate-600">Naknada troškova (Tbr. 48.-51.)</span>
+                          <button
+                            type="button"
+                            onClick={addNaknadaTroskova}
+                            className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800"
+                          >
+                            + Dodaj
+                          </button>
+                        </div>
+                        {naknadaTroskovaStavke.map((redak, i) => (
+                          <div key={i} className="flex items-center gap-1.5">
+                            <select
+                              value={redak.vrsta}
+                              onChange={(e) => updateNaknadaTroskova(i, { vrsta: e.target.value as VrstaTroska })}
+                              className="flex-1 min-w-0 rounded border border-slate-200 px-1.5 py-1 text-[11px] text-slate-700"
+                            >
+                              {Object.values(VRSTA_TROSKA).map((v) => (
+                                <option key={v} value={v}>{VRSTA_TROSKA_LABELE[v]}</option>
+                              ))}
+                            </select>
+                            <input
+                              type="text"
+                              placeholder="Opis (neobavezno)"
+                              value={redak.opis}
+                              onChange={(e) => updateNaknadaTroskova(i, { opis: e.target.value })}
+                              className="w-20 rounded border border-slate-200 px-1.5 py-1 text-[11px] text-slate-700 placeholder:text-slate-400"
+                            />
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              placeholder="0,00"
+                              value={redak.iznos}
+                              onChange={(e) => updateNaknadaTroskova(i, { iznos: e.target.value })}
+                              className="w-16 rounded border border-slate-200 px-1.5 py-1 text-[11px] text-right text-slate-700 placeholder:text-slate-400"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeNaknadaTroskova(i)}
+                              className="text-slate-400 hover:text-red-600 shrink-0"
+                              aria-label="Ukloni"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+
                       {/* Totals when PDV included */}
-                      <div className={`transition-all duration-300 ease-in-out overflow-hidden ${isPdvUkljucen ? 'max-h-80 opacity-100' : 'max-h-0 opacity-0'}`}>
+                      <div className={`transition-all duration-300 ease-in-out overflow-hidden ${isPdvUkljucen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}>
                         <div className="flex justify-between text-xs text-slate-500 mt-2">
-                          <span>Osnovica (bez PDV)</span>
-                          <span className="font-semibold">{fmtEur(liveCalc.ukupnoEur)}</span>
+                          <span>Osnovica (bez PDV) — nagrada + naknada troškova</span>
+                          <span className="font-semibold">{fmtEur(liveCalc.osnovicaSaNaknadom)}</span>
                         </div>
                         <div className="flex justify-between text-xs text-slate-500">
                           <span>PDV (25%)</span>
@@ -1878,8 +2043,8 @@ function TroskovnikContent() {
                       {/* Totals when PDV excluded */}
                       <div className={`transition-all duration-300 ease-in-out overflow-hidden ${isPdvUkljucen ? 'max-h-0 opacity-0' : 'max-h-40 opacity-100'}`}>
                         <div className="flex justify-between text-xs font-bold text-indigo-700 pt-1 mt-2">
-                          <span>Odvjetnički trošak</span>
-                          <span>{fmtEur(liveCalc.ukupnoEur)}</span>
+                          <span>Odvjetnički trošak — nagrada + naknada troškova</span>
+                          <span>{fmtEur(liveCalc.osnovicaSaNaknadom)}</span>
                         </div>
                       </div>
 
@@ -1911,6 +2076,59 @@ function TroskovnikContent() {
                             </div>
                             <p className="text-[10px] text-slate-400">{objasnjenjePristojbe(pristojbaOsnova)}</p>
                           </>
+                        )}
+                      </div>
+
+                      {/* ── Predujam — prolazna stavka, ne ulazi u osnovicu ── */}
+                      <div className="pt-2 mt-1 border-t border-dashed border-slate-200 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold text-slate-600">Predujam (npr. za vještačenje)</span>
+                          <button
+                            type="button"
+                            onClick={addPredujam}
+                            className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800"
+                          >
+                            + Dodaj
+                          </button>
+                        </div>
+                        {predujmovi.length > 0 && (
+                          <p className="text-[10px] text-slate-400 leading-snug">
+                            Prolazna stavka — plaća se u ime i za račun stranke (čl. 33. Zakona o PDV-u), ne ulazi u
+                            PDV osnovicu.
+                          </p>
+                        )}
+                        {predujmovi.map((redak, i) => (
+                          <div key={i} className="flex items-center gap-1.5">
+                            <input
+                              type="text"
+                              placeholder="Opis (npr. predujam za vještačenje)"
+                              value={redak.opis}
+                              onChange={(e) => updatePredujam(i, { opis: e.target.value })}
+                              className="flex-1 min-w-0 rounded border border-slate-200 px-1.5 py-1 text-[11px] text-slate-700 placeholder:text-slate-400"
+                            />
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              placeholder="0,00"
+                              value={redak.iznos}
+                              onChange={(e) => updatePredujam(i, { iznos: e.target.value })}
+                              className="w-16 rounded border border-slate-200 px-1.5 py-1 text-[11px] text-right text-slate-700 placeholder:text-slate-400"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removePredujam(i)}
+                              className="text-slate-400 hover:text-red-600 shrink-0"
+                              aria-label="Ukloni"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                        {liveCalc.predujmoviUkupno > 0 && (
+                          <div className="flex justify-between text-xs text-slate-600">
+                            <span>Predujam ukupno</span>
+                            <span className="font-semibold">{fmtEur(liveCalc.predujmoviUkupno)}</span>
+                          </div>
                         )}
                       </div>
 
@@ -2276,14 +2494,24 @@ function TroskovnikContent() {
                       const pdvCalc = isPdv ? Math.round(base * 0.25 * 100) / 100 : 0;
                       const odvjetnickiTrosak = Math.round((base + pdvCalc) * 100) / 100;
                       const pristojba = Number(result.sudska_pristojba ?? 0);
-                      const sveukupni = Number(result.sveukupni_trosak ?? (odvjetnickiTrosak + pristojba));
+                      const naknadaTroskova = Number(result.naknada_troskova_ukupno ?? 0);
+                      const predujam = Number(result.predujmovi_ukupno ?? 0);
+                      const sveukupni = Number(result.sveukupni_trosak ?? (odvjetnickiTrosak + pristojba + predujam));
+                      const osnovicaLabel = naknadaTroskova > 0 ? " — nagrada + naknada troškova" : "";
 
                       return (
                         <>
+                          {naknadaTroskova > 0 && (
+                            <tr>
+                              <td colSpan={5} className="py-1 px-2 text-right text-xs text-slate-500">Naknada troškova (Tbr. 48.-51.)</td>
+                              <td />
+                              <td className="py-1 px-2 text-right text-sm text-slate-600">{fmtEur(naknadaTroskova)}</td>
+                            </tr>
+                          )}
                           {isPdv && (
                             <>
                               <tr>
-                                <td colSpan={5} className="py-1 px-2 text-right text-xs text-slate-500">Osnovica (bez PDV)</td>
+                                <td colSpan={5} className="py-1 px-2 text-right text-xs text-slate-500">Osnovica (bez PDV){osnovicaLabel}</td>
                                 <td />
                                 <td className="py-1 px-2 text-right text-sm text-slate-600">{fmtEur(base)}</td>
                               </tr>
@@ -2301,7 +2529,7 @@ function TroskovnikContent() {
                           )}
                           {!isPdv && (
                             <tr>
-                              <td colSpan={5} className="py-1 px-2 text-right text-xs font-semibold text-indigo-700">Odvjetnički trošak</td>
+                              <td colSpan={5} className="py-1 px-2 text-right text-xs font-semibold text-indigo-700">Odvjetnički trošak{osnovicaLabel}</td>
                               <td />
                               <td className="py-1 px-2 text-right text-sm font-semibold text-indigo-700">{fmtEur(base)}</td>
                             </tr>
@@ -2319,6 +2547,18 @@ function TroskovnikContent() {
                               {fmtEur(pristojba)}
                             </td>
                           </tr>
+                          {predujam > 0 && (
+                            <tr>
+                              <td colSpan={5} className="py-1 px-2 text-right text-xs text-slate-500">
+                                Predujam
+                                <span className="block text-[10px] text-slate-400">
+                                  Prolazna stavka — izuzeta iz PDV osnovice (čl. 33. Zakona o PDV-u)
+                                </span>
+                              </td>
+                              <td />
+                              <td className="py-1 px-2 text-right text-sm text-slate-600">{fmtEur(predujam)}</td>
+                            </tr>
+                          )}
                           <tr className="bg-indigo-50">
                             <td colSpan={5} className="py-3 px-2 text-right text-sm font-bold text-indigo-800">SVEUKUPNI TROŠAK</td>
                             <td />

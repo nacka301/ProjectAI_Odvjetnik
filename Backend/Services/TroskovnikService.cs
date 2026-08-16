@@ -313,11 +313,38 @@ public sealed class TroskovnikService : ITroskovnikService
         var katalogPoId = TarifaKatalog.Sve.ToDictionary(s => s.Id);
         var odabraneDefinicije = ProvjeriIRazrijesiDefinicije(request, katalogPoId);
         var kontekst = RazrijesiKontekst(request, odabraneDefinicije);
+        ProvjeriNaknaduIPredujam(request);
 
         var stavkeRetci = IzracunajRetke(request, katalogPoId, kontekst);
         var zbrojevi = IzracunajZbrojeve(request, stavkeRetci, odabraneDefinicije, kontekst);
 
         return SastaviOdgovor(request, stavkeRetci, zbrojevi, kontekst);
+    }
+
+    /// <summary>
+    /// Provjerava stavke naknade troškova (Tbr. 48.-51.) i predujmove prije izračuna —
+    /// nepoznata vrsta izdatka ili negativan iznos odbija se odmah, umjesto da tiho
+    /// nestane iz troškovnika ili tiho ispravi predznak.
+    /// </summary>
+    private static void ProvjeriNaknaduIPredujam(TroskovnikRequest request)
+    {
+        foreach (var stavka in request.NaknadaTroskovaStavke ?? [])
+        {
+            if (!VrstaTroska.Sve.Contains(stavka.Vrsta))
+                throw new TroskovnikValidationException(
+                    $"Nepoznata vrsta troška: \"{stavka.Vrsta}\". Dopušteno: {string.Join(", ", VrstaTroska.Sve)}.");
+
+            if (stavka.Iznos < 0)
+                throw new TroskovnikValidationException(
+                    "Iznos naknade troškova ne može biti negativan.");
+        }
+
+        foreach (var predujam in request.Predujmovi ?? [])
+        {
+            if (predujam.Iznos < 0)
+                throw new TroskovnikValidationException(
+                    "Iznos predujma ne može biti negativan.");
+        }
     }
 
     /// <summary>
@@ -530,23 +557,39 @@ public sealed class TroskovnikService : ITroskovnikService
         // Dijeli se NAGRADA; PDV i sudska pristojba nisu odvjetnička nagrada pa ne ulaze.
         var brojOsoba = Math.Max(1, request.BrojZastupanihOsoba);
         var bodoviPoOsobi = ukupnoBodova / brojOsoba;
+        // Dijeli se NAGRADA (ukupnoEur) — naknada troškova nije dio nje, isto kao PDV
+        // i sudska pristojba: vidi komentar o Tbr. 40. toč. 1 gore.
         var nagradaPoOsobi = ZaokruziNovac(ukupnoEur / brojOsoba);
+
+        // ── Naknada troškova (Tbr. 48.-51.) — vlastiti trošak odvjetnika, ULAZI u
+        // PDV osnovicu (čl. 33. Zakona o PDV-u; čl. 78. Direktive 2006/112/EZ).
+        var naknadaTroskovaUkupno = ZaokruziNovac(
+            (request.NaknadaTroskovaStavke ?? []).Sum(s => s.Iznos));
+
+        var osnovicaSaNaknadom = ukupnoEur + naknadaTroskovaUkupno;
 
         decimal pdv = 0;
         var obracunajPdv = request.IsPdvUkljucen ?? request.HasVat;
         if (obracunajPdv)
-            pdv = ZaokruziNovac(ukupnoEur * TarifaConstants.PdvRate);
+            pdv = ZaokruziNovac(osnovicaSaNaknadom * TarifaConstants.PdvRate);
 
         // Sudska pristojba je drugi propis (Uredba NN 37/2023) i cijela se računa ondje.
         var pristojba = SudskePristojbeCalculator.Obracunaj(
             kontekst.VrijednostSpora, odabraneDefinicije, request.IsOslobodjenPristojbi);
 
-        var odvjetnickiTrosak = ukupnoEur + pdv;
-        var sveukupniTrosak = odvjetnickiTrosak + pristojba.Iznos;
+        // Predujam (npr. za vještačenje) — plaća se u ime i za račun stranke, PROLAZNA
+        // stavka po čl. 33. Zakona o PDV-u: nikad se ne oporezuje, dodaje se tek nakon
+        // PDV-a i sudske pristojbe, isto kao pristojba sama.
+        var predujmoviUkupno = ZaokruziNovac(
+            (request.Predujmovi ?? []).Sum(p => p.Iznos));
+
+        var odvjetnickiTrosak = osnovicaSaNaknadom + pdv;
+        var sveukupniTrosak = odvjetnickiTrosak + pristojba.Iznos + predujmoviUkupno;
 
         return new Zbrojevi(
             ukupnoBodova, povisenjePostotak, povisenjeBodovi, tbr41Bodovi, ukupnoEur,
-            bodoviPoOsobi, nagradaPoOsobi, pdv, pristojba.Osnova, pristojba.Iznos, sveukupniTrosak,
+            bodoviPoOsobi, nagradaPoOsobi, naknadaTroskovaUkupno, osnovicaSaNaknadom, pdv,
+            pristojba.Osnova, pristojba.Iznos, predujmoviUkupno, sveukupniTrosak,
             brojOsoba, obracunajPdv);
     }
 
@@ -576,9 +619,26 @@ public sealed class TroskovnikService : ITroskovnikService
             NagradaPoOsobi = zbrojevi.NagradaPoOsobi,
             VrijednostSpora = kontekst.VrijednostSpora,
             IsSamoKazneni = kontekst.JeSamoKazneni,
-            UkupnoEurBezPdv = zbrojevi.UkupnoEur,
+            // Osnovica (bez PDV) = nagrada + naknada troškova (Tbr. 48.-51.) — obje su
+            // vlastiti trošak odvjetnika i ulaze u PDV osnovicu; sudska pristojba i
+            // predujam nisu, pa se dodaju tek u SveukupniTrosak, nakon PDV-a.
+            UkupnoEurBezPdv = zbrojevi.OsnovicaSaNaknadom,
             Pdv = zbrojevi.Pdv,
-            UkupnoEurSPdv = zbrojevi.UkupnoEur + zbrojevi.Pdv,
+            UkupnoEurSPdv = zbrojevi.OsnovicaSaNaknadom + zbrojevi.Pdv,
+            NaknadaTroskovaStavke = (request.NaknadaTroskovaStavke ?? []).Select(s => new NaknadaTroskovaStavkaResponse
+            {
+                Vrsta = s.Vrsta,
+                Opis = s.Opis,
+                Iznos = s.Iznos,
+                PravniIzvor = VrstaTroska.PravniIzvor.GetValueOrDefault(s.Vrsta, "")
+            }).ToList(),
+            NaknadaTroskovaUkupno = zbrojevi.NaknadaTroskovaUkupno,
+            Predujmovi = (request.Predujmovi ?? []).Select(p => new PredujamStavkaResponse
+            {
+                Opis = p.Opis,
+                Iznos = p.Iznos
+            }).ToList(),
+            PredujmoviUkupno = zbrojevi.PredujmoviUkupno,
             Klijent = request.Klijent,
             // Ugniježđeni odvjetnik iz zahtjeva preslikava se u stranku odgovora
             // (naziv → ime), radi spojivosti sa starijim oblikom odgovora.
@@ -647,9 +707,12 @@ public sealed class TroskovnikService : ITroskovnikService
         decimal UkupnoEur,
         decimal BodoviPoOsobi,
         decimal NagradaPoOsobi,
+        decimal NaknadaTroskovaUkupno,
+        decimal OsnovicaSaNaknadom,
         decimal Pdv,
         PristojbaOsnova PristojbaOsnova,
         decimal SudskaPristojba,
+        decimal PredujmoviUkupno,
         decimal SveukupniTrosak,
         int BrojZastupanihOsoba,
         bool ObracunajPdv);

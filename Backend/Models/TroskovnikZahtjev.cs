@@ -150,6 +150,22 @@ public sealed class TroskovnikRequest
     /// </summary>
     [JsonPropertyName("tbr41_snizenje_postotak")]
     public decimal Tbr41SnizenjePostotak { get; set; }
+
+    // ── Naknada troškova (Tbr. 48.-51.) i predujam ─────────────────
+
+    /// <summary>
+    /// Stvarni izdaci odvjetnika (prijevoz, dnevnica, hotel, ostali izdaci) — vlastiti
+    /// trošak obavljanja usluge, ULAZI u PDV osnovicu. Vidi <see cref="Models.VrstaTroska"/>.
+    /// </summary>
+    [JsonPropertyName("naknada_troskova_stavke")]
+    public List<NaknadaTroskovaStavkaRequest> NaknadaTroskovaStavke { get; set; } = [];
+
+    /// <summary>
+    /// Predujmovi (npr. za vještačenje) — plaćaju se u ime i za račun stranke, PROLAZNA
+    /// stavka po čl. 33. Zakona o PDV-u, ne ulazi u osnovicu niti se oporezuje.
+    /// </summary>
+    [JsonPropertyName("predujmovi")]
+    public List<PredujamStavkaRequest> Predujmovi { get; set; } = [];
 }
 
 // New request DTOs for nested schema
@@ -224,6 +240,34 @@ public sealed class TroskovnikItemRequest
     /// </summary>
     [JsonPropertyName("tbr41_snizenje_postotak")]
     public decimal? Tbr41SnizenjePostotak { get; set; }
+}
+
+/// <summary>Jedan stvarni izdatak iz naknade troškova (Tbr. 48.-51.).</summary>
+public sealed class NaknadaTroskovaStavkaRequest
+{
+    /// <summary>Jedna od vrijednosti u <see cref="VrstaTroska.Sve"/>.</summary>
+    [JsonPropertyName("vrsta")]
+    public string Vrsta { get; set; } = "";
+
+    /// <summary>Slobodan opis (npr. "Put Zagreb-Split, 340 km"). Neobavezno.</summary>
+    [JsonPropertyName("opis")]
+    public string? Opis { get; set; }
+
+    /// <summary>Stvarni iznos u EUR — Tarifa ne propisuje bodove za ove izdatke.</summary>
+    [JsonPropertyName("iznos")]
+    public decimal Iznos { get; set; }
+}
+
+/// <summary>Jedan predujam (npr. za vještačenje) — prolazna stavka.</summary>
+public sealed class PredujamStavkaRequest
+{
+    /// <summary>Slobodan opis (npr. "Predujam za financijsko vještačenje"). Neobavezno.</summary>
+    [JsonPropertyName("opis")]
+    public string? Opis { get; set; }
+
+    /// <summary>Stvarni iznos u EUR.</summary>
+    [JsonPropertyName("iznos")]
+    public decimal Iznos { get; set; }
 }
 
 public sealed class TroskovnikParty

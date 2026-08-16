@@ -38,6 +38,10 @@ ALTER TABLE troskovnici ADD COLUMN IF NOT EXISTS is_stjecaj BOOLEAN DEFAULT FALS
 ALTER TABLE troskovnici ADD COLUMN IF NOT EXISTS is_oduzimanje_prekrsaj BOOLEAN DEFAULT FALSE;
 ALTER TABLE troskovnici ADD COLUMN IF NOT EXISTS vrijednost_oduzimanja NUMERIC DEFAULT 0;
 
+-- ── Naknada troškova (Tbr. 48.-51.) i predujam (from 021 migration) ──
+ALTER TABLE troskovnici ADD COLUMN IF NOT EXISTS naknada_troskova_ukupno NUMERIC(12,2) NOT NULL DEFAULT 0;
+ALTER TABLE troskovnici ADD COLUMN IF NOT EXISTS predujmovi_ukupno NUMERIC(12,2) NOT NULL DEFAULT 0;
+
 -- ── Helpful comments ──
 COMMENT ON TABLE troskovnici IS 'Odvjetnički troškovnici — persisted fee calculations';
 COMMENT ON COLUMN troskovnici.odvjetnik IS 'JSONB: {naziv, oib, adresa, iban}';
