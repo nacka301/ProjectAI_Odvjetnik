@@ -114,12 +114,85 @@ public static class SudskePristojbeCalculator
     /// </summary>
     public static PristojbaRezultat Obracunaj(
         decimal vrijednostSpora, List<TarifnaStavka> odabrane, bool oslobodjen)
+        => Obracunaj(vrijednostSpora, odabrane, OslobodjenjeUlaz.Jednostavni(oslobodjen));
+
+    /// <summary>
+    /// Obračun s punim oslobođenjem po Zakonu o sudskim pristojbama, čl. 11–13.
+    ///
+    /// <para><b>Čl. 12</b> — kad podnesak podnosi više osoba, a neke su oslobođene,
+    /// neoslobođene plaćaju „samo prema svom dijelu vrijednosti predmeta spora".
+    /// Umanjuje se OSNOVICA, ne gotov iznos: tarifa je progresivna, pa pristojba na
+    /// polovicu VPS-a nije polovica pristojbe.</para>
+    ///
+    /// <para><b>Čl. 13</b> — kad oslobođena stranka uspije, pristojbu koju bi ona platila
+    /// plaća protivna stranka, razmjerno uspjehu. Taj iznos stoji zasebno; obveza nastaje
+    /// tek po pravomoćnosti, pa ne ulazi u trošak zastupane stranke.</para>
+    /// </summary>
+    public static PristojbaRezultat Obracunaj(
+        decimal vrijednostSpora, List<TarifnaStavka> odabrane, OslobodjenjeUlaz oslobodjenje)
     {
         var osnova = OdrediOsnovu(odabrane);
-        var iznos = oslobodjen ? 0m : Izracunaj(vrijednostSpora, osnova);
 
-        return new PristojbaRezultat(osnova, iznos);
+        var vpsNeoslobodjenih = VpsNeoslobodjenih(vrijednostSpora, oslobodjenje);
+        var iznos = Izracunaj(vpsNeoslobodjenih, osnova);
+
+        // Čl. 13 se veže uz dio VPS-a koji otpada na oslobođene — pristojba koju bi
+        // upravo oni platili. Računa se iz njihova dijela, a ne kao razlika dvaju
+        // zaokruženih iznosa, jer je tarifa progresivna.
+        var vpsOslobodjenih = vrijednostSpora - vpsNeoslobodjenih;
+        var naTeretProtustranke = NaTeretProtustranke(vpsOslobodjenih, osnova, oslobodjenje);
+
+        return new PristojbaRezultat(osnova, iznos, vpsNeoslobodjenih, naTeretProtustranke);
     }
+
+    /// <summary>
+    /// Dio vrijednosti predmeta spora na koji se pristojba stvarno obračunava.
+    ///
+    /// Čl. 12 st. 2: kad se dio pojedine osobe ne može utvrditi, vrijednost se dijeli
+    /// brojem osoba. Izričito upisan udio ima prednost pred tom diobom.
+    /// </summary>
+    private static decimal VpsNeoslobodjenih(decimal vrijednostSpora, OslobodjenjeUlaz oslobodjenje)
+    {
+        if (SviOslobodjeni(oslobodjenje))
+            return 0m;
+
+        if (oslobodjenje.BrojOslobodjenih <= 0)
+            return vrijednostSpora;
+
+        if (oslobodjenje.UdioVps is { } udio)
+            return Math.Clamp(udio, 0m, vrijednostSpora);
+
+        var brojOsoba = Math.Max(1, oslobodjenje.BrojOsoba);
+        var neoslobodjeni = Math.Max(0, brojOsoba - oslobodjenje.BrojOslobodjenih);
+
+        return vrijednostSpora * neoslobodjeni / brojOsoba;
+    }
+
+    /// <summary>
+    /// Čl. 13 — pristojba na teret protivne stranke, razmjerno uspjehu oslobođene.
+    /// Nula kad uspjeh nije upisan ili kad nitko nije oslobođen.
+    /// </summary>
+    private static decimal NaTeretProtustranke(
+        decimal vpsOslobodjenih, PristojbaOsnova osnova, OslobodjenjeUlaz oslobodjenje)
+    {
+        if (oslobodjenje.PostotakUspjeha is not { } postotak || postotak <= 0m)
+            return 0m;
+
+        if (vpsOslobodjenih <= 0m)
+            return 0m;
+
+        var pristojbaOslobodjenih = Izracunaj(vpsOslobodjenih, osnova);
+
+        return Math.Round(
+            pristojbaOslobodjenih * Math.Clamp(postotak, 0m, 100m) / 100m,
+            2, MidpointRounding.AwayFromZero);
+    }
+
+    /// <summary>Cijela zastupana strana je oslobođena — pristojba je 0.</summary>
+    private static bool SviOslobodjeni(OslobodjenjeUlaz oslobodjenje)
+        => oslobodjenje.Oslobodjen
+           || (oslobodjenje.BrojOslobodjenih > 0
+               && oslobodjenje.BrojOslobodjenih >= Math.Max(1, oslobodjenje.BrojOsoba));
 
     /// <summary>
     /// Tar. br. 1 st. 1 — nezaokruženi iznos, da se zaokruživanje dogodi samo jednom,

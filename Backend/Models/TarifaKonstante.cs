@@ -17,6 +17,13 @@ public static class TarifaConstants
     public const string NazivUredbeOPristojbama =
         "Uredba o tarifi sudskih pristojbi (NN 37/2023)";
 
+    /// <summary>
+    /// Zakon koji uređuje tko plaća pristojbu, tko je oslobođen i kako se utvrđuje
+    /// vrijednost predmeta spora. Iznose propisuje Uredba, ne ovaj Zakon.
+    /// </summary>
+    public const string NazivZakonaOPristojbama =
+        "Zakon o sudskim pristojbama (NN 118/18, 51/23)";
+
     /// <summary>Tbr. 54 — vrijednost boda.</summary>
     public const decimal BodValue = 2.00m;
 

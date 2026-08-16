@@ -42,13 +42,23 @@ import {
   izracunajBodove,
   jeSamoKazneni,
   izracunajKazneneBodove,
-  izracunajSudskuPristojbu,
   objasnjenjePristojbe,
+  obracunajPristojbu,
+  razrijesiVps,
+  OSLOBODJENJE_KATEGORIJE,
+  OSLOBODJENJE_NAPOMENA_LOKALNA,
   OSNOVICA_TBR7,
   OSNOVICA_LABELE,
+  PRAVNI_LIJEK,
+  PRAVNI_LIJEK_LABELE,
   RAZINA_SUDA,
   RAZINA_SUDA_LABELE,
   RENTA_RAZDOBLJE,
+  VRSTA_POSTUPKA,
+  VRSTA_POSTUPKA_LABELE,
+  VRSTA_POSTUPKA_PRAVILA,
+  ZAHTJEVI_NACIN,
+  ZAHTJEVI_NACIN_LABELE,
   TBR41_MAX_POVISENJE,
   TBR41_MAX_SNIZENJE,
   TBR45_NACIN,
@@ -68,12 +78,16 @@ import {
   ukupnoBodovaZaStavku,
   zaokruziNovac,
   type OsnovicaTbr7,
+  type PravniLijek,
   type PristojbaOsnova,
   type RazinaSuda,
   type RentaRazdoblje,
   type TarifnaStavka,
   type Tbr41Stavka,
   type Tbr45Nacin,
+  type VpsZahtjev,
+  type VrstaPostupka,
+  type ZahtjeviNacin,
 } from "@/lib/tarifa";
 
 // ── Types (mirror backend models) ──
@@ -162,6 +176,24 @@ interface TroskovnikResponse {
   pristojba_osnova?: PristojbaOsnova;
   is_oslobodjen_pristojbi?: boolean;
   sveukupni_trosak?: number;
+  // Oslobođenja — Zakon o sudskim pristojbama, čl. 11–13
+  oslobodjenje_kategorija?: string | null;
+  oslobodjenje_naziv?: string;
+  broj_oslobodjenih_osoba?: number;
+  /** Čl. 12 — dio VPS-a na koji je pristojba obračunata. */
+  pristojba_vps_udio?: number;
+  /** Čl. 13 — tereti protivnu stranku, ne ulazi u sveukupni trošak. */
+  pristojba_na_teret_protustranke?: number;
+  postotak_uspjeha?: number | null;
+  // Vrijednost predmeta spora — Zakon o sudskim pristojbama, čl. 14–26
+  vps_zakonski?: number;
+  vps_vrsta_postupka?: string;
+  vps_pravni_izvor?: string;
+  vps_napomena?: string | null;
+  vps_prilagodjen?: boolean;
+  vps_primijeni_na_nagradu?: boolean;
+  /** Čl. 16 uz suparničarstvo — zahtjevi koje ovaj troškovnik ne pokriva. */
+  zahtjevi_informativno?: { iznos: number; opis?: string | null; primarni?: boolean }[];
 }
 
 // ── Format helpers ──
@@ -263,6 +295,25 @@ function TroskovnikContent() {
 
   // ── Sudske pristojbe state ──
   const [isOslobodjenPristojbi, setIsOslobodjenPristojbi] = useState(false);
+
+  // ── Oslobođenja — Zakon o sudskim pristojbama, čl. 11–13 ──
+  const [oslobodjenjeKategorija, setOslobodjenjeKategorija] = useState("");
+  const [brojOslobodjenihOsoba, setBrojOslobodjenihOsoba] = useState(0);
+  const [udioUVps, setUdioUVps] = useState("");
+  const [postotakUspjeha, setPostotakUspjeha] = useState("");
+
+  // ── Vrijednost predmeta spora — Zakon o sudskim pristojbama, čl. 14–26 ──
+  const [vrstaPostupka, setVrstaPostupka] = useState<VrstaPostupka>(VRSTA_POSTUPKA.Opci);
+  const [uzdrzavanjeMjesecno, setUzdrzavanjeMjesecno] = useState("");
+  const [zahtjevi, setZahtjevi] = useState<VpsZahtjev[]>([]);
+  const [zahtjeviNacin, setZahtjeviNacin] = useState<ZahtjeviNacin | null>(null);
+  const [pravniLijek, setPravniLijek] = useState<PravniLijek>(PRAVNI_LIJEK.Nema);
+  const [pravniLijekIznos, setPravniLijekIznos] = useState("");
+  /**
+   * Prenosi zakonski VPS i na odvjetničku nagradu po Tbr. 7. toč. 1. Zadano isključeno:
+   * čl. 14–26 Zakona pisani su za sudske pristojbe, ne za Tarifu.
+   */
+  const [vpsPrimijeniNaNagradu, setVpsPrimijeniNaNagradu] = useState(false);
 
   // ── Tbr. 40 — broj osoba koje odvjetnik zastupa u istom postupku ──
   const [brojZastupanihOsoba, setBrojZastupanihOsoba] = useState(1);
@@ -431,18 +482,44 @@ function TroskovnikContent() {
   const vrijednostNum = isOnlyKazneni ? 0 : unesenVps;
   const rentaIznosNum = parseFloat(rentaIznos.replace(/\./g, "").replace(",", ".")) || 0;
 
+  const brojIliNula = (tekst: string) =>
+    parseFloat(tekst.replace(/\./g, "").replace(",", ".")) || 0;
+
+  // ── Vrijednost predmeta spora po Zakonu o sudskim pristojbama (čl. 14–26) ──
+  // Obavezna za sudsku pristojbu; na nagradu se prenosi samo izričitim odabirom.
+  const vpsUlaz = useMemo(
+    () => ({
+      vrijednostSpora: vrijednostNum,
+      vrstaPostupka,
+      uzdrzavanjeMjesecno: brojIliNula(uzdrzavanjeMjesecno),
+      zahtjevi,
+      zahtjeviNacin,
+      pravniLijek,
+      pravniLijekIznos: brojIliNula(pravniLijekIznos),
+    }),
+    [vrijednostNum, vrstaPostupka, uzdrzavanjeMjesecno, zahtjevi, zahtjeviNacin, pravniLijek, pravniLijekIznos],
+  );
+
+  const vpsRezultat = useMemo(
+    () => (isOnlyKazneni ? null : razrijesiVps(vpsUlaz)),
+    [isOnlyKazneni, vpsUlaz],
+  );
+
+  /** VPS koji ide u sudsku pristojbu. Null rezultat znači „podatak nedostaje". */
+  const vpsZakonski = vpsRezultat?.vps ?? vrijednostNum;
+
   // Osnovica na koju upućuju Tbr. 8. toč. 1, 3, 4 i Tbr. 9. toč. 1–6:
   // "Tbr. 7. toč. 1., 4., 7. i 8." — četiri varijante iste osnovice.
   const osnovicaUlaz = useMemo(
     () => ({
       osnovicaTbr7,
-      vrijednostSpora: vrijednostNum,
+      vrijednostSpora: vpsPrimijeniNaNagradu ? vpsZakonski : vrijednostNum,
       razinaSuda,
       tbr45Nacin,
       rentaIznos: rentaIznosNum,
       rentaRazdoblje,
     }),
-    [osnovicaTbr7, vrijednostNum, razinaSuda, tbr45Nacin, rentaIznosNum, rentaRazdoblje],
+    [osnovicaTbr7, vpsPrimijeniNaNagradu, vpsZakonski, vrijednostNum, razinaSuda, tbr45Nacin, rentaIznosNum, rentaRazdoblje],
   );
 
   const osnovica = useMemo(() => izracunajOsnovicu(osnovicaUlaz), [osnovicaUlaz]);
@@ -452,6 +529,18 @@ function TroskovnikContent() {
   // Uredba NN 37/23, Poglavlje I. pokriva parnični i ovršni postupak.
   // Pristojba se veže uz stvarnu vrijednost spora, ne uz osnovicu iz Tbr. 45.
   const pristojbaOsnova = odrediPristojbuOsnovu(odabraneDefinicije);
+
+  // Oslobođenja po čl. 11–13; broj osoba dolazi iz Tbr. 40, gdje već stoji.
+  const oslobodjenjeUlaz = useMemo(
+    () => ({
+      oslobodjen: isOslobodjenPristojbi,
+      brojOsoba: brojZastupanihOsoba,
+      brojOslobodjenih: brojOslobodjenihOsoba,
+      udioVps: udioUVps.trim() ? brojIliNula(udioUVps) : null,
+      postotakUspjeha: postotakUspjeha.trim() ? brojIliNula(postotakUspjeha) : null,
+    }),
+    [isOslobodjenPristojbi, brojZastupanihOsoba, brojOslobodjenihOsoba, udioUVps, postotakUspjeha],
+  );
 
   // Što nedostaje da se troškovnik može valjano izračunati — zrcali backend provjere.
   const nedostaci = useMemo(
@@ -463,8 +552,11 @@ function TroskovnikContent() {
         osnovicaTbr7,
         razinaSuda,
         tbr45Nacin,
+        // VPS je institut parničnog postupka — u kaznenom se ne provjerava.
+        vps: isOnlyKazneni ? undefined : vpsUlaz,
+        oslobodjenje: oslobodjenjeUlaz,
       }),
-    [odabraneDefinicije, zaprijecenaKazna, isOduzimanjePrekrsaj, vrijednostOduzimanja, osnovicaTbr7, razinaSuda, tbr45Nacin],
+    [odabraneDefinicije, zaprijecenaKazna, isOduzimanjePrekrsaj, vrijednostOduzimanja, osnovicaTbr7, razinaSuda, tbr45Nacin, isOnlyKazneni, vpsUlaz, oslobodjenjeUlaz],
   );
 
   // Tbr. 41 — povišenje i sniženje ne mogu stajati na istoj stavci.
@@ -620,18 +712,20 @@ function TroskovnikContent() {
     const pdv = isPdvUkljucen ? zaokruziNovac(ukupnoEur * PDV_RATE) : 0;
     const odvjetnickiTrosak = ukupnoEur + pdv;
 
-    // Sudske pristojbe (Uredba NN 37/2023, Tar. br. 1)
-    const sudskaPristojba = isOslobodjenPristojbi
-      ? 0
-      : izracunajSudskuPristojbu(vrijednostNum, pristojbaOsnova);
+    // Sudske pristojbe (Uredba NN 37/2023, Tar. br. 1). Vrijednost na koju se
+    // obračunavaju propisuje Zakon o sudskim pristojbama, pa ide zakonski VPS.
+    const pristojba = obracunajPristojbu(vpsZakonski, pristojbaOsnova, oslobodjenjeUlaz);
+    const sudskaPristojba = pristojba.iznos;
+
+    // Čl. 13 ne ulazi u zbroj: tereti protivnu stranku, i to po pravomoćnosti.
     const sveukupniTrosak = odvjetnickiTrosak + sudskaPristojba;
 
     // Tbr. 40. toč. 1, drugi odlomak — dioba na jednake dijelove po zastupanoj osobi.
     const bodoviPoOsobi = podijeliPoOsobama(ukupnoBodova, brojZastupanihOsoba);
     const nagradaPoOsobi = zaokruziNovac(podijeliPoOsobama(ukupnoEur, brojZastupanihOsoba));
 
-    return { lines, osnovicaBodova, povisenjePostotak, povisenjeBodovi, tbr41Postotak, tbr41Bodovi, ukupnoBodova, bodoviPoOsobi, nagradaPoOsobi, ukupnoEur, pdv, ukupnoSPdv: ukupnoEur + pdv, sudskaPristojba, sveukupniTrosak };
-  }, [selectedItems, katalog, osnovica, isPdvUkljucen, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, isOduzimanjePrekrsaj, parsedVrijednostOduzimanja, isOslobodjenPristojbi, vrijednostNum, pristojbaOsnova, brojZastupanihOsoba, zaprijecenaKazna, tbr41Povisenje, tbr41Snizenje, tbr41PoStavci]);
+    return { lines, osnovicaBodova, povisenjePostotak, povisenjeBodovi, tbr41Postotak, tbr41Bodovi, ukupnoBodova, bodoviPoOsobi, nagradaPoOsobi, ukupnoEur, pdv, ukupnoSPdv: ukupnoEur + pdv, sudskaPristojba, pristojbaVpsUdio: pristojba.vpsUdio, pristojbaNaTeretProtustranke: pristojba.naTeretProtustranke, sveukupniTrosak };
+  }, [selectedItems, katalog, osnovica, isPdvUkljucen, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, isOduzimanjePrekrsaj, parsedVrijednostOduzimanja, vpsZakonski, oslobodjenjeUlaz, pristojbaOsnova, brojZastupanihOsoba, zaprijecenaKazna, tbr41Povisenje, tbr41Snizenje, tbr41PoStavci]);
 
   // ── Handlers ──
   const toggleCategory = useCallback((cat: string) => {
@@ -750,6 +844,19 @@ function TroskovnikContent() {
         vrijednost_oduzimanja: parsedVrijednostOduzimanja,
         is_oslobodjen_pristojbi: isOslobodjenPristojbi,
         broj_zastupanih_osoba: brojZastupanihOsoba,
+        // Oslobođenja — Zakon o sudskim pristojbama, čl. 11–13
+        oslobodjenje_kategorija: oslobodjenjeKategorija || undefined,
+        broj_oslobodjenih_osoba: brojOslobodjenihOsoba,
+        udio_u_vps: oslobodjenjeUlaz.udioVps,
+        postotak_uspjeha: oslobodjenjeUlaz.postotakUspjeha,
+        // Vrijednost predmeta spora — Zakon o sudskim pristojbama, čl. 14–26
+        vrsta_postupka: vrstaPostupka,
+        uzdrzavanje_mjesecno: vpsUlaz.uzdrzavanjeMjesecno,
+        zahtjevi: zahtjevi.map((z) => ({ iznos: z.iznos, opis: z.opis, primarni: !!z.primarni })),
+        zahtjevi_nacin: zahtjeviNacin ?? undefined,
+        pravni_lijek: pravniLijek,
+        pravni_lijek_iznos: vpsUlaz.pravniLijekIznos,
+        vps_primijeni_na_nagradu: vpsPrimijeniNaNagradu,
         // Osnovica po Tbr. 7. toč. 1., 4., 7. i 8., odnosno Tbr. 45
         osnovica_tbr7: osnovicaTbr7,
         razina_suda: razinaSuda ?? undefined,
@@ -837,6 +944,19 @@ function TroskovnikContent() {
         vrijednost_oduzimanja: parsedVrijednostOduzimanja,
         is_oslobodjen_pristojbi: isOslobodjenPristojbi,
         broj_zastupanih_osoba: brojZastupanihOsoba,
+        // Oslobođenja — Zakon o sudskim pristojbama, čl. 11–13
+        oslobodjenje_kategorija: oslobodjenjeKategorija || undefined,
+        broj_oslobodjenih_osoba: brojOslobodjenihOsoba,
+        udio_u_vps: oslobodjenjeUlaz.udioVps,
+        postotak_uspjeha: oslobodjenjeUlaz.postotakUspjeha,
+        // Vrijednost predmeta spora — Zakon o sudskim pristojbama, čl. 14–26
+        vrsta_postupka: vrstaPostupka,
+        uzdrzavanje_mjesecno: vpsUlaz.uzdrzavanjeMjesecno,
+        zahtjevi: zahtjevi.map((z) => ({ iznos: z.iznos, opis: z.opis, primarni: !!z.primarni })),
+        zahtjevi_nacin: zahtjeviNacin ?? undefined,
+        pravni_lijek: pravniLijek,
+        pravni_lijek_iznos: vpsUlaz.pravniLijekIznos,
+        vps_primijeni_na_nagradu: vpsPrimijeniNaNagradu,
         // Osnovica po Tbr. 7. toč. 1., 4., 7. i 8., odnosno Tbr. 45
         osnovica_tbr7: osnovicaTbr7,
         razina_suda: razinaSuda ?? undefined,
@@ -1022,6 +1142,199 @@ function TroskovnikContent() {
                     {osnovica ? `${fmtNum(baseBodovi)} bod.` : "—"}
                   </div>
                 </div>
+              </div>
+
+              {/* ── Vrsta postupka: Zakon o sudskim pristojbama, čl. 15–25 ──
+                  Stoji IZNAD osnovice po Tbr. 7 jer VPS logički prethodi osnovici:
+                  prvo se utvrdi vrijednost, pa se na nju primijeni Tarifa. */}
+              <div className="mt-3 pt-3 border-t border-dashed border-slate-200 space-y-2">
+                <label className="block text-[11px] font-semibold text-slate-600">
+                  Vrsta postupka (Zakon o sudskim pristojbama, čl. 15–25)
+                </label>
+                <select
+                  value={vrstaPostupka}
+                  onChange={(e) => {
+                    const nova = e.target.value as VrstaPostupka;
+                    setVrstaPostupka(nova);
+                    if (VRSTA_POSTUPKA_PRAVILA[nova].nacin !== "uzdrzavanje") setUzdrzavanjeMjesecno("");
+                  }}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
+                >
+                  {Object.values(VRSTA_POSTUPKA).map((v) => (
+                    <option key={v} value={v}>
+                      {VRSTA_POSTUPKA_LABELE[v]}
+                    </option>
+                  ))}
+                </select>
+
+                {/* Čl. 15 — zbroj davanja za tri mjeseca */}
+                {VRSTA_POSTUPKA_PRAVILA[vrstaPostupka].nacin === "uzdrzavanje" && (
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={uzdrzavanjeMjesecno}
+                    onChange={(e) => setUzdrzavanjeMjesecno(e.target.value)}
+                    placeholder="mjesečno davanje u € (obavezno)"
+                    className="w-full px-2.5 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                )}
+
+                {/* Čl. 17, 18, 20, 21 — Zakon kaže ŠTO se upisuje, ne koliko */}
+                {VRSTA_POSTUPKA_PRAVILA[vrstaPostupka].naputak && (
+                  <p className="text-[10px] text-slate-500 leading-snug">
+                    {VRSTA_POSTUPKA_PRAVILA[vrstaPostupka].naputak}
+                  </p>
+                )}
+
+                {/* Zakon je promijenio uneseni iznos — objasni i ponudi prijenos na nagradu */}
+                {vpsRezultat?.prilagodjen && vpsRezultat.napomena && (
+                  <div className="rounded-lg bg-amber-50 border border-amber-200 p-2.5 space-y-2">
+                    <p className="text-[10px] text-amber-800 leading-snug">{vpsRezultat.napomena}</p>
+                    <p className="text-[11px] font-semibold text-amber-900">
+                      Za sudsku pristojbu vrijedi {fmtEur(vpsRezultat.vps)}
+                    </p>
+                    <label className="flex items-start gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={vpsPrimijeniNaNagradu}
+                        onChange={(e) => setVpsPrimijeniNaNagradu(e.target.checked)}
+                        className="mt-0.5 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                      />
+                      <span className="text-[10px] text-amber-800 leading-snug">
+                        Primijeni i na odvjetničku nagradu (Tbr. 7. toč. 1). Čl. 14–26 Zakona
+                        propisuju vrijednost za sudske pristojbe, ne za Tarifu — zato odabir.
+                      </span>
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Čl. 16 — više zahtjeva iz iste tužbe ── */}
+              <div className="mt-3 pt-3 border-t border-dashed border-slate-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-[11px] font-semibold text-slate-600">
+                    Više zahtjeva (čl. 16)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setZahtjevi((prev) => [...prev, { iznos: 0, opis: "" }])}
+                    className="text-[10px] text-indigo-600 hover:text-indigo-800 font-semibold"
+                  >
+                    + dodaj zahtjev
+                  </button>
+                </div>
+
+                {zahtjevi.length === 0 ? (
+                  <p className="text-[10px] text-slate-400 leading-snug">
+                    Bez unesenih zahtjeva vrijedi gornji iznos.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    <select
+                      value={zahtjeviNacin ?? ""}
+                      onChange={(e) => setZahtjeviNacin((e.target.value || null) as ZahtjeviNacin | null)}
+                      className="w-full px-2.5 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value="">— način (obavezno) —</option>
+                      {Object.values(ZAHTJEVI_NACIN).map((n) => (
+                        <option key={n} value={n}>
+                          {ZAHTJEVI_NACIN_LABELE[n]}
+                        </option>
+                      ))}
+                    </select>
+
+                    {zahtjevi.map((z, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={z.opis ?? ""}
+                          onChange={(e) =>
+                            setZahtjevi((prev) =>
+                              prev.map((s, j) => (j === i ? { ...s, opis: e.target.value } : s)),
+                            )
+                          }
+                          placeholder="opis"
+                          className="flex-1 px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={z.iznos === 0 ? "" : String(z.iznos)}
+                          onChange={(e) =>
+                            setZahtjevi((prev) =>
+                              prev.map((s, j) =>
+                                j === i ? { ...s, iznos: brojIliNula(e.target.value) } : s,
+                              ),
+                            )
+                          }
+                          placeholder="iznos €"
+                          className="w-28 px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                        {/* Suparničarstvo: točno jedan zahtjev nosi ovaj troškovnik */}
+                        {zahtjeviNacin === ZAHTJEVI_NACIN.Zasebno && (
+                          <label className="flex items-center gap-1 shrink-0" title="Zahtjev koji ovaj troškovnik pokriva">
+                            <input
+                              type="radio"
+                              name="zahtjev-primarni"
+                              checked={!!z.primarni}
+                              onChange={() =>
+                                setZahtjevi((prev) => prev.map((s, j) => ({ ...s, primarni: j === i })))
+                              }
+                              className="text-indigo-600 focus:ring-indigo-500"
+                            />
+                            <span className="text-[10px] text-slate-500">ovaj</span>
+                          </label>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setZahtjevi((prev) => prev.filter((_, j) => j !== i))}
+                          className="text-slate-300 hover:text-red-500 transition shrink-0"
+                          aria-label="Ukloni zahtjev"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* ── Čl. 24 — pravni lijekovi ── */}
+              <div className="mt-3 pt-3 border-t border-dashed border-slate-200 space-y-2">
+                <label className="block text-[11px] font-semibold text-slate-600">
+                  Pravni lijek (čl. 24)
+                </label>
+                <select
+                  value={pravniLijek}
+                  onChange={(e) => {
+                    const novi = e.target.value as PravniLijek;
+                    setPravniLijek(novi);
+                    if (novi === PRAVNI_LIJEK.Nema || novi === PRAVNI_LIJEK.CijelaOdluka)
+                      setPravniLijekIznos("");
+                  }}
+                  className="w-full px-2.5 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  {Object.values(PRAVNI_LIJEK).map((l) => (
+                    <option key={l} value={l}>
+                      {PRAVNI_LIJEK_LABELE[l]}
+                    </option>
+                  ))}
+                </select>
+                {(pravniLijek === PRAVNI_LIJEK.PobijaniDio ||
+                  pravniLijek === PRAVNI_LIJEK.SamoTroskovi) && (
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={pravniLijekIznos}
+                    onChange={(e) => setPravniLijekIznos(e.target.value)}
+                    placeholder={
+                      pravniLijek === PRAVNI_LIJEK.PobijaniDio
+                        ? "vrijednost pobijanog dijela u € (obavezno)"
+                        : "iznos troškova u € (obavezno)"
+                    }
+                    className="w-full px-2.5 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                )}
               </div>
 
               {/* ── Osnovica: Tbr. 7. toč. 1., 4., 7. i 8., odnosno Tbr. 45 ── */}
@@ -1903,13 +2216,93 @@ function TroskovnikContent() {
                                 <span className="text-xs">Oslobođenje od pristojbi (čl. 11.)</span>
                               </label>
                             </div>
+
+                            {/* Osnova oslobođenja — čl. 11 ima 21 točku, uz zahtjev po čl. 10.
+                                Ne mijenja iznos, ali mora se vidjeti PO ČEMU je stranka oslobođena. */}
+                            <select
+                              value={oslobodjenjeKategorija}
+                              onChange={(e) => setOslobodjenjeKategorija(e.target.value)}
+                              className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-[11px] outline-none focus:ring-2 focus:ring-amber-500"
+                            >
+                              <option value="">— osnova oslobođenja (neobavezno) —</option>
+                              {Object.entries(OSLOBODJENJE_KATEGORIJE).map(([kljuc, naziv]) => (
+                                <option key={kljuc} value={kljuc}>
+                                  {naziv}
+                                </option>
+                              ))}
+                            </select>
+                            {(oslobodjenjeKategorija === "rh_tijela" ||
+                              oslobodjenjeKategorija === "javne_ovlasti") && (
+                              <p className="text-[10px] text-amber-700 leading-snug">
+                                {OSLOBODJENJE_NAPOMENA_LOKALNA}
+                              </p>
+                            )}
+
+                            {/* Čl. 12 — dio suparničara oslobođen: umanjuje se OSNOVICA, ne iznos */}
+                            {brojZastupanihOsoba > 1 && (
+                              <div className="rounded-lg bg-slate-50 border border-slate-200 p-2 space-y-1.5">
+                                <div className="flex items-center gap-2">
+                                  <label className="text-[10px] text-slate-600 flex-1 leading-snug">
+                                    Oslobođeno osoba od {brojZastupanihOsoba} (čl. 12)
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={brojZastupanihOsoba}
+                                    value={brojOslobodjenihOsoba}
+                                    onChange={(e) => setBrojOslobodjenihOsoba(Number(e.target.value) || 0)}
+                                    className="w-16 px-2 py-1 border border-slate-200 rounded text-[11px] outline-none focus:ring-2 focus:ring-amber-500"
+                                  />
+                                </div>
+                                {brojOslobodjenihOsoba > 0 && (
+                                  <>
+                                    <input
+                                      type="text"
+                                      inputMode="decimal"
+                                      value={udioUVps}
+                                      onChange={(e) => setUdioUVps(e.target.value)}
+                                      placeholder="dio VPS-a neoslobođenih u € (neobavezno)"
+                                      className="w-full px-2 py-1 border border-slate-200 rounded text-[11px] outline-none focus:ring-2 focus:ring-amber-500"
+                                    />
+                                    <p className="text-[10px] text-slate-500 leading-snug">
+                                      Bez upisanog dijela vrijednost se dijeli brojem osoba (čl. 12
+                                      st. 2). Pristojba se obračunava na {fmtEur(liveCalc.pristojbaVpsUdio)}.
+                                    </p>
+                                  </>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Čl. 13 — oslobođena stranka uspije: plaća protivna, razmjerno uspjehu */}
+                            {(isOslobodjenPristojbi || brojOslobodjenihOsoba > 0) && (
+                              <div className="flex items-center gap-2">
+                                <label className="text-[10px] text-slate-600 flex-1 leading-snug">
+                                  Uspjeh oslobođene stranke u % (čl. 13)
+                                </label>
+                                <input
+                                  type="text"
+                                  inputMode="decimal"
+                                  value={postotakUspjeha}
+                                  onChange={(e) => setPostotakUspjeha(e.target.value)}
+                                  placeholder="npr. 60"
+                                  className="w-20 px-2 py-1 border border-slate-200 rounded text-[11px] outline-none focus:ring-2 focus:ring-amber-500"
+                                />
+                              </div>
+                            )}
+
                             <div className="flex justify-between text-xs text-slate-600">
                               <span>Sudska pristojba (Tar. br. 1)</span>
-                              <span className={`font-semibold ${isOslobodjenPristojbi ? 'line-through text-slate-400' : ''}`}>
-                                {fmtEur(isOslobodjenPristojbi ? 0 : liveCalc.sudskaPristojba)}
+                              <span className={`font-semibold ${liveCalc.sudskaPristojba === 0 && (isOslobodjenPristojbi || brojOslobodjenihOsoba > 0) ? 'line-through text-slate-400' : ''}`}>
+                                {fmtEur(liveCalc.sudskaPristojba)}
                               </span>
                             </div>
                             <p className="text-[10px] text-slate-400">{objasnjenjePristojbe(pristojbaOsnova)}</p>
+                            {vpsRezultat?.prilagodjen && (
+                              <p className="text-[10px] text-amber-600 leading-snug">
+                                Obračunato na zakonski VPS od {fmtEur(vpsRezultat.vps)} —{" "}
+                                {vpsRezultat.pravniIzvor}.
+                              </p>
+                            )}
                           </>
                         )}
                       </div>
@@ -1919,6 +2312,36 @@ function TroskovnikContent() {
                         <span>SVEUKUPNI TROŠAK</span>
                         <span>{fmtEur(liveCalc.sveukupniTrosak)}</span>
                       </div>
+
+                      {/* Čl. 13 — tereti protivnu stranku po pravomoćnosti, pa stoji ISPOD
+                          ukupnog iznosa i u njega ne ulazi. */}
+                      {liveCalc.pristojbaNaTeretProtustranke > 0 && (
+                        <div className="mt-2 pt-2 border-t border-dashed border-slate-200">
+                          <div className="flex justify-between text-xs font-semibold text-slate-700">
+                            <span>Pristojba na teret protivne stranke</span>
+                            <span>{fmtEur(liveCalc.pristojbaNaTeretProtustranke)}</span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 leading-snug mt-0.5">
+                            Čl. 13: oslobođena stranka uspjela u {postotakUspjeha} %. Obveza nastaje
+                            po pravomoćnosti i ne ulazi u sveukupni trošak zastupane stranke.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Čl. 16 uz suparničarstvo — zahtjevi koje ovaj troškovnik ne pokriva */}
+                      {(vpsRezultat?.ostaliZahtjevi.length ?? 0) > 0 && (
+                        <div className="mt-2 pt-2 border-t border-dashed border-slate-200">
+                          <p className="text-[10px] font-semibold text-slate-600">
+                            Nije obuhvaćeno (čl. 16 — zasebna pristojba)
+                          </p>
+                          {vpsRezultat!.ostaliZahtjevi.map((z, i) => (
+                            <div key={i} className="flex justify-between text-[10px] text-slate-500 mt-0.5">
+                              <span>{z.opis?.trim() || "zahtjev"}</span>
+                              <span>{fmtEur(z.iznos)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
 
                       {/* Tbr. 40. toč. 1, drugi odlomak — dioba na jednake dijelove */}
                       {brojZastupanihOsoba > 1 && (
@@ -2309,13 +2732,29 @@ function TroskovnikContent() {
                           <tr>
                             <td colSpan={5} className="py-1 px-2 text-right text-xs text-slate-500">
                               Sudska pristojba (Tar. br. 1)
-                              {result.is_oslobodjen_pristojbi && <span className="ml-1 text-amber-600">(oslobođeno)</span>}
+                              {(result.is_oslobodjen_pristojbi || (result.broj_oslobodjenih_osoba ?? 0) > 0) && (
+                                <span className="ml-1 text-amber-600">
+                                  (oslobođeno{result.oslobodjenje_naziv ? ` — ${result.oslobodjenje_naziv}` : ""})
+                                </span>
+                              )}
                               <span className="block text-[10px] text-slate-400">
                                 {objasnjenjePristojbe(result.pristojba_osnova ?? "Puna")}
                               </span>
+                              {/* Zašto pristojba ne odgovara upisanoj vrijednosti spora */}
+                              {result.vps_prilagodjen && result.vps_napomena && (
+                                <span className="block text-[10px] text-amber-600">{result.vps_napomena}</span>
+                              )}
+                              {/* Čl. 12 — obračunato na dio koji otpada na neoslobođene */}
+                              {(result.broj_oslobodjenih_osoba ?? 0) > 0 &&
+                                (result.broj_oslobodjenih_osoba ?? 0) < (result.broj_zastupanih_osoba ?? 1) && (
+                                  <span className="block text-[10px] text-amber-600">
+                                    Čl. 12 — obračunato na {fmtEur(result.pristojba_vps_udio ?? 0)}, jer je{" "}
+                                    {result.broj_oslobodjenih_osoba} od {result.broj_zastupanih_osoba} osoba oslobođeno.
+                                  </span>
+                                )}
                             </td>
                             <td />
-                            <td className={`py-1 px-2 text-right text-sm ${result.is_oslobodjen_pristojbi ? 'line-through text-slate-400' : 'text-slate-600'}`}>
+                            <td className={`py-1 px-2 text-right text-sm ${pristojba === 0 && (result.is_oslobodjen_pristojbi || (result.broj_oslobodjenih_osoba ?? 0) > 0) ? 'line-through text-slate-400' : 'text-slate-600'}`}>
                               {fmtEur(pristojba)}
                             </td>
                           </tr>
@@ -2324,6 +2763,37 @@ function TroskovnikContent() {
                             <td />
                             <td className="py-3 px-2 text-right text-lg font-bold text-indigo-800">{fmtEur(sveukupni)}</td>
                           </tr>
+                          {/* Čl. 13 — tereti protivnu stranku po pravomoćnosti; ispod ukupnog
+                              iznosa jer u njega ne ulazi. */}
+                          {(result.pristojba_na_teret_protustranke ?? 0) > 0 && (
+                            <tr>
+                              <td colSpan={5} className="py-2 px-2 text-right text-xs text-slate-500">
+                                Pristojba na teret protivne stranke
+                                <span className="block text-[10px] text-slate-400">
+                                  Čl. 13 — oslobođena stranka uspjela u {result.postotak_uspjeha} %; obveza
+                                  nastaje po pravomoćnosti i ne ulazi u sveukupni trošak
+                                </span>
+                              </td>
+                              <td />
+                              <td className="py-2 px-2 text-right text-sm font-semibold text-slate-700">
+                                {fmtEur(result.pristojba_na_teret_protustranke ?? 0)}
+                              </td>
+                            </tr>
+                          )}
+                          {/* Čl. 16 uz suparničarstvo — zahtjevi za koje ide zasebna pristojba */}
+                          {(result.zahtjevi_informativno ?? []).map((z, i) => (
+                            <tr key={`cl16-${i}`}>
+                              <td colSpan={5} className="py-1 px-2 text-right text-xs text-slate-500">
+                                Nije obuhvaćeno: {z.opis?.trim() || "zahtjev"}
+                                <span className="block text-[10px] text-slate-400">
+                                  Čl. 16 — kod suparničarstva se uzima vrijednost svakog pojedinog
+                                  zahtjeva, pa se za ovaj plaća zasebna pristojba
+                                </span>
+                              </td>
+                              <td />
+                              <td className="py-1 px-2 text-right text-sm text-slate-600">{fmtEur(z.iznos)}</td>
+                            </tr>
+                          ))}
                           {(result.broj_zastupanih_osoba ?? 1) > 1 && (
                             <tr>
                               <td colSpan={5} className="py-2 px-2 text-right text-xs text-slate-500">
