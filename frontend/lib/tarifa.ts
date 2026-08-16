@@ -808,3 +808,52 @@ export function izracunajSudskuPristojbu(
   // Zaokruživanje "od nule", ne bankarsko: 38,2258 → 38,23.
   return Math.round((iznos + Number.EPSILON) * 100) / 100;
 }
+
+// ── Ručno uneseni troškovi: dodatne pristojbe i predujmovi ──────
+//
+// Isti oblik za oba popisa (zrcali `TroskovnikTrosakRequest`). Odjeljak "Sudske
+// pristojbe" = automatski izračunata pristojba + ovaj popis; odjeljak "Predujmovi"
+// je isključivo ovaj popis. Ni jedno ni drugo ne nosi PDV.
+
+/**
+ * Ponuđeni tekst napomene; korisnik ga smije izmijeniti ili obrisati.
+ * Mora ostati doslovno jednaka `TarifaConstants.ZadanaNapomena` na backendu —
+ * paritetni test to zaključava.
+ */
+export const ZADANA_NAPOMENA =
+  "Na traženi iznos obračunava se zakonska zatezna kamata sukladno članku 29. " +
+  "Zakona o obveznim odnosima.";
+
+export interface TrosakStavka {
+  datum?: string | null;
+  opis: string;
+  iznos: number;
+}
+
+/**
+ * Zbraja ručno unesen popis troškova (dodatne pristojbe ili predujmove). Svaki
+ * iznos zaokružuje se zasebno prije zbrajanja — isto kao u
+ * `TroskovnikService.RazrijesiRucneTroskove` na backendu.
+ */
+export function zbrojiRucneTroskove(stavke: TrosakStavka[]): number {
+  return stavke.reduce((zbroj, t) => zbroj + zaokruziNovac(t.iznos || 0), 0);
+}
+
+// ── Premještanje redaka ──────────────────────────────────────────
+//
+// Korisnik bira redoslijed radnji sam (nema forsiranog kronološkog poretka).
+// Redni broj se renumerira nakon premještanja ili brisanja — izveden je iz
+// pozicije u polju (index + 1), nikad spremljen zasebno.
+
+/**
+ * Zamjena elementa na `index` sa susjedom u smjeru `smjer` (-1 gore, +1 dolje).
+ * Na rubovima (prvi ▲ ili zadnji ▼) nema efekta — vraća isto polje.
+ */
+export function pomakniRedak<T>(lista: T[], index: number, smjer: -1 | 1): T[] {
+  const cilj = index + smjer;
+  if (index < 0 || index >= lista.length || cilj < 0 || cilj >= lista.length) return lista;
+
+  const rezultat = [...lista];
+  [rezultat[index], rezultat[cilj]] = [rezultat[cilj], rezultat[index]];
+  return rezultat;
+}

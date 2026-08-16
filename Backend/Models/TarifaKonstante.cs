@@ -52,6 +52,11 @@ public static class TarifaConstants
     /// 0,50 × 0,70 = 35% pune tarife — ne 70%. Vidi TarifaUmanjenjaTests.
     /// </summary>
     public const decimal ZastupnikDjetetaRate = 0.70m;
+
+    /// <summary>Ponuđeni tekst napomene; korisnik ga smije izmijeniti ili obrisati.</summary>
+    public const string ZadanaNapomena =
+        "Na traženi iznos obračunava se zakonska zatezna kamata sukladno članku 29. " +
+        "Zakona o obveznim odnosima.";
 }
 
 /// <summary>Zapriječena kazna → bodovi (Tbr. 4)</summary>

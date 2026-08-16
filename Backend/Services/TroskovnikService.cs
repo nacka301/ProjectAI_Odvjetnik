@@ -315,9 +315,45 @@ public sealed class TroskovnikService : ITroskovnikService
         var kontekst = RazrijesiKontekst(request, odabraneDefinicije);
 
         var stavkeRetci = IzracunajRetke(request, katalogPoId, kontekst);
-        var zbrojevi = IzracunajZbrojeve(request, stavkeRetci, odabraneDefinicije, kontekst);
+        var dodatnePristojbe = RazrijesiRucneTroskove(request.DodatnePristojbe, "Pristojba");
+        var predujmovi = RazrijesiRucneTroskove(request.Predujmovi, "Predujam");
+        var zbrojevi = IzracunajZbrojeve(request, stavkeRetci, odabraneDefinicije, kontekst, dodatnePristojbe, predujmovi);
 
-        return SastaviOdgovor(request, stavkeRetci, zbrojevi, kontekst);
+        return SastaviOdgovor(request, stavkeRetci, zbrojevi, kontekst, dodatnePristojbe, predujmovi);
+    }
+
+    /// <summary>
+    /// Razrješava ručno unesen popis troškova (dodatne pristojbe ili predujmove): provjerava
+    /// opis i iznos, zaokružuje iznos postojećim <see cref="ZaokruziNovac"/> i renumerira
+    /// redni broj od 1. Ništa se ne smije tiho preskočiti ni vratiti kao 0.
+    /// </summary>
+    private static List<TroskovnikTrosakStavka> RazrijesiRucneTroskove(
+        List<TroskovnikTrosakRequest> stavke, string nazivStavke)
+    {
+        var rezultat = new List<TroskovnikTrosakStavka>();
+        var redniBroj = 0;
+
+        foreach (var stavka in stavke)
+        {
+            if (string.IsNullOrWhiteSpace(stavka.Opis))
+                throw new TroskovnikValidationException(
+                    $"{nazivStavke} bez opisa. Svaki ručno unesen trošak mora imati opis.");
+
+            if (stavka.Iznos < 0)
+                throw new TroskovnikValidationException(
+                    $"{nazivStavke} \"{stavka.Opis}\" ima negativan iznos ({stavka.Iznos}). Iznos ne može biti negativan.");
+
+            redniBroj++;
+            rezultat.Add(new TroskovnikTrosakStavka
+            {
+                Rbr = redniBroj,
+                Datum = stavka.Datum,
+                Opis = stavka.Opis,
+                Iznos = ZaokruziNovac(stavka.Iznos)
+            });
+        }
+
+        return rezultat;
     }
 
     /// <summary>
@@ -437,6 +473,7 @@ public sealed class TroskovnikService : ITroskovnikService
             {
                 Rbr = redniBroj,
                 ItemId = definicija.Id,
+                Datum = stavka.Datum,
                 Opis = definicija.Opis,
                 TarifniBroj = definicija.TarifniBroj,
                 PravniIzvor = definicija.PravniIzvor,
@@ -500,7 +537,9 @@ public sealed class TroskovnikService : ITroskovnikService
         TroskovnikRequest request,
         List<TroskovnikLineItem> stavkeRetci,
         List<TarifnaStavka> odabraneDefinicije,
-        KontekstIzracuna kontekst)
+        KontekstIzracuna kontekst,
+        List<TroskovnikTrosakStavka> dodatnePristojbe,
+        List<TroskovnikTrosakStavka> predujmovi)
     {
         var osnovicaBodova = stavkeRetci.Sum(redak => redak.UkupnoBodova);
 
@@ -541,13 +580,19 @@ public sealed class TroskovnikService : ITroskovnikService
         var pristojba = SudskePristojbeCalculator.Obracunaj(
             kontekst.VrijednostSpora, odabraneDefinicije, request.IsOslobodjenPristojbi);
 
+        // Odjeljak "Sudske pristojbe" = automatski izračunata pristojba + ručno dodane.
+        // Odjeljak "Predujmovi" = isključivo ručni popis. Ni jedno ni drugo ne nosi PDV —
+        // PDV se obračunava samo na odvjetničku nagradu, nikad ovdje.
+        var ukupnoPristojbe = pristojba.Iznos + dodatnePristojbe.Sum(t => t.Iznos);
+        var ukupnoPredujmovi = predujmovi.Sum(t => t.Iznos);
+
         var odvjetnickiTrosak = ukupnoEur + pdv;
-        var sveukupniTrosak = odvjetnickiTrosak + pristojba.Iznos;
+        var sveukupniTrosak = odvjetnickiTrosak + ukupnoPristojbe + ukupnoPredujmovi;
 
         return new Zbrojevi(
             ukupnoBodova, povisenjePostotak, povisenjeBodovi, tbr41Bodovi, ukupnoEur,
-            bodoviPoOsobi, nagradaPoOsobi, pdv, pristojba.Osnova, pristojba.Iznos, sveukupniTrosak,
-            brojOsoba, obracunajPdv);
+            bodoviPoOsobi, nagradaPoOsobi, pdv, pristojba.Osnova, pristojba.Iznos, ukupnoPristojbe,
+            ukupnoPredujmovi, sveukupniTrosak, brojOsoba, obracunajPdv);
     }
 
     /// <summary>Preslikava zahtjev i izračunate zbrojeve u odgovor koji ide klijentu.</summary>
@@ -555,7 +600,9 @@ public sealed class TroskovnikService : ITroskovnikService
         TroskovnikRequest request,
         List<TroskovnikLineItem> stavkeRetci,
         Zbrojevi zbrojevi,
-        KontekstIzracuna kontekst)
+        KontekstIzracuna kontekst,
+        List<TroskovnikTrosakStavka> dodatnePristojbe,
+        List<TroskovnikTrosakStavka> predujmovi)
     {
         return new TroskovnikResponse
         {
@@ -624,7 +671,12 @@ public sealed class TroskovnikService : ITroskovnikService
             SudskaPristojba = zbrojevi.SudskaPristojba,
             PristojbaOsnova = zbrojevi.PristojbaOsnova,
             IsOslobodjenPristojbi = request.IsOslobodjenPristojbi,
-            SveukupniTrosak = zbrojevi.SveukupniTrosak
+            SveukupniTrosak = zbrojevi.SveukupniTrosak,
+            DodatnePristojbe = dodatnePristojbe,
+            UkupnoPristojbe = zbrojevi.UkupnoPristojbe,
+            Predujmovi = predujmovi,
+            UkupnoPredujmovi = zbrojevi.UkupnoPredujmovi,
+            Napomena = string.IsNullOrWhiteSpace(request.Napomena) ? null : request.Napomena
         };
     }
 
@@ -650,6 +702,8 @@ public sealed class TroskovnikService : ITroskovnikService
         decimal Pdv,
         PristojbaOsnova PristojbaOsnova,
         decimal SudskaPristojba,
+        decimal UkupnoPristojbe,
+        decimal UkupnoPredujmovi,
         decimal SveukupniTrosak,
         int BrojZastupanihOsoba,
         bool ObracunajPdv);
