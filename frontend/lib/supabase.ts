@@ -8,7 +8,7 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
  * Uses @supabase/ssr's createBrowserClient — consistent with the HttpOnly cookie
  * flow used by the rest of the app (middleware, server components, useUserId hook).
  * This ensures RLS sees the correct auth.uid() on direct Supabase queries
- * (history page, dashboard, audit page, delete operations).
+ * (history page, dashboard, delete operations).
  */
 export const supabase =
   supabaseUrl && supabaseAnonKey
@@ -388,114 +388,4 @@ export async function deleteActivityItem(type: ActivityType, id: string): Promis
     case "invoice":     return deleteInvoice(id);
     default:            return false;
   }
-}
-
-// ═══════════════════════════════════════════════════════════
-//  Valuation Audit Results (Perplexity AI Layer)
-// ═══════════════════════════════════════════════════════════
-
-export type AuditVerdict = "CONFIRMED" | "SUSPICIOUS" | "REJECTED";
-
-export interface AuditRow {
-  id: string;
-  created_at: string;
-  evaluation_id: string;
-  verdict: AuditVerdict;
-  overall_confidence: number;
-  summary: string;
-  recommendation: string;
-  price_score: number;
-  location_score: number;
-  methodology_score: number;
-  data_quality_score: number;
-  findings_count: number;
-  critical_count: number;
-  model_used: string;
-  prompt_tokens: number;
-  completion_tokens: number;
-  raw_json_output: Record<string, unknown>;
-}
-
-/**
- * Fetch all audit results, optionally filtered by verdict.
- */
-export async function getAuditResults(
-  limit = 50,
-  verdict?: AuditVerdict
-): Promise<AuditRow[]> {
-  if (!supabase) return [];
-
-  let query = supabase
-    .from("valuation_audits")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(limit);
-
-  if (verdict) {
-    query = query.eq("verdict", verdict);
-  }
-
-  const { data, error } = await query;
-
-  if (error) {
-    console.error("Supabase valuation_audits error:", error.message);
-    return [];
-  }
-
-  return (data as AuditRow[]) ?? [];
-}
-
-/**
- * Fetch audit result for a specific evaluation.
- */
-export async function getAuditForEvaluation(
-  evaluationId: string
-): Promise<AuditRow | null> {
-  if (!supabase) return null;
-
-  const { data, error } = await supabase
-    .from("valuation_audits")
-    .select("*")
-    .eq("evaluation_id", evaluationId)
-    .limit(1)
-    .single();
-
-  if (error) {
-    // Not found is expected for unaudited evaluations
-    if (error.code !== "PGRST116") {
-      console.error("Supabase audit fetch error:", error.message);
-    }
-    return null;
-  }
-
-  return data as AuditRow;
-}
-
-/**
- * Fetch audit stats — counts per verdict.
- */
-export async function getAuditStats(): Promise<{
-  total: number;
-  confirmed: number;
-  suspicious: number;
-  rejected: number;
-}> {
-  if (!supabase) return { total: 0, confirmed: 0, suspicious: 0, rejected: 0 };
-
-  const { data, error } = await supabase
-    .from("valuation_audits")
-    .select("verdict");
-
-  if (error) {
-    console.error("Supabase audit stats error:", error.message);
-    return { total: 0, confirmed: 0, suspicious: 0, rejected: 0 };
-  }
-
-  const rows = data ?? [];
-  return {
-    total: rows.length,
-    confirmed: rows.filter((r) => r.verdict === "CONFIRMED").length,
-    suspicious: rows.filter((r) => r.verdict === "SUSPICIOUS").length,
-    rejected: rows.filter((r) => r.verdict === "REJECTED").length,
-  };
 }
