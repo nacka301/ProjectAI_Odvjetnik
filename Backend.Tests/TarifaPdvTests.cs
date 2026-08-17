@@ -43,15 +43,15 @@ public class TarifaPdvTests
 
     /// <summary>
     /// Odvjetnik izvan sustava PDV-a plaća samo sudsku pristojbu povrh nagrade.
-    /// 1.000,00 € + 546,45 € = 1.546,45 €.
+    /// 1.000,00 € + 620,00 € = 1.620,00 € (Tar. br. 1 st. 1, NN 50/2026).
     /// </summary>
     [Fact]
     public void IzvanSustavaPdva_SveukupnoJeNagradaPlusPristojba()
     {
         var rezultat = Izracunaj(pdvUkljucen: false);
 
-        Assert.Equal(546.45m, rezultat.SudskaPristojba);
-        Assert.Equal(1_546.45m, rezultat.SveukupniTrosak);
+        Assert.Equal(620.00m, rezultat.SudskaPristojba);
+        Assert.Equal(1_620.00m, rezultat.SveukupniTrosak);
     }
 
     /// <summary>Zastavica se vraća u odgovoru, da je sučelje i ispis mogu prikazati.</summary>

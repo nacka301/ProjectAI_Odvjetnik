@@ -13,9 +13,17 @@ public static class TarifaConstants
     public const string NazivTarife =
         "Tarifa o nagradama i naknadi troškova za rad odvjetnika (Hrvatska odvjetnička komora, 14. listopada 2023.)";
 
-    /// <summary>Uredba koja propisuje sudske pristojbe.</summary>
+    /// <summary>Uredba koja propisuje sudske pristojbe — na snazi od 1.6.2026.</summary>
     public const string NazivUredbeOPristojbama =
-        "Uredba o tarifi sudskih pristojbi (NN 37/2023)";
+        "Uredba o Tarifi sudskih pristojbi (NN 50/2026)";
+
+    /// <summary>
+    /// Uredba koja je prestala važiti 1.6.2026. Navodi se uz retke koje čl. 2 nove
+    /// Uredbe zadržava na starom propisu — odgovor na tužbu podnesen prije tog dana i
+    /// upravni spor pokrenut prije tog dana.
+    /// </summary>
+    public const string NazivStareUredbeOPristojbama =
+        "Uredba o Tarifi sudskih pristojbi (NN 37/2023)";
 
     /// <summary>Tbr. 54 — vrijednost boda.</summary>
     public const decimal BodValue = 2.00m;

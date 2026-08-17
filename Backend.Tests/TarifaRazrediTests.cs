@@ -134,8 +134,15 @@ public class TarifaRazrediTests
     ///   ──────────────────────────────────────────
     ///   ukupno                      2.125 bodova = 4.250,00 €
     ///   PDV 25%                                    1.062,50 €
-    ///   sudska pristojba (Tar. br. 1 st. 1)          546,45 €
-    ///   sveukupno                                  5.858,95 €
+    ///   ──────────────────────────────────────────
+    /// Sudske pristojbe po Uredbi NN 50/2026 — dvije, jer Uredba naplaćuje po radnji:
+    ///   tužba (Tar. br. 1 st. 1)                     620,00 €
+    ///   žalba protiv presude (Tar. br. 3 st. 1)    1.240,00 €
+    ///   ──────────────────────────────────────────
+    ///   sveukupno                                  7.172,50 €
+    ///
+    /// Po staroj je Uredbi cijeli troškovnik nosio jednu pristojbu od 546,45 €: žalba
+    /// se vodila kao polovica iz Tar. br. 1 st. 2 i utapala se u pristojbu za tužbu.
     /// </summary>
     [Fact]
     public void StandardnaProcjenjivaParnica()
@@ -164,8 +171,11 @@ public class TarifaRazrediTests
         Assert.Equal(5_312.50m, rezultat.UkupnoEurSPdv);
 
         Assert.Equal(PristojbaOsnova.Puna, rezultat.PristojbaOsnova);
-        Assert.Equal(546.45m, rezultat.SudskaPristojba);
-        Assert.Equal(5_858.95m, rezultat.SveukupniTrosak);
+        Assert.Equal(
+            [("tbr1_st1", 620.00m), ("tbr3_st1", 1_240.00m)],
+            rezultat.PristojbeneStavke.Select(s => (s.OdredbaId, s.Iznos)));
+        Assert.Equal(1_860.00m, rezultat.SudskaPristojba);
+        Assert.Equal(7_172.50m, rezultat.SveukupniTrosak);
 
         Assert.False(rezultat.IsSamoKazneni);
         Assert.Equal(50_000m, rezultat.VrijednostSpora);

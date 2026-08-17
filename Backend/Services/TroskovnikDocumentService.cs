@@ -180,18 +180,9 @@ public sealed class TroskovnikDocumentService
             sb.AppendLine($"<tr><th>Odvjetnički trošak</th><th style=\"text-align:right\">{FormatCurrency(resp.UkupnoEurBezPdv)}</th></tr>");
         }
 
-        // Sudska pristojba — s razlogom kad je nema, da "0,00 €" ne izgleda kao greška.
-        var pristojbaObrazlozenje = resp.PristojbaOsnova switch
-        {
-            PristojbaOsnova.Nema =>
-                $"{TarifaConstants.NazivUredbeOPristojbama} ne propisuje pristojbu za kazneni postupak (Poglavlje I. — parnični i ovršni postupak)",
-            PristojbaOsnova.Polovica =>
-                $"{TarifaConstants.NazivUredbeOPristojbama}, Tar. br. 1 st. 2 — polovica iznosa iz st. 1",
-            _ =>
-                $"{TarifaConstants.NazivUredbeOPristojbama}, Tar. br. 1 st. 1"
-        };
-
-        sb.AppendLine($"<tr><td>Sudska pristojba{(resp.IsOslobodjenPristojbi ? " (oslobođeno)" : "")}<br/><span style=\"font-size:10px;color:#555\">{System.Net.WebUtility.HtmlEncode(pristojbaObrazlozenje)}</span></td><td style=\"text-align:right\">{FormatCurrency(resp.SudskaPristojba)}</td></tr>");
+        // Sudske pristojbe — jedan redak po pristojbenoj radnji, svaki sa svojim tarifnim
+        // brojem. Kad ih nema, ostaje jedan redak s razlogom, da "0,00 €" ne izgleda kao greška.
+        AppendPristojbe(sb, resp);
         sb.AppendLine($"<tr><th>SVEUKUPNI TROŠAK</th><th style=\"text-align:right\">{FormatCurrency(resp.SveukupniTrosak)}</th></tr>");
 
         // Tbr. 40. toč. 1, drugi odlomak — "Iznos povišene nagrade dijeli se na jednake
@@ -212,6 +203,43 @@ public sealed class TroskovnikDocumentService
         sb.AppendLine("</body></html>");
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Ispisuje sudske pristojbe, jedan redak po pristojbenoj radnji.
+    ///
+    /// Uredba naplaćuje po radnji, pa troškovnik u kojem su tužba, presuda i žalba nosi
+    /// tri retka s tri različita tarifna broja. Uz svaki stoji odredba iz koje proizlazi —
+    /// bez toga se zbroj ne može provjeriti, a odvjetnik ga predaje sudu.
+    ///
+    /// Retci koje čl. 2 zadržava na staroj Uredbi nose vidljivu naznaku, jer bi inače
+    /// izgledali kao pogrešno izračunati po novoj.
+    /// </summary>
+    private void AppendPristojbe(StringBuilder sb, TroskovnikResponse resp)
+    {
+        var oslobodjeno = resp.IsOslobodjenPristojbi ? " (oslobođeno)" : "";
+
+        if (resp.PristojbeneStavke.Count == 0)
+        {
+            var razlog = $"{TarifaConstants.NazivUredbeOPristojbama} za odabrane radnje ne propisuje pristojbu";
+            sb.AppendLine($"<tr><td>Sudska pristojba{oslobodjeno}<br/><span style=\"font-size:10px;color:#555\">{System.Net.WebUtility.HtmlEncode(razlog)}</span></td><td style=\"text-align:right\">{FormatCurrency(0m)}</td></tr>");
+            return;
+        }
+
+        foreach (var stavka in resp.PristojbeneStavke)
+        {
+            var naslov = $"Sudska pristojba — {stavka.TarifniBroj}{oslobodjeno}";
+            var kolicina = stavka.Kolicina > 1 ? $" × {stavka.Kolicina}" : "";
+
+            // PravniIzvor za retke po staroj Uredbi već nosi "— čl. 2 NN 50/2026",
+            // pa se naznaka prijelaznog slučaja ne mora dodavati posebno.
+            var izvor = $"{stavka.Opis}{kolicina} · {stavka.PravniIzvor}";
+
+            sb.AppendLine($"<tr><td>{System.Net.WebUtility.HtmlEncode(naslov)}<br/><span style=\"font-size:10px;color:#555\">{System.Net.WebUtility.HtmlEncode(izvor)}</span></td><td style=\"text-align:right\">{FormatCurrency(stavka.Iznos)}</td></tr>");
+        }
+
+        if (resp.PristojbeneStavke.Count > 1)
+            sb.AppendLine($"<tr><td>Ukupno sudske pristojbe{oslobodjeno}</td><td style=\"text-align:right\">{FormatCurrency(resp.SudskaPristojba)}</td></tr>");
     }
 
     /// <summary>

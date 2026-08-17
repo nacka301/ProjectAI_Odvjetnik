@@ -26,6 +26,7 @@ import {
   AlertCircle,
   CheckCircle,
   Info,
+  X,
 } from "lucide-react";
 import { API_BASE } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
@@ -42,8 +43,9 @@ import {
   izracunajBodove,
   jeSamoKazneni,
   izracunajKazneneBodove,
-  izracunajSudskuPristojbu,
-  objasnjenjePristojbe,
+  obracunajPristojbe,
+  objasnjenjeBezPristojbe,
+  PRISTOJBE_NN50_2026,
   OSNOVICA_TBR7,
   OSNOVICA_LABELE,
   RAZINA_SUDA,
@@ -55,7 +57,6 @@ import {
   TBR45_NACIN_LABELE,
   efektivniVps,
   izracunajOsnovicu,
-  odrediPristojbuOsnovu,
   podijeliPoOsobama,
   povisenjeViseOsobaPostotak,
   provjeriZahtjev,
@@ -68,7 +69,8 @@ import {
   ukupnoBodovaZaStavku,
   zaokruziNovac,
   type OsnovicaTbr7,
-  type PristojbaOsnova,
+  type PristojbenaStavka,
+  type RucnaPristojba,
   type RazinaSuda,
   type RentaRazdoblje,
   type TarifnaStavka,
@@ -157,9 +159,9 @@ interface TroskovnikResponse {
   napomena_stjecaj?: string | null;
   is_oduzimanje_prekrsaj?: boolean;
   vrijednost_oduzimanja?: number;
-  // Sudske pristojbe
+  // Sudske pristojbe — lista, jer Uredba naplaćuje po radnji
+  pristojbene_stavke?: PristojbenaStavka[];
   sudska_pristojba?: number;
-  pristojba_osnova?: PristojbaOsnova;
   is_oslobodjen_pristojbi?: boolean;
   sveukupni_trosak?: number;
 }
@@ -263,6 +265,17 @@ function TroskovnikContent() {
 
   // ── Sudske pristojbe state ──
   const [isOslobodjenPristojbi, setIsOslobodjenPristojbi] = useState(false);
+
+  // Čl. 2 Uredbe NN 50/2026 — dva prijelazna slučaja u kojima vrijedi stara Uredba.
+  // Dva zasebna datuma, jer jedan predmet može imati star odgovor na tužbu i novu žalbu.
+  const [datumOdgovoraNaTuzbu, setDatumOdgovoraNaTuzbu] = useState("");
+  const [datumPokretanjaUpravnogSpora, setDatumPokretanjaUpravnogSpora] = useState("");
+
+  // Velik dio Uredbe (ovjere, etažiranje, upis broda, polog) nema svoju tarifnu stavku
+  // iz koje bi se izveo, a nekoliko stavaka kataloga pokriva dvije odredbe odjednom
+  // (dioba/ostavina, stečaj/predstečaj) — zato se lista mora dati urediti.
+  const [pristojbeDodane, setPristojbeDodane] = useState<RucnaPristojba[]>([]);
+  const [pristojbeIskljucene, setPristojbeIskljucene] = useState<string[]>([]);
 
   // ── Tbr. 40 — broj osoba koje odvjetnik zastupa u istom postupku ──
   const [brojZastupanihOsoba, setBrojZastupanihOsoba] = useState(1);
@@ -449,9 +462,55 @@ function TroskovnikContent() {
   const efektivniVpsNum = useMemo(() => efektivniVps(osnovicaUlaz), [osnovicaUlaz]);
   const baseBodovi = osnovica?.bodovi ?? 0;
 
-  // Uredba NN 37/23, Poglavlje I. pokriva parnični i ovršni postupak.
-  // Pristojba se veže uz stvarnu vrijednost spora, ne uz osnovicu iz Tbr. 45.
-  const pristojbaOsnova = odrediPristojbuOsnovu(odabraneDefinicije);
+  // Sudske pristojbe (Uredba NN 50/2026). Svaka pristojbena radnja svoj redak — tužba,
+  // presuda i žalba tri su pristojbe. Veže se uz stvarnu vrijednost spora, ne uz
+  // osnovicu iz Tbr. 45, koja služi samo za odvjetničku nagradu.
+  const pristojbe = useMemo(
+    () =>
+      obracunajPristojbe({
+        vrijednostSpora: vrijednostNum,
+        odabraneStavke: odabraneDefinicije,
+        oslobodjen: isOslobodjenPristojbi,
+        datumOdgovoraNaTuzbu: datumOdgovoraNaTuzbu || null,
+        datumPokretanjaUpravnogSpora: datumPokretanjaUpravnogSpora || null,
+        dodane: pristojbeDodane,
+        iskljucene: pristojbeIskljucene,
+      }),
+    [
+      vrijednostNum,
+      odabraneDefinicije,
+      isOslobodjenPristojbi,
+      datumOdgovoraNaTuzbu,
+      datumPokretanjaUpravnogSpora,
+      pristojbeDodane,
+      pristojbeIskljucene,
+    ],
+  );
+
+  /**
+   * Miče redak iz obračuna: automatski izveden se stavlja na popis isključenih,
+   * a ručno dodan se jednostavno briše.
+   */
+  const makniPristojbu = useCallback((odredbaId: string, automatski: boolean) => {
+    if (automatski) {
+      setPristojbeIskljucene((prev) => (prev.includes(odredbaId) ? prev : [...prev, odredbaId]));
+    } else {
+      setPristojbeDodane((prev) => prev.filter((p) => p.odredba_id !== odredbaId));
+    }
+  }, []);
+
+  /** Dodaje odredbu iz popisa; isključenje se pritom poništava. */
+  const dodajPristojbu = useCallback((odredbaId: string) => {
+    if (!odredbaId) return;
+    setPristojbeIskljucene((prev) => prev.filter((id) => id !== odredbaId));
+    setPristojbeDodane((prev) =>
+      prev.some((p) => p.odredba_id === odredbaId) ? prev : [...prev, { odredba_id: odredbaId }],
+    );
+  }, []);
+
+  // Polja za datum imaju smisla samo kad je odabrana radnja na koju se čl. 2 odnosi.
+  const imaOdgovorNaTuzbu = odabraneDefinicije.some((d) => d.id === "par_odgovor_tuzba");
+  const imaUpravniSpor = pristojbe.stavke.some((s) => s.poglavlje === "VIII. Upravni spor");
 
   // Što nedostaje da se troškovnik može valjano izračunati — zrcali backend provjere.
   const nedostaci = useMemo(
@@ -620,10 +679,9 @@ function TroskovnikContent() {
     const pdv = isPdvUkljucen ? zaokruziNovac(ukupnoEur * PDV_RATE) : 0;
     const odvjetnickiTrosak = ukupnoEur + pdv;
 
-    // Sudske pristojbe (Uredba NN 37/2023, Tar. br. 1)
-    const sudskaPristojba = isOslobodjenPristojbi
-      ? 0
-      : izracunajSudskuPristojbu(vrijednostNum, pristojbaOsnova);
+    // Sudske pristojbe se računaju izvan ovog memoa (vidi `pristojbe`) jer ovise o
+    // drugom propisu i ne ulaze u osnovicu za PDV — pribrajaju se tek na kraju.
+    const sudskaPristojba = pristojbe.ukupno;
     const sveukupniTrosak = odvjetnickiTrosak + sudskaPristojba;
 
     // Tbr. 40. toč. 1, drugi odlomak — dioba na jednake dijelove po zastupanoj osobi.
@@ -631,7 +689,7 @@ function TroskovnikContent() {
     const nagradaPoOsobi = zaokruziNovac(podijeliPoOsobama(ukupnoEur, brojZastupanihOsoba));
 
     return { lines, osnovicaBodova, povisenjePostotak, povisenjeBodovi, tbr41Postotak, tbr41Bodovi, ukupnoBodova, bodoviPoOsobi, nagradaPoOsobi, ukupnoEur, pdv, ukupnoSPdv: ukupnoEur + pdv, sudskaPristojba, sveukupniTrosak };
-  }, [selectedItems, katalog, osnovica, isPdvUkljucen, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, isOduzimanjePrekrsaj, parsedVrijednostOduzimanja, isOslobodjenPristojbi, vrijednostNum, pristojbaOsnova, brojZastupanihOsoba, zaprijecenaKazna, tbr41Povisenje, tbr41Snizenje, tbr41PoStavci]);
+  }, [selectedItems, katalog, osnovica, isPdvUkljucen, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, isOduzimanjePrekrsaj, parsedVrijednostOduzimanja, pristojbe, brojZastupanihOsoba, zaprijecenaKazna, tbr41Povisenje, tbr41Snizenje, tbr41PoStavci]);
 
   // ── Handlers ──
   const toggleCategory = useCallback((cat: string) => {
@@ -749,6 +807,11 @@ function TroskovnikContent() {
         is_oduzimanje_prekrsaj: isOduzimanjePrekrsaj,
         vrijednost_oduzimanja: parsedVrijednostOduzimanja,
         is_oslobodjen_pristojbi: isOslobodjenPristojbi,
+        // Čl. 2 Uredbe NN 50/2026 — prazan datum znači "nije prijelazni slučaj".
+        datum_podnosenja_odgovora_na_tuzbu: datumOdgovoraNaTuzbu || null,
+        datum_pokretanja_upravnog_spora: datumPokretanjaUpravnogSpora || null,
+        pristojbe_dodane: pristojbeDodane,
+        pristojbe_iskljucene: pristojbeIskljucene,
         broj_zastupanih_osoba: brojZastupanihOsoba,
         // Osnovica po Tbr. 7. toč. 1., 4., 7. i 8., odnosno Tbr. 45
         osnovica_tbr7: osnovicaTbr7,
@@ -836,6 +899,11 @@ function TroskovnikContent() {
         is_oduzimanje_prekrsaj: isOduzimanjePrekrsaj,
         vrijednost_oduzimanja: parsedVrijednostOduzimanja,
         is_oslobodjen_pristojbi: isOslobodjenPristojbi,
+        // Čl. 2 Uredbe NN 50/2026 — prazan datum znači "nije prijelazni slučaj".
+        datum_podnosenja_odgovora_na_tuzbu: datumOdgovoraNaTuzbu || null,
+        datum_pokretanja_upravnog_spora: datumPokretanjaUpravnogSpora || null,
+        pristojbe_dodane: pristojbeDodane,
+        pristojbe_iskljucene: pristojbeIskljucene,
         broj_zastupanih_osoba: brojZastupanihOsoba,
         // Osnovica po Tbr. 7. toč. 1., 4., 7. i 8., odnosno Tbr. 45
         osnovica_tbr7: osnovicaTbr7,
@@ -907,17 +975,37 @@ function TroskovnikContent() {
     const csvPdvActive = result ? (result.is_pdv_ukljucen ?? result.has_vat ?? isPdvUkljucen) : isPdvUkljucen;
     const csvPristojba = result?.sudska_pristojba ?? liveCalc.sudskaPristojba;
     const csvSveukupni = result?.sveukupni_trosak ?? liveCalc.sveukupniTrosak;
+
+    // Uredba naplaćuje po radnji, pa svaka pristojba ide u svoj redak — zbroj bez
+    // razrade ne bi se dao provjeriti, a troškovnik se predaje sudu.
+    const csvPristojbeneStavke = result?.pristojbene_stavke ?? pristojbe.stavke;
+    const pristojbeRedci = csvPristojbeneStavke
+      .map(
+        (s) =>
+          `\n;;;;;;Sudska pristojba — ${s.tarifni_broj}${s.kolicina > 1 ? ` × ${s.kolicina}` : ""}` +
+          `${s.uredba === "NN 37/2023" ? " (NN 37/2023, čl. 2)" : ""};${formatNumber(s.iznos)}`,
+      )
+      .join("");
+    const pristojbeUkupno =
+      csvPristojbeneStavke.length > 1
+        ? `\n;;;;;;Ukupno sudske pristojbe;${formatNumber(csvPristojba)}`
+        : "";
+    const pristojbeCsv =
+      csvPristojbeneStavke.length === 0
+        ? `\n;;;;;;Sudska pristojba;${formatNumber(0)}`
+        : pristojbeRedci + pristojbeUkupno;
+
     let totals: string;
     if (csvPdvActive) {
       const base = result ? result.ukupno_eur_bez_pdv : liveCalc.ukupnoEur;
       const pdvAmt = result ? result.pdv : liveCalc.pdv;
       const grand = result ? result.ukupno_eur_s_pdv : liveCalc.ukupnoSPdv;
       const bodova = result ? result.ukupno_bodova : liveCalc.ukupnoBodova;
-      totals = `\n\n;;;;;;Ukupno bodova;${bodova}\n;;;;;;Osnovica (bez PDV);${formatNumber(base)}\n;;;;;;PDV (25%);${formatNumber(pdvAmt)}\n;;;;;;Odvjetnički trošak s PDV-om;${formatNumber(grand)}\n;;;;;;Sudska pristojba (Tar. br. 1);${formatNumber(csvPristojba)}\n;;;;;;SVEUKUPNI TROŠAK;${formatNumber(csvSveukupni)}`;
+      totals = `\n\n;;;;;;Ukupno bodova;${bodova}\n;;;;;;Osnovica (bez PDV);${formatNumber(base)}\n;;;;;;PDV (25%);${formatNumber(pdvAmt)}\n;;;;;;Odvjetnički trošak s PDV-om;${formatNumber(grand)}${pristojbeCsv}\n;;;;;;SVEUKUPNI TROŠAK;${formatNumber(csvSveukupni)}`;
     } else {
       const base = result ? result.ukupno_eur_bez_pdv : liveCalc.ukupnoEur;
       const bodova = result ? result.ukupno_bodova : liveCalc.ukupnoBodova;
-      totals = `\n\n;;;;;;Ukupno bodova;${bodova}\n;;;;;;Odvjetnički trošak;${formatNumber(base)}\n;;;;;;Sudska pristojba (Tar. br. 1);${formatNumber(csvPristojba)}\n;;;;;;SVEUKUPNI TROŠAK;${formatNumber(csvSveukupni)}`;
+      totals = `\n\n;;;;;;Ukupno bodova;${bodova}\n;;;;;;Odvjetnički trošak;${formatNumber(base)}${pristojbeCsv}\n;;;;;;SVEUKUPNI TROŠAK;${formatNumber(csvSveukupni)}`;
     }
 
     const bom = "\uFEFF";
@@ -928,7 +1016,9 @@ function TroskovnikContent() {
     a.download = `troskovnik-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [result, liveCalc]);
+    // `pristojbe` je ovdje jer izvoz bez spremljenog rezultata ispisuje retke iz živog
+    // pregleda; bez te ovisnosti CSV bi nosio pristojbe od prošle promjene.
+  }, [result, liveCalc, pristojbe, isPdvUkljucen]);
 
   // ═══════════════════════════════════════════════════════════════
   //  RENDER
@@ -1885,10 +1975,10 @@ function TroskovnikContent() {
 
                       {/* ── Sudske pristojbe ── */}
                       <div className="pt-2 mt-1 border-t border-dashed border-slate-200 space-y-1.5">
-                        {pristojbaOsnova === "Nema" ? (
+                        {pristojbe.stavke.length === 0 ? (
                           <div className="flex items-start gap-1.5 text-[10px] text-slate-500 leading-snug">
                             <Info className="h-3 w-3 shrink-0 mt-0.5 text-slate-400" />
-                            <span>{objasnjenjePristojbe("Nema")}</span>
+                            <span>{objasnjenjeBezPristojbe()}</span>
                           </div>
                         ) : (
                           <>
@@ -1903,15 +1993,105 @@ function TroskovnikContent() {
                                 <span className="text-xs">Oslobođenje od pristojbi (čl. 11.)</span>
                               </label>
                             </div>
-                            <div className="flex justify-between text-xs text-slate-600">
-                              <span>Sudska pristojba (Tar. br. 1)</span>
-                              <span className={`font-semibold ${isOslobodjenPristojbi ? 'line-through text-slate-400' : ''}`}>
-                                {fmtEur(isOslobodjenPristojbi ? 0 : liveCalc.sudskaPristojba)}
-                              </span>
-                            </div>
-                            <p className="text-[10px] text-slate-400">{objasnjenjePristojbe(pristojbaOsnova)}</p>
+
+                            {/* Uredba naplaćuje po radnji — tužba, presuda i žalba tri su pristojbe. */}
+                            {pristojbe.stavke.map((s) => (
+                              <div key={s.odredba_id} className="space-y-0.5 group">
+                                <div className="flex justify-between items-center gap-1 text-xs text-slate-600">
+                                  <span className="flex items-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => makniPristojbu(s.odredba_id, s.automatski)}
+                                      title="Makni ovu pristojbu iz obračuna"
+                                      aria-label={`Makni pristojbu ${s.tarifni_broj}`}
+                                      className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-slate-400 hover:text-rose-600 transition"
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </button>
+                                    {s.tarifni_broj}
+                                    {s.kolicina > 1 && <span className="text-slate-400"> × {s.kolicina}</span>}
+                                  </span>
+                                  <span className={`font-semibold ${isOslobodjenPristojbi ? 'line-through text-slate-400' : ''}`}>
+                                    {fmtEur(s.iznos)}
+                                  </span>
+                                </div>
+                                <p className="text-[10px] text-slate-400 leading-snug">
+                                  {s.opis}
+                                  {s.uredba === "NN 37/2023" && (
+                                    <span className="ml-1 text-amber-600">
+                                      · po staroj Uredbi (NN 37/2023), čl. 2
+                                    </span>
+                                  )}
+                                </p>
+                              </div>
+                            ))}
+
+                            {pristojbe.stavke.length > 1 && (
+                              <div className="flex justify-between text-xs font-semibold text-slate-700 pt-1 border-t border-slate-100">
+                                <span>Ukupno sudske pristojbe</span>
+                                <span className={isOslobodjenPristojbi ? 'line-through text-slate-400' : ''}>
+                                  {fmtEur(liveCalc.sudskaPristojba)}
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Čl. 2 — datumi se traže samo kad je odabrana radnja na koju se odnose. */}
+                            {(imaOdgovorNaTuzbu || imaUpravniSpor) && (
+                              <div className="pt-1.5 mt-1 border-t border-slate-100 space-y-1.5">
+                                <p className="text-[10px] text-slate-500 leading-snug">
+                                  Uredba NN 50/2026 vrijedi od 1.6.2026. Po čl. 2 se pristojba za odgovor
+                                  na tužbu podnesen prije tog dana i pristojba u upravnom sporu pokrenutom
+                                  prije tog dana utvrđuju po staroj Uredbi.
+                                </p>
+                                {imaOdgovorNaTuzbu && (
+                                  <label className="flex items-center justify-between gap-2 text-[10px] text-slate-500">
+                                    <span>Odgovor na tužbu podnesen</span>
+                                    <input
+                                      type="date"
+                                      value={datumOdgovoraNaTuzbu}
+                                      onChange={(e) => setDatumOdgovoraNaTuzbu(e.target.value)}
+                                      className="rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-600"
+                                    />
+                                  </label>
+                                )}
+                                {imaUpravniSpor && (
+                                  <label className="flex items-center justify-between gap-2 text-[10px] text-slate-500">
+                                    <span>Upravni spor pokrenut</span>
+                                    <input
+                                      type="date"
+                                      value={datumPokretanjaUpravnogSpora}
+                                      onChange={(e) => setDatumPokretanjaUpravnogSpora(e.target.value)}
+                                      className="rounded border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-600"
+                                    />
+                                  </label>
+                                )}
+                              </div>
+                            )}
                           </>
                         )}
+
+                        {/*
+                          Ručno dodavanje. Ovjere, etažiranje, upis broda i polog nemaju
+                          odvjetničku tarifnu stavku iz koje bi se izveli, a dioba/ostavina
+                          i stečaj/predstečaj dijele jednu stavku kataloga pa se izvedeni
+                          redak mora moći zamijeniti.
+                        */}
+                        <select
+                          value=""
+                          onChange={(e) => dodajPristojbu(e.target.value)}
+                          aria-label="Dodaj sudsku pristojbu iz Uredbe"
+                          className="w-full rounded border border-slate-200 px-1.5 py-1 text-[10px] text-slate-600 mt-1"
+                        >
+                          <option value="">+ Dodaj pristojbu iz Uredbe…</option>
+                          {PRISTOJBE_NN50_2026.filter(
+                            (o) => !pristojbe.stavke.some((s) => s.odredba_id === o.id),
+                          ).map((o) => (
+                            <option key={o.id} value={o.id}>
+                              {o.poglavlje} · {o.tarifni_broj} — {o.opis.slice(0, 70)}
+                              {o.opis.length > 70 ? "…" : ""}
+                            </option>
+                          ))}
+                        </select>
                       </div>
 
                       {/* ── Grand Total ── */}
@@ -2306,19 +2486,49 @@ function TroskovnikContent() {
                               <td className="py-1 px-2 text-right text-sm font-semibold text-indigo-700">{fmtEur(base)}</td>
                             </tr>
                           )}
-                          <tr>
-                            <td colSpan={5} className="py-1 px-2 text-right text-xs text-slate-500">
-                              Sudska pristojba (Tar. br. 1)
-                              {result.is_oslobodjen_pristojbi && <span className="ml-1 text-amber-600">(oslobođeno)</span>}
-                              <span className="block text-[10px] text-slate-400">
-                                {objasnjenjePristojbe(result.pristojba_osnova ?? "Puna")}
-                              </span>
-                            </td>
-                            <td />
-                            <td className={`py-1 px-2 text-right text-sm ${result.is_oslobodjen_pristojbi ? 'line-through text-slate-400' : 'text-slate-600'}`}>
-                              {fmtEur(pristojba)}
-                            </td>
-                          </tr>
+                          {/* Uredba naplaćuje po radnji — svaki tarifni broj svoj redak. */}
+                          {(result.pristojbene_stavke ?? []).length === 0 ? (
+                            <tr>
+                              <td colSpan={5} className="py-1 px-2 text-right text-xs text-slate-500">
+                                Sudska pristojba
+                                <span className="block text-[10px] text-slate-400">
+                                  {objasnjenjeBezPristojbe()}
+                                </span>
+                              </td>
+                              <td />
+                              <td className="py-1 px-2 text-right text-sm text-slate-600">{fmtEur(0)}</td>
+                            </tr>
+                          ) : (
+                            <>
+                              {(result.pristojbene_stavke ?? []).map((s) => (
+                                <tr key={s.odredba_id}>
+                                  <td colSpan={5} className="py-1 px-2 text-right text-xs text-slate-500">
+                                    Sudska pristojba — {s.tarifni_broj}
+                                    {s.kolicina > 1 && <span className="text-slate-400"> × {s.kolicina}</span>}
+                                    {result.is_oslobodjen_pristojbi && <span className="ml-1 text-amber-600">(oslobođeno)</span>}
+                                    <span className="block text-[10px] text-slate-400">
+                                      {s.pravni_izvor}
+                                    </span>
+                                  </td>
+                                  <td />
+                                  <td className={`py-1 px-2 text-right text-sm ${result.is_oslobodjen_pristojbi ? 'line-through text-slate-400' : 'text-slate-600'}`}>
+                                    {fmtEur(s.iznos)}
+                                  </td>
+                                </tr>
+                              ))}
+                              {(result.pristojbene_stavke ?? []).length > 1 && (
+                                <tr>
+                                  <td colSpan={5} className="py-1 px-2 text-right text-xs font-semibold text-slate-600">
+                                    Ukupno sudske pristojbe
+                                  </td>
+                                  <td />
+                                  <td className={`py-1 px-2 text-right text-sm font-semibold ${result.is_oslobodjen_pristojbi ? 'line-through text-slate-400' : 'text-slate-700'}`}>
+                                    {fmtEur(pristojba)}
+                                  </td>
+                                </tr>
+                              )}
+                            </>
+                          )}
                           <tr className="bg-indigo-50">
                             <td colSpan={5} className="py-3 px-2 text-right text-sm font-bold text-indigo-800">SVEUKUPNI TROŠAK</td>
                             <td />
@@ -2349,7 +2559,7 @@ function TroskovnikContent() {
 
               {/* Footer */}
               <div className="mt-4 pt-3 border-t border-slate-200 text-[10px] text-slate-400 leading-relaxed">
-                <p>Izračun je napravljen prema Tarifi o nagradama i naknadi troškova za rad odvjetnika (Hrvatska odvjetnička komora, 14. listopada 2023.). Vrijednost boda: {fmtEur(BOD_VALUE)} (Tbr. 54). Sudske pristojbe prema Uredbi o tarifi sudskih pristojbi (NN 37/2023), Tar. br. 1.</p>
+                <p>Izračun je napravljen prema Tarifi o nagradama i naknadi troškova za rad odvjetnika (Hrvatska odvjetnička komora, 14. listopada 2023.). Vrijednost boda: {fmtEur(BOD_VALUE)} (Tbr. 54). Sudske pristojbe prema Uredbi o Tarifi sudskih pristojbi (NN 50/2026), na snazi od 1.6.2026.; za odgovor na tužbu podnesen i upravni spor pokrenut prije tog dana primjenjuje se NN 37/2023 (čl. 2).</p>
                 <p className="mt-1">Ovaj troškovnik služi kao orijentacijski izračun i ne predstavlja pravno obvezujući dokument.</p>
               </div>
             </div>

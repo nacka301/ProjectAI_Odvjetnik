@@ -1,0 +1,89 @@
+{
+  "napomena": [
+    "Zajednički izvor istine za sudske pristojbe. Čitaju ga OBA izračuna:",
+    "  • Backend.Tests/SudskePristojbeParitetTests.cs  (C#)",
+    "  • frontend/__tests__/tarifa-pristojbe.test.ts    (TypeScript)",
+    "Frontend ponavlja backendov izračun radi živog prikaza, pa se svako razilaženje",
+    "mora srušiti kao test, a ne tiho proizvesti dva različita iznosa za istog klijenta.",
+    "",
+    "'osnovica' je vrijednost na koju se odredba primjenjuje: VPS, čista ostavina,",
+    "vrijednost tražbine, broj etažnih dijelova. Kod fiksnih iznosa se zanemaruje.",
+    "'uredba' je 'NN 50/2026' ili 'NN 37/2023'."
+  ],
+  "slucajevi": [
+    { "odredba": "tbr1_st1", "osnovica": 300, "uredba": "NN 50/2026", "ocekivano": 30.00, "opis": "Tar. br. 1 st. 1 — razred 1 (do 400,00)" },
+    { "odredba": "tbr1_st1", "osnovica": 500, "uredba": "NN 50/2026", "ocekivano": 60.00, "opis": "Tar. br. 1 st. 1 — razred 2 (do 800,00)" },
+    { "odredba": "tbr1_st1", "osnovica": 1000, "uredba": "NN 50/2026", "ocekivano": 80.00, "opis": "Tar. br. 1 st. 1 — razred 3 (do 1.200,00)" },
+    { "odredba": "tbr1_st1", "osnovica": 1500, "uredba": "NN 50/2026", "ocekivano": 110.00, "opis": "Tar. br. 1 st. 1 — razred 4 (do 1.600,00)" },
+    { "odredba": "tbr1_st1", "osnovica": 1900, "uredba": "NN 50/2026", "ocekivano": 140.00, "opis": "Tar. br. 1 st. 1 — razred 5 (do 2.000,00)" },
+    { "odredba": "tbr1_st1", "osnovica": 2000, "uredba": "NN 50/2026", "ocekivano": 140.00, "opis": "Tar. br. 1 st. 1 — točno na pragu, još uvijek razred" },
+    { "odredba": "tbr1_st1", "osnovica": 3000, "uredba": "NN 50/2026", "ocekivano": 150.00, "opis": "Tar. br. 1 st. 1 — 140,00 + 1 % × 1.000,00" },
+    { "odredba": "tbr1_st1", "osnovica": 50000, "uredba": "NN 50/2026", "ocekivano": 620.00, "opis": "Tar. br. 1 st. 1 — 140,00 + 1 % × 48.000,00; prije popravka 546,45" },
+    { "odredba": "tbr1_st1", "osnovica": 138000, "uredba": "NN 50/2026", "ocekivano": 1500.00, "opis": "Tar. br. 1 st. 1 — točka u kojoj se dostiže kapa" },
+    { "odredba": "tbr1_st1", "osnovica": 500000, "uredba": "NN 50/2026", "ocekivano": 1500.00, "opis": "Tar. br. 1 st. 1 — kapa; prije popravka 663,61" },
+
+    { "odredba": "tbr1_st2", "osnovica": 300, "uredba": "NN 50/2026", "ocekivano": 15.00, "opis": "Tar. br. 1 st. 2 — polovica od 30,00" },
+    { "odredba": "tbr1_st2", "osnovica": 50000, "uredba": "NN 50/2026", "ocekivano": 310.00, "opis": "Tar. br. 1 st. 2 — polovica od 620,00" },
+    { "odredba": "tbr1_st3", "osnovica": 50000, "uredba": "NN 50/2026", "ocekivano": 40.00, "opis": "Tar. br. 1 st. 3 — fiksno, ne ovisi o VPS-u" },
+
+    { "odredba": "tbr2_st1", "osnovica": 50000, "uredba": "NN 50/2026", "ocekivano": 620.00, "opis": "Tar. br. 2 st. 1 — prvostupanjska presuda, puni st. 1" },
+    { "odredba": "tbr2_st2", "osnovica": 50000, "uredba": "NN 50/2026", "ocekivano": 310.00, "opis": "Tar. br. 2 st. 2 — presuda zbog ogluhe, po st. 2" },
+    { "odredba": "tbr2_st7", "osnovica": 50000, "uredba": "NN 50/2026", "ocekivano": 30.00, "opis": "Tar. br. 2 st. 7 — priznanje strane odluke, fiksno" },
+    { "odredba": "tbr2_st9", "osnovica": 50000, "uredba": "NN 50/2026", "ocekivano": 0.00, "opis": "Tar. br. 2 st. 9 — za sudske nagodbe pristojba se ne plaća" },
+
+    { "odredba": "tbr3_st1", "osnovica": 50000, "uredba": "NN 50/2026", "ocekivano": 1240.00, "opis": "Tar. br. 3 st. 1 — žalba protiv presude, uvećano za 100 %" },
+    { "odredba": "tbr3_st1", "osnovica": 500000, "uredba": "NN 50/2026", "ocekivano": 3000.00, "opis": "Tar. br. 3 st. 1 — uvećanje se računa na već ograničenih 1.500,00" },
+    { "odredba": "tbr3_st2", "osnovica": 50000, "uredba": "NN 50/2026", "ocekivano": 620.00, "opis": "Tar. br. 3 st. 2 — žalba protiv rješenja, bez uvećanja" },
+    { "odredba": "tbr3_st5", "osnovica": 50000, "uredba": "NN 50/2026", "ocekivano": 50.00, "opis": "Tar. br. 3 st. 5 — polovica st. 1, ali najviše 50,00" },
+    { "odredba": "tbr3_st5", "osnovica": 60, "uredba": "NN 50/2026", "ocekivano": 15.00, "opis": "Tar. br. 3 st. 5 — ispod kape se plaća stvarna polovica" },
+
+    { "odredba": "tbr4_prijedlog", "osnovica": 50000, "uredba": "NN 50/2026", "ocekivano": 30.00, "opis": "Tar. br. 4 — izvanparnični prijedlog, fiksno" },
+    { "odredba": "tbr5", "osnovica": 2700, "uredba": "NN 50/2026", "ocekivano": 30.00, "opis": "Tar. br. 5 — dioba, razred 1" },
+    { "odredba": "tbr5", "osnovica": 6600, "uredba": "NN 50/2026", "ocekivano": 60.00, "opis": "Tar. br. 5 — dioba, zadnji razred" },
+    { "odredba": "tbr5", "osnovica": 10000, "uredba": "NN 50/2026", "ocekivano": 150.00, "opis": "Tar. br. 5 — 60,00 + 30,00 × ⌈3.400/1.300⌉ = 60 + 90" },
+    { "odredba": "tbr5", "osnovica": 1000000, "uredba": "NN 50/2026", "ocekivano": 840.00, "opis": "Tar. br. 5 — kapa" },
+    { "odredba": "tbr9_zalba", "osnovica": 0, "uredba": "NN 50/2026", "ocekivano": 1680.00, "opis": "Tar. br. 9 — žalba, dvostruko od 840,00" },
+
+    { "odredba": "tbr11", "osnovica": 3300, "uredba": "NN 50/2026", "ocekivano": 30.00, "opis": "Tar. br. 11 — ostavina, razred 1" },
+    { "odredba": "tbr11", "osnovica": 10000, "uredba": "NN 50/2026", "ocekivano": 120.00, "opis": "Tar. br. 11 — 60,00 + 30,00 × ⌈2.000/1.300⌉ = 60 + 60" },
+    { "odredba": "tbr11", "osnovica": 1000000, "uredba": "NN 50/2026", "ocekivano": 700.00, "opis": "Tar. br. 11 — kapa" },
+    { "odredba": "tbr12", "osnovica": 1000000, "uredba": "NN 50/2026", "ocekivano": 140.00, "opis": "Tar. br. 12 — žalba u ostavini, fiksno bez obzira na ostavinu" },
+
+    { "odredba": "tbr14_upis", "osnovica": 50000, "uredba": "NN 50/2026", "ocekivano": 10.00, "opis": "Tar. br. 14 — zk prijedlog za upis" },
+    { "odredba": "tbr14_zakasnjeli", "osnovica": 50000, "uredba": "NN 50/2026", "ocekivano": 50.00, "opis": "Tar. br. 14 — nakon 60 dana peterostruko" },
+    { "odredba": "tbr15_poljoprivredni", "osnovica": 0, "uredba": "NN 50/2026", "ocekivano": 3.00, "opis": "Tar. br. 15 — 10 % od 30,00" },
+    { "odredba": "tbr15_etaziranje", "osnovica": 5, "uredba": "NN 50/2026", "ocekivano": 30.00, "opis": "Tar. br. 15 — etažiranje do 10 dijelova" },
+    { "odredba": "tbr15_etaziranje", "osnovica": 50, "uredba": "NN 50/2026", "ocekivano": 80.00, "opis": "Tar. br. 15 — etažiranje 11–100" },
+    { "odredba": "tbr15_etaziranje", "osnovica": 500, "uredba": "NN 50/2026", "ocekivano": 140.00, "opis": "Tar. br. 15 — etažiranje 101–500" },
+    { "odredba": "tbr15_etaziranje", "osnovica": 501, "uredba": "NN 50/2026", "ocekivano": 280.00, "opis": "Tar. br. 15 — etažiranje preko 500" },
+
+    { "odredba": "tbr19_tuzba", "osnovica": 50000, "uredba": "NN 50/2026", "ocekivano": 70.00, "opis": "Tar. br. 19 — privatna tužba" },
+    { "odredba": "tbr21_odgovor", "osnovica": 0, "uredba": "NN 50/2026", "ocekivano": 70.00, "opis": "Tar. br. 21 — odgovor na žalbu, polovica od Tar. br. 20" },
+
+    { "odredba": "tbr23_st2", "osnovica": 5000, "uredba": "NN 50/2026", "ocekivano": 100.00, "opis": "Tar. br. 23 st. 2 — 2 % tražbine" },
+    { "odredba": "tbr23_st2", "osnovica": 50000, "uredba": "NN 50/2026", "ocekivano": 140.00, "opis": "Tar. br. 23 st. 2 — kapa" },
+    { "odredba": "tbr23_zalba", "osnovica": 5000, "uredba": "NN 50/2026", "ocekivano": 200.00, "opis": "Tar. br. 23 — žalba, dvostruko od st. 2" },
+    { "odredba": "tbr24", "osnovica": 10000, "uredba": "NN 50/2026", "ocekivano": 200.00, "opis": "Tar. br. 24 — 2 % diobne mase" },
+
+    { "odredba": "tbr25_enotar", "osnovica": 0, "uredba": "NN 50/2026", "ocekivano": 15.00, "opis": "Tar. br. 25 — e-Notar, polovica od 30,00" },
+
+    { "odredba": "tbr29_tuzba", "osnovica": 50000, "uredba": "NN 50/2026", "ocekivano": 110.00, "opis": "Tar. br. 29 — upravni spor je fiksan; zatečeni kod je davao 546,45" },
+    { "odredba": "tbr29_zalba", "osnovica": 50000, "uredba": "NN 50/2026", "ocekivano": 140.00, "opis": "Tar. br. 29 — žalba u upravnom sporu" },
+    { "odredba": "tbr30_odluka", "osnovica": 50000, "uredba": "NN 50/2026", "ocekivano": 140.00, "opis": "Tar. br. 30 — presuda u upravnom sporu" },
+
+    { "odredba": "tbr33", "osnovica": 0, "uredba": "NN 50/2026", "ocekivano": 30.00, "opis": "Tar. br. 33 — razmatranje spisa" },
+    { "odredba": "tbr34", "osnovica": 1000, "uredba": "NN 50/2026", "ocekivano": 78.00, "opis": "Tar. br. 34 — 30,00 + 6,00 × ⌈1.000/130⌉ = 30 + 48" },
+    { "odredba": "tbr34", "osnovica": 100000, "uredba": "NN 50/2026", "ocekivano": 560.00, "opis": "Tar. br. 34 — kapa" },
+
+    { "odredba": "tbr1_st1", "osnovica": 300, "uredba": "NN 37/2023", "ocekivano": 13.27, "opis": "Stara Uredba — razred 1" },
+    { "odredba": "tbr1_st1", "osnovica": 3000, "uredba": "NN 37/2023", "ocekivano": 76.45, "opis": "Stara Uredba — 66,36 + 1 % × 1.009,16" },
+    { "odredba": "tbr1_st1", "osnovica": 50000, "uredba": "NN 37/2023", "ocekivano": 546.45, "opis": "Stara Uredba — iznos koji je aplikacija davala prije prelaska" },
+    { "odredba": "tbr1_st1", "osnovica": 500000, "uredba": "NN 37/2023", "ocekivano": 663.61, "opis": "Stara Uredba — stara kapa" },
+    { "odredba": "tbr1_st2", "osnovica": 300, "uredba": "NN 37/2023", "ocekivano": 6.64, "opis": "Stara Uredba — 6,635 se zaokružuje od nule, ne bankarski" },
+    { "odredba": "tbr1_st2", "osnovica": 3000, "uredba": "NN 37/2023", "ocekivano": 38.23, "opis": "Stara Uredba — polovica od nezaokruženih 76,4516" },
+    { "odredba": "tbr1_st2", "osnovica": 50000, "uredba": "NN 37/2023", "ocekivano": 273.23, "opis": "Stara Uredba — odgovor na tužbu podnesen prije 1.6.2026." },
+    { "odredba": "tbr29_tuzba", "osnovica": 50000, "uredba": "NN 37/2023", "ocekivano": 53.09, "opis": "Stara Uredba — tužba u upravnom sporu pokrenutom prije 1.6.2026." },
+    { "odredba": "tbr29_opci_akti", "osnovica": 0, "uredba": "NN 37/2023", "ocekivano": 265.45, "opis": "Stara Uredba — ocjena zakonitosti općih akata" },
+    { "odredba": "tbr30_odluka", "osnovica": 50000, "uredba": "NN 37/2023", "ocekivano": 66.36, "opis": "Stara Uredba — presuda u upravnom sporu" }
+  ]
+}

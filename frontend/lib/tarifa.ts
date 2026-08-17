@@ -11,7 +11,9 @@
  * Izvori:
  *  - Tarifa o nagradama i naknadi troškova za rad odvjetnika
  *    (Upravni odbor HOK-a, 14. listopada 2023.; nesl. proč. tekst listopad 2025.)
- *  - Uredba o tarifi sudskih pristojbi, NN 37/2023
+ *  - Uredba o Tarifi sudskih pristojbi, NN 50/2026 (na snazi od 1.6.2026.)
+ *  - Uredba o Tarifi sudskih pristojbi, NN 37/2023 — samo za dva prijelazna
+ *    slučaja iz čl. 2 nove Uredbe
  */
 
 /** Tbr. 54 — vrijednost boda. */
@@ -79,13 +81,21 @@ export interface TarifnaStavka {
 /** Naziv kategorije kaznenog i prekršajnog postupka u katalogu. */
 export const KATEGORIJA_KAZNENI = "Kazneni postupak";
 
+/** Naziv kategorije parničnog postupka u katalogu. */
+export const KATEGORIJA_PARNICNI = "Parnični postupak";
+
+/** Naziv kategorije ovršnog postupka u katalogu. */
+export const KATEGORIJA_OVRSNI = "Ovršni postupak";
+
 /**
  * True kad su odabrane isključivo kaznene/prekršajne stavke.
  *
  * U kaznenom se postupku sve veže na zapriječenu kaznu (Tbr. 4. toč. 1), nikad
- * na vrijednost predmeta spora, pa se VPS izbacuje iz izračuna. Uredba o tarifi
- * sudskih pristojbi (NN 37/2023) u Poglavlju I. pokriva samo parnični i ovršni
- * postupak, pa se ni pristojba ne obračunava.
+ * na vrijednost predmeta spora, pa se VPS izbacuje iz izračuna.
+ *
+ * Sudska se pristojba pritom ne izvodi odavde nego iz PRISTOJBENE_RADNJE: Poglavlje V.
+ * Uredbe NN 50/2026 pokriva postupak po privatnoj tužbi, a obrana po javnoj optužbi
+ * pristojbu nema.
  */
 export function jeSamoKazneni(odabraneStavke: TarifnaStavka[]): boolean {
   return (
@@ -719,92 +729,653 @@ export function ukupnoBodovaZaStavku(
   return ukupno;
 }
 
-// ── Sudske pristojbe (Uredba NN 37/2023) ─────────────────────────
-
-/**
- * Osnova za obračun sudske pristojbe.
- *
- * Prilog Uredbe, POGLAVLJE I. nosi naslov "PARNIČNI I OVRŠNI POSTUPAK" — izvan
- * tog poglavlja Tar. br. 1 se ne primjenjuje, pa kazneni predmet dobiva "Nema".
- */
-export type PristojbaOsnova = "Puna" | "Polovica" | "Nema";
-
-/** Objašnjenje koje sučelje prikazuje uz iznos pristojbe. */
-export function objasnjenjePristojbe(osnova: PristojbaOsnova): string {
-  switch (osnova) {
-    case "Nema":
-      return "Uredba NN 37/23 ne propisuje pristojbu za kazneni postupak (Poglavlje I. – parnični i ovršni postupak).";
-    case "Polovica":
-      return "Tar. br. 1 st. 2 – polovica iznosa iz st. 1.";
-    default:
-      return "Tar. br. 1 st. 1.";
-  }
-}
-
-/** Naziv kategorije parničnog postupka u katalogu. */
-export const KATEGORIJA_PARNICNI = "Parnični postupak";
-
-/** Naziv kategorije ovršnog postupka u katalogu. */
-export const KATEGORIJA_OVRSNI = "Ovršni postupak";
-
-/**
- * Vrsta postupka → osnova za pristojbu. Zrcali
- * `TroskovnikService.OdrediPristojbuOsnovu`.
- */
-export function odrediPristojbuOsnovu(odabraneStavke: TarifnaStavka[]): PristojbaOsnova {
-  if (odabraneStavke.length === 0) return "Puna";
-  if (jeSamoKazneni(odabraneStavke)) return "Nema";
-
-  const imaOvrsnih = odabraneStavke.some((s) => s.kategorija === KATEGORIJA_OVRSNI);
-  const imaParnicnih = odabraneStavke.some((s) => s.kategorija === KATEGORIJA_PARNICNI);
-
-  if (imaOvrsnih && !imaParnicnih) return "Polovica";
-  return "Puna";
-}
-
-// Tar. br. 1 st. 1 — pet fiksnih razreda, doslovno iz tablice u NN 37/2023:
+// ══════════════════════════════════════════════════════════════════
+//  Sudske pristojbe — Uredba o Tarifi sudskih pristojbi
+// ══════════════════════════════════════════════════════════════════
 //
-//   iznad        do eura      eura
-//   0,00         398,17       13,27
-//   398,18       796,34       26,54
-//   796,35       1.194,51     39,82
-//   1.194,52     1.592,67     53,09
-//   1.592,68     1.990,84     66,36
-const PRISTOJBA_BRACKETS: [number, number][] = [
-  [398.17, 13.27],
-  [796.34, 26.54],
-  [1_194.51, 39.82],
-  [1_592.67, 53.09],
-  [1_990.84, 66.36],
+// Zrcalo backenda: Backend/Services/Pristojbe/* i SudskePristojbeCalculator.cs.
+// Uredba naplaćuje po RADNJI — tužba (Tar. br. 1), presuda (Tar. br. 2) i žalba
+// (Tar. br. 3) tri su zasebne pristojbe — pa je ishod lista, a ne jedan broj.
+//
+// Očekivani iznosi po odredbama žive u Backend.Tests/TestData/pristojbe-paritet.json,
+// koji čitaju i xunit i vitest. Razilaženje dvaju motora ruši testove na obje strane.
+
+/** Koja se Uredba primjenjuje na pojedinu pristojbenu radnju. */
+export type UredbaVerzija = "NN 50/2026" | "NN 37/2023";
+
+/**
+ * Dan stupanja na snagu NN 50/2026. Čl. 2 uz taj dan vezuje oba prijelazna slučaja:
+ * odgovor na tužbu podnesen PRIJE tog dana i upravni spor pokrenut PRIJE tog dana.
+ */
+export const NOVA_UREDBA_NA_SNAZI = "2026-06-01";
+
+export type PristojbaPoglavlje =
+  | "I. Parnični i ovršni postupak"
+  | "II. Izvanparnični postupak"
+  | "III. Ostavinski postupak"
+  | "IV. Zemljišnoknjižni postupak"
+  | "V. Kazneni postupak po privatnoj tužbi"
+  | "VI. Stečaj i likvidacija"
+  | "VII. Sudski registar"
+  | "VIII. Upravni spor"
+  | "IX. Ostali slučajevi";
+
+/** Jedan razred ljestvice: sve do `do` plaća `iznos`. */
+type Razred = { do: number; iznos: number };
+
+/**
+ * Kako se iznos izvodi iz osnovice. Zatvoren skup — svih 35 tarifnih brojeva
+ * svodi se na ovih sedam oblika.
+ */
+type Izracun =
+  | { vrsta: "fiksno"; iznos: number }
+  | { vrsta: "ne_placa_se" }
+  | { vrsta: "udio"; odredba: string; faktor: number; max?: number }
+  | { vrsta: "ljestvica_postotak"; razredi: Razred[]; prag: number; baza: number; stopa: number; max: number }
+  | { vrsta: "ljestvica_korak"; razredi: Razred[]; prag: number; baza: number; korak: number; poKoraku: number; max: number }
+  | { vrsta: "postotak"; stopa: number; max: number }
+  | { vrsta: "stepenasto"; stepenice: Razred[] };
+
+export interface PristojbenaOdredba {
+  id: string;
+  poglavlje: PristojbaPoglavlje;
+  tarifni_broj: string;
+  opis: string;
+  izracun: Izracun;
+  /** Što je osnovica ove odredbe; prazno kad je ne koristi. */
+  osnovica_opis?: string;
+}
+
+// ── NN 50/2026, po poglavljima Priloga ────────────────────────────
+
+const VPS_OSNOVICA = "vrijednost predmeta spora";
+
+export const PRISTOJBE_NN50_2026: PristojbenaOdredba[] = [
+  // ── Poglavlje I. — Tar. br. 1, podnesci ──
+  //   iznad      do eura     pristojba
+  //   0,00         400,00       30,00
+  //   400,01       800,00       60,00
+  //   800,01     1.200,00       80,00
+  //   1.200,01   1.600,00      110,00
+  //   1.600,01   2.000,00      140,00
+  // Preko 2.000,00: 140,00 + 1 % na razliku, najviše 1.500,00.
+  {
+    id: "tbr1_st1",
+    poglavlje: "I. Parnični i ovršni postupak",
+    tarifni_broj: "Tar. br. 1 st. 1",
+    opis: "Tužba, protutužba, prigovor protiv platnog naloga i prigovor protiv rješenja o ovrsi",
+    izracun: {
+      vrsta: "ljestvica_postotak",
+      razredi: [
+        { do: 400, iznos: 30 },
+        { do: 800, iznos: 60 },
+        { do: 1_200, iznos: 80 },
+        { do: 1_600, iznos: 110 },
+        { do: 2_000, iznos: 140 },
+      ],
+      prag: 2_000,
+      baza: 140,
+      stopa: 0.01,
+      max: 1_500,
+    },
+    osnovica_opis: VPS_OSNOVICA,
+  },
+  // Nabrajanje u st. 2 završava popisom ODGOVORA ("odgovor na … tužbu, žalbu,
+  // prijedlog za dopuštenje revizije i reviziju"). Sama žalba ide po Tar. br. 3 i
+  // ondje je skuplja, ne jeftinija.
+  {
+    id: "tbr1_st2",
+    poglavlje: "I. Parnični i ovršni postupak",
+    tarifni_broj: "Tar. br. 1 st. 2",
+    opis:
+      "Tužba s prijedlogom za platni nalog, prijedlog za ovrhu/protuovrhu/osiguranje, " +
+      "prijedlog za povrat u prijašnje stanje, prijedlog za osiguranje dokaza, " +
+      "odgovor na tužbu, žalbu, prijedlog za dopuštenje revizije i reviziju",
+    izracun: { vrsta: "udio", odredba: "tbr1_st1", faktor: 0.5 },
+    osnovica_opis: VPS_OSNOVICA,
+  },
+  {
+    id: "tbr1_st3",
+    poglavlje: "I. Parnični i ovršni postupak",
+    tarifni_broj: "Tar. br. 1 st. 3",
+    opis:
+      "Prijedlog za priznanje odluke stranog suda; ovršenikov prijedlog za odgodu ovrhe; " +
+      "prijedlog za odgodu prijenosa zaplijenjenih sredstava (ako je odbijen)",
+    izracun: { vrsta: "fiksno", iznos: 40 },
+  },
+
+  // ── Tar. br. 2 — odluke ──
+  { id: "tbr2_st1", poglavlje: "I. Parnični i ovršni postupak", tarifni_broj: "Tar. br. 2 st. 1", opis: "Prvostupanjska presuda; rješenje u sporu zbog smetanja posjeda", izracun: { vrsta: "udio", odredba: "tbr1_st1", faktor: 1 }, osnovica_opis: VPS_OSNOVICA },
+  { id: "tbr2_st2", poglavlje: "I. Parnični i ovršni postupak", tarifni_broj: "Tar. br. 2 st. 2", opis: "Presuda zbog ogluhe, bez rasprave, zbog izostanka, na temelju odricanja ili priznanja", izracun: { vrsta: "udio", odredba: "tbr1_st2", faktor: 1 }, osnovica_opis: VPS_OSNOVICA },
+  { id: "tbr2_st3", poglavlje: "I. Parnični i ovršni postupak", tarifni_broj: "Tar. br. 2 st. 3", opis: "Rješenje o odbačaju nedopuštenog prijedloga za reviziju i o odbačaju revizije", izracun: { vrsta: "udio", odredba: "tbr1_st1", faktor: 1 }, osnovica_opis: VPS_OSNOVICA },
+  { id: "tbr2_st4", poglavlje: "I. Parnični i ovršni postupak", tarifni_broj: "Tar. br. 2 st. 4", opis: "Rješenje o izdavanju platnog naloga", izracun: { vrsta: "udio", odredba: "tbr1_st2", faktor: 1 }, osnovica_opis: VPS_OSNOVICA },
+  { id: "tbr2_st5", poglavlje: "I. Parnični i ovršni postupak", tarifni_broj: "Tar. br. 2 st. 5", opis: "Rješenje o ovrsi, protuovrsi, osiguranju dokaza i osiguranju", izracun: { vrsta: "udio", odredba: "tbr1_st2", faktor: 1 }, osnovica_opis: VPS_OSNOVICA },
+  { id: "tbr2_st5_strane", poglavlje: "I. Parnični i ovršni postupak", tarifni_broj: "Tar. br. 2 st. 5", opis: "Rješenje o ovrsi na temelju stranih ovršnih isprava", izracun: { vrsta: "udio", odredba: "tbr1_st1", faktor: 1 }, osnovica_opis: VPS_OSNOVICA },
+  { id: "tbr2_st6", poglavlje: "I. Parnični i ovršni postupak", tarifni_broj: "Tar. br. 2 st. 6", opis: "Rješenje o povratu u prijašnje stanje", izracun: { vrsta: "udio", odredba: "tbr1_st1", faktor: 1 }, osnovica_opis: VPS_OSNOVICA },
+  { id: "tbr2_st7", poglavlje: "I. Parnični i ovršni postupak", tarifni_broj: "Tar. br. 2 st. 7", opis: "Rješenje o priznanju strane odluke", izracun: { vrsta: "fiksno", iznos: 30 } },
+  { id: "tbr2_st8", poglavlje: "I. Parnični i ovršni postupak", tarifni_broj: "Tar. br. 2 st. 8", opis: "Rješenje o odgodi ili obustavi ovrhe", izracun: { vrsta: "fiksno", iznos: 30 } },
+  { id: "tbr2_st9", poglavlje: "I. Parnični i ovršni postupak", tarifni_broj: "Tar. br. 2 st. 9", opis: "Sudske nagodbe — pristojba se ne plaća", izracun: { vrsta: "ne_placa_se" } },
+
+  // ── Tar. br. 3 — pravni lijekovi ──
+  // Protiv PRESUDE dvostruko, protiv RJEŠENJA jednostruko.
+  { id: "tbr3_st1", poglavlje: "I. Parnični i ovršni postupak", tarifni_broj: "Tar. br. 3 st. 1", opis: "Žalba, prijedlog za dopuštenje revizije i revizija protiv presude; žalba protiv rješenja u sporu zbog smetanja posjeda — uvećano za 100 %", izracun: { vrsta: "udio", odredba: "tbr1_st1", faktor: 2 }, osnovica_opis: VPS_OSNOVICA },
+  { id: "tbr3_st2", poglavlje: "I. Parnični i ovršni postupak", tarifni_broj: "Tar. br. 3 st. 2", opis: "Žalba, prijedlog za dopuštenje revizije i revizija protiv rješenja; prijedlog za ponavljanje postupka", izracun: { vrsta: "udio", odredba: "tbr1_st1", faktor: 1 }, osnovica_opis: VPS_OSNOVICA },
+  { id: "tbr3_st3", poglavlje: "I. Parnični i ovršni postupak", tarifni_broj: "Tar. br. 3 st. 3", opis: "Prijedlog za proglašenje pljenidbe i prijenosa nedopuštenim", izracun: { vrsta: "udio", odredba: "tbr1_st1", faktor: 1 }, osnovica_opis: VPS_OSNOVICA },
+  { id: "tbr3_st5", poglavlje: "I. Parnični i ovršni postupak", tarifni_broj: "Tar. br. 3 st. 5", opis: "Žalba protiv rješenja o povratu u prijašnje stanje ili o priznanju strane odluke — najviše 50,00", izracun: { vrsta: "udio", odredba: "tbr1_st2", faktor: 1, max: 50 }, osnovica_opis: VPS_OSNOVICA },
+
+  // ── Poglavlje II. — izvanparnični postupak ──
+  { id: "tbr4_prijedlog", poglavlje: "II. Izvanparnični postupak", tarifni_broj: "Tar. br. 4", opis: "Prijedlog za pokretanje izvanparničnog postupka ili za povrat u prijašnje stanje", izracun: { vrsta: "fiksno", iznos: 30 } },
+  { id: "tbr4_odluka", poglavlje: "II. Izvanparnični postupak", tarifni_broj: "Tar. br. 4", opis: "Odluka prvostupanjskog suda o osnovanosti prijedloga", izracun: { vrsta: "fiksno", iznos: 40 } },
+  { id: "tbr4_zalba", poglavlje: "II. Izvanparnični postupak", tarifni_broj: "Tar. br. 4", opis: "Žalba protiv odluke o osnovanosti prijedloga", izracun: { vrsta: "fiksno", iznos: 60 } },
+  {
+    id: "tbr5",
+    poglavlje: "II. Izvanparnični postupak",
+    tarifni_broj: "Tar. br. 5",
+    opis: "Prijedlog za diobu suvlasništva i zajedničke imovine",
+    izracun: {
+      vrsta: "ljestvica_korak",
+      razredi: [
+        { do: 2_700, iznos: 30 },
+        { do: 4_000, iznos: 40 },
+        { do: 6_600, iznos: 60 },
+      ],
+      prag: 6_600,
+      baza: 60,
+      korak: 1_300,
+      poKoraku: 30,
+      max: 840,
+    },
+    osnovica_opis: "vrijednost imovine koja se dijeli",
+  },
+  { id: "tbr5_odluka", poglavlje: "II. Izvanparnični postupak", tarifni_broj: "Tar. br. 5", opis: "Odluka o diobi suvlasništva i zajedničke imovine", izracun: { vrsta: "udio", odredba: "tbr5", faktor: 1 }, osnovica_opis: "vrijednost imovine koja se dijeli" },
+  { id: "tbr5_zalba", poglavlje: "II. Izvanparnični postupak", tarifni_broj: "Tar. br. 5", opis: "Žalba u postupku diobe suvlasništva i zajedničke imovine", izracun: { vrsta: "udio", odredba: "tbr5", faktor: 1 }, osnovica_opis: "vrijednost imovine koja se dijeli" },
+  { id: "tbr6_prijedlog", poglavlje: "II. Izvanparnični postupak", tarifni_broj: "Tar. br. 6", opis: "Prijedlog za uređenje odnosa između suvlasnika", izracun: { vrsta: "fiksno", iznos: 30 } },
+  { id: "tbr6_odluka", poglavlje: "II. Izvanparnični postupak", tarifni_broj: "Tar. br. 6", opis: "Odluka o uređenju odnosa između suvlasnika", izracun: { vrsta: "fiksno", iznos: 80 } },
+  { id: "tbr6_zalba", poglavlje: "II. Izvanparnični postupak", tarifni_broj: "Tar. br. 6", opis: "Žalba u postupku uređenja odnosa između suvlasnika", izracun: { vrsta: "fiksno", iznos: 80 } },
+  { id: "tbr7_prijedlog", poglavlje: "II. Izvanparnični postupak", tarifni_broj: "Tar. br. 7", opis: "Prijedlog u postupku uređenja međe, nužnog prolaza i služnosti", izracun: { vrsta: "fiksno", iznos: 80 } },
+  { id: "tbr7_odluka", poglavlje: "II. Izvanparnični postupak", tarifni_broj: "Tar. br. 7", opis: "Odluka u postupku uređenja međe, nužnog prolaza i služnosti", izracun: { vrsta: "fiksno", iznos: 170 } },
+  { id: "tbr7_zalba", poglavlje: "II. Izvanparnični postupak", tarifni_broj: "Tar. br. 7", opis: "Žalba u postupku uređenja međe, nužnog prolaza i služnosti", izracun: { vrsta: "fiksno", iznos: 170 } },
+  { id: "tbr8_tijelo", poglavlje: "II. Izvanparnični postupak", tarifni_broj: "Tar. br. 8", opis: "Ovjera isprave za inozemstvo — potpis i pečat tijela ili pravne osobe", izracun: { vrsta: "fiksno", iznos: 15 } },
+  { id: "tbr8_tumac", poglavlje: "II. Izvanparnični postupak", tarifni_broj: "Tar. br. 8", opis: "Ovjera isprave za inozemstvo — potpis i pečat sudskog tumača ili vještaka", izracun: { vrsta: "fiksno", iznos: 20 } },
+  { id: "tbr9_prvi_upis", poglavlje: "II. Izvanparnični postupak", tarifni_broj: "Tar. br. 9 st. 1", opis: "Prvi upis broda", izracun: { vrsta: "fiksno", iznos: 840 } },
+  { id: "tbr9_rjesenje", poglavlje: "II. Izvanparnični postupak", tarifni_broj: "Tar. br. 9", opis: "Rješenje o upisu broda — polovica", izracun: { vrsta: "udio", odredba: "tbr9_prvi_upis", faktor: 0.5 } },
+  { id: "tbr9_daljnji_upis", poglavlje: "II. Izvanparnični postupak", tarifni_broj: "Tar. br. 9", opis: "Daljnji upisi broda — polovica", izracun: { vrsta: "udio", odredba: "tbr9_prvi_upis", faktor: 0.5 } },
+  { id: "tbr9_zalba", poglavlje: "II. Izvanparnični postupak", tarifni_broj: "Tar. br. 9", opis: "Žalba u postupku upisa broda — dvostruko od st. 1", izracun: { vrsta: "udio", odredba: "tbr9_prvi_upis", faktor: 2 } },
+
+  // ── Poglavlje III. — ostavinski postupak ──
+  {
+    id: "tbr11",
+    poglavlje: "III. Ostavinski postupak",
+    tarifni_broj: "Tar. br. 11",
+    opis: "Rješenje o nasljeđivanju",
+    izracun: {
+      vrsta: "ljestvica_korak",
+      razredi: [
+        { do: 3_300, iznos: 30 },
+        { do: 4_600, iznos: 40 },
+        { do: 8_000, iznos: 60 },
+      ],
+      prag: 8_000,
+      baza: 60,
+      korak: 1_300,
+      poKoraku: 30,
+      max: 700,
+    },
+    osnovica_opis: "čista vrijednost ostavine",
+  },
+  { id: "tbr12", poglavlje: "III. Ostavinski postupak", tarifni_broj: "Tar. br. 12", opis: "Žalba u ostavinskom postupku", izracun: { vrsta: "fiksno", iznos: 140 } },
+  { id: "tbr13_sastavljanje", poglavlje: "III. Ostavinski postupak", tarifni_broj: "Tar. br. 13", opis: "Sastavljanje sudske oporuke ili opoziv oporuke pred sudom", izracun: { vrsta: "fiksno", iznos: 140 } },
+  { id: "tbr13_cuvanje", poglavlje: "III. Ostavinski postupak", tarifni_broj: "Tar. br. 13", opis: "Čuvanje i vraćanje oporuke", izracun: { vrsta: "fiksno", iznos: 30 } },
+
+  // ── Poglavlje IV. — zemljišnoknjižni postupak ──
+  { id: "tbr14_upis", poglavlje: "IV. Zemljišnoknjižni postupak", tarifni_broj: "Tar. br. 14", opis: "Prijedlog za upis ili brisanje u zemljišnoj knjizi", izracun: { vrsta: "fiksno", iznos: 10 } },
+  { id: "tbr14_ispravni", poglavlje: "IV. Zemljišnoknjižni postupak", tarifni_broj: "Tar. br. 14", opis: "Prijedlog u pojedinačnom ispravnom postupku", izracun: { vrsta: "fiksno", iznos: 70 } },
+  { id: "tbr14_zakasnjeli", poglavlje: "IV. Zemljišnoknjižni postupak", tarifni_broj: "Tar. br. 14", opis: "Prijedlog podnesen nakon 60 dana od stjecanja uvjeta — peterostruko", izracun: { vrsta: "udio", odredba: "tbr14_upis", faktor: 5 } },
+  { id: "tbr15_uknjizba", poglavlje: "IV. Zemljišnoknjižni postupak", tarifni_broj: "Tar. br. 15", opis: "Rješenje o uknjižbi ili predbilježbi", izracun: { vrsta: "fiksno", iznos: 30 } },
+  { id: "tbr15_zabiljezba", poglavlje: "IV. Zemljišnoknjižni postupak", tarifni_broj: "Tar. br. 15", opis: "Rješenje o zabilježbi", izracun: { vrsta: "fiksno", iznos: 10 } },
+  { id: "tbr15_poljoprivredni", poglavlje: "IV. Zemljišnoknjižni postupak", tarifni_broj: "Tar. br. 15", opis: "Upis za poljoprivredne kredite — 10 % propisane pristojbe", izracun: { vrsta: "udio", odredba: "tbr15_uknjizba", faktor: 0.1 } },
+  {
+    id: "tbr15_etaziranje",
+    poglavlje: "IV. Zemljišnoknjižni postupak",
+    tarifni_broj: "Tar. br. 15",
+    opis: "Upis etažnog vlasništva",
+    izracun: {
+      vrsta: "stepenasto",
+      stepenice: [
+        { do: 10, iznos: 30 },
+        { do: 100, iznos: 80 },
+        { do: 500, iznos: 140 },
+        { do: Number.POSITIVE_INFINITY, iznos: 280 },
+      ],
+    },
+    osnovica_opis: "broj etažnih dijelova",
+  },
+  { id: "tbr15_zakasnjelo", poglavlje: "IV. Zemljišnoknjižni postupak", tarifni_broj: "Tar. br. 15", opis: "Odluka po prijedlogu podnesenom nakon 60 dana — peterostruko", izracun: { vrsta: "udio", odredba: "tbr15_uknjizba", faktor: 5 } },
+  { id: "tbr16", poglavlje: "IV. Zemljišnoknjižni postupak", tarifni_broj: "Tar. br. 16", opis: "Prigovor i žalba u zemljišnoknjižnom postupku", izracun: { vrsta: "fiksno", iznos: 70 } },
+  { id: "tbr17_18", poglavlje: "IV. Zemljišnoknjižni postupak", tarifni_broj: "Tar. br. 17 i 18", opis: "Ovjera preslike", izracun: { vrsta: "fiksno", iznos: 5 } },
+
+  // ── Poglavlje V. — kazneni postupak po privatnoj tužbi ──
+  { id: "tbr19_tuzba", poglavlje: "V. Kazneni postupak po privatnoj tužbi", tarifni_broj: "Tar. br. 19", opis: "Privatna tužba i protutužba", izracun: { vrsta: "fiksno", iznos: 70 } },
+  { id: "tbr19_povrat", poglavlje: "V. Kazneni postupak po privatnoj tužbi", tarifni_broj: "Tar. br. 19", opis: "Prijedlog za povrat u prijašnje stanje", izracun: { vrsta: "fiksno", iznos: 40 } },
+  { id: "tbr20", poglavlje: "V. Kazneni postupak po privatnoj tužbi", tarifni_broj: "Tar. br. 20", opis: "Prvostupanjska presuda ili sudska opomena", izracun: { vrsta: "fiksno", iznos: 140 } },
+  { id: "tbr21_zalba", poglavlje: "V. Kazneni postupak po privatnoj tužbi", tarifni_broj: "Tar. br. 21", opis: "Žalba", izracun: { vrsta: "fiksno", iznos: 170 } },
+  { id: "tbr21_odgovor", poglavlje: "V. Kazneni postupak po privatnoj tužbi", tarifni_broj: "Tar. br. 21", opis: "Odgovor na žalbu — polovica od Tar. br. 20", izracun: { vrsta: "udio", odredba: "tbr20", faktor: 0.5 } },
+  { id: "tbr21_izvanredni", poglavlje: "V. Kazneni postupak po privatnoj tužbi", tarifni_broj: "Tar. br. 21", opis: "Zahtjev za izvanredno preispitivanje i prijedlog za obnovu — kao žalba", izracun: { vrsta: "udio", odredba: "tbr21_zalba", faktor: 1 } },
+
+  // ── Poglavlje VI. — stečaj i likvidacija ──
+  { id: "tbr22_prijedlog", poglavlje: "VI. Stečaj i likvidacija", tarifni_broj: "Tar. br. 22", opis: "Prijedlog za otvaranje predstečajnog postupka", izracun: { vrsta: "fiksno", iznos: 280 } },
+  { id: "tbr22_zalba", poglavlje: "VI. Stečaj i likvidacija", tarifni_broj: "Tar. br. 22", opis: "Žalba u predstečajnom postupku", izracun: { vrsta: "fiksno", iznos: 560 } },
+  { id: "tbr23_st1", poglavlje: "VI. Stečaj i likvidacija", tarifni_broj: "Tar. br. 23 st. 1", opis: "Prijedlog za otvaranje stečajnog ili likvidacijskog postupka", izracun: { vrsta: "fiksno", iznos: 30 } },
+  { id: "tbr23_st2", poglavlje: "VI. Stečaj i likvidacija", tarifni_broj: "Tar. br. 23 st. 2", opis: "Prijava potraživanja — 2 % vrijednosti tražbine, najviše 140,00", izracun: { vrsta: "postotak", stopa: 0.02, max: 140 }, osnovica_opis: "vrijednost tražbine" },
+  { id: "tbr23_zalba", poglavlje: "VI. Stečaj i likvidacija", tarifni_broj: "Tar. br. 23", opis: "Žalba — dvostruko od st. 2", izracun: { vrsta: "udio", odredba: "tbr23_st2", faktor: 2 }, osnovica_opis: "vrijednost tražbine" },
+  { id: "tbr24", poglavlje: "VI. Stečaj i likvidacija", tarifni_broj: "Tar. br. 24", opis: "Paušalna pristojba — 2 % diobne mase, najviše 560,00", izracun: { vrsta: "postotak", stopa: 0.02, max: 560 }, osnovica_opis: "diobna masa" },
+
+  // ── Poglavlje VII. — sudski registar ──
+  { id: "tbr25_prijava", poglavlje: "VII. Sudski registar", tarifni_broj: "Tar. br. 25", opis: "Prijava za upis u sudski registar", izracun: { vrsta: "fiksno", iznos: 30 } },
+  { id: "tbr25_jdoo", poglavlje: "VII. Sudski registar", tarifni_broj: "Tar. br. 25", opis: "Prijava za upis — j.d.o.o.", izracun: { vrsta: "fiksno", iznos: 10 } },
+  { id: "tbr25_enotar", poglavlje: "VII. Sudski registar", tarifni_broj: "Tar. br. 25", opis: "Prijava putem sustava e-Notar ili START — polovica", izracun: { vrsta: "udio", odredba: "tbr25_prijava", faktor: 0.5 } },
+  { id: "tbr26_osnivanje", poglavlje: "VII. Sudski registar", tarifni_broj: "Tar. br. 26", opis: "Upis osnivanja", izracun: { vrsta: "fiksno", iznos: 80 } },
+  { id: "tbr26_osnivanje_jdoo", poglavlje: "VII. Sudski registar", tarifni_broj: "Tar. br. 26", opis: "Upis osnivanja — j.d.o.o.", izracun: { vrsta: "fiksno", iznos: 10 } },
+  { id: "tbr26_promjena", poglavlje: "VII. Sudski registar", tarifni_broj: "Tar. br. 26", opis: "Upis promjene podataka", izracun: { vrsta: "fiksno", iznos: 40 } },
+  { id: "tbr26_promjena_jdoo", poglavlje: "VII. Sudski registar", tarifni_broj: "Tar. br. 26", opis: "Upis promjene podataka — j.d.o.o.", izracun: { vrsta: "fiksno", iznos: 10 } },
+  { id: "tbr26_fizicki", poglavlje: "VII. Sudski registar", tarifni_broj: "Tar. br. 26", opis: "Podnesak u fizičkom obliku", izracun: { vrsta: "fiksno", iznos: 30 } },
+  { id: "tbr26_enotar", poglavlje: "VII. Sudski registar", tarifni_broj: "Tar. br. 26", opis: "Upis putem sustava e-Notar ili START — polovica", izracun: { vrsta: "udio", odredba: "tbr26_osnivanje", faktor: 0.5 } },
+  { id: "tbr27_prijava", poglavlje: "VII. Sudski registar", tarifni_broj: "Tar. br. 27", opis: "Prijava za upis podružnice", izracun: { vrsta: "fiksno", iznos: 30 } },
+  { id: "tbr27_upis", poglavlje: "VII. Sudski registar", tarifni_broj: "Tar. br. 27", opis: "Upis podružnice", izracun: { vrsta: "fiksno", iznos: 70 } },
+  { id: "tbr27_promjena", poglavlje: "VII. Sudski registar", tarifni_broj: "Tar. br. 27", opis: "Upis promjene podataka o podružnici", izracun: { vrsta: "fiksno", iznos: 30 } },
+  { id: "tbr28_preslika", poglavlje: "VII. Sudski registar", tarifni_broj: "Tar. br. 28", opis: "Preslika iz registra — po stranici", izracun: { vrsta: "fiksno", iznos: 1 } },
+  { id: "tbr28_potvrda", poglavlje: "VII. Sudski registar", tarifni_broj: "Tar. br. 28", opis: "Potvrda iz registra", izracun: { vrsta: "fiksno", iznos: 3 } },
+
+  // ── Poglavlje VIII. — upravni spor ──
+  // Fiksni iznosi. Tar. br. 1 se ovdje NE primjenjuje.
+  { id: "tbr29_tuzba", poglavlje: "VIII. Upravni spor", tarifni_broj: "Tar. br. 29", opis: "Tužba u upravnom sporu", izracun: { vrsta: "fiksno", iznos: 110 } },
+  { id: "tbr29_obnova", poglavlje: "VIII. Upravni spor", tarifni_broj: "Tar. br. 29", opis: "Prijedlog za obnovu upravnog spora", izracun: { vrsta: "fiksno", iznos: 140 } },
+  { id: "tbr29_opci_akti", poglavlje: "VIII. Upravni spor", tarifni_broj: "Tar. br. 29", opis: "Prijedlog za ocjenu zakonitosti općih akata", izracun: { vrsta: "fiksno", iznos: 560 } },
+  { id: "tbr29_vus", poglavlje: "VIII. Upravni spor", tarifni_broj: "Tar. br. 29", opis: "Podnesak pred Visokim upravnim sudom", izracun: { vrsta: "fiksno", iznos: 140 } },
+  { id: "tbr29_zalba", poglavlje: "VIII. Upravni spor", tarifni_broj: "Tar. br. 29", opis: "Žalba protiv prvostupanjske presude ili rješenja", izracun: { vrsta: "fiksno", iznos: 140 } },
+  { id: "tbr30_odluka", poglavlje: "VIII. Upravni spor", tarifni_broj: "Tar. br. 30", opis: "Presuda i rješenje u upravnom sporu", izracun: { vrsta: "fiksno", iznos: 140 } },
+  { id: "tbr30_obnova", poglavlje: "VIII. Upravni spor", tarifni_broj: "Tar. br. 30", opis: "Odluka o obnovi upravnog spora", izracun: { vrsta: "fiksno", iznos: 140 } },
+  { id: "tbr30_vus", poglavlje: "VIII. Upravni spor", tarifni_broj: "Tar. br. 30", opis: "Prvostupanjska odluka Visokog upravnog suda", izracun: { vrsta: "fiksno", iznos: 140 } },
+
+  // ── Poglavlje IX. — ostali slučajevi ──
+  { id: "tbr31_podnesak", poglavlje: "IX. Ostali slučajevi", tarifni_broj: "Tar. br. 31", opis: "Podnesak kojim se traži uvjerenje", izracun: { vrsta: "fiksno", iznos: 3 } },
+  { id: "tbr31_uvjerenje", poglavlje: "IX. Ostali slučajevi", tarifni_broj: "Tar. br. 31", opis: "Uvjerenje", izracun: { vrsta: "fiksno", iznos: 6 } },
+  { id: "tbr31_egradani", poglavlje: "IX. Ostali slučajevi", tarifni_broj: "Tar. br. 31", opis: "Uvjerenje zatraženo putem sustava e-Građani — polovica", izracun: { vrsta: "udio", odredba: "tbr31_uvjerenje", faktor: 0.5 } },
+  { id: "tbr32", poglavlje: "IX. Ostali slučajevi", tarifni_broj: "Tar. br. 32", opis: "Ovjera ugovora o doživotnom ili dosmrtnom uzdržavanju", izracun: { vrsta: "fiksno", iznos: 80 } },
+  { id: "tbr33", poglavlje: "IX. Ostali slučajevi", tarifni_broj: "Tar. br. 33", opis: "Razmatranje sudskog spisa", izracun: { vrsta: "fiksno", iznos: 30 } },
+  {
+    id: "tbr34",
+    poglavlje: "IX. Ostali slučajevi",
+    tarifni_broj: "Tar. br. 34",
+    opis: "Prijedlog o pologu",
+    izracun: { vrsta: "ljestvica_korak", razredi: [], prag: 0, baza: 30, korak: 130, poKoraku: 6, max: 560 },
+    osnovica_opis: "vrijednost pologa",
+  },
+  { id: "tbr35_pohrana", poglavlje: "IX. Ostali slučajevi", tarifni_broj: "Tar. br. 35", opis: "Pohrana opće punomoći", izracun: { vrsta: "fiksno", iznos: 30 } },
+  { id: "tbr35_odluka", poglavlje: "IX. Ostali slučajevi", tarifni_broj: "Tar. br. 35", opis: "Odluka o pohrani opće punomoći", izracun: { vrsta: "fiksno", iznos: 60 } },
 ];
 
-// "Preko 1.990,84 eura plaća se pristojba u iznosu od 66,36 eura i još 1% na
-//  razliku iznad 1.990,84 eura, ali ne više od 663,61 euro."
-const PRISTOJBA_PRAG = 1_990.84;
-const PRISTOJBA_BAZA = 66.36;
-const PRISTOJBA_STOPA = 0.01;
-const PRISTOJBA_MAX = 663.61;
+/**
+ * NN 37/2023 — namjerno samo ono što čl. 2 nove Uredbe traži: Tar. br. 1 (odgovor na
+ * tužbu upućuje na st. 2, a on na st. 1) i cijelo Poglavlje VIII. Ostatak mrtvog
+ * propisa ne držimo u kodu.
+ */
+export const PRISTOJBE_NN37_2023: PristojbenaOdredba[] = [
+  {
+    id: "tbr1_st1",
+    poglavlje: "I. Parnični i ovršni postupak",
+    tarifni_broj: "Tar. br. 1 st. 1",
+    opis: "Tužba, protutužba, prigovor protiv platnog naloga i prigovor protiv rješenja o ovrsi",
+    izracun: {
+      vrsta: "ljestvica_postotak",
+      razredi: [
+        { do: 398.17, iznos: 13.27 },
+        { do: 796.34, iznos: 26.54 },
+        { do: 1_194.51, iznos: 39.82 },
+        { do: 1_592.67, iznos: 53.09 },
+        { do: 1_990.84, iznos: 66.36 },
+      ],
+      prag: 1_990.84,
+      baza: 66.36,
+      stopa: 0.01,
+      max: 663.61,
+    },
+    osnovica_opis: VPS_OSNOVICA,
+  },
+  { id: "tbr1_st2", poglavlje: "I. Parnični i ovršni postupak", tarifni_broj: "Tar. br. 1 st. 2", opis: "Odgovor na tužbu i ostali podnesci iz st. 2 — polovica pristojbe iz st. 1", izracun: { vrsta: "udio", odredba: "tbr1_st1", faktor: 0.5 }, osnovica_opis: VPS_OSNOVICA },
+  { id: "tbr29_tuzba", poglavlje: "VIII. Upravni spor", tarifni_broj: "Tar. br. 29 st. 1", opis: "Tužba u upravnom sporu", izracun: { vrsta: "fiksno", iznos: 53.09 } },
+  { id: "tbr29_obnova", poglavlje: "VIII. Upravni spor", tarifni_broj: "Tar. br. 29 st. 2", opis: "Prijedlog za obnovu upravnog spora", izracun: { vrsta: "fiksno", iznos: 66.36 } },
+  { id: "tbr29_opci_akti", poglavlje: "VIII. Upravni spor", tarifni_broj: "Tar. br. 29 st. 3", opis: "Prijedlog o ocjeni zakonitosti općih akata", izracun: { vrsta: "fiksno", iznos: 265.45 } },
+  { id: "tbr29_vus", poglavlje: "VIII. Upravni spor", tarifni_broj: "Tar. br. 29 st. 4", opis: "Podnesak kojim se pokreće postupak pred Visokim upravnim sudom", izracun: { vrsta: "fiksno", iznos: 66.36 } },
+  { id: "tbr29_zalba", poglavlje: "VIII. Upravni spor", tarifni_broj: "Tar. br. 29 st. 5", opis: "Žalba protiv prvostupanjske presude ili rješenja u upravnom sporu", izracun: { vrsta: "fiksno", iznos: 66.36 } },
+  { id: "tbr30_odluka", poglavlje: "VIII. Upravni spor", tarifni_broj: "Tar. br. 30 st. 1", opis: "Presuda i rješenje doneseno u upravnom sporu", izracun: { vrsta: "fiksno", iznos: 66.36 } },
+  { id: "tbr30_obnova", poglavlje: "VIII. Upravni spor", tarifni_broj: "Tar. br. 30 st. 2", opis: "Odluka o prijedlogu za obnovu upravnog spora", izracun: { vrsta: "fiksno", iznos: 66.36 } },
+  { id: "tbr30_vus", poglavlje: "VIII. Upravni spor", tarifni_broj: "Tar. br. 30 st. 3", opis: "Prvostupanjska odluka Visokog upravnog suda", izracun: { vrsta: "fiksno", iznos: 66.36 } },
+];
 
-/** Nezaokruženi iznos po Tar. br. 1 st. 1 — da se zaokružuje samo jednom, na kraju. */
-function pristojbaNezaokruzeno(vps: number): number {
-  for (const [maxVps, fee] of PRISTOJBA_BRACKETS) {
-    if (vps <= maxVps) return fee;
-  }
-  return Math.min(PRISTOJBA_BAZA + PRISTOJBA_STOPA * (vps - PRISTOJBA_PRAG), PRISTOJBA_MAX);
+const ODREDBE_PO_ID: Record<UredbaVerzija, Map<string, PristojbenaOdredba>> = {
+  "NN 50/2026": new Map(PRISTOJBE_NN50_2026.map((o) => [o.id, o])),
+  "NN 37/2023": new Map(PRISTOJBE_NN37_2023.map((o) => [o.id, o])),
+};
+
+const REDOSLIJED = new Map(PRISTOJBE_NN50_2026.map((o, i) => [o.id, i]));
+
+/** Odredba po ključu iz tablice tražene verzije. */
+export function pristojbenaOdredba(
+  odredbaId: string,
+  verzija: UredbaVerzija = "NN 50/2026",
+): PristojbenaOdredba | undefined {
+  return ODREDBE_PO_ID[verzija].get(odredbaId);
 }
 
-export function izracunajSudskuPristojbu(
-  vps: number,
-  osnova: PristojbaOsnova = "Puna",
+// ── Katalog tarife → pristojbena radnja ───────────────────────────
+//
+// Zrcalo Backend/Services/Pristojbe/PristojbeneRadnjeMapa.cs. Stavka koje ovdje nema
+// ne povlači pristojbu — Tar. br. 1 napomena 5 ("ne plaća se pristojba za podneske
+// koji nisu navedeni"), a ročišta, savjeti i zastupanje pred upravnim tijelima uopće
+// nisu sudske radnje.
+
+export const PRISTOJBENE_RADNJE: Record<string, string[]> = {
+  par_tuzba: ["tbr1_st1"],
+  par_tuzba_smetanje: ["tbr1_st1"],
+  par_tuzba_obiteljski: ["tbr1_st1"],
+  par_zahtjev_haska: ["tbr1_st1"],
+
+  par_tuzba_platni_nalog: ["tbr1_st2"],
+  par_tuzba_vrijednosni_papiri: ["tbr1_st2"],
+  par_povrat_u_prijasnje_stanje: ["tbr1_st2"],
+
+  par_odgovor_tuzba: ["tbr1_st2"],
+  par_odgovor_zalba: ["tbr1_st2"],
+  par_odgovor_zalba_jednokratno: ["tbr1_st2"],
+
+  par_rociste_presuda: ["tbr2_st1"],
+
+  par_zalba_presuda: ["tbr3_st1"],
+  par_zalba_jednokratna: ["tbr3_st1"],
+  par_zalba_mali_spor: ["tbr3_st1"],
+  par_revizija: ["tbr3_st1"],
+  par_revizija_jednokratna: ["tbr3_st1"],
+  par_revizija_mali_spor: ["tbr3_st1"],
+  par_zalba_rjesenje: ["tbr3_st2"],
+
+  ovr_prijedlog: ["tbr1_st2"],
+  ovr_odgoda: ["tbr1_st3"],
+  ovr_pravni_lijek: ["tbr3_st2"],
+
+  izv_dioba: ["tbr5"],
+  izv_meda: ["tbr7_prijedlog"],
+  izv_neprocjenjivi: ["tbr4_prijedlog"],
+  izv_amortizacija: ["tbr4_prijedlog"],
+  izv_pravni_lijek: ["tbr4_zalba"],
+
+  zk_redoviti: ["tbr14_upis"],
+  zk_redoviti_neproc: ["tbr14_upis"],
+  zk_posebni: ["tbr14_ispravni"],
+  zk_pravni_lijek: ["tbr16"],
+
+  ste_prijedlog: ["tbr23_st1"],
+  ste_prijava_potrazivanja: ["tbr23_st2"],
+  ste_pravni_lijek: ["tbr23_zalba"],
+
+  reg_upis: ["tbr25_prijava"],
+  reg_ponistaj_tuzba_sudski: ["tbr1_st1"],
+  reg_ponistaj_lijek_presuda_sudski: ["tbr3_st1"],
+  reg_ponistaj_lijek_rjesenje_sudski: ["tbr3_st2"],
+  reg_ponistaj_tuzba_drugi_proc: ["tbr29_tuzba"],
+  reg_ponistaj_tuzba_drugi_neproc: ["tbr29_tuzba"],
+  reg_ponistaj_lijek_presuda_drugi_proc: ["tbr29_zalba"],
+  reg_ponistaj_lijek_presuda_drugi_neproc: ["tbr29_zalba"],
+  reg_ponistaj_lijek_rjesenje_drugi_proc: ["tbr29_zalba"],
+  reg_ponistaj_lijek_rjesenje_drugi_neproc: ["tbr29_zalba"],
+
+  usp_tuzba_proc: ["tbr29_tuzba"],
+  usp_tuzba_neproc: ["tbr29_tuzba"],
+  usp_zalba: ["tbr29_zalba"],
+  usp_zalba_neproc: ["tbr29_zalba"],
+};
+
+/**
+ * Stavke koje znače "odgovor na tužbu" u smislu čl. 2. Odgovor na žalbu ondje nije
+ * spomenut, pa mu stara Uredba ne pripada ni kad je podnesen prije 1.6.2026.
+ */
+export const ITEMI_ODGOVOR_NA_TUZBU = new Set(["par_odgovor_tuzba"]);
+
+// ── Izračun ───────────────────────────────────────────────────────
+
+const MAX_DUBINA_UPUTE = 8;
+
+// Zaokružuje `zaokruziNovac` iz izračuna nagrade: dvije decimale, od nule a ne
+// bankarski (38,2258 → 38,23). Zaokružuje se jednom, na kraju cijelog lanca uputa —
+// "polovica pristojbe iz st. 1" računa se iz nezaokruženog st. 1.
+
+function nezaokruzeno(
+  odredbaId: string,
+  osnovica: number,
+  verzija: UredbaVerzija,
+  preostalaDubina: number,
 ): number {
-  if (osnova === "Nema") return 0;
-  if (vps <= 0) return 0;
+  if (preostalaDubina <= 0) {
+    throw new Error(`Upute između odredbi vrte se u krug kod "${odredbaId}".`);
+  }
 
-  let iznos = pristojbaNezaokruzeno(vps);
+  const odredba = pristojbenaOdredba(odredbaId, verzija);
+  if (!odredba) return 0;
 
-  // Tar. br. 1 st. 2 — polovica pristojbe iz st. 1.
-  if (osnova === "Polovica") iznos *= 0.5;
+  const iz = odredba.izracun;
 
-  // Zaokruživanje "od nule", ne bankarsko: 38,2258 → 38,23.
-  return Math.round((iznos + Number.EPSILON) * 100) / 100;
+  switch (iz.vrsta) {
+    case "ne_placa_se":
+      return 0;
+
+    case "fiksno":
+      return iz.iznos;
+
+    case "udio": {
+      const iznos = nezaokruzeno(iz.odredba, osnovica, verzija, preostalaDubina - 1) * iz.faktor;
+      return iz.max === undefined ? iznos : Math.min(iznos, iz.max);
+    }
+
+    case "ljestvica_postotak": {
+      if (osnovica <= 0) return 0;
+      for (const r of iz.razredi) {
+        if (osnovica <= r.do) return r.iznos;
+      }
+      return Math.min(iz.baza + iz.stopa * (osnovica - iz.prag), iz.max);
+    }
+
+    case "ljestvica_korak": {
+      if (osnovica <= 0) return iz.razredi.length > 0 ? 0 : iz.baza;
+      for (const r of iz.razredi) {
+        if (osnovica <= r.do) return r.iznos;
+      }
+      // "na svakih ZAPOČETIH" — broj koraka se zaokružuje naviše.
+      const koraka = Math.ceil((osnovica - iz.prag) / iz.korak);
+      return Math.min(iz.baza + koraka * iz.poKoraku, iz.max);
+    }
+
+    case "postotak":
+      return osnovica <= 0 ? 0 : Math.min(osnovica * iz.stopa, iz.max);
+
+    case "stepenasto": {
+      for (const s of iz.stepenice) {
+        if (osnovica <= s.do) return s.iznos;
+      }
+      return iz.stepenice.length > 0 ? iz.stepenice[iz.stepenice.length - 1].iznos : 0;
+    }
+  }
+}
+
+/** Iznos jedne odredbe uz zadanu osnovicu i verziju Uredbe. */
+export function izracunajPristojbu(
+  odredbaId: string,
+  osnovica: number,
+  verzija: UredbaVerzija = "NN 50/2026",
+): number {
+  return zaokruziNovac(nezaokruzeno(odredbaId, osnovica, verzija, MAX_DUBINA_UPUTE));
+}
+
+/** Ovisi li iznos o osnovici — fiksni iznosi je ne koriste, pa se uz njih ne prikazuje. */
+function koristiOsnovicu(odredbaId: string, verzija: UredbaVerzija, dubina = MAX_DUBINA_UPUTE): boolean {
+  const odredba = pristojbenaOdredba(odredbaId, verzija);
+  if (!odredba || dubina <= 0) return false;
+
+  const iz = odredba.izracun;
+  if (iz.vrsta === "fiksno" || iz.vrsta === "ne_placa_se") return false;
+  if (iz.vrsta === "udio") return koristiOsnovicu(iz.odredba, verzija, dubina - 1);
+  return true;
+}
+
+export interface PristojbenaStavka {
+  odredba_id: string;
+  tarifni_broj: string;
+  poglavlje: PristojbaPoglavlje;
+  opis: string;
+  osnovica: number;
+  kolicina: number;
+  iznos_po_jedinici: number;
+  iznos: number;
+  uredba: UredbaVerzija;
+  pravni_izvor: string;
+  /** True kad je redak izveden iz odabranih stavki tarife, false kad je dodan ručno. */
+  automatski: boolean;
+}
+
+export interface RucnaPristojba {
+  odredba_id: string;
+  osnovica?: number | null;
+  kolicina?: number;
+}
+
+export interface PristojbeUlaz {
+  vrijednostSpora: number;
+  odabraneStavke: TarifnaStavka[];
+  oslobodjen: boolean;
+  /** Čl. 2, prvi slučaj — ISO datum (YYYY-MM-DD) ili null. */
+  datumOdgovoraNaTuzbu?: string | null;
+  /** Čl. 2, drugi slučaj — ISO datum (YYYY-MM-DD) ili null. */
+  datumPokretanjaUpravnogSpora?: string | null;
+  dodane?: RucnaPristojba[];
+  iskljucene?: string[];
+}
+
+export interface PristojbeRezultat {
+  stavke: PristojbenaStavka[];
+  ukupno: number;
+  oslobodjen: boolean;
+}
+
+function prijeNoveUredbe(datum: string | null | undefined): boolean {
+  return typeof datum === "string" && datum.length > 0 && datum < NOVA_UREDBA_NA_SNAZI;
+}
+
+/**
+ * Čl. 2 NN 50/2026 — verzija se bira po RETKU, ne po troškovniku, pa predmet sa starim
+ * odgovorom na tužbu i novom žalbom nosi jedan redak po svakoj Uredbi.
+ */
+function razrijesiVerziju(
+  odredbaId: string,
+  izvorniItemId: string | null,
+  ulaz: PristojbeUlaz,
+): UredbaVerzija {
+  const jeOdgovorNaTuzbu =
+    izvorniItemId !== null && ITEMI_ODGOVOR_NA_TUZBU.has(izvorniItemId);
+  const jeUpravniSpor = pristojbenaOdredba(odredbaId)?.poglavlje === "VIII. Upravni spor";
+
+  const prijelazni =
+    (jeOdgovorNaTuzbu && prijeNoveUredbe(ulaz.datumOdgovoraNaTuzbu)) ||
+    (jeUpravniSpor && prijeNoveUredbe(ulaz.datumPokretanjaUpravnogSpora));
+
+  // Stara je tablica namjerno djelomična. Odredba koje u njoj nema ostaje na novoj
+  // Uredbi umjesto da ispadne iz zbroja.
+  if (prijelazni && pristojbenaOdredba(odredbaId, "NN 37/2023")) {
+    return "NN 37/2023";
+  }
+
+  return "NN 50/2026";
+}
+
+function pravniIzvor(odredba: PristojbenaOdredba, verzija: UredbaVerzija): string {
+  const naziv =
+    verzija === "NN 37/2023"
+      ? "Uredba o Tarifi sudskih pristojbi (NN 37/2023) — čl. 2 NN 50/2026"
+      : "Uredba o Tarifi sudskih pristojbi (NN 50/2026)";
+
+  return `${naziv}, ${odredba.tarifni_broj}`;
+}
+
+/**
+ * Cijeli obračun sudskih pristojbi. Zrcali `SudskePristojbeCalculator.Obracunaj`.
+ *
+ * Ista se odredba naplaćuje jednom i kad na nju vode dvije tarifne stavke — tužba i
+ * tužba zbog smetanja posjeda i dalje su jedan podnesak.
+ */
+export function obracunajPristojbe(ulaz: PristojbeUlaz): PristojbeRezultat {
+  const iskljucene = new Set(ulaz.iskljucene ?? []);
+  const vidjene = new Set<string>();
+  const radnje: { odredbaId: string; itemId: string | null; rucna: RucnaPristojba | null }[] = [];
+
+  for (const rucna of ulaz.dodane ?? []) {
+    if (iskljucene.has(rucna.odredba_id) || vidjene.has(rucna.odredba_id)) continue;
+    vidjene.add(rucna.odredba_id);
+    radnje.push({ odredbaId: rucna.odredba_id, itemId: null, rucna });
+  }
+
+  for (const stavka of ulaz.odabraneStavke) {
+    for (const odredbaId of PRISTOJBENE_RADNJE[stavka.id] ?? []) {
+      if (iskljucene.has(odredbaId) || vidjene.has(odredbaId)) continue;
+      vidjene.add(odredbaId);
+      radnje.push({ odredbaId, itemId: stavka.id, rucna: null });
+    }
+  }
+
+  const stavke: PristojbenaStavka[] = [];
+
+  for (const { odredbaId, itemId, rucna } of radnje) {
+    const verzija = razrijesiVerziju(odredbaId, itemId, ulaz);
+    const odredba = pristojbenaOdredba(odredbaId, verzija);
+
+    // Backend na nepoznat ključ baca TroskovnikValidationException; ovdje se redak
+    // preskače jer bi iznimka u živom pregledu srušila ekran umjesto da javi grešku.
+    // Sučelje nudi samo ključeve iz tablice, pa je ovo obrana od nemogućeg stanja.
+    if (!odredba) continue;
+
+    const osnovica = rucna?.osnovica ?? ulaz.vrijednostSpora;
+    const kolicina = Math.max(1, rucna?.kolicina ?? 1);
+    const poJedinici = ulaz.oslobodjen ? 0 : izracunajPristojbu(odredbaId, osnovica, verzija);
+
+    stavke.push({
+      odredba_id: odredbaId,
+      tarifni_broj: odredba.tarifni_broj,
+      poglavlje: odredba.poglavlje,
+      opis: odredba.opis,
+      osnovica: koristiOsnovicu(odredbaId, verzija) ? osnovica : 0,
+      kolicina,
+      iznos_po_jedinici: poJedinici,
+      iznos: poJedinici * kolicina,
+      uredba: verzija,
+      pravni_izvor: pravniIzvor(odredba, verzija),
+      automatski: rucna === null,
+    });
+  }
+
+  stavke.sort(
+    (a, b) =>
+      (REDOSLIJED.get(a.odredba_id) ?? Number.MAX_SAFE_INTEGER) -
+      (REDOSLIJED.get(b.odredba_id) ?? Number.MAX_SAFE_INTEGER),
+  );
+
+  return {
+    stavke,
+    ukupno: stavke.reduce((zbroj, s) => zbroj + s.iznos, 0),
+    oslobodjen: ulaz.oslobodjen,
+  };
+}
+
+/**
+ * Objašnjenje kad pristojbi uopće nema — "0,00 €" bez razloga izgleda kao greška
+ * u računu, a ne kao ispravan ishod.
+ */
+export function objasnjenjeBezPristojbe(): string {
+  return "Uredba NN 50/2026 za odabrane radnje ne propisuje sudsku pristojbu.";
 }
