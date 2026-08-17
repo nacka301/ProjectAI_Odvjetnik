@@ -13,9 +13,24 @@ public static class TarifaConstants
     public const string NazivTarife =
         "Tarifa o nagradama i naknadi troškova za rad odvjetnika (Hrvatska odvjetnička komora, 14. listopada 2023.)";
 
-    /// <summary>Uredba koja propisuje sudske pristojbe.</summary>
+    /// <summary>Uredba koja propisuje sudske pristojbe — na snazi od 1.6.2026.</summary>
     public const string NazivUredbeOPristojbama =
-        "Uredba o tarifi sudskih pristojbi (NN 37/2023)";
+        "Uredba o Tarifi sudskih pristojbi (NN 50/2026)";
+
+    /// <summary>
+    /// Uredba koja je prestala važiti 1.6.2026. Navodi se uz retke koje čl. 2 nove
+    /// Uredbe zadržava na starom propisu — odgovor na tužbu podnesen prije tog dana i
+    /// upravni spor pokrenut prije tog dana.
+    /// </summary>
+    public const string NazivStareUredbeOPristojbama =
+        "Uredba o Tarifi sudskih pristojbi (NN 37/2023)";
+
+    /// <summary>
+    /// Zakon koji uređuje tko plaća pristojbu, tko je oslobođen i kako se utvrđuje
+    /// vrijednost predmeta spora. Iznose propisuje Uredba, ne ovaj Zakon.
+    /// </summary>
+    public const string NazivZakonaOPristojbama =
+        "Zakon o sudskim pristojbama (NN 118/18, 51/23)";
 
     /// <summary>Tbr. 54 — vrijednost boda.</summary>
     public const decimal BodValue = 2.00m;
@@ -30,28 +45,33 @@ public static class TarifaConstants
     /// koji je određen za branitelja po službenoj dužnosti, sukladno odredbama Zakona o
     /// odvjetništvu, određuje se Pravilnikom ministarstva nadležnog za poslove pravosuđa."
     ///
-    /// Izvor stope: Pravilnik, Narodne novine 22/2022, br. 271, ČL. 1.
+    /// Izvor stope: Pravilnik, Narodne novine 22/2022, br. 271, ČL. 1:
+    /// "Nagrada za rad odvjetnika prilikom obrana po službenoj dužnosti i obrana na teret
+    /// proračunskih sredstava određuje se u visini od 50% od nagrade za rad koja bi
+    /// odvjetniku pripadala za pojedine radnje u postupku prema Tarifi (...)"
     /// https://narodne-novine.nn.hr/clanci/sluzbeni/2022_02_22_271.html
     /// </summary>
     public const decimal KazneniReductionRate = 0.50m;
 
     /// <summary>
-    /// Tbr. 4. toč. 8: "Odvjetniku koji zastupa oštećenika u postupku koji se vodi pred
-    /// policijom, državnim odvjetništvom (...) te na raspravi pred sudom, pripada 50%
-    /// nagrade iz ovog tarifnog broja."
-    /// </summary>
-    public const decimal Tbr4t8Rate = 0.50m;
-
-    /// <summary>
-    /// Opunomoćenik djeteta žrtve kaznenog djela — 70% od nagrade iz Tbr. 4. toč. 8.
+    /// Opunomoćenik djeteta žrtve kaznenog djela — 70% pune tarife.
     ///
-    /// Izvor stope: Pravilnik, Narodne novine 22/2022, br. 271, ČL. 2.
+    /// Izvor stope: Pravilnik, Narodne novine 22/2022, br. 271, ČL. 2:
+    /// "Nagrada za rad odvjetnika kao opunomoćenika djeteta žrtve kaznenog djela određuje
+    /// se u visini od 70% od nagrade za rad koja bi odvjetniku pripadala za pojedine
+    /// radnje u postupku prema Tarifi (...)"
     /// https://narodne-novine.nn.hr/clanci/sluzbeni/2022_02_22_271.html
     ///
-    /// Budući da je Tbr. 4. toč. 8 već 50% nagrade iz Tbr. 4, efektivna stopa je
-    /// 0,50 × 0,70 = 35% pune tarife — ne 70%. Vidi TarifaUmanjenjaTests.
+    /// Osnovica je ista kao u čl. 1 — nagrada za pojedinu radnju prema Tarifi. Čl. 2 se
+    /// ne poziva na Tbr. 4. toč. 8, pa se te dvije stope ne množe: 70% je 70%.
+    /// Umanjenje iz Tbr. 4. toč. 8 (zastupanje oštećenika) nosi sama stavka u katalogu.
     /// </summary>
     public const decimal ZastupnikDjetetaRate = 0.70m;
+
+    /// <summary>Ponuđeni tekst napomene; korisnik ga smije izmijeniti ili obrisati.</summary>
+    public const string ZadanaNapomena =
+        "Na traženi iznos obračunava se zakonska zatezna kamata sukladno članku 29. " +
+        "Zakona o obveznim odnosima.";
 }
 
 /// <summary>Zapriječena kazna → bodovi (Tbr. 4)</summary>

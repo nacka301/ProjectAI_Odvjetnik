@@ -158,9 +158,9 @@ public class TarifaTbr4DopuneTests
     }
 
     /// <summary>
-    /// Opunomoćenik djeteta žrtve dobiva 70% od te nagrade (Pravilnik NN 22/2022
-    /// br. 271), dakle 35% pune tarife — ta se putanja i dalje uključuje zastavicom
-    /// i ne smije se pomiješati s ovom stavkom.
+    /// Umanjenje po toč. 8 (stavka u katalogu) i stopa za opunomoćenika djeteta žrtve
+    /// (zastavica, Pravilnik NN 22/2022 br. 271, čl. 2) dvije su različite stvari i ne
+    /// smiju se pomiješati. Čl. 2 daje 70% nagrade po Tarifi, ne 70% od toč. 8.
     /// </summary>
     [Fact]
     public void Toc8_RazlikujeSeOdOpunomocenikaDjeteta()
@@ -176,7 +176,7 @@ public class TarifaTbr4DopuneTests
         });
 
         Assert.Equal(250m, ostecenik.UkupnoBodova);   // 50% od 500
-        Assert.Equal(175m, dijete.UkupnoBodova);      // 35% od 500
+        Assert.Equal(350m, dijete.UkupnoBodova);      // 70% od 500
     }
 
     // ── Pokrivenost ──

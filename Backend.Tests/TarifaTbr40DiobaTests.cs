@@ -68,7 +68,7 @@ public class TarifaTbr40DiobaTests
 
         Assert.Equal(1_100.00m, rezultat.UkupnoEurBezPdv);
         Assert.Equal(275.00m, rezultat.Pdv);
-        Assert.Equal(546.45m, rezultat.SudskaPristojba);
+        Assert.Equal(620.00m, rezultat.SudskaPristojba);   // Tar. br. 1 st. 1, NN 50/2026
 
         // Po osobi je polovica nagrade, ne polovica sveukupnog troška.
         Assert.Equal(550.00m, rezultat.NagradaPoOsobi);

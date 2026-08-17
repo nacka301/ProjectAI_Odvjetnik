@@ -276,21 +276,46 @@ Minimum je stajao na stavci bez obzira na vrstu predmeta.
 
 ---
 
-## 11. Izvori za dvije potvrđene stope (`6bcdd63`)
+## 11. Izvori za dvije potvrđene stope (`6bcdd63`, ispravljeno naknadno)
 
 Oba su broja zadržana i dobila izvor u kodu. Uklonjena su dva zatečena `AUDIT NOTE`
 komentara, uključujući onaj koji je tvrdio da izvor za 0,70 nije poznat.
 
 | stopa | mjesto | izvor |
 |---|---|---|
-| **50 %** — branitelj po službenoj dužnosti / na teret proračuna | [TroskovnikModels.cs:35](Backend/Models/TroskovnikModels.cs#L35) | Pravilnik NN 22/2022 br. 271 (Tbr. 4. toč. 7 upućuje na njega) |
-| **70 %** od Tbr. 4. toč. 8 — opunomoćenik djeteta žrtve | [TroskovnikModels.cs:53](Backend/Models/TroskovnikModels.cs#L53) | isti Pravilnik |
+| **50 %** — branitelj po službenoj dužnosti / na teret proračuna | [TarifaKonstante.cs](Backend/Models/TarifaKonstante.cs) `KazneniReductionRate` | Pravilnik NN 22/2022 br. 271, čl. 1 (Tbr. 4. toč. 7 upućuje na njega) |
+| **70 %** — opunomoćenik djeteta žrtve | [TarifaKonstante.cs](Backend/Models/TarifaKonstante.cs) `ZastupnikDjetetaRate` | isti Pravilnik, čl. 2 |
 
-**Provjereno kako je zadatak tražio:** kod doista računa **35 %**, ne 70 %. Tbr. 4. toč. 8
-je već 50 % nagrade iz Tbr. 4, pa je 0,50 × 0,70 = 0,35. Pri dugotrajnom zatvoru
-(500 bodova) to je **175 bodova**, a ne 350.
+### Ispravak: nije 35 %, nego 70 %
 
-Testovi: `TarifaUmanjenjaTests` (11) · `__tests__/tarifa-umanjenja.test.ts`.
+Ovaj je nalaz izvorno tvrdio da je efektivna stopa 35 % jer je čl. 2 čitan kao „70 % od
+Tbr. 4. toč. 8". **To je bilo pogrešno.** Provjerom teksta propisa utvrđeno je da oba
+članka imaju identično formuliranu osnovicu:
+
+> …u visini od **50 %** *(čl. 1)* / **70 %** *(čl. 2)* od nagrade za rad koja bi odvjetniku
+> pripadala za pojedine radnje u postupku prema Tarifi o nagradama i naknadi troškova za
+> rad odvjetnika
+
+Čl. 2 se nigdje ne poziva na Tbr. 4. toč. 8, pa se stope ne množe — 35 % je bio artefakt
+množenja `0,50 × 0,70`. Uz to su, kad su bile označene obje uloge, dvije stope išle jedna
+na drugu i davale 17,5 % pune tarife.
+
+Popravljeno:
+
+- `Tbr4t8Rate` / `TBR_4_8_STOPA` uklonjeni — umanjenje po Tbr. 4. toč. 8 već nosi sama
+  stavka u katalogu (`kaz_zastupanje_ostecenika`, `KazneniPovecanje = -0.5m`), gdje mu je
+  i mjesto: osnovica tada ovisi o radnji, a ne o tvrdom faktoru u servisu.
+- Primjenjuje se najviše **jedna** stopa (`else if`), i u backendu i u zrcalnom
+  `frontend/lib/tarifa.ts`.
+- Uloge su u UI-u radio grupa, a `TroskovnikController.ProvjeriZahtjev` odbija proturječnu
+  kombinaciju — čl. 1 je obrana okrivljenika, čl. 2 zastupanje djeteta žrtve, što je za
+  istog odvjetnika sukob interesa.
+
+Pri dugotrajnom zatvoru (500 bodova) opunomoćenik djeteta žrtve sada dobiva **350 bodova**,
+a ne 175.
+
+Testovi: `TarifaUmanjenjaTests` · `TarifaZaokruzivanjeTests` · `TarifaTbr4DopuneTests` ·
+`__tests__/tarifa-umanjenja.test.ts`.
 
 ---
 

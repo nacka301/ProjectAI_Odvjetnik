@@ -53,15 +53,25 @@ public sealed class TroskovnikRequest
     [JsonPropertyName("zaprijecena_kazna")]
     public string? ZaprijecenaKazna { get; set; }
 
-    /// <summary>Obrana po službenoj dužnosti – 50% umanjenje.</summary>
+    /// <summary>
+    /// Obrana po službenoj dužnosti – 50% nagrade za pojedinu radnju prema Tarifi
+    /// (Pravilnik NN 22/2022 br. 271, čl. 1). Isključuje IsZastupnikDjeteta.
+    /// </summary>
     [JsonPropertyName("is_po_sluzbenoj_duznosti")]
     public bool IsPoSluzbenojDuznosti { get; set; }
 
-    /// <summary>Obrana na teret proračuna – 50% umanjenje.</summary>
+    /// <summary>
+    /// Obrana na teret proračunskih sredstava – 50% nagrade za pojedinu radnju prema
+    /// Tarifi (isti Pravilnik, čl. 1). Isključuje IsZastupnikDjeteta.
+    /// </summary>
     [JsonPropertyName("is_na_teret_proracuna")]
     public bool IsNaTeretProracuna { get; set; }
 
-    /// <summary>Zastupnik djeteta – 70% od Tbr. 4.</summary>
+    /// <summary>
+    /// Opunomoćenik djeteta žrtve kaznenog djela – 70% nagrade za pojedinu radnju prema
+    /// Tarifi (isti Pravilnik, čl. 2). Isključuje obje zastavice iz čl. 1 — isti odvjetnik
+    /// ne može u istom postupku braniti okrivljenika i zastupati dijete žrtvu.
+    /// </summary>
     [JsonPropertyName("is_zastupnik_djeteta")]
     public bool IsZastupnikDjeteta { get; set; }
 
@@ -100,6 +110,139 @@ public sealed class TroskovnikRequest
     /// <summary>Oslobođenje od plaćanja sudskih pristojbi (čl. 11. Zakona).</summary>
     [JsonPropertyName("is_oslobodjen_pristojbi")]
     public bool IsOslobodjenPristojbi { get; set; }
+
+    // ── Prijelazna odredba, čl. 2 Uredbe NN 50/2026 ───────────────
+    //
+    // Dva datuma, a ne jedan zajednički: čl. 2 imenuje točno dvije situacije u kojima
+    // se primjenjuje stara Uredba, pa jedan predmet može imati star odgovor na tužbu i
+    // novu žalbu istodobno. Null znači „nije prijelazni slučaj" → nova Uredba.
+
+    /// <summary>
+    /// Datum podnošenja odgovora na tužbu. Ako je prije 1.6.2026., pristojba za odgovor
+    /// na tužbu utvrđuje se po NN 37/2023.
+    /// </summary>
+    [JsonPropertyName("datum_podnosenja_odgovora_na_tuzbu")]
+    public DateOnly? DatumPodnosenjaOdgovoraNaTuzbu { get; set; }
+
+    /// <summary>
+    /// Datum pokretanja upravnog spora. Ako je prije 1.6.2026., pristojbe u tom sporu
+    /// utvrđuju se po NN 37/2023 — i tužba i odluka, ne samo tužba.
+    /// </summary>
+    [JsonPropertyName("datum_pokretanja_upravnog_spora")]
+    public DateOnly? DatumPokretanjaUpravnogSpora { get; set; }
+
+    /// <summary>
+    /// Pristojbe koje korisnik dodaje sam, izvan onih izvedenih iz tarifnih stavaka.
+    /// Velik dio Uredbe (ovjere, etažiranje, upis broda, polog, e-Notar) nema svoju
+    /// odvjetničku tarifnu stavku iz koje bi se mogao izvesti.
+    /// </summary>
+    [JsonPropertyName("pristojbe_dodane")]
+    public List<RucnaPristojbaRequest> PristojbeDodane { get; set; } = [];
+
+    /// <summary>
+    /// Ključevi odredbi koje se ne naplaćuju, iako bi ih odabrane stavke povukle.
+    /// Postoji jer je nekoliko stavaka kataloga dvoznačno (dioba/ostavina,
+    /// stečaj/predstečaj, revizija protiv presude ili rješenja), pa automatski izvedeni
+    /// redak mora biti moguće maknuti.
+    /// </summary>
+    [JsonPropertyName("pristojbe_iskljucene")]
+    public List<string> PristojbeIskljucene { get; set; } = [];
+
+    // ── Čl. 7 Zakona o sudskim pristojbama — elektronički oblik ────
+    //
+    // Tri stavka, tri različita uvjeta, pa tri različita ulaza. Vidi PristojbeOpcije.
+
+    /// <summary>
+    /// Čl. 7 st. 1 — podnesci predani elektronički i pristojba plaćena u trenutku
+    /// podnošenja. Vrijedi za cijeli troškovnik.
+    /// </summary>
+    [JsonPropertyName("podnesci_elektronicki")]
+    public bool PodnesciElektronicki { get; set; }
+
+    /// <summary>
+    /// Čl. 7 st. 3 — zemljišnoknjižni upis predložen elektronički i plaćeno pri
+    /// podnošenju. Zaseban prekidač jer uvjet nije oblik pojedinog podneska nego oblik
+    /// prijedloga za upis.
+    /// </summary>
+    [JsonPropertyName("zk_upis_elektronicki")]
+    public bool ZkUpisElektronicki { get; set; }
+
+    /// <summary>
+    /// Čl. 7 st. 2 — ključevi odredbi (odluka) koje je sud dostavio elektronički i za
+    /// koje je pristojba uplaćena u roku od tri dana. Po retku, jer se rok može ispuniti
+    /// za jednu odluku, a za drugu ne.
+    /// </summary>
+    [JsonPropertyName("odluke_elektronicki")]
+    public List<string> OdlukeElektronicki { get; set; } = [];
+
+    /// <summary>
+    /// Po kojoj je točki čl. 11 stranka oslobođena. Vidi <see cref="Models.OslobodjenjeKategorija"/>.
+    /// Null znači „oslobođena, bez navedene osnove" — staro ponašanje golog prekidača.
+    /// </summary>
+    [JsonPropertyName("oslobodjenje_kategorija")]
+    public string? OslobodjenjeKategorija { get; set; }
+
+    /// <summary>
+    /// Čl. 12 — koliko je od <see cref="BrojZastupanihOsoba"/> oslobođeno. Zadano 0.
+    /// Kad ih je oslobođeno koliko i ukupno, pristojba je 0 kao i kod golog prekidača.
+    /// </summary>
+    [JsonPropertyName("broj_oslobodjenih_osoba")]
+    public int BrojOslobodjenihOsoba { get; set; }
+
+    /// <summary>
+    /// Čl. 12 — dio vrijednosti predmeta spora koji otpada na neoslobođene osobe.
+    /// Null znači da se dio ne može utvrditi, pa se VPS dijeli brojem osoba (st. 2).
+    /// </summary>
+    [JsonPropertyName("udio_u_vps")]
+    public decimal? UdioUVps { get; set; }
+
+    /// <summary>
+    /// Čl. 13 — omjer u kojem je oslobođena stranka uspjela u postupku, 0–100.
+    /// Null kad se ne obračunava.
+    /// </summary>
+    [JsonPropertyName("postotak_uspjeha")]
+    public decimal? PostotakUspjeha { get; set; }
+
+    // ── Vrijednost predmeta spora po Zakonu o sudskim pristojbama ──
+
+    /// <summary>
+    /// Vrsta postupka po čl. 15–25. Vidi <see cref="Models.VrstaPostupka"/>.
+    /// Zadano opće pravilo iz čl. 14 — vrijedi uneseni iznos.
+    /// </summary>
+    [JsonPropertyName("vrsta_postupka")]
+    public string VrstaPostupka { get; set; } = Models.VrstaPostupka.Opci;
+
+    /// <summary>Čl. 15 — mjesečno davanje za uzdržavanje; vrijednost je zbroj za tri mjeseca.</summary>
+    [JsonPropertyName("uzdrzavanje_mjesecno")]
+    public decimal UzdrzavanjeMjesecno { get; set; }
+
+    /// <summary>Čl. 16 — pojedinačni zahtjevi iz tužbe. Prazno znači „vrijedi vrijednost_spora".</summary>
+    [JsonPropertyName("zahtjevi")]
+    public List<ZahtjevStavka> Zahtjevi { get; set; } = [];
+
+    /// <summary>Čl. 16 — kako se zahtjevi sastavljaju. Vidi <see cref="Models.ZahtjeviNacin"/>.</summary>
+    [JsonPropertyName("zahtjevi_nacin")]
+    public string? ZahtjeviNacin { get; set; }
+
+    /// <summary>Čl. 24 — po čemu se plaća pristojba na pravni lijek. Vidi <see cref="Models.PravniLijek"/>.</summary>
+    [JsonPropertyName("pravni_lijek")]
+    public string PravniLijek { get; set; } = Models.PravniLijek.Nema;
+
+    /// <summary>
+    /// Čl. 24 — vrijednost pobijanog dijela odnosno iznos troškova i sporednih
+    /// potraživanja. Obavezan uz `pobijani_dio` i `samo_troskovi`.
+    /// </summary>
+    [JsonPropertyName("pravni_lijek_iznos")]
+    public decimal PravniLijekIznos { get; set; }
+
+    /// <summary>
+    /// Prenosi zakonski VPS i na odvjetničku nagradu po Tbr. 7. toč. 1.
+    ///
+    /// Zadano false: čl. 14–26 Zakona pisani su za sudske pristojbe, ne za Tarifu, pa
+    /// se zakonski iznos na nagradu prenosi samo kad odvjetnik to izričito odabere.
+    /// </summary>
+    [JsonPropertyName("vps_primijeni_na_nagradu")]
+    public bool VpsPrimijeniNaNagradu { get; set; }
 
     /// <summary>
     /// Broj osoba koje odvjetnik brani ili zastupa u istom postupku (Tbr. 40. toč. 1).
@@ -150,6 +293,43 @@ public sealed class TroskovnikRequest
     /// </summary>
     [JsonPropertyName("tbr41_snizenje_postotak")]
     public decimal Tbr41SnizenjePostotak { get; set; }
+
+    /// <summary>Ručno dodane sudske pristojbe — ispod automatski izračunate, bez PDV-a.</summary>
+    [JsonPropertyName("dodatne_pristojbe")]
+    public List<TroskovnikTrosakRequest> DodatnePristojbe { get; set; } = [];
+
+    /// <summary>Predujmovi (vještačenje i sl.) — vlastiti odjeljak, bez PDV-a.</summary>
+    [JsonPropertyName("predujmovi")]
+    public List<TroskovnikTrosakRequest> Predujmovi { get; set; } = [];
+
+    /// <summary>Slobodni tekst napomene na kraju troškovnika. Prazan/whitespace izostavlja odjeljak.</summary>
+    [JsonPropertyName("napomena")]
+    public string? Napomena { get; set; }
+
+    /// <summary>
+    /// Naknada troškova (Tbr. 48.-51.): prijevoz, dnevnica, hotel, ostali izdaci.
+    /// Vlastiti trošak odvjetnika, pa po čl. 33. Zakona o PDV-u ULAZI u poreznu
+    /// osnovicu — za razliku od pristojbi i predujmova, koji su prolazne stavke.
+    /// Vidi <see cref="Models.VrstaTroska"/>.
+    /// </summary>
+    [JsonPropertyName("naknada_troskova_stavke")]
+    public List<NaknadaTroskovaStavkaRequest> NaknadaTroskovaStavke { get; set; } = [];
+}
+
+/// <summary>
+/// Jedan ručno unesen trošak (dodatna pristojba ili predujam) — oba popisa dijele isti oblik.
+/// </summary>
+public sealed class TroskovnikTrosakRequest
+{
+    /// <summary>Datum troška. Opcionalan, kao i kod radnje.</summary>
+    [JsonPropertyName("datum")]
+    public DateOnly? Datum { get; set; }
+
+    [JsonPropertyName("opis")]
+    public string Opis { get; set; } = "";
+
+    [JsonPropertyName("iznos")]
+    public decimal Iznos { get; set; }
 }
 
 // New request DTOs for nested schema
@@ -212,6 +392,14 @@ public sealed class TroskovnikItemRequest
     public int Kolicina { get; set; } = 1;
 
     /// <summary>
+    /// Datum kad je radnja poduzeta. Opcionalan — prazan se ne ispisuje i ne blokira
+    /// izračun. <c>DateOnly?</c> namjerno umjesto <c>string</c>: neispravan datum tada
+    /// pada s greškom umjesto da završi kao smeće u dokumentu.
+    /// </summary>
+    [JsonPropertyName("datum")]
+    public DateOnly? Datum { get; set; }
+
+    /// <summary>
     /// Tbr. 41. toč. 1 — povišenje ove stavke, 0–100 %. Null znači „koristi postotak
     /// s razine zahtjeva" (prečac „primijeni na sve stavke").
     /// </summary>
@@ -224,6 +412,59 @@ public sealed class TroskovnikItemRequest
     /// </summary>
     [JsonPropertyName("tbr41_snizenje_postotak")]
     public decimal? Tbr41SnizenjePostotak { get; set; }
+}
+
+/// <summary>Ručno dodana sudska pristojba — vidi <see cref="RucnaPristojba"/>.</summary>
+public sealed class RucnaPristojbaRequest
+{
+    /// <summary>Ključ odredbe iz Uredbe, npr. „tbr11" ili „tbr15_etaziranje".</summary>
+    [JsonPropertyName("odredba_id")]
+    public string OdredbaId { get; set; } = "";
+
+    /// <summary>
+    /// Vrijednost na koju se odredba primjenjuje (čista ostavina, diobna masa, broj
+    /// etažnih dijelova…). Kad je null, uzima se vrijednost predmeta spora.
+    /// </summary>
+    [JsonPropertyName("osnovica")]
+    public decimal? Osnovica { get; set; }
+
+    [JsonPropertyName("kolicina")]
+    public int Kolicina { get; set; } = 1;
+}
+
+/// <summary>Čl. 16 — jedan od više zahtjeva iz iste tužbe.</summary>
+public sealed class ZahtjevStavka
+{
+    /// <summary>Vrijednost ovog zahtjeva u EUR.</summary>
+    [JsonPropertyName("iznos")]
+    public decimal Iznos { get; set; }
+
+    /// <summary>Opis zahtjeva, samo za ispis.</summary>
+    [JsonPropertyName("opis")]
+    public string? Opis { get; set; }
+
+    /// <summary>
+    /// Uz način „zasebno" (suparničarstvo) — zahtjev koji ovaj troškovnik pokriva.
+    /// Točno jedan zahtjev mora ga nositi; za ostale ide posebna pristojba.
+    /// </summary>
+    [JsonPropertyName("primarni")]
+    public bool Primarni { get; set; }
+}
+
+/// <summary>Jedan stvarni izdatak iz naknade troškova (Tbr. 48.-51.).</summary>
+public sealed class NaknadaTroskovaStavkaRequest
+{
+    /// <summary>Jedna od vrijednosti u <see cref="VrstaTroska.Sve"/>.</summary>
+    [JsonPropertyName("vrsta")]
+    public string Vrsta { get; set; } = "";
+
+    /// <summary>Slobodan opis (npr. "Put Zagreb-Split, 340 km"). Neobavezno.</summary>
+    [JsonPropertyName("opis")]
+    public string? Opis { get; set; }
+
+    /// <summary>Stvarni iznos u EUR — Tarifa ne propisuje bodove za ove izdatke.</summary>
+    [JsonPropertyName("iznos")]
+    public decimal Iznos { get; set; }
 }
 
 public sealed class TroskovnikParty

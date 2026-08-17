@@ -37,7 +37,8 @@ CREATE TABLE IF NOT EXISTS law_firms (
     name            TEXT            NOT NULL DEFAULT '',
     oib             TEXT,
     address         TEXT,
-    iban            TEXT
+    iban            TEXT,
+    pdv_obveznik    BOOLEAN         NOT NULL DEFAULT FALSE   -- zadana vrijednost za novi troškovnik (migracija 021)
 );
 
 
@@ -279,6 +280,8 @@ CREATE TABLE IF NOT EXISTS troskovnici (
     ukupno_eur_bez_pdv      NUMERIC(12,2)   DEFAULT 0,
     pdv                     NUMERIC(12,2)   DEFAULT 0,
     ukupno_eur_s_pdv        NUMERIC(12,2)   DEFAULT 0,
+    naknada_troskova_ukupno NUMERIC(12,2)   NOT NULL DEFAULT 0,  -- Tbr. 48.-51., ulazi u osnovicu (migracija 021)
+    predujmovi_ukupno       NUMERIC(12,2)   NOT NULL DEFAULT 0,  -- prolazna stavka, ne ulazi u osnovicu (migracija 021)
 
     -- Nested JSONB objects
     odvjetnik               JSONB,                          -- {naziv, oib, adresa, iban}

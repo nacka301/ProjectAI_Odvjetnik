@@ -100,6 +100,10 @@ public sealed class TroskovnikRecord : IFirmScoped
     public decimal UkupnoEurBezPdv { get; set; }
     public decimal Pdv { get; set; }
     public decimal UkupnoEurSPdv { get; set; }
+    /// <summary>Zbroj naknade troškova (Tbr. 48.-51.) — već uključen u UkupnoEurBezPdv.</summary>
+    public decimal NaknadaTroskovaUkupno { get; set; }
+    /// <summary>Zbroj predujmova — prolazna stavka, izvan UkupnoEurBezPdv.</summary>
+    public decimal PredujmoviUkupno { get; set; }
     // Nested objects per requested schema
     public OdvjetnikInfo? Odvjetnik { get; set; }
     public PredmetInfo? Predmet { get; set; }
@@ -131,6 +135,8 @@ public sealed class TroskovnikReadRecord
     public decimal UkupnoEurBezPdv { get; set; }
     public decimal Pdv { get; set; }
     public decimal UkupnoEurSPdv { get; set; }
+    public decimal NaknadaTroskovaUkupno { get; set; }
+    public decimal PredujmoviUkupno { get; set; }
     // Nested objects for read record
     public OdvjetnikInfo? Odvjetnik { get; set; }
     public PredmetInfo? Predmet { get; set; }

@@ -1,4 +1,5 @@
 using Backend.Models;
+using Backend.Services.Pristojbe;
 
 namespace Backend.Services;
 
@@ -117,19 +118,36 @@ public sealed class TroskovnikService : ITroskovnikService
     ///
     /// Preračun se radi SAMO uz osnovicu `toc4_renta` i uz izričito odabrano razdoblje —
     /// ništa se ne izvodi tiho.
+    ///
+    /// <para>Polazna vrijednost je unesena, osim kad je <c>vps_primijeni_na_nagradu</c>
+    /// uključen — tada polazi od vrijednosti koju propisuje Zakon o sudskim pristojbama.
+    /// Čl. 14–26 tog Zakona pisani su za pristojbe, ne za Tarifu, pa se prijenos na
+    /// nagradu nikad ne događa sam od sebe.</para>
     /// </summary>
     public static decimal EfektivniVps(TroskovnikRequest request)
+        => EfektivniVps(request, PolaznaVrijednostSpora(request));
+
+    private static decimal EfektivniVps(TroskovnikRequest request, decimal polazna)
     {
         if (request.OsnovicaTbr7 != OsnovicaTbr7.Toc4Renta || request.RentaIznos <= 0)
-            return request.VrijednostSpora;
+            return polazna;
 
         return request.RentaRazdoblje switch
         {
             RentaRazdoblje.Mjesecno => request.RentaIznos * 60m,  // 5 godina × 12 mjeseci
             RentaRazdoblje.Godisnje => request.RentaIznos * 5m,   // 5 godina
-            _                       => request.VrijednostSpora    // razdoblje nije odabrano → bez preračuna
+            _                       => polazna                    // razdoblje nije odabrano → bez preračuna
         };
     }
+
+    /// <summary>
+    /// Od koje vrijednosti kreće izračun odvjetničke nagrade po Tbr. 7. toč. 1 —
+    /// unesene ili one koju propisuje Zakon o sudskim pristojbama.
+    /// </summary>
+    private static decimal PolaznaVrijednostSpora(TroskovnikRequest request)
+        => request.VpsPrimijeniNaNagradu
+            ? VpsCalculator.Razrijesi(request).Vps
+            : request.VrijednostSpora;
 
     /// <summary>
     /// Tbr. 41. toč. 1 — povišenje do 100 % za posebno stručno i specijalističko znanje.
@@ -313,11 +331,74 @@ public sealed class TroskovnikService : ITroskovnikService
         var katalogPoId = TarifaKatalog.Sve.ToDictionary(s => s.Id);
         var odabraneDefinicije = ProvjeriIRazrijesiDefinicije(request, katalogPoId);
         var kontekst = RazrijesiKontekst(request, odabraneDefinicije);
+        ProvjeriNaknaduIPredujam(request);
 
         var stavkeRetci = IzracunajRetke(request, katalogPoId, kontekst);
-        var zbrojevi = IzracunajZbrojeve(request, stavkeRetci, odabraneDefinicije, kontekst);
+        var dodatnePristojbe = RazrijesiRucneTroskove(request.DodatnePristojbe, "Pristojba");
+        var predujmovi = RazrijesiRucneTroskove(request.Predujmovi, "Predujam");
+        var zbrojevi = IzracunajZbrojeve(request, stavkeRetci, odabraneDefinicije, kontekst, dodatnePristojbe, predujmovi);
 
-        return SastaviOdgovor(request, stavkeRetci, zbrojevi, kontekst);
+        return SastaviOdgovor(request, stavkeRetci, zbrojevi, kontekst, dodatnePristojbe, predujmovi);
+    }
+
+    /// <summary>
+    /// Razrješava ručno unesen popis troškova (dodatne pristojbe ili predujmove): provjerava
+    /// opis i iznos, zaokružuje iznos postojećim <see cref="ZaokruziNovac"/> i renumerira
+    /// redni broj od 1. Ništa se ne smije tiho preskočiti ni vratiti kao 0.
+    /// </summary>
+    private static List<TroskovnikTrosakStavka> RazrijesiRucneTroskove(
+        List<TroskovnikTrosakRequest> stavke, string nazivStavke)
+    {
+        var rezultat = new List<TroskovnikTrosakStavka>();
+        var redniBroj = 0;
+
+        foreach (var stavka in stavke)
+        {
+            if (string.IsNullOrWhiteSpace(stavka.Opis))
+                throw new TroskovnikValidationException(
+                    $"{nazivStavke} bez opisa. Svaki ručno unesen trošak mora imati opis.");
+
+            if (stavka.Iznos < 0)
+                throw new TroskovnikValidationException(
+                    $"{nazivStavke} \"{stavka.Opis}\" ima negativan iznos ({stavka.Iznos}). Iznos ne može biti negativan.");
+
+            redniBroj++;
+            rezultat.Add(new TroskovnikTrosakStavka
+            {
+                Rbr = redniBroj,
+                Datum = stavka.Datum,
+                Opis = stavka.Opis,
+                Iznos = ZaokruziNovac(stavka.Iznos)
+            });
+        }
+
+        return rezultat;
+    }
+
+    /// <summary>
+    /// Provjerava stavke naknade troškova (Tbr. 48.-51.) i predujmove prije izračuna —
+    /// nepoznata vrsta izdatka ili negativan iznos odbija se odmah, umjesto da tiho
+    /// nestane iz troškovnika ili tiho ispravi predznak.
+    /// </summary>
+    private static void ProvjeriNaknaduIPredujam(TroskovnikRequest request)
+    {
+        foreach (var stavka in request.NaknadaTroskovaStavke ?? [])
+        {
+            if (!VrstaTroska.Sve.Contains(stavka.Vrsta))
+                throw new TroskovnikValidationException(
+                    $"Nepoznata vrsta troška: \"{stavka.Vrsta}\". Dopušteno: {string.Join(", ", VrstaTroska.Sve)}.");
+
+            if (stavka.Iznos < 0)
+                throw new TroskovnikValidationException(
+                    "Iznos naknade troškova ne može biti negativan.");
+        }
+
+        foreach (var predujam in request.Predujmovi ?? [])
+        {
+            if (predujam.Iznos < 0)
+                throw new TroskovnikValidationException(
+                    "Iznos predujma ne može biti negativan.");
+        }
     }
 
     /// <summary>
@@ -363,7 +444,16 @@ public sealed class TroskovnikService : ITroskovnikService
         var jeSamoKazneni = odabraneDefinicije.Count > 0
             && odabraneDefinicije.TrueForAll(d => d.Kategorija == TarifaKatalog.KategorijaKazneni);
 
-        var vrijednostSpora = jeSamoKazneni ? 0m : EfektivniVps(request);
+        // Vrijednost predmeta spora po Zakonu o sudskim pristojbama (čl. 14–26). U kaznenom
+        // postupku VPS ne postoji, pa se ni pravila ne razrješavaju — inače bi npr. odabrana
+        // vrsta postupka tražila mjesečno uzdržavanje u kaznenom troškovniku.
+        var vps = jeSamoKazneni
+            ? VpsCalculator.Neprilagodjen(0m)
+            : VpsCalculator.Razrijesi(request);
+
+        var vrijednostSpora = jeSamoKazneni
+            ? 0m
+            : EfektivniVps(request, request.VpsPrimijeniNaNagradu ? vps.Vps : request.VrijednostSpora);
 
         // Osnovica na koju upućuju Tbr. 8. toč. 1, 3, 4 i Tbr. 9. toč. 1–6:
         // "Tbr. 7. toč. 1., 4., 7. i 8." — četiri varijante iste osnovice, ne četiri iznosa.
@@ -373,7 +463,8 @@ public sealed class TroskovnikService : ITroskovnikService
             : IzracunajOsnovicu(request);
 
         return new KontekstIzracuna(
-            osnovica, vrijednostSpora, jeSamoKazneni, RazrijesiKazneniRazred(request, odabraneDefinicije));
+            osnovica, vrijednostSpora, vps, jeSamoKazneni,
+            RazrijesiKazneniRazred(request, odabraneDefinicije));
     }
 
     /// <summary>
@@ -437,6 +528,7 @@ public sealed class TroskovnikService : ITroskovnikService
             {
                 Rbr = redniBroj,
                 ItemId = definicija.Id,
+                Datum = stavka.Datum,
                 Opis = definicija.Opis,
                 TarifniBroj = definicija.TarifniBroj,
                 PravniIzvor = definicija.PravniIzvor,
@@ -500,7 +592,9 @@ public sealed class TroskovnikService : ITroskovnikService
         TroskovnikRequest request,
         List<TroskovnikLineItem> stavkeRetci,
         List<TarifnaStavka> odabraneDefinicije,
-        KontekstIzracuna kontekst)
+        KontekstIzracuna kontekst,
+        List<TroskovnikTrosakStavka> dodatnePristojbe,
+        List<TroskovnikTrosakStavka> predujmovi)
     {
         var osnovicaBodova = stavkeRetci.Sum(redak => redak.UkupnoBodova);
 
@@ -530,24 +624,122 @@ public sealed class TroskovnikService : ITroskovnikService
         // Dijeli se NAGRADA; PDV i sudska pristojba nisu odvjetnička nagrada pa ne ulaze.
         var brojOsoba = Math.Max(1, request.BrojZastupanihOsoba);
         var bodoviPoOsobi = ukupnoBodova / brojOsoba;
+        // Dijeli se NAGRADA (ukupnoEur) — naknada troškova nije dio nje, isto kao PDV
+        // i sudska pristojba: vidi komentar o Tbr. 40. toč. 1 gore.
         var nagradaPoOsobi = ZaokruziNovac(ukupnoEur / brojOsoba);
+
+        // ── Naknada troškova (Tbr. 48.-51.) — vlastiti trošak odvjetnika, ULAZI u
+        // PDV osnovicu (čl. 33. Zakona o PDV-u; čl. 78. Direktive 2006/112/EZ).
+        var naknadaTroskovaUkupno = ZaokruziNovac(
+            (request.NaknadaTroskovaStavke ?? []).Sum(s => s.Iznos));
+
+        var osnovicaSaNaknadom = ukupnoEur + naknadaTroskovaUkupno;
 
         decimal pdv = 0;
         var obracunajPdv = request.IsPdvUkljucen ?? request.HasVat;
         if (obracunajPdv)
-            pdv = ZaokruziNovac(ukupnoEur * TarifaConstants.PdvRate);
+            pdv = ZaokruziNovac(osnovicaSaNaknadom * TarifaConstants.PdvRate);
 
-        // Sudska pristojba je drugi propis (Uredba NN 37/2023) i cijela se računa ondje.
-        var pristojba = SudskePristojbeCalculator.Obracunaj(
-            kontekst.VrijednostSpora, odabraneDefinicije, request.IsOslobodjenPristojbi);
+        // Sudske pristojbe su drugi propis (Uredba NN 50/2026) i cijele se računaju ondje.
+        // Vrijednost na koju se obračunavaju propisuje Zakon o sudskim pristojbama, pa ide
+        // zakonski VPS — ne uneseni, koji vrijedi samo za odvjetničku nagradu.
+        var pristojbe = SudskePristojbeCalculator.Obracunaj(
+            kontekst.Vps.Vps, odabraneDefinicije, RazrijesiOslobodjenje(request),
+            PristojbeOpcijeIz(request));
 
-        var odvjetnickiTrosak = ukupnoEur + pdv;
-        var sveukupniTrosak = odvjetnickiTrosak + pristojba.Iznos;
+        // Odjeljak "Sudske pristojbe" = automatski izračunata pristojba + ručno dodane.
+        // Odjeljak "Predujmovi" = isključivo ručni popis. Ni jedno ni drugo ne nosi PDV —
+        // PDV se obračunava samo na odvjetničku nagradu, nikad ovdje.
+        // Automatski izvedene pristojbe (lista po radnjama) + ručno dodane u tom odjeljku.
+        var ukupnoPristojbe = pristojbe.Ukupno + dodatnePristojbe.Sum(t => t.Iznos);
+        var ukupnoPredujmovi = predujmovi.Sum(t => t.Iznos);
+
+        // Naknada troškova ULAZI u osnovicu (čl. 33. Zakona o PDV-u), pa i u odvjetnički
+        // trošak; pristojbe i predujmovi su prolazne stavke i dolaze tek nakon PDV-a.
+        var odvjetnickiTrosak = osnovicaSaNaknadom + pdv;
+
+        // Čl. 13 ne ulazi u zbroj: pristojbu na teret protustranke plaća druga strana,
+        // i to tek po pravomoćnosti. Zato `Ukupno`, a ne `Ukupno + NaTeretProtustranke`.
+        var sveukupniTrosak = odvjetnickiTrosak + ukupnoPristojbe + ukupnoPredujmovi;
 
         return new Zbrojevi(
             ukupnoBodova, povisenjePostotak, povisenjeBodovi, tbr41Bodovi, ukupnoEur,
-            bodoviPoOsobi, nagradaPoOsobi, pdv, pristojba.Osnova, pristojba.Iznos, sveukupniTrosak,
-            brojOsoba, obracunajPdv);
+            bodoviPoOsobi, nagradaPoOsobi, naknadaTroskovaUkupno, osnovicaSaNaknadom, pdv,
+            pristojbe, ukupnoPristojbe,
+            ukupnoPredujmovi, sveukupniTrosak, brojOsoba, obracunajPdv);
+    }
+
+    /// <summary>
+    /// Prijelazni datumi iz čl. 2 i ručne izmjene liste pristojbi, izdvojeni iz zahtjeva.
+    /// </summary>
+    private static PristojbeOpcije PristojbeOpcijeIz(TroskovnikRequest request) => new(
+        DatumPodnosenjaOdgovoraNaTuzbu: request.DatumPodnosenjaOdgovoraNaTuzbu,
+        DatumPokretanjaUpravnogSpora: request.DatumPokretanjaUpravnogSpora,
+        Dodane: [.. request.PristojbeDodane
+            .Where(p => !string.IsNullOrWhiteSpace(p.OdredbaId))
+            .Select(p => new RucnaPristojba(p.OdredbaId, p.Osnovica, p.Kolicina))],
+        Iskljucene: request.PristojbeIskljucene.ToHashSet(),
+        PodnesciElektronicki: request.PodnesciElektronicki,
+        ZkUpisElektronicki: request.ZkUpisElektronicki,
+        OdlukeElektronicki: request.OdlukeElektronicki.ToHashSet());
+
+    /// <summary>
+    /// Naslijeđena oznaka osnove, izvedena iz gotove liste pristojbi.
+    ///
+    /// Postoji samo zbog spremljenih troškovnika koji nose polje `pristojba_osnova`.
+    /// Lista je bogatija od oznake, pa je preslikavanje nužno grubo: bez ijedne
+    /// pristojbe „Nema", inače se gleda je li prvi redak polovica iz Tar. br. 1 st. 2.
+    /// </summary>
+    private static PristojbaOsnova NaslijedenaOsnova(PristojbeRezultat pristojbe)
+    {
+        if (pristojbe.Stavke.Count == 0)
+            return PristojbaOsnova.Nema;
+
+        return pristojbe.Stavke[0].OdredbaId == PristojbeTarifaNn50_2026.Tbr1St2
+            ? PristojbaOsnova.Polovica
+            : PristojbaOsnova.Puna;
+    }
+
+    /// <summary>
+    /// Sastavlja oslobođenje iz zahtjeva i provjerava ga (Zakon o sudskim pristojbama,
+    /// čl. 11–13). Nevaljan unos daje grešku, nikad tihi pad na „nije oslobođen".
+    /// </summary>
+    private static OslobodjenjeUlaz RazrijesiOslobodjenje(TroskovnikRequest request)
+    {
+        var brojOsoba = Math.Max(1, request.BrojZastupanihOsoba);
+
+        if (request.OslobodjenjeKategorija is { } kategorija
+            && !OslobodjenjeKategorija.Nazivi.ContainsKey(kategorija))
+            throw new TroskovnikValidationException(
+                $"Nepoznata osnova oslobođenja \"{kategorija}\". " +
+                $"Dopušteno: {string.Join(", ", OslobodjenjeKategorija.Sve)}.");
+
+        if (request.BrojOslobodjenihOsoba < 0)
+            throw new TroskovnikValidationException(
+                "Broj oslobođenih osoba ne može biti negativan.");
+
+        if (request.BrojOslobodjenihOsoba > brojOsoba)
+            throw new TroskovnikValidationException(
+                $"Oslobođeno je {request.BrojOslobodjenihOsoba} osoba, a zastupa se {brojOsoba}. " +
+                "Čl. 12 dijeli vrijednost predmeta spora među osobama koje podnesak podnose, " +
+                "pa oslobođenih ne može biti više nego ukupno.");
+
+        if (request.UdioUVps is { } udio && udio < 0m)
+            throw new TroskovnikValidationException(
+                "Dio vrijednosti predmeta spora koji otpada na neoslobođene osobe (čl. 12) " +
+                "ne može biti negativan.");
+
+        if (request.PostotakUspjeha is { } postotak && (postotak < 0m || postotak > 100m))
+            throw new TroskovnikValidationException(
+                $"Omjer uspjeha po čl. 13 iznosi {postotak} %. Dopušteno je 0–100 %.");
+
+        return new OslobodjenjeUlaz(
+            request.IsOslobodjenPristojbi,
+            request.OslobodjenjeKategorija,
+            brojOsoba,
+            request.BrojOslobodjenihOsoba,
+            request.UdioUVps,
+            request.PostotakUspjeha);
     }
 
     /// <summary>Preslikava zahtjev i izračunate zbrojeve u odgovor koji ide klijentu.</summary>
@@ -555,7 +747,9 @@ public sealed class TroskovnikService : ITroskovnikService
         TroskovnikRequest request,
         List<TroskovnikLineItem> stavkeRetci,
         Zbrojevi zbrojevi,
-        KontekstIzracuna kontekst)
+        KontekstIzracuna kontekst,
+        List<TroskovnikTrosakStavka> dodatnePristojbe,
+        List<TroskovnikTrosakStavka> predujmovi)
     {
         return new TroskovnikResponse
         {
@@ -576,9 +770,22 @@ public sealed class TroskovnikService : ITroskovnikService
             NagradaPoOsobi = zbrojevi.NagradaPoOsobi,
             VrijednostSpora = kontekst.VrijednostSpora,
             IsSamoKazneni = kontekst.JeSamoKazneni,
-            UkupnoEurBezPdv = zbrojevi.UkupnoEur,
+            // Osnovica (bez PDV) = nagrada + naknada troškova (Tbr. 48.-51.) — obje su
+            // vlastiti trošak odvjetnika i ulaze u PDV osnovicu; sudska pristojba i
+            // predujam nisu, pa se dodaju tek u SveukupniTrosak, nakon PDV-a.
+            UkupnoEurBezPdv = zbrojevi.OsnovicaSaNaknadom,
             Pdv = zbrojevi.Pdv,
-            UkupnoEurSPdv = zbrojevi.UkupnoEur + zbrojevi.Pdv,
+            UkupnoEurSPdv = zbrojevi.OsnovicaSaNaknadom + zbrojevi.Pdv,
+            NaknadaTroskovaStavke = (request.NaknadaTroskovaStavke ?? []).Select(s => new NaknadaTroskovaStavkaResponse
+            {
+                Vrsta = s.Vrsta,
+                Opis = s.Opis,
+                Iznos = s.Iznos,
+                PravniIzvor = VrstaTroska.PravniIzvor.GetValueOrDefault(s.Vrsta, "")
+            }).ToList(),
+            NaknadaTroskovaUkupno = zbrojevi.NaknadaTroskovaUkupno,
+            // Predujmovi se preslikavaju niže, iz `predujmovi` — taj popis je već prošao
+            // provjeru i renumeriranje, pa nosi i datum i redni broj.
             Klijent = request.Klijent,
             // Ugniježđeni odvjetnik iz zahtjeva preslikava se u stranku odgovora
             // (naziv → ime), radi spojivosti sa starijim oblikom odgovora.
@@ -621,10 +828,31 @@ public sealed class TroskovnikService : ITroskovnikService
             IsOduzimanjePrekrsaj = request.IsOduzimanjePrekrsaj,
             VrijednostOduzimanja = request.VrijednostOduzimanja,
             // Sudske pristojbe
-            SudskaPristojba = zbrojevi.SudskaPristojba,
-            PristojbaOsnova = zbrojevi.PristojbaOsnova,
+            PristojbeneStavke = [.. zbrojevi.Pristojbe.Stavke.Select(PristojbenaStavkaUOdgovor)],
+            SudskaPristojba = zbrojevi.Pristojbe.Ukupno,
+            PristojbaOsnova = NaslijedenaOsnova(zbrojevi.Pristojbe),
             IsOslobodjenPristojbi = request.IsOslobodjenPristojbi,
-            SveukupniTrosak = zbrojevi.SveukupniTrosak
+            SveukupniTrosak = zbrojevi.SveukupniTrosak,
+            // Oslobođenja — Zakon o sudskim pristojbama, čl. 11–13
+            OslobodjenjeKategorija = request.OslobodjenjeKategorija,
+            OslobodjenjeNaziv = Models.OslobodjenjeKategorija.Naziv(request.OslobodjenjeKategorija),
+            BrojOslobodjenihOsoba = request.BrojOslobodjenihOsoba,
+            PristojbaVpsUdio = zbrojevi.Pristojbe.VpsUdio,
+            PristojbaNaTeretProtustranke = zbrojevi.Pristojbe.NaTeretProtustranke,
+            PostotakUspjeha = request.PostotakUspjeha,
+            // Vrijednost predmeta spora — Zakon o sudskim pristojbama, čl. 14–26
+            VpsZakonski = kontekst.Vps.Vps,
+            VpsVrstaPostupka = kontekst.Vps.Kljuc,
+            VpsPravniIzvor = kontekst.Vps.PravniIzvor,
+            VpsNapomena = kontekst.Vps.Napomena,
+            VpsPrilagodjen = kontekst.Vps.Prilagodjen,
+            VpsPrimijeniNaNagradu = request.VpsPrimijeniNaNagradu,
+            ZahtjeviInformativno = [.. kontekst.Vps.OstaliZahtjevi],
+            DodatnePristojbe = dodatnePristojbe,
+            UkupnoPristojbe = zbrojevi.UkupnoPristojbe,
+            Predujmovi = predujmovi,
+            UkupnoPredujmovi = zbrojevi.UkupnoPredujmovi,
+            Napomena = string.IsNullOrWhiteSpace(request.Napomena) ? null : request.Napomena
         };
     }
 
@@ -635,6 +863,7 @@ public sealed class TroskovnikService : ITroskovnikService
     private sealed record KontekstIzracuna(
         OsnovicaRezultat Osnovica,
         decimal VrijednostSpora,
+        VpsRezultat Vps,
         bool JeSamoKazneni,
         int KazneniRazredBodovi);
 
@@ -647,12 +876,42 @@ public sealed class TroskovnikService : ITroskovnikService
         decimal UkupnoEur,
         decimal BodoviPoOsobi,
         decimal NagradaPoOsobi,
+        decimal NaknadaTroskovaUkupno,
+        decimal OsnovicaSaNaknadom,
         decimal Pdv,
-        PristojbaOsnova PristojbaOsnova,
-        decimal SudskaPristojba,
+        // Lista pristojbenih redaka nosi i čl. 12 udio i čl. 13 iznos, pa zamjenjuje
+        // četiri zasebna polja iz vremena jedne pristojbe po troškovniku.
+        PristojbeRezultat Pristojbe,
+        /// <summary>Automatski izvedene pristojbe + ručno dodane u odjeljku „Sudske pristojbe".</summary>
+        decimal UkupnoPristojbe,
+        decimal UkupnoPredujmovi,
         decimal SveukupniTrosak,
         int BrojZastupanihOsoba,
         bool ObracunajPdv);
+
+    /// <summary>Pristojbena stavka u izlazni oblik: enum poglavlja i verzije postaju tekst.</summary>
+    private static PristojbenaStavkaDto PristojbenaStavkaUOdgovor(PristojbenaStavka stavka) => new()
+    {
+        OdredbaId = stavka.OdredbaId,
+        TarifniBroj = stavka.TarifniBroj,
+        Poglavlje = PoglavljeNazivi.Naziv(stavka.Poglavlje),
+        Opis = stavka.Opis,
+        Osnovica = stavka.Osnovica,
+        Kolicina = stavka.Kolicina,
+        IznosPoJedinici = stavka.IznosPoJedinici,
+        Iznos = stavka.Iznos,
+        Uredba = stavka.Verzija == UredbaVerzija.Nn37_2023 ? "NN 37/2023" : "NN 50/2026",
+        PravniIzvor = stavka.PravniIzvor,
+        Automatski = stavka.Automatski,
+        Cl7Rezim = stavka.Cl7Rezim switch
+        {
+            Models.Cl7Rezim.St1Podnesak => "st_1",
+            Models.Cl7Rezim.St2Odluka => "st_2",
+            Models.Cl7Rezim.St3Zemljisnoknjizni => "st_3",
+            _ => ""
+        },
+        UmanjenoElektronicki = stavka.UmanjenoZaElektronickiOblik
+    };
 
     /// <summary>
     /// Jedino zaokruživanje u cijelom izračunu: novac, na dvije decimale, standardno.
@@ -753,8 +1012,9 @@ public sealed class TroskovnikService : ITroskovnikService
     /// Izračunava bodove za stavke s KazneniBase = true.
     /// Koristi ZaprijecenaKaznaTiers lookup i primjenjuje modifikatore:
     ///   - KazneniPovecanje (npr. +50% za žalbu)
-    ///   - IsZastupnikDjeteta → 70% od Tbr. 4.8 (= 70% × 50% = 35% baze)
-    ///   - IsPoSluzbenojDuznosti / IsNaTeretProracuna → 50% umanjenje
+    ///   - IsZastupnikDjeteta → 70% baze (Pravilnik NN 22/2022, čl. 2)
+    ///   - IsPoSluzbenojDuznosti / IsNaTeretProracuna → 50% baze (isti Pravilnik, čl. 1)
+    /// Te dvije stope se ne množe — primjenjuje se najviše jedna.
     /// </summary>
     private static decimal IzracunajKazneneBodove(TarifnaStavka definicija, int tierBodovi, TroskovnikRequest req)
     {
@@ -773,14 +1033,16 @@ public sealed class TroskovnikService : ITroskovnikService
         if (povecanje.HasValue)
             bodovi *= 1 + povecanje.Value;
 
-        // Opunomoćenik djeteta žrtve kaznenog djela →
-        //   Tbr. 4.8: zastupanje oštećenika = 50% od Tbr. 4
-        //   Dijete žrtve = 70% od Tbr. 4.8  ⇒ efektivno 35%
+        // Pravilnik NN 22/2022 br. 271 — obje stope idu od iste osnovice: nagrade koja bi
+        // odvjetniku pripadala za pojedinu radnju prema Tarifi. Ne množe se međusobno.
+        //   čl. 1 — obrana po sl. dužnosti / na teret proračuna → 50%
+        //   čl. 2 — opunomoćenik djeteta žrtve kaznenog djela  → 70%
+        // Uloge se isključuju (obrana okrivljenika vs. zastupanje djeteta žrtve), pa se
+        // primjenjuje najviše jedna stopa i kad zahtjev ipak stigne s obje zastavice.
+        // Novu proturječnu kombinaciju odbija TroskovnikRequestValidator.
         if (req.IsZastupnikDjeteta)
-            bodovi *= TarifaConstants.Tbr4t8Rate * TarifaConstants.ZastupnikDjetetaRate;
-
-        // Branitelj po službenoj dužnosti ili na teret proračunskih sredstava → 50%
-        if (req.IsPoSluzbenojDuznosti || req.IsNaTeretProracuna)
+            bodovi *= TarifaConstants.ZastupnikDjetetaRate;
+        else if (req.IsPoSluzbenojDuznosti || req.IsNaTeretProracuna)
             bodovi *= TarifaConstants.KazneniReductionRate;
 
         return ClampBodovi(bodovi, definicija);

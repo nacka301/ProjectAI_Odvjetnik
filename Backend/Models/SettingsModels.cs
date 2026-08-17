@@ -32,6 +32,12 @@ public class LawFirmResponse
     public string? Oib { get; set; }
     public string? Address { get; set; }
     public string? Iban { get; set; }
+
+    /// <summary>
+    /// Je li ured u sustavu PDV-a. Zadana vrijednost za novi troškovnik — korisnik je
+    /// i dalje može ručno promijeniti po dokumentu (vidi TroskovnikRequest.IsPdvUkljucen).
+    /// </summary>
+    public bool PdvObveznik { get; set; }
 }
 
 public class LawFirmUpdateRequest
@@ -41,6 +47,7 @@ public class LawFirmUpdateRequest
     public string? Oib { get; set; }
     public string? Address { get; set; }
     public string? Iban { get; set; }
+    public bool PdvObveznik { get; set; }
 }
 
 // ── Subscription ──
