@@ -2,11 +2,18 @@
  * E2E Valuation Text — standalone valuation page /valuation text mode
  */
 import { test, expect } from "@playwright/test";
-import { createLogger, setupRequestLogging } from "./helpers/test-utils";
+import {
+  createLogger,
+  setupRequestLogging,
+  LOCKED_MODULE_E2E_DISABLED,
+  LOCKED_MODULE_E2E_REASON,
+} from "./helpers/test-utils";
 
 const log = createLogger("VAL-TXT");
 
 test.describe("Valuation Text Mode", () => {
+  test.skip(LOCKED_MODULE_E2E_DISABLED, LOCKED_MODULE_E2E_REASON);
+
   test("evaluates property from text description", async ({ page }) => {
     test.setTimeout(15 * 60 * 1000); // 15 min for AI
     setupRequestLogging(page, log);

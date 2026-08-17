@@ -2,7 +2,12 @@
  * E2E Contract Analysis — kupoprodajni ugovor text mode
  */
 import { test, expect } from "@playwright/test";
-import { createLogger, setupRequestLogging } from "./helpers/test-utils";
+import {
+  createLogger,
+  setupRequestLogging,
+  LOCKED_MODULE_E2E_DISABLED,
+  LOCKED_MODULE_E2E_REASON,
+} from "./helpers/test-utils";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -15,6 +20,8 @@ const contractText = fs.readFileSync(
 ).slice(0, 2000); // Take first 2000 chars (raw contract only, not analysis result)
 
 test.describe("Contract Analysis (Ugovor)", () => {
+  test.skip(LOCKED_MODULE_E2E_DISABLED, LOCKED_MODULE_E2E_REASON);
+
   test("analyzes kupoprodajni ugovor text", async ({ page }) => {
     test.setTimeout(15 * 60 * 1000); // 15 min for AI
     setupRequestLogging(page, log);

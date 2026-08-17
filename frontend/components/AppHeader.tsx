@@ -8,6 +8,8 @@ import { createSupabaseBrowser } from "@/lib/supabase/client";
 import { useUserId } from "@/lib/useUserId";
 import { useCredits } from "@/lib/useCredits";
 import { useSubscription } from "@/lib/useSubscription";
+import { useIsAdmin } from "@/lib/useIsAdmin";
+import { isPathLocked } from "@/lib/modules";
 import React from "react";
 
 // ── Plan badge styling ──
@@ -42,7 +44,11 @@ function AppHeaderInner({ extraStart }: AppHeaderProps) {
   const subscription = useSubscription();
 
   // ── Admin detection (cookie set by middleware) ──
-  const isAdmin = typeof document !== "undefined" && document.cookie.split(";").some((c) => c.trim() === "is-admin=1");
+  const isAdmin = useIsAdmin();
+
+  // A link to a module still in development is a link to a redirect. Today this
+  // drops "Revizija"; /history and /postavke are not modules and always stay.
+  const visibleNavItems = navItems.filter(({ href }) => !isPathLocked(href, isAdmin));
 
   return (
     <header className="bg-slate-900 text-white">
@@ -77,7 +83,7 @@ function AppHeaderInner({ extraStart }: AppHeaderProps) {
 
           {extraStart}
 
-          {navItems.map(({ href, label, icon: Icon }) => {
+          {visibleNavItems.map(({ href, label, icon: Icon }) => {
             const isActive = pathname === href;
             return (
               <Link

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseMiddleware } from "@/lib/supabase/middleware";
 import { checkSecondFactor } from "@/lib/second-factor";
+import { findLockedModuleForPath } from "@/lib/modules";
 import {
   MFA_COOKIE,
   mfaCookieOptions,
@@ -117,6 +118,23 @@ export async function middleware(request: NextRequest) {
     denyUrl.pathname = "/";
     denyUrl.searchParams.delete("next");
     return NextResponse.redirect(denyUrl);
+  }
+
+  // ── Modules still in development ──
+  // The dashboard already hides these, but hiding a card does not stop anyone
+  // typing the route. This is the second of three layers; the one that actually
+  // matters is AdminGuardMiddleware on the backend, which refuses the module's
+  // API prefixes no matter how the page was reached.
+  //
+  // The module id travels along so the dashboard can say which module it was,
+  // rather than silently swallowing the navigation.
+  const lockedModule = findLockedModuleForPath(pathname);
+  if (lockedModule && !isAdmin) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/";
+    url.search = "";
+    url.searchParams.set("modul", lockedModule.id);
+    return NextResponse.redirect(url);
   }
 
   // Set is-admin cookie for client-side UI (navbar link)

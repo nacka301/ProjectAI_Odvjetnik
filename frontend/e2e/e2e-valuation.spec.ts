@@ -21,6 +21,10 @@
 import { test, expect, type Page } from "@playwright/test";
 import * as path from "path";
 import * as fs from "fs";
+import {
+  LOCKED_MODULE_E2E_DISABLED,
+  LOCKED_MODULE_E2E_REASON,
+} from "./helpers/test-utils";
 
 // ── Load JSON scenarios ──────────────────────────────────────────────
 
@@ -201,6 +205,8 @@ async function toggleCheckbox(page: Page, labelText: string, shouldBeChecked: bo
 // ═══════════════════════════════════════════════════════════════════════
 
 test.describe("E2E Procjena Nekretnina — Real Black-Box", () => {
+
+  test.skip(LOCKED_MODULE_E2E_DISABLED, LOCKED_MODULE_E2E_REASON);
 
   // Each test is independent — if one fails, others continue
   test.describe.configure({ mode: "serial" });
