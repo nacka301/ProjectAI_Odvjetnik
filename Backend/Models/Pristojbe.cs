@@ -195,10 +195,28 @@ public sealed record PristojbenaStavka(
 /// kojeg je i prije oslobođenje zadržavalo osnovu: „0,00 €" bez obrazloženja izgleda
 /// kao greška u računu.
 /// </summary>
+/// <param name="VpsUdio">
+/// Vrijednost predmeta spora na koju je pristojba stvarno obračunata. Razlikuje se od
+/// ukupnog VPS-a samo kad je dio suparničara oslobođen — čl. 12 Zakona o sudskim
+/// pristojbama.
+/// </param>
+/// <param name="NaTeretProtustranke">
+/// Čl. 13 — pristojba koju bi platila oslobođena stranka, razmjerno njezinu uspjehu u
+/// postupku, a koju plaća protivna stranka. Obveza nastaje po pravomoćnosti, pa iznos
+/// stoji zasebno i ne ulazi u ukupan trošak zastupane stranke. 0 kad se ne obračunava.
+/// </param>
+/// <param name="OslobodjenjeKategorija">
+/// Po čemu je stranka oslobođena (ključ iz <see cref="Backend.Models.OslobodjenjeKategorija"/>);
+/// null kad nije navedeno. Iznos ne mijenja — troškovnik mora pokazati osnovu, kao što
+/// svaka tarifna stavka nosi svoj pravni izvor.
+/// </param>
 public sealed record PristojbeRezultat(
     IReadOnlyList<PristojbenaStavka> Stavke,
     decimal Ukupno,
-    bool Oslobodjen)
+    bool Oslobodjen,
+    decimal VpsUdio = 0m,
+    decimal NaTeretProtustranke = 0m,
+    string? OslobodjenjeKategorija = null)
 {
     /// <summary>Prazan ishod — nijedna odabrana stavka ne povlači pristojbu.</summary>
     public static readonly PristojbeRezultat Prazan = new([], 0m, false);

@@ -185,6 +185,29 @@ public sealed class TroskovnikDocumentService
         AppendPristojbe(sb, resp);
         sb.AppendLine($"<tr><th>SVEUKUPNI TROŠAK</th><th style=\"text-align:right\">{FormatCurrency(resp.SveukupniTrosak)}</th></tr>");
 
+        // Čl. 13 — pristojba koju umjesto oslobođene stranke plaća protivna, razmjerno
+        // uspjehu. Stoji ISPOD sveukupnog troška jer u njega ne ulazi: obveza nastaje
+        // tek po pravomoćnosti i tereti drugu stranu.
+        if (resp.PristojbaNaTeretProtustranke > 0)
+        {
+            var cl13 =
+                $"{TarifaConstants.NazivZakonaOPristojbama}, čl. 13 — oslobođena stranka uspjela " +
+                $"u {resp.PostotakUspjeha:0.##} %; obveza nastaje po pravomoćnosti i ne ulazi u " +
+                "sveukupni trošak zastupane stranke";
+            sb.AppendLine($"<tr><td>Pristojba na teret protivne stranke<br/><span style=\"font-size:10px;color:#555\">{System.Net.WebUtility.HtmlEncode(cl13)}</span></td><td style=\"text-align:right\">{FormatCurrency(resp.PristojbaNaTeretProtustranke)}</td></tr>");
+        }
+
+        // Čl. 16 uz suparničarstvo — zahtjevi koje ovaj troškovnik ne pokriva. Bez ovog
+        // retka izgledalo bi kao da je jedna pristojba pokrila sve zahtjeve.
+        foreach (var zahtjev in resp.ZahtjeviInformativno)
+        {
+            var opis = string.IsNullOrWhiteSpace(zahtjev.Opis) ? "zahtjev" : zahtjev.Opis;
+            var cl16 =
+                $"{TarifaConstants.NazivZakonaOPristojbama}, čl. 16 — kod suparničarstva se uzima " +
+                "vrijednost svakog pojedinog zahtjeva, pa se za ovaj plaća zasebna pristojba";
+            sb.AppendLine($"<tr><td>Nije obuhvaćeno: {System.Net.WebUtility.HtmlEncode(opis)}<br/><span style=\"font-size:10px;color:#555\">{System.Net.WebUtility.HtmlEncode(cl16)}</span></td><td style=\"text-align:right\">{FormatCurrency(zahtjev.Iznos)}</td></tr>");
+        }
+
         // Tbr. 40. toč. 1, drugi odlomak — "Iznos povišene nagrade dijeli se na jednake
         // dijelove prema broju branjenika, odnosno zastupanih osoba."
         if (resp.BrojZastupanihOsoba > 1)
@@ -217,12 +240,18 @@ public sealed class TroskovnikDocumentService
     /// </summary>
     private void AppendPristojbe(StringBuilder sb, TroskovnikResponse resp)
     {
-        var oslobodjeno = resp.IsOslobodjenPristojbi ? " (oslobođeno)" : "";
+        // Oslobođenje se označava uz svaki redak, a osnova (čl. 10 ili točka čl. 11) uz
+        // oznaku — "oslobođeno" bez navođenja po čemu ne da se provjeriti.
+        var oslobodjeno = (resp.IsOslobodjenPristojbi || resp.BrojOslobodjenihOsoba > 0)
+            ? string.IsNullOrEmpty(resp.OslobodjenjeNaziv)
+                ? " (oslobođeno)"
+                : $" (oslobođeno — {resp.OslobodjenjeNaziv})"
+            : "";
 
         if (resp.PristojbeneStavke.Count == 0)
         {
             var razlog = $"{TarifaConstants.NazivUredbeOPristojbama} za odabrane radnje ne propisuje pristojbu";
-            sb.AppendLine($"<tr><td>Sudska pristojba{oslobodjeno}<br/><span style=\"font-size:10px;color:#555\">{System.Net.WebUtility.HtmlEncode(razlog)}</span></td><td style=\"text-align:right\">{FormatCurrency(0m)}</td></tr>");
+            sb.AppendLine($"<tr><td>Sudska pristojba{System.Net.WebUtility.HtmlEncode(oslobodjeno)}<br/><span style=\"font-size:10px;color:#555\">{System.Net.WebUtility.HtmlEncode(razlog)}</span></td><td style=\"text-align:right\">{FormatCurrency(0m)}</td></tr>");
             return;
         }
 
@@ -239,7 +268,37 @@ public sealed class TroskovnikDocumentService
         }
 
         if (resp.PristojbeneStavke.Count > 1)
-            sb.AppendLine($"<tr><td>Ukupno sudske pristojbe{oslobodjeno}</td><td style=\"text-align:right\">{FormatCurrency(resp.SudskaPristojba)}</td></tr>");
+            sb.AppendLine($"<tr><td>Ukupno sudske pristojbe{System.Net.WebUtility.HtmlEncode(oslobodjeno)}</td><td style=\"text-align:right\">{FormatCurrency(resp.SudskaPristojba)}</td></tr>");
+
+        AppendOsnovicaPristojbe(sb, resp);
+    }
+
+    /// <summary>
+    /// Napomena o tome NA ŠTO je pristojba obračunata: zakonski VPS kad se razlikuje od
+    /// unesenog (čl. 14–25) i dio vrijednosti kad je dio suparničara oslobođen (čl. 12).
+    ///
+    /// Bez toga na ispisu stoji pristojba koja ne odgovara vrijednosti spora, a nigdje
+    /// ne piše zašto.
+    /// </summary>
+    private void AppendOsnovicaPristojbe(StringBuilder sb, TroskovnikResponse resp)
+    {
+        var napomene = new List<string>();
+
+        if (resp.VpsPrilagodjen && !string.IsNullOrEmpty(resp.VpsNapomena))
+            napomene.Add(resp.VpsNapomena);
+
+        // Čl. 12 — neoslobođeni plaćaju samo prema svom dijelu vrijednosti predmeta spora.
+        if (resp.BrojOslobodjenihOsoba > 0 && resp.BrojOslobodjenihOsoba < resp.BrojZastupanihOsoba)
+            napomene.Add(
+                $"{TarifaConstants.NazivZakonaOPristojbama}, čl. 12 — obračunato na dio " +
+                $"vrijednosti predmeta spora od {FormatCurrency(resp.PristojbaVpsUdio)}, " +
+                $"jer je {resp.BrojOslobodjenihOsoba} od {resp.BrojZastupanihOsoba} osoba oslobođeno.");
+
+        if (napomene.Count == 0)
+            return;
+
+        var tekst = string.Join(" ", napomene);
+        sb.AppendLine($"<tr><td colspan=\"2\" style=\"font-size:10px;color:#555\">{System.Net.WebUtility.HtmlEncode(tekst)}</td></tr>");
     }
 
     /// <summary>

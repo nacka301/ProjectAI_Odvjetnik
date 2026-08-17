@@ -149,6 +149,75 @@ public sealed class TroskovnikRequest
     public List<string> PristojbeIskljucene { get; set; } = [];
 
     /// <summary>
+    /// Po kojoj je točki čl. 11 stranka oslobođena. Vidi <see cref="Models.OslobodjenjeKategorija"/>.
+    /// Null znači „oslobođena, bez navedene osnove" — staro ponašanje golog prekidača.
+    /// </summary>
+    [JsonPropertyName("oslobodjenje_kategorija")]
+    public string? OslobodjenjeKategorija { get; set; }
+
+    /// <summary>
+    /// Čl. 12 — koliko je od <see cref="BrojZastupanihOsoba"/> oslobođeno. Zadano 0.
+    /// Kad ih je oslobođeno koliko i ukupno, pristojba je 0 kao i kod golog prekidača.
+    /// </summary>
+    [JsonPropertyName("broj_oslobodjenih_osoba")]
+    public int BrojOslobodjenihOsoba { get; set; }
+
+    /// <summary>
+    /// Čl. 12 — dio vrijednosti predmeta spora koji otpada na neoslobođene osobe.
+    /// Null znači da se dio ne može utvrditi, pa se VPS dijeli brojem osoba (st. 2).
+    /// </summary>
+    [JsonPropertyName("udio_u_vps")]
+    public decimal? UdioUVps { get; set; }
+
+    /// <summary>
+    /// Čl. 13 — omjer u kojem je oslobođena stranka uspjela u postupku, 0–100.
+    /// Null kad se ne obračunava.
+    /// </summary>
+    [JsonPropertyName("postotak_uspjeha")]
+    public decimal? PostotakUspjeha { get; set; }
+
+    // ── Vrijednost predmeta spora po Zakonu o sudskim pristojbama ──
+
+    /// <summary>
+    /// Vrsta postupka po čl. 15–25. Vidi <see cref="Models.VrstaPostupka"/>.
+    /// Zadano opće pravilo iz čl. 14 — vrijedi uneseni iznos.
+    /// </summary>
+    [JsonPropertyName("vrsta_postupka")]
+    public string VrstaPostupka { get; set; } = Models.VrstaPostupka.Opci;
+
+    /// <summary>Čl. 15 — mjesečno davanje za uzdržavanje; vrijednost je zbroj za tri mjeseca.</summary>
+    [JsonPropertyName("uzdrzavanje_mjesecno")]
+    public decimal UzdrzavanjeMjesecno { get; set; }
+
+    /// <summary>Čl. 16 — pojedinačni zahtjevi iz tužbe. Prazno znači „vrijedi vrijednost_spora".</summary>
+    [JsonPropertyName("zahtjevi")]
+    public List<ZahtjevStavka> Zahtjevi { get; set; } = [];
+
+    /// <summary>Čl. 16 — kako se zahtjevi sastavljaju. Vidi <see cref="Models.ZahtjeviNacin"/>.</summary>
+    [JsonPropertyName("zahtjevi_nacin")]
+    public string? ZahtjeviNacin { get; set; }
+
+    /// <summary>Čl. 24 — po čemu se plaća pristojba na pravni lijek. Vidi <see cref="Models.PravniLijek"/>.</summary>
+    [JsonPropertyName("pravni_lijek")]
+    public string PravniLijek { get; set; } = Models.PravniLijek.Nema;
+
+    /// <summary>
+    /// Čl. 24 — vrijednost pobijanog dijela odnosno iznos troškova i sporednih
+    /// potraživanja. Obavezan uz `pobijani_dio` i `samo_troskovi`.
+    /// </summary>
+    [JsonPropertyName("pravni_lijek_iznos")]
+    public decimal PravniLijekIznos { get; set; }
+
+    /// <summary>
+    /// Prenosi zakonski VPS i na odvjetničku nagradu po Tbr. 7. toč. 1.
+    ///
+    /// Zadano false: čl. 14–26 Zakona pisani su za sudske pristojbe, ne za Tarifu, pa
+    /// se zakonski iznos na nagradu prenosi samo kad odvjetnik to izričito odabere.
+    /// </summary>
+    [JsonPropertyName("vps_primijeni_na_nagradu")]
+    public bool VpsPrimijeniNaNagradu { get; set; }
+
+    /// <summary>
     /// Broj osoba koje odvjetnik brani ili zastupa u istom postupku (Tbr. 40. toč. 1).
     /// Vrijednosti manje od 2 znače da nema povišenja.
     /// </summary>
@@ -289,6 +358,25 @@ public sealed class RucnaPristojbaRequest
 
     [JsonPropertyName("kolicina")]
     public int Kolicina { get; set; } = 1;
+}
+
+/// <summary>Čl. 16 — jedan od više zahtjeva iz iste tužbe.</summary>
+public sealed class ZahtjevStavka
+{
+    /// <summary>Vrijednost ovog zahtjeva u EUR.</summary>
+    [JsonPropertyName("iznos")]
+    public decimal Iznos { get; set; }
+
+    /// <summary>Opis zahtjeva, samo za ispis.</summary>
+    [JsonPropertyName("opis")]
+    public string? Opis { get; set; }
+
+    /// <summary>
+    /// Uz način „zasebno" (suparničarstvo) — zahtjev koji ovaj troškovnik pokriva.
+    /// Točno jedan zahtjev mora ga nositi; za ostale ide posebna pristojba.
+    /// </summary>
+    [JsonPropertyName("primarni")]
+    public bool Primarni { get; set; }
 }
 
 public sealed class TroskovnikParty

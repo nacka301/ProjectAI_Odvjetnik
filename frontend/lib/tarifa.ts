@@ -557,6 +557,10 @@ export interface ProvjeraUlaza {
   osnovicaTbr7?: OsnovicaTbr7;
   razinaSuda?: RazinaSuda | null;
   tbr45Nacin?: Tbr45Nacin | null;
+  /** Zakon o sudskim pristojbama, čl. 14–26. Izostavljeno u kaznenom troškovniku. */
+  vps?: VpsUlaz;
+  /** Zakon o sudskim pristojbama, čl. 11–13. */
+  oslobodjenje?: OslobodjenjeUlaz;
 }
 
 /**
@@ -605,6 +609,100 @@ export function provjeriZahtjev(
           "postoci iz Tbr. 8. i Tbr. 9. na iznos iz Tbr. 45, pa sustav ne smije pretpostaviti.",
       );
     }
+  }
+
+  // ── Vrijednost predmeta spora — Zakon o sudskim pristojbama, čl. 14–26 ──
+  // Zrcali provjere iz `VpsCalculator.Razrijesi`.
+  if (ulaz.vps) {
+    greske.push(...provjeriVps(ulaz.vps));
+  }
+
+  // ── Oslobođenja — čl. 11–13 ──
+  if (ulaz.oslobodjenje) {
+    greske.push(...provjeriOslobodjenje(ulaz.oslobodjenje));
+  }
+
+  return greske;
+}
+
+function provjeriVps(vps: VpsUlaz): string[] {
+  const greske: string[] = [];
+
+  if (!(vps.vrstaPostupka in VRSTA_POSTUPKA_PRAVILA)) {
+    greske.push(`Nepoznata vrsta postupka: "${vps.vrstaPostupka}".`);
+    return greske;
+  }
+
+  if (
+    VRSTA_POSTUPKA_PRAVILA[vps.vrstaPostupka].nacin === "uzdrzavanje" &&
+    !(vps.uzdrzavanjeMjesecno && vps.uzdrzavanjeMjesecno > 0)
+  ) {
+    greske.push(
+      "U postupcima radi uzdržavanja vrijednost predmeta spora je zbroj davanja za tri " +
+        "mjeseca (čl. 15), pa je potreban mjesečni iznos davanja.",
+    );
+  }
+
+  const zahtjevi = vps.zahtjevi ?? [];
+  if (zahtjevi.length > 0) {
+    if (!vps.zahtjeviNacin) {
+      greske.push(
+        "Uneseno je više zahtjeva, a nije odabrano kako se sastavljaju. Čl. 16 razlikuje " +
+          "zbroj (isti tuženik), zasebnu procjenu (suparničarstvo) i veći od povezanih zahtjeva.",
+      );
+    } else if (vps.zahtjeviNacin === ZAHTJEVI_NACIN.Zasebno) {
+      const oznaceni = zahtjevi.filter((z) => z.primarni).length;
+      if (oznaceni !== 1) {
+        greske.push(
+          "Uz suparničarstvo (čl. 16) svaki se zahtjev procjenjuje zasebno, pa se vrijednosti " +
+            `ne zbrajaju. Označite točno jedan zahtjev koji ovaj troškovnik pokriva — označeno ih je ${oznaceni}.`,
+        );
+      }
+    }
+
+    if (zahtjevi.some((z) => z.iznos < 0)) {
+      greske.push("Vrijednost pojedinog zahtjeva po čl. 16 ne može biti negativna.");
+    }
+  }
+
+  const lijek = vps.pravniLijek ?? PRAVNI_LIJEK.Nema;
+  if (
+    (lijek === PRAVNI_LIJEK.PobijaniDio || lijek === PRAVNI_LIJEK.SamoTroskovi) &&
+    !(vps.pravniLijekIznos && vps.pravniLijekIznos > 0)
+  ) {
+    greske.push(
+      lijek === PRAVNI_LIJEK.PobijaniDio
+        ? "Kad se pobija samo dio odluke, pristojba se plaća prema vrijednosti pobijanog dijela (čl. 24), pa je taj iznos potreban."
+        : "Kad se pravni lijek podnosi samo protiv odluke o troškovima ili sporednim potraživanjima, pristojba se plaća prema iznosu troškova (čl. 24), pa je taj iznos potreban.",
+    );
+  }
+
+  return greske;
+}
+
+function provjeriOslobodjenje(o: OslobodjenjeUlaz): string[] {
+  const greske: string[] = [];
+  const brojOsoba = Math.max(1, o.brojOsoba);
+
+  if (o.brojOslobodjenih < 0) {
+    greske.push("Broj oslobođenih osoba ne može biti negativan.");
+  } else if (o.brojOslobodjenih > brojOsoba) {
+    greske.push(
+      `Oslobođeno je ${o.brojOslobodjenih} osoba, a zastupa se ${brojOsoba}. Čl. 12 dijeli ` +
+        "vrijednost predmeta spora među osobama koje podnesak podnose, pa oslobođenih ne može " +
+        "biti više nego ukupno.",
+    );
+  }
+
+  if (o.udioVps !== null && o.udioVps !== undefined && o.udioVps < 0) {
+    greske.push(
+      "Dio vrijednosti predmeta spora koji otpada na neoslobođene osobe (čl. 12) ne može biti negativan.",
+    );
+  }
+
+  const postotak = o.postotakUspjeha;
+  if (postotak !== null && postotak !== undefined && (postotak < 0 || postotak > 100)) {
+    greske.push(`Omjer uspjeha po čl. 13 iznosi ${postotak} %. Dopušteno je 0–100 %.`);
   }
 
   return greske;
@@ -1255,12 +1353,21 @@ export interface PristojbeUlaz {
   datumPokretanjaUpravnogSpora?: string | null;
   dodane?: RucnaPristojba[];
   iskljucene?: string[];
+  /**
+   * Oslobođenja po Zakonu o sudskim pristojbama, čl. 11–13. Kad izostane, vrijedi
+   * samo grubi prekidač `oslobodjen`.
+   */
+  oslobodjenje?: OslobodjenjeUlaz;
 }
 
 export interface PristojbeRezultat {
   stavke: PristojbenaStavka[];
   ukupno: number;
   oslobodjen: boolean;
+  /** Čl. 12 — dio VPS-a na koji je pristojba stvarno obračunata. */
+  vpsUdio: number;
+  /** Čl. 13 — pristojba koju umjesto oslobođene stranke plaća protivna, razmjerno uspjehu. */
+  naTeretProtustranke: number;
 }
 
 function prijeNoveUredbe(datum: string | null | undefined): boolean {
@@ -1309,6 +1416,15 @@ function pravniIzvor(odredba: PristojbenaOdredba, verzija: UredbaVerzija): strin
  * tužba zbog smetanja posjeda i dalje su jedan podnesak.
  */
 export function obracunajPristojbe(ulaz: PristojbeUlaz): PristojbeRezultat {
+  // Čl. 11–13. Kad oslobođenje nije prošireno, stari prekidač i dalje vrijedi.
+  const oslobodjenje: OslobodjenjeUlaz = ulaz.oslobodjenje ?? {
+    ...OSLOBODJENJE_NEMA,
+    oslobodjen: ulaz.oslobodjen,
+  };
+
+  const potpuno = sviOslobodjeni(oslobodjenje);
+  const vpsUdio = vpsNeoslobodjenih(ulaz.vrijednostSpora, oslobodjenje);
+
   const iskljucene = new Set(ulaz.iskljucene ?? []);
   const vidjene = new Set<string>();
   const radnje: { odredbaId: string; itemId: string | null; rucna: RucnaPristojba | null }[] = [];
@@ -1338,9 +1454,10 @@ export function obracunajPristojbe(ulaz: PristojbeUlaz): PristojbeRezultat {
     // Sučelje nudi samo ključeve iz tablice, pa je ovo obrana od nemogućeg stanja.
     if (!odredba) continue;
 
-    const osnovica = rucna?.osnovica ?? ulaz.vrijednostSpora;
+    // Čl. 12 umanjuje OSNOVICU, ne gotov iznos — Tar. br. 1 je progresivan.
+    const osnovica = rucna?.osnovica ?? vpsUdio;
     const kolicina = Math.max(1, rucna?.kolicina ?? 1);
-    const poJedinici = ulaz.oslobodjen ? 0 : izracunajPristojbu(odredbaId, osnovica, verzija);
+    const poJedinici = potpuno ? 0 : izracunajPristojbu(odredbaId, osnovica, verzija);
 
     stavke.push({
       odredba_id: odredbaId,
@@ -1363,10 +1480,33 @@ export function obracunajPristojbe(ulaz: PristojbeUlaz): PristojbeRezultat {
       (REDOSLIJED.get(b.odredba_id) ?? Number.MAX_SAFE_INTEGER),
   );
 
+  // Čl. 13 — pristojba koju bi platili oslobođeni, na istim odredbama, razmjerno
+  // njihovu uspjehu. Ne ulazi u `ukupno`: plaća je protivna stranka, po pravomoćnosti.
+  const postotak = oslobodjenje.postotakUspjeha ?? 0;
+  const vpsOslobodjenih = ulaz.vrijednostSpora - vpsUdio;
+
+  let naTeretProtustranke = 0;
+  if (postotak > 0 && vpsOslobodjenih > 0) {
+    const pristojbaOslobodjenih = radnje.reduce((zbroj, { odredbaId, itemId, rucna }) => {
+      const verzija = razrijesiVerziju(odredbaId, itemId, ulaz);
+      if (!pristojbenaOdredba(odredbaId, verzija)) return zbroj;
+
+      const osnovica = rucna?.osnovica ?? vpsOslobodjenih;
+      const kolicina = Math.max(1, rucna?.kolicina ?? 1);
+      return zbroj + izracunajPristojbu(odredbaId, osnovica, verzija) * kolicina;
+    }, 0);
+
+    naTeretProtustranke = zaokruziNovac(
+      (pristojbaOslobodjenih * Math.min(Math.max(postotak, 0), 100)) / 100,
+    );
+  }
+
   return {
     stavke,
     ukupno: stavke.reduce((zbroj, s) => zbroj + s.iznos, 0),
-    oslobodjen: ulaz.oslobodjen,
+    oslobodjen: potpuno,
+    vpsUdio,
+    naTeretProtustranke,
   };
 }
 
@@ -1377,3 +1517,463 @@ export function obracunajPristojbe(ulaz: PristojbeUlaz): PristojbeRezultat {
 export function objasnjenjeBezPristojbe(): string {
   return "Uredba NN 50/2026 za odabrane radnje ne propisuje sudsku pristojbu.";
 }
+
+// ── Vrijednost predmeta spora — Zakon o sudskim pristojbama, čl. 14–26 ──
+//
+// Za niz postupaka VPS nije stvar unosa nego zakonske odredbe: smetanje posjeda je
+// uvijek 663,61 €, razvod isto, poništenje arbitražnog pravorijeka nikad ispod
+// 6.634,14 €. Zrcali `VpsCalculator.Razrijesi`.
+//
+// Rezultat obavezno vrijedi za SUDSKU PRISTOJBU. Na odvjetničku nagradu po
+// Tbr. 7. toč. 1 prenosi se samo kad korisnik to izričito odabere — čl. 14–26 pisani
+// su za pristojbe, ne za Tarifu.
+
+const NAZIV_ZAKONA_O_PRISTOJBAMA = "Zakon o sudskim pristojbama (NN 118/18, 51/23)";
+
+/** Iznosi iz čl. 19–25; svaki se pojavljuje na više mjesta. */
+export const VPS_IZNOSI = {
+  /** čl. 19 (minimum), čl. 25 (fiksno), čl. 21 st. 5 i 6 (maksimum). */
+  Prag1327: 1_327.22,
+  /** čl. 21 st. 2, 3 i 4 te osiguranje dokaza. */
+  Prag663: 663.61,
+  /** čl. 21 st. 1 — otkaz najma ili zakupa. */
+  Prag2654: 2_654.45,
+  /** čl. 20 st. 1 i 2 — arbitraža. */
+  Prag6634: 6_634.14,
+  /** čl. 15 — „zbroj davanja za tri mjeseca". */
+  UzdrzavanjeMjeseci: 3,
+} as const;
+
+export const VRSTA_POSTUPKA = {
+  Opci: "opci",
+  NenovcaniZahtjev: "nenovcani_zahtjev",
+  NeutvrdivaVrijednost: "neutvrdiva_vrijednost",
+  OtkazNajmaZakupa: "otkaz_najma_zakupa",
+  SmetanjePosjeda: "smetanje_posjeda",
+  OcinstvoMajcinstvo: "ocinstvo_majcinstvo",
+  Brak: "brak",
+  RedPrvenstvaOvrha: "red_prvenstva_ovrha",
+  PrethodnoPravnoPitanje: "prethodno_pravno_pitanje",
+  OsiguranjeDokaza: "osiguranje_dokaza",
+  Uzdrzavanje: "uzdrzavanje",
+  DiobaImovine: "dioba_imovine",
+  Nasljedivanje: "nasljedivanje",
+  PonistenjePravorijeka: "ponistenje_pravorijeka",
+  PrestanakArbitraze: "prestanak_arbitraze",
+} as const;
+
+export type VrstaPostupka = (typeof VRSTA_POSTUPKA)[keyof typeof VRSTA_POSTUPKA];
+
+export type VpsNacin = "slobodan" | "fiksan" | "minimalan" | "maksimalan" | "uzdrzavanje";
+
+export interface VpsPravilo {
+  nacin: VpsNacin;
+  /** Iznos iz Zakona; null kod slobodne vrijednosti i uzdržavanja. */
+  iznos: number | null;
+  clanak: string;
+  naziv: string;
+  /** Što Zakon kaže da treba upisati kad ne propisuje iznos (čl. 17, 18). */
+  naputak?: string;
+}
+
+/** Tablica iz čl. 15–25, doslovno. Zrcali `VrstaPostupka.Pravila`. */
+export const VRSTA_POSTUPKA_PRAVILA: Record<VrstaPostupka, VpsPravilo> = {
+  [VRSTA_POSTUPKA.Opci]: {
+    nacin: "slobodan",
+    iznos: null,
+    clanak: "čl. 14",
+    naziv: "Opće pravilo — vrijednost u vrijeme podnošenja tužbe",
+  },
+  [VRSTA_POSTUPKA.NenovcaniZahtjev]: {
+    nacin: "minimalan",
+    iznos: VPS_IZNOSI.Prag1327,
+    clanak: "čl. 19",
+    naziv: "Nenovčani zahtjev (činjenje, trpljenje, utvrđenje prava, istinitost isprave)",
+  },
+  [VRSTA_POSTUPKA.NeutvrdivaVrijednost]: {
+    nacin: "fiksan",
+    iznos: VPS_IZNOSI.Prag1327,
+    clanak: "čl. 25",
+    naziv: "Vrijednost se ne može utvrditi",
+  },
+  [VRSTA_POSTUPKA.OtkazNajmaZakupa]: {
+    nacin: "minimalan",
+    iznos: VPS_IZNOSI.Prag2654,
+    clanak: "čl. 21 st. 1",
+    naziv: "Otkaz ugovora o najmu ili zakupu",
+    naputak: "Upisuje se jednogodišnja najamnina odnosno zakupnina.",
+  },
+  [VRSTA_POSTUPKA.SmetanjePosjeda]: {
+    nacin: "fiksan",
+    iznos: VPS_IZNOSI.Prag663,
+    clanak: "čl. 21 st. 2",
+    naziv: "Smetanje posjeda",
+  },
+  [VRSTA_POSTUPKA.OcinstvoMajcinstvo]: {
+    nacin: "fiksan",
+    iznos: VPS_IZNOSI.Prag663,
+    clanak: "čl. 21 st. 3",
+    naziv: "Utvrđivanje ili osporavanje očinstva odnosno majčinstva",
+  },
+  [VRSTA_POSTUPKA.Brak]: {
+    nacin: "fiksan",
+    iznos: VPS_IZNOSI.Prag663,
+    clanak: "čl. 21 st. 4",
+    naziv: "Brak — postojanje, nepostojanje, poništaj, razvod",
+  },
+  [VRSTA_POSTUPKA.RedPrvenstvaOvrha]: {
+    nacin: "maksimalan",
+    iznos: VPS_IZNOSI.Prag1327,
+    clanak: "čl. 21 st. 5",
+    naziv: "Red prvenstva tražbina u ovrsi",
+    naputak: "Upisuje se visina potraživanja; iznad zakonske granice se ne obračunava.",
+  },
+  [VRSTA_POSTUPKA.PrethodnoPravnoPitanje]: {
+    nacin: "maksimalan",
+    iznos: VPS_IZNOSI.Prag1327,
+    clanak: "čl. 21 st. 6",
+    naziv: "Prethodna pravna pitanja bez restitucije ili naknade",
+  },
+  [VRSTA_POSTUPKA.OsiguranjeDokaza]: {
+    nacin: "fiksan",
+    iznos: VPS_IZNOSI.Prag663,
+    clanak: "čl. 21 st. 3",
+    naziv: "Osiguranje dokaza prije pokretanja parnice",
+  },
+  [VRSTA_POSTUPKA.Uzdrzavanje]: {
+    nacin: "uzdrzavanje",
+    iznos: null,
+    clanak: "čl. 15",
+    naziv: "Uzdržavanje",
+    naputak: "Upisuje se mjesečno davanje; vrijednost je zbroj davanja za tri mjeseca.",
+  },
+  [VRSTA_POSTUPKA.DiobaImovine]: {
+    nacin: "slobodan",
+    iznos: null,
+    clanak: "čl. 17",
+    naziv: "Dioba imovine",
+    naputak: "Upisuje se vrijednost dijela koji tužitelj traži izdvojiti, ne cijele imovine.",
+  },
+  [VRSTA_POSTUPKA.Nasljedivanje]: {
+    nacin: "slobodan",
+    iznos: null,
+    clanak: "čl. 18",
+    naziv: "Nasljeđivanje cijele ostavine",
+    naputak: "Upisuje se vrijednost nasljednog dijela, ne cijele ostavine.",
+  },
+  [VRSTA_POSTUPKA.PonistenjePravorijeka]: {
+    nacin: "minimalan",
+    iznos: VPS_IZNOSI.Prag6634,
+    clanak: "čl. 20 st. 1",
+    naziv: "Poništenje pravorijeka arbitraže",
+    naputak: "Upisuje se dosuđeni iznos.",
+  },
+  [VRSTA_POSTUPKA.PrestanakArbitraze]: {
+    nacin: "fiksan",
+    iznos: VPS_IZNOSI.Prag6634,
+    clanak: "čl. 20 st. 2",
+    naziv: "Prestanak važnosti ugovora o arbitraži",
+  },
+};
+
+/** Naziv s člankom, za padajući izbornik. */
+export const VRSTA_POSTUPKA_LABELE: Record<VrstaPostupka, string> = Object.fromEntries(
+  Object.entries(VRSTA_POSTUPKA_PRAVILA).map(([k, p]) => [k, `${p.clanak} — ${p.naziv}`]),
+) as Record<VrstaPostupka, string>;
+
+/** Čl. 16 — kako se sastavlja vrijednost kad tužba sadrži više zahtjeva. */
+export const ZAHTJEVI_NACIN = {
+  /** Više zahtjeva protiv istog tuženika → zbroj. */
+  Zbroj: "zbroj",
+  /** Suparničarstvo → svaki zahtjev zasebno; troškovnik pokriva označeni. */
+  Zasebno: "zasebno",
+  /** Povezani (eventualni) zahtjevi → onaj veće vrijednosti. */
+  Eventualni: "eventualni",
+} as const;
+
+export type ZahtjeviNacin = (typeof ZAHTJEVI_NACIN)[keyof typeof ZAHTJEVI_NACIN];
+
+export const ZAHTJEVI_NACIN_LABELE: Record<ZahtjeviNacin, string> = {
+  [ZAHTJEVI_NACIN.Zbroj]: "Zbroj — više zahtjeva protiv istog tuženika (čl. 16 st. 1)",
+  [ZAHTJEVI_NACIN.Zasebno]: "Zasebno — suparničarstvo, svaki zahtjev ima svoju pristojbu (čl. 16 st. 2)",
+  [ZAHTJEVI_NACIN.Eventualni]: "Veći od povezanih — eventualni zahtjevi (čl. 16 st. 3)",
+};
+
+/** Čl. 24 — po kojoj se vrijednosti plaća pristojba na pravni lijek. */
+export const PRAVNI_LIJEK = {
+  Nema: "nema",
+  CijelaOdluka: "cijela_odluka",
+  PobijaniDio: "pobijani_dio",
+  SamoTroskovi: "samo_troskovi",
+} as const;
+
+export type PravniLijek = (typeof PRAVNI_LIJEK)[keyof typeof PRAVNI_LIJEK];
+
+export const PRAVNI_LIJEK_LABELE: Record<PravniLijek, string> = {
+  [PRAVNI_LIJEK.Nema]: "Nije pravni lijek",
+  [PRAVNI_LIJEK.CijelaOdluka]: "Pobija se cijela odluka — vrijednost iz prvostupanjskog postupka",
+  [PRAVNI_LIJEK.PobijaniDio]: "Pobija se samo dio odluke — vrijednost pobijanog dijela",
+  [PRAVNI_LIJEK.SamoTroskovi]: "Samo protiv odluke o troškovima — iznos troškova",
+};
+
+export interface VpsZahtjev {
+  iznos: number;
+  opis?: string;
+  /** Uz „zasebno" — zahtjev koji ovaj troškovnik pokriva. */
+  primarni?: boolean;
+}
+
+export interface VpsUlaz {
+  vrijednostSpora: number;
+  vrstaPostupka: VrstaPostupka;
+  uzdrzavanjeMjesecno?: number;
+  zahtjevi?: VpsZahtjev[];
+  zahtjeviNacin?: ZahtjeviNacin | null;
+  pravniLijek?: PravniLijek;
+  pravniLijekIznos?: number;
+}
+
+export interface VpsRezultat {
+  vps: number;
+  uneseni: number;
+  vrstaPostupka: VrstaPostupka;
+  pravniIzvor: string;
+  prilagodjen: boolean;
+  napomena: string | null;
+  /** Čl. 16 uz „zasebno" — zahtjevi koje ovaj troškovnik ne pokriva. */
+  ostaliZahtjevi: VpsZahtjev[];
+}
+
+function novac(iznos: number): string {
+  return `${iznos.toLocaleString("hr-HR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })} €`;
+}
+
+/**
+ * Razrješava vrijednost predmeta spora, tri koraka redom: čl. 16 (od čega se sastoji),
+ * pravilo vrste postupka (kako je Zakon ograničava), čl. 24 (koji se broj uzima kod
+ * pravnog lijeka). Vraća `null` kad podatak nedostaje — tada `provjeriZahtjev` vraća
+ * poruku, a sučelje ne prikazuje iznos. Zrcali `VpsCalculator.Razrijesi`.
+ */
+export function razrijesiVps(ulaz: VpsUlaz): VpsRezultat | null {
+  const osnovni = osnovniVps(ulaz);
+  if (osnovni === null) return null;
+
+  const pravilo = VRSTA_POSTUPKA_PRAVILA[ulaz.vrstaPostupka] ?? VRSTA_POSTUPKA_PRAVILA[VRSTA_POSTUPKA.Opci];
+  const primijenjeno = primijeniPravilo(pravilo, osnovni.vps, ulaz);
+  if (primijenjeno === null) return null;
+
+  const konacno = primijeniPravniLijek(ulaz, primijenjeno);
+  if (konacno === null) return null;
+
+  return {
+    vps: konacno.vps,
+    uneseni: osnovni.vps,
+    vrstaPostupka: ulaz.vrstaPostupka,
+    pravniIzvor: konacno.izvor,
+    prilagodjen: konacno.vps !== osnovni.vps,
+    napomena: konacno.napomena,
+    ostaliZahtjevi: osnovni.ostali,
+  };
+}
+
+function osnovniVps(ulaz: VpsUlaz): { vps: number; ostali: VpsZahtjev[] } | null {
+  const zahtjevi = ulaz.zahtjevi ?? [];
+  if (zahtjevi.length === 0) return { vps: ulaz.vrijednostSpora, ostali: [] };
+
+  switch (ulaz.zahtjeviNacin) {
+    case ZAHTJEVI_NACIN.Zbroj:
+      return { vps: zahtjevi.reduce((s, z) => s + z.iznos, 0), ostali: [] };
+
+    case ZAHTJEVI_NACIN.Eventualni:
+      return { vps: Math.max(...zahtjevi.map((z) => z.iznos)), ostali: [] };
+
+    case ZAHTJEVI_NACIN.Zasebno: {
+      const primarni = zahtjevi.filter((z) => z.primarni);
+      if (primarni.length !== 1) return null;
+      return { vps: primarni[0].iznos, ostali: zahtjevi.filter((z) => !z.primarni) };
+    }
+
+    default:
+      return null; // način nije odabran
+  }
+}
+
+function primijeniPravilo(
+  pravilo: VpsPravilo,
+  uneseni: number,
+  ulaz: VpsUlaz,
+): { vps: number; napomena: string | null; izvor: string } | null {
+  const izvor = `${NAZIV_ZAKONA_O_PRISTOJBAMA}, ${pravilo.clanak} — ${pravilo.naziv}`;
+
+  switch (pravilo.nacin) {
+    case "fiksan": {
+      const iznos = pravilo.iznos!;
+      const napomena =
+        uneseni === iznos
+          ? null
+          : `${pravilo.naziv}: Zakon propisuje vrijednost predmeta spora od ${novac(iznos)}, ` +
+            `pa uneseni iznos od ${novac(uneseni)} nije primijenjen (${pravilo.clanak}).`;
+      return { vps: iznos, napomena, izvor };
+    }
+
+    case "minimalan": {
+      const granica = pravilo.iznos!;
+      if (uneseni >= granica) return { vps: uneseni, napomena: null, izvor };
+      return {
+        vps: granica,
+        napomena:
+          `${pravilo.naziv}: vrijednost predmeta spora ne može biti niža od ${novac(granica)}, ` +
+          `pa je uneseni iznos od ${novac(uneseni)} podignut na zakonski minimum (${pravilo.clanak}).`,
+        izvor,
+      };
+    }
+
+    case "maksimalan": {
+      const granica = pravilo.iznos!;
+      if (uneseni <= granica) return { vps: uneseni, napomena: null, izvor };
+      return {
+        vps: granica,
+        napomena:
+          `${pravilo.naziv}: vrijednost predmeta spora ne može biti viša od ${novac(granica)}, ` +
+          `pa je uneseni iznos od ${novac(uneseni)} spušten na zakonski maksimum (${pravilo.clanak}).`,
+        izvor,
+      };
+    }
+
+    // Čl. 15 — „zbroj davanja za tri mjeseca". Bez mjesečnog iznosa nema se što izvesti.
+    case "uzdrzavanje": {
+      const mjesecno = ulaz.uzdrzavanjeMjesecno ?? 0;
+      if (mjesecno <= 0) return null;
+
+      const vps = mjesecno * VPS_IZNOSI.UzdrzavanjeMjeseci;
+      return {
+        vps,
+        napomena:
+          `Uzdržavanje: vrijednost predmeta spora je zbroj davanja za tri mjeseca — ` +
+          `${VPS_IZNOSI.UzdrzavanjeMjeseci} × ${novac(mjesecno)} = ${novac(vps)} (${pravilo.clanak}).`,
+        izvor,
+      };
+    }
+
+    // Čl. 14, 17, 18 — Zakon kaže ŠTO se upisuje, ne koliko.
+    default:
+      return { vps: uneseni, napomena: null, izvor };
+  }
+}
+
+function primijeniPravniLijek(
+  ulaz: VpsUlaz,
+  prethodni: { vps: number; napomena: string | null; izvor: string },
+): { vps: number; napomena: string | null; izvor: string } | null {
+  const lijek = ulaz.pravniLijek ?? PRAVNI_LIJEK.Nema;
+  if (lijek === PRAVNI_LIJEK.Nema) return prethodni;
+
+  const spoji = (druga: string) =>
+    prethodni.napomena ? `${prethodni.napomena} ${druga}` : druga;
+
+  if (lijek === PRAVNI_LIJEK.CijelaOdluka) {
+    return {
+      ...prethodni,
+      napomena: spoji(
+        "Pravni lijek protiv cijele odluke: pristojba se plaća prema vrijednosti predmeta " +
+          "spora utvrđenoj u prvostupanjskom postupku (čl. 24).",
+      ),
+    };
+  }
+
+  const iznos = ulaz.pravniLijekIznos ?? 0;
+  if (iznos <= 0) return null;
+
+  const opis =
+    lijek === PRAVNI_LIJEK.PobijaniDio
+      ? `Pobija se samo dio odluke: vrijednost predmeta spora je vrijednost pobijanog dijela, ${novac(iznos)} (čl. 24).`
+      : `Pravni lijek samo protiv odluke o troškovima odnosno sporednim potraživanjima: ` +
+        `vrijednost predmeta spora je iznos troškova, ${novac(iznos)} (čl. 24).`;
+
+  return {
+    vps: iznos,
+    napomena: spoji(opis),
+    izvor: `${NAZIV_ZAKONA_O_PRISTOJBAMA}, čl. 24 — pristojba na pravni lijek`,
+  };
+}
+
+// ── Oslobođenja — Zakon o sudskim pristojbama, čl. 10–13 ─────────
+
+/**
+ * Čl. 11 — 21 točka osoba oslobođenih po sili zakona, uz oslobođenje na zahtjev
+ * stranke po čl. 10, o kojem odlučuje sud. Zrcali `OslobodjenjeKategorija`.
+ */
+export const OSLOBODJENJE_KATEGORIJE: Record<string, string> = {
+  rh_tijela: "čl. 11. t. 1 — Republika Hrvatska i tijela državne vlasti",
+  javne_ovlasti: "čl. 11. t. 2 — osobe i tijela s javnim ovlastima, u postupcima iz tih ovlasti",
+  radnici: "čl. 11. t. 3 — radnici u sporovima o pravima iz radnog odnosa",
+  sluzbenici: "čl. 11. t. 4 — službenici i namještenici u upravnim sporovima o službeničkim pravima",
+  invaliditet: "čl. 11. t. 5 — osobe s invaliditetom",
+  obitelji_branitelja:
+    "čl. 11. t. 6 — supružnici, djeca i roditelji branitelja smrtno stradalih, nestalih i zatočenih",
+  obitelji_domovinski_rat:
+    "čl. 11. t. 7 — supružnici, djeca i roditelji smrtno stradalih, nestalih i zatočenih u Domovinskom ratu",
+  prognanici: "čl. 11. t. 8 — prognanici, izbjeglice i povratnici",
+  socijalna_skrb: "čl. 11. t. 9 — korisnici socijalne skrbi koji primaju zajamčenu minimalnu naknadu",
+  humanitarne: "čl. 11. t. 10 — humanitarne organizacije i organizacije osoba s invaliditetom",
+  djeca_uzdrzavanje: "čl. 11. t. 11 — djeca u postupcima radi uzdržavanja",
+  majcinstvo_ocinstvo:
+    "čl. 11. t. 12 — postupci radi utvrđivanja majčinstva ili očinstva i troškova trudnoće i poroda",
+  poslovna_sposobnost: "čl. 11. t. 13 — postupci radi vraćanja poslovne sposobnosti",
+  maloljetnici_brak: "čl. 11. t. 14 — maloljetnici u postupcima dopuštenja za sklapanje braka",
+  predaja_djeteta: "čl. 11. t. 15 — postupci radi predaje djeteta i ostvarivanja osobnih odnosa s djetetom",
+  mirovinsko_zdravstveno:
+    "čl. 11. t. 16 — postupci o pravima iz mirovinskog i zdravstvenog osiguranja, osiguranja za slučaj nezaposlenosti i socijalne skrbi",
+  ustavna_prava: "čl. 11. t. 17 — zaštita ustavom zajamčenih ljudskih prava protiv konačnih pojedinačnih akata",
+  steta_okolis: "čl. 11. t. 18 — naknada štete zbog onečišćenja okoliša",
+  sindikati: "čl. 11. t. 19 — sindikati u kolektivnim radnim sporovima",
+  potrosaci: "čl. 11. t. 20 — potrošači kao stečajni dužnici i tužitelji u kolektivnoj zaštiti",
+  posebni_zakon: "čl. 11. t. 21 — drugi kada je propisano posebnim zakonom",
+  zahtjev_cl_10: "čl. 10 — oslobođenje na zahtjev stranke koja ne može platiti bez štete za uzdržavanje",
+};
+
+/**
+ * Čl. 11 st. 5 — oslobođenje iz t. 1 i 2 ne obuhvaća jedinice lokalne i područne
+ * samouprave, osim kad im je preneseno obavljanje javnih ovlasti.
+ */
+export const OSLOBODJENJE_NAPOMENA_LOKALNA =
+  "Čl. 11. st. 5: oslobođenje se ne odnosi na jedinice lokalne i područne (regionalne) " +
+  "samouprave, osim kada im je preneseno obavljanje javnih ovlasti.";
+
+export interface OslobodjenjeUlaz {
+  /** Zastupana strana oslobođena u cijelosti. */
+  oslobodjen: boolean;
+  brojOsoba: number;
+  brojOslobodjenih: number;
+  /** Čl. 12 — dio VPS-a koji otpada na neoslobođene; null → dijeli se brojem osoba. */
+  udioVps?: number | null;
+  /** Čl. 13 — omjer uspjeha oslobođene stranke, 0–100. */
+  postotakUspjeha?: number | null;
+}
+
+const OSLOBODJENJE_NEMA: OslobodjenjeUlaz = {
+  oslobodjen: false,
+  brojOsoba: 1,
+  brojOslobodjenih: 0,
+};
+
+function sviOslobodjeni(o: OslobodjenjeUlaz): boolean {
+  return o.oslobodjen || (o.brojOslobodjenih > 0 && o.brojOslobodjenih >= Math.max(1, o.brojOsoba));
+}
+
+/** Čl. 12 st. 2 — bez upisanog udjela vrijednost se dijeli brojem osoba. */
+function vpsNeoslobodjenih(vps: number, o: OslobodjenjeUlaz): number {
+  if (sviOslobodjeni(o)) return 0;
+  if (o.brojOslobodjenih <= 0) return vps;
+
+  if (o.udioVps !== null && o.udioVps !== undefined) {
+    return Math.min(Math.max(o.udioVps, 0), vps);
+  }
+
+  const brojOsoba = Math.max(1, o.brojOsoba);
+  return (vps * Math.max(0, brojOsoba - o.brojOslobodjenih)) / brojOsoba;
+}
+

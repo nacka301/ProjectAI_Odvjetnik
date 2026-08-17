@@ -131,6 +131,80 @@ public sealed class TroskovnikRequestValidator : AbstractValidator<TroskovnikReq
                     "(mjesecno ili godisnje) da bi se izveo petogodišnji iznos iz Tbr. 7. toč. 4.");
         });
 
+        // ── Vrijednost predmeta spora — Zakon o sudskim pristojbama, čl. 14–26 ──
+        //
+        // Ista pravila stvarno izvršava TroskovnikService kroz VpsCalculator; ovdje stoje
+        // da se, ako se validator ikad uključi, dvije provjere ne raziđu.
+
+        RuleFor(x => x.VrstaPostupka)
+            .Must(v => string.IsNullOrWhiteSpace(v) || VrstaPostupka.Pravila.ContainsKey(v))
+            .WithMessage($"Nepoznata vrsta postupka. Dopušteno: {string.Join(", ", VrstaPostupka.Sve)}.");
+
+        When(x => x.VrstaPostupka == VrstaPostupka.Uzdrzavanje, () =>
+        {
+            RuleFor(x => x.UzdrzavanjeMjesecno)
+                .GreaterThan(0).WithMessage(
+                    "U postupcima radi uzdržavanja vrijednost predmeta spora je zbroj davanja " +
+                    "za tri mjeseca (čl. 15), pa je potreban mjesečni iznos davanja.");
+        });
+
+        When(x => x.Zahtjevi.Count > 0, () =>
+        {
+            RuleFor(x => x.ZahtjeviNacin)
+                .Must(n => n is not null && ZahtjeviNacin.Sve.Contains(n))
+                .WithMessage($"Uz više zahtjeva (čl. 16) obavezan je način. Dopušteno: {string.Join(", ", ZahtjeviNacin.Sve)}.");
+
+            RuleForEach(x => x.Zahtjevi).ChildRules(z =>
+            {
+                z.RuleFor(s => s.Iznos)
+                    .GreaterThanOrEqualTo(0).WithMessage("Vrijednost zahtjeva po čl. 16 ne može biti negativna.");
+            });
+        });
+
+        // Čl. 16: kod suparničarstva se zahtjevi ne zbrajaju, pa troškovnik mora znati
+        // koji pokriva.
+        When(x => x.ZahtjeviNacin == ZahtjeviNacin.Zasebno && x.Zahtjevi.Count > 0, () =>
+        {
+            RuleFor(x => x.Zahtjevi)
+                .Must(z => z.Count(s => s.Primarni) == 1)
+                .WithMessage(
+                    "Uz suparničarstvo (čl. 16) označite točno jedan zahtjev koji ovaj " +
+                    "troškovnik pokriva — vrijednosti se ne zbrajaju.");
+        });
+
+        RuleFor(x => x.PravniLijek)
+            .Must(p => string.IsNullOrWhiteSpace(p) || PravniLijek.Sve.Contains(p))
+            .WithMessage($"Nepoznata vrsta pravnog lijeka. Dopušteno: {string.Join(", ", PravniLijek.Sve)}.");
+
+        When(x => x.PravniLijek is PravniLijek.PobijaniDio or PravniLijek.SamoTroskovi, () =>
+        {
+            RuleFor(x => x.PravniLijekIznos)
+                .GreaterThan(0).WithMessage(
+                    "Čl. 24 pristojbu na pravni lijek veže uz vrijednost pobijanog dijela " +
+                    "odnosno iznos troškova, pa je taj iznos obavezan.");
+        });
+
+        // ── Oslobođenja — Zakon o sudskim pristojbama, čl. 11–13 ──
+
+        RuleFor(x => x.OslobodjenjeKategorija)
+            .Must(k => k is null || OslobodjenjeKategorija.Nazivi.ContainsKey(k))
+            .WithMessage($"Nepoznata osnova oslobođenja. Dopušteno: {string.Join(", ", OslobodjenjeKategorija.Sve)}.");
+
+        RuleFor(x => x.BrojOslobodjenihOsoba)
+            .GreaterThanOrEqualTo(0).WithMessage("Broj oslobođenih osoba ne može biti negativan.")
+            .Must((req, broj) => broj <= Math.Max(1, req.BrojZastupanihOsoba))
+            .WithMessage(
+                "Oslobođenih osoba ne može biti više nego zastupanih — čl. 12 dijeli vrijednost " +
+                "predmeta spora među osobama koje podnesak podnose.");
+
+        RuleFor(x => x.UdioUVps)
+            .Must(u => u is null || u >= 0m)
+            .WithMessage("Dio vrijednosti predmeta spora po čl. 12 ne može biti negativan.");
+
+        RuleFor(x => x.PostotakUspjeha)
+            .Must(p => p is null || (p >= 0m && p <= 100m))
+            .WithMessage("Omjer uspjeha po čl. 13 mora biti između 0 i 100 %.");
+
         // ── Tbr. 41 — rasponi iz same Tarife ──────────────────────
 
         RuleFor(x => x.Tbr41PovisenjePostotak)
