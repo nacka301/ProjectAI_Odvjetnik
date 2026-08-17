@@ -331,6 +331,7 @@ public sealed class TroskovnikService : ITroskovnikService
         var katalogPoId = TarifaKatalog.Sve.ToDictionary(s => s.Id);
         var odabraneDefinicije = ProvjeriIRazrijesiDefinicije(request, katalogPoId);
         var kontekst = RazrijesiKontekst(request, odabraneDefinicije);
+        ProvjeriNaknaduIPredujam(request);
 
         var stavkeRetci = IzracunajRetke(request, katalogPoId, kontekst);
         var dodatnePristojbe = RazrijesiRucneTroskove(request.DodatnePristojbe, "Pristojba");
@@ -372,6 +373,32 @@ public sealed class TroskovnikService : ITroskovnikService
         }
 
         return rezultat;
+    }
+
+    /// <summary>
+    /// Provjerava stavke naknade troškova (Tbr. 48.-51.) i predujmove prije izračuna —
+    /// nepoznata vrsta izdatka ili negativan iznos odbija se odmah, umjesto da tiho
+    /// nestane iz troškovnika ili tiho ispravi predznak.
+    /// </summary>
+    private static void ProvjeriNaknaduIPredujam(TroskovnikRequest request)
+    {
+        foreach (var stavka in request.NaknadaTroskovaStavke ?? [])
+        {
+            if (!VrstaTroska.Sve.Contains(stavka.Vrsta))
+                throw new TroskovnikValidationException(
+                    $"Nepoznata vrsta troška: \"{stavka.Vrsta}\". Dopušteno: {string.Join(", ", VrstaTroska.Sve)}.");
+
+            if (stavka.Iznos < 0)
+                throw new TroskovnikValidationException(
+                    "Iznos naknade troškova ne može biti negativan.");
+        }
+
+        foreach (var predujam in request.Predujmovi ?? [])
+        {
+            if (predujam.Iznos < 0)
+                throw new TroskovnikValidationException(
+                    "Iznos predujma ne može biti negativan.");
+        }
     }
 
     /// <summary>
@@ -597,12 +624,21 @@ public sealed class TroskovnikService : ITroskovnikService
         // Dijeli se NAGRADA; PDV i sudska pristojba nisu odvjetnička nagrada pa ne ulaze.
         var brojOsoba = Math.Max(1, request.BrojZastupanihOsoba);
         var bodoviPoOsobi = ukupnoBodova / brojOsoba;
+        // Dijeli se NAGRADA (ukupnoEur) — naknada troškova nije dio nje, isto kao PDV
+        // i sudska pristojba: vidi komentar o Tbr. 40. toč. 1 gore.
         var nagradaPoOsobi = ZaokruziNovac(ukupnoEur / brojOsoba);
+
+        // ── Naknada troškova (Tbr. 48.-51.) — vlastiti trošak odvjetnika, ULAZI u
+        // PDV osnovicu (čl. 33. Zakona o PDV-u; čl. 78. Direktive 2006/112/EZ).
+        var naknadaTroskovaUkupno = ZaokruziNovac(
+            (request.NaknadaTroskovaStavke ?? []).Sum(s => s.Iznos));
+
+        var osnovicaSaNaknadom = ukupnoEur + naknadaTroskovaUkupno;
 
         decimal pdv = 0;
         var obracunajPdv = request.IsPdvUkljucen ?? request.HasVat;
         if (obracunajPdv)
-            pdv = ZaokruziNovac(ukupnoEur * TarifaConstants.PdvRate);
+            pdv = ZaokruziNovac(osnovicaSaNaknadom * TarifaConstants.PdvRate);
 
         // Sudske pristojbe su drugi propis (Uredba NN 50/2026) i cijele se računaju ondje.
         // Vrijednost na koju se obračunavaju propisuje Zakon o sudskim pristojbama, pa ide
@@ -618,7 +654,9 @@ public sealed class TroskovnikService : ITroskovnikService
         var ukupnoPristojbe = pristojbe.Ukupno + dodatnePristojbe.Sum(t => t.Iznos);
         var ukupnoPredujmovi = predujmovi.Sum(t => t.Iznos);
 
-        var odvjetnickiTrosak = ukupnoEur + pdv;
+        // Naknada troškova ULAZI u osnovicu (čl. 33. Zakona o PDV-u), pa i u odvjetnički
+        // trošak; pristojbe i predujmovi su prolazne stavke i dolaze tek nakon PDV-a.
+        var odvjetnickiTrosak = osnovicaSaNaknadom + pdv;
 
         // Čl. 13 ne ulazi u zbroj: pristojbu na teret protustranke plaća druga strana,
         // i to tek po pravomoćnosti. Zato `Ukupno`, a ne `Ukupno + NaTeretProtustranke`.
@@ -626,7 +664,8 @@ public sealed class TroskovnikService : ITroskovnikService
 
         return new Zbrojevi(
             ukupnoBodova, povisenjePostotak, povisenjeBodovi, tbr41Bodovi, ukupnoEur,
-            bodoviPoOsobi, nagradaPoOsobi, pdv, pristojbe, ukupnoPristojbe,
+            bodoviPoOsobi, nagradaPoOsobi, naknadaTroskovaUkupno, osnovicaSaNaknadom, pdv,
+            pristojbe, ukupnoPristojbe,
             ukupnoPredujmovi, sveukupniTrosak, brojOsoba, obracunajPdv);
     }
 
@@ -728,9 +767,22 @@ public sealed class TroskovnikService : ITroskovnikService
             NagradaPoOsobi = zbrojevi.NagradaPoOsobi,
             VrijednostSpora = kontekst.VrijednostSpora,
             IsSamoKazneni = kontekst.JeSamoKazneni,
-            UkupnoEurBezPdv = zbrojevi.UkupnoEur,
+            // Osnovica (bez PDV) = nagrada + naknada troškova (Tbr. 48.-51.) — obje su
+            // vlastiti trošak odvjetnika i ulaze u PDV osnovicu; sudska pristojba i
+            // predujam nisu, pa se dodaju tek u SveukupniTrosak, nakon PDV-a.
+            UkupnoEurBezPdv = zbrojevi.OsnovicaSaNaknadom,
             Pdv = zbrojevi.Pdv,
-            UkupnoEurSPdv = zbrojevi.UkupnoEur + zbrojevi.Pdv,
+            UkupnoEurSPdv = zbrojevi.OsnovicaSaNaknadom + zbrojevi.Pdv,
+            NaknadaTroskovaStavke = (request.NaknadaTroskovaStavke ?? []).Select(s => new NaknadaTroskovaStavkaResponse
+            {
+                Vrsta = s.Vrsta,
+                Opis = s.Opis,
+                Iznos = s.Iznos,
+                PravniIzvor = VrstaTroska.PravniIzvor.GetValueOrDefault(s.Vrsta, "")
+            }).ToList(),
+            NaknadaTroskovaUkupno = zbrojevi.NaknadaTroskovaUkupno,
+            // Predujmovi se preslikavaju niže, iz `predujmovi` — taj popis je već prošao
+            // provjeru i renumeriranje, pa nosi i datum i redni broj.
             Klijent = request.Klijent,
             // Ugniježđeni odvjetnik iz zahtjeva preslikava se u stranku odgovora
             // (naziv → ime), radi spojivosti sa starijim oblikom odgovora.
@@ -821,6 +873,8 @@ public sealed class TroskovnikService : ITroskovnikService
         decimal UkupnoEur,
         decimal BodoviPoOsobi,
         decimal NagradaPoOsobi,
+        decimal NaknadaTroskovaUkupno,
+        decimal OsnovicaSaNaknadom,
         decimal Pdv,
         // Lista pristojbenih redaka nosi i čl. 12 udio i čl. 13 iznos, pa zamjenjuje
         // četiri zasebna polja iz vremena jedne pristojbe po troškovniku.

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Save, Building2, Hash, MapPin, Landmark } from "lucide-react";
+import { Loader2, Save, Building2, Hash, MapPin, Landmark, Receipt } from "lucide-react";
 import { API_BASE } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
 
@@ -15,6 +15,7 @@ export default function LawFirmForm({ userId: _propUserId }: Props) {
   const [oib, setOib] = useState("");
   const [address, setAddress] = useState("");
   const [iban, setIban] = useState("");
+  const [pdvObveznik, setPdvObveznik] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -39,6 +40,7 @@ export default function LawFirmForm({ userId: _propUserId }: Props) {
             setOib(data.oib || "");
             setAddress(data.address || "");
             setIban(data.iban || "");
+            setPdvObveznik(Boolean(data.pdv_obveznik));
           }
           // null / empty → fields stay blank = "create" mode
         } else if (res.status !== 404) {
@@ -81,6 +83,7 @@ export default function LawFirmForm({ userId: _propUserId }: Props) {
           oib: oib.trim() || null,
           address: address.trim() || null,
           iban: iban.trim() || null,
+          pdv_obveznik: pdvObveznik,
         }),
       });
 
@@ -194,6 +197,28 @@ export default function LawFirmForm({ userId: _propUserId }: Props) {
             placeholder="HR12 1234 0061 1234 5678 9"
             className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-400 transition"
           />
+        </div>
+
+        {/* PDV obveznik */}
+        <div className="rounded-lg border border-slate-200 p-4">
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={pdvObveznik}
+              onChange={(e) => setPdvObveznik(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <span>
+              <span className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+                <Receipt className="h-3.5 w-3.5 text-slate-400" />
+                Ured je u sustavu PDV-a
+              </span>
+              <span className="block text-[11px] text-slate-400 mt-1">
+                Postavlja zadanu vrijednost za nove troškovnike — svaki se troškovnik i dalje može ručno
+                izuzeti ili uključiti pojedinačno.
+              </span>
+            </span>
+          </label>
         </div>
 
         {/* Submit */}

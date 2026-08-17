@@ -167,6 +167,33 @@ export const TBR_7_1_RAZREDI: RazredZaPrikaz[] = [
   { od: 1_327_228.01, do: null, bodovi: "7.496 + 1 bod / započetih 664,00 €, najviše 10.000" },
 ];
 
+// ── Naknada troškova (Tbr. 48.-51.) ──────────────────────────────
+//
+// Stvarni izdaci odvjetnika (izvan bodovnog sustava), vlastiti trošak obavljanja
+// usluge — ULAZE u PDV osnovicu (čl. 33. Zakona o PDV-u; čl. 78. Direktive
+// 2006/112/EZ). Zrcali backend `Backend/Models/NaknadaTroskovaKatalog.cs`.
+
+export const VRSTA_TROSKA = {
+  /** Tbr. 49./50. — naknada za prijevoz izvan sjedišta odvjetničke pisarnice. */
+  Prijevoz: "prijevoz",
+  /** Tbr. 51. — dnevnica, u visini dnevnice suca Županijskog suda. */
+  Dnevnica: "dnevnica",
+  /** Tbr. 51. — troškovi hotelskog smještaja. */
+  HotelskiSmjestaj: "hotelski_smjestaj",
+  /** Tbr. 48. — poštanski, telefonski i bankarski troškovi te ostali izdaci. */
+  OstaliIzdaci: "ostali_izdaci",
+} as const;
+
+export type VrstaTroska = (typeof VRSTA_TROSKA)[keyof typeof VRSTA_TROSKA];
+
+/** Nazivi za padajući izbornik, s tarifnim brojem iz kojeg proizlaze. */
+export const VRSTA_TROSKA_LABELE: Record<VrstaTroska, string> = {
+  [VRSTA_TROSKA.Prijevoz]: "Prijevoz (Tbr. 49./50.)",
+  [VRSTA_TROSKA.Dnevnica]: "Dnevnica (Tbr. 51.)",
+  [VRSTA_TROSKA.HotelskiSmjestaj]: "Hotelski smještaj (Tbr. 51.)",
+  [VRSTA_TROSKA.OstaliIzdaci]: "Ostali izdaci — poštanski/telefonski/bankovni (Tbr. 48.)",
+};
+
 // ── Osnovica: "Tbr. 7. toč. 1., 4., 7. i 8." ─────────────────────
 //
 // Tarifa na devet mjesta upućuje na "nagradu iz Tbr. 7. toč. 1., 4., 7. i 8."

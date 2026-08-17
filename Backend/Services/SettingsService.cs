@@ -227,7 +227,7 @@ public sealed class SettingsService
                 return null;
 
             var safeId = Uri.EscapeDataString(profile.LawFirmId);
-            var url = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/law_firms?id=eq.{safeId}&select=id,name,oib,address,iban";
+            var url = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/law_firms?id=eq.{safeId}&select=id,name,oib,address,iban,pdv_obveznik";
             var request = CreateRequest(HttpMethod.Get, url);
 
             var response = await _httpClient.SendAsync(request);
@@ -270,7 +270,8 @@ public sealed class SettingsService
                     name = req.Name?.Trim() ?? "",
                     oib = req.Oib?.Trim(),
                     address = req.Address?.Trim(),
-                    iban = req.Iban?.Trim()
+                    iban = req.Iban?.Trim(),
+                    pdv_obveznik = req.PdvObveznik
                 }, JsonOpts);
 
                 var request = CreateRequest(HttpMethod.Patch, url, payload);
@@ -289,7 +290,7 @@ public sealed class SettingsService
             else
             {
                 // Create new firm and link to profile
-                return await CreateFirmAndLinkAsync(req.UserId, req.Name, req.Oib, req.Address, req.Iban);
+                return await CreateFirmAndLinkAsync(req.UserId, req.Name, req.Oib, req.Address, req.Iban, req.PdvObveznik);
             }
         }
         catch (Exception ex)
@@ -352,7 +353,7 @@ public sealed class SettingsService
         {
             // 1. Create the law firm
             var firm = await CreateFirmAndLinkAsync(
-                req.UserId, req.FirmName, req.FirmOib, null, null);
+                req.UserId, req.FirmName, req.FirmOib, null, null, pdvObveznik: false);
 
             if (firm == null) return null;
 
@@ -380,7 +381,7 @@ public sealed class SettingsService
     // ═══════════════════════════════════════════════════════════
 
     private async Task<LawFirmResponse?> CreateFirmAndLinkAsync(
-        string userId, string? name, string? oib, string? address, string? iban)
+        string userId, string? name, string? oib, string? address, string? iban, bool pdvObveznik = false)
     {
         // Insert new law firm
         var firmUrl = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/law_firms";
@@ -389,7 +390,8 @@ public sealed class SettingsService
             name = name?.Trim() ?? "",
             oib = oib?.Trim(),
             address = address?.Trim(),
-            iban = iban?.Trim()
+            iban = iban?.Trim(),
+            pdv_obveznik = pdvObveznik
         }, JsonOpts);
 
         // service_role: law_firms has no INSERT policy — a user must not be able

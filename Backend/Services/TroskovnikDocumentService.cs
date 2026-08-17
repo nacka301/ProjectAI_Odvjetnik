@@ -69,6 +69,8 @@ public sealed class TroskovnikDocumentService
                 UkupnoEurBezPdv = record.UkupnoEurBezPdv,
                 Pdv = record.Pdv,
                 UkupnoEurSPdv = record.UkupnoEurSPdv,
+                NaknadaTroskovaUkupno = record.NaknadaTroskovaUkupno,
+                UkupnoPredujmovi = record.PredujmoviUkupno,
                 HasVat = record.HasVat,
                 IsPdvUkljucen = record.IsPdvUkljucen,
                 Klijent = null,
@@ -167,11 +169,38 @@ public sealed class TroskovnikDocumentService
 
         sb.AppendLine("</table>");
 
+        // ── Naknada troškova (Tbr. 48.-51.) ───────────────────────
+        // Stoji PRIJE zbroja jer je vlastiti trošak odvjetnika i ULAZI u poreznu
+        // osnovicu (čl. 33. Zakona o PDV-u) — za razliku od pristojbi i predujmova.
+        if (resp.NaknadaTroskovaStavke is { Count: > 0 })
+        {
+            sb.AppendLine("<h3>Naknada troškova (Tbr. 48.-51.)</h3>");
+            sb.AppendLine("<table><tr><th>Vrsta</th><th>Opis</th><th>Pravni izvor</th><th>Iznos (EUR)</th></tr>");
+            foreach (var n in resp.NaknadaTroskovaStavke)
+            {
+                var naziv = n.Vrsta switch
+                {
+                    VrstaTroska.Prijevoz => "Prijevoz",
+                    VrstaTroska.Dnevnica => "Dnevnica",
+                    VrstaTroska.HotelskiSmjestaj => "Hotelski smještaj",
+                    VrstaTroska.OstaliIzdaci => "Ostali izdaci",
+                    _ => n.Vrsta
+                };
+                sb.AppendLine($"<tr><td>{System.Net.WebUtility.HtmlEncode(naziv)}</td><td>{System.Net.WebUtility.HtmlEncode(n.Opis ?? "")}</td><td style=\"font-size:10px;color:#555\">{System.Net.WebUtility.HtmlEncode(n.PravniIzvor)}</td><td style=\"text-align:right\">{FormatCurrency(n.Iznos)}</td></tr>");
+            }
+            sb.AppendLine("</table>");
+        }
+
         // ── Zbroj nagrade ─────────────────────────────────────────
+        // "Osnovica" je nagrada + naknada troškova; oboje ulazi u PDV.
+        var napomenaNaknade = resp.NaknadaTroskovaUkupno > 0
+            ? $"<br/><span style=\"font-size:10px;color:#555\">uključuje naknadu troškova (Tbr. 48.-51.): {FormatCurrency(resp.NaknadaTroskovaUkupno)}</span>"
+            : "";
+
         sb.AppendLine("<h3>Zbroj nagrade</h3>");
         sb.AppendLine("<table style=\"width:320px;\">");
         sb.AppendLine($"<tr><td>Ukupno bodova</td><td style=\"text-align:right\">{FormatBodovi(resp.UkupnoBodova)}</td></tr>");
-        sb.AppendLine($"<tr><th>Nagrada (bez PDV-a)</th><th style=\"text-align:right\">{FormatCurrency(resp.UkupnoEurBezPdv)}</th></tr>");
+        sb.AppendLine($"<tr><th>Nagrada (bez PDV-a){napomenaNaknade}</th><th style=\"text-align:right\">{FormatCurrency(resp.UkupnoEurBezPdv)}</th></tr>");
         sb.AppendLine("</table>");
 
         // ── PDV — samo kad je odvjetnik u sustavu PDV-a ────────────

@@ -222,6 +222,8 @@ public class TroskovnikController : ControllerBase
         UkupnoEurBezPdv = rezultat.UkupnoEurBezPdv,
         Pdv = rezultat.Pdv,
         UkupnoEurSPdv = rezultat.UkupnoEurSPdv,
+        NaknadaTroskovaUkupno = rezultat.NaknadaTroskovaUkupno,
+        PredujmoviUkupno = rezultat.UkupnoPredujmovi,
         Odvjetnik = SastaviOdvjetnika(zahtjev),
         Predmet = new PredmetInfo
         {

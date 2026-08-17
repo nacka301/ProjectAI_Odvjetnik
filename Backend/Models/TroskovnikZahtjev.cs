@@ -278,6 +278,15 @@ public sealed class TroskovnikRequest
     /// <summary>Slobodni tekst napomene na kraju troškovnika. Prazan/whitespace izostavlja odjeljak.</summary>
     [JsonPropertyName("napomena")]
     public string? Napomena { get; set; }
+
+    /// <summary>
+    /// Naknada troškova (Tbr. 48.-51.): prijevoz, dnevnica, hotel, ostali izdaci.
+    /// Vlastiti trošak odvjetnika, pa po čl. 33. Zakona o PDV-u ULAZI u poreznu
+    /// osnovicu — za razliku od pristojbi i predujmova, koji su prolazne stavke.
+    /// Vidi <see cref="Models.VrstaTroska"/>.
+    /// </summary>
+    [JsonPropertyName("naknada_troskova_stavke")]
+    public List<NaknadaTroskovaStavkaRequest> NaknadaTroskovaStavke { get; set; } = [];
 }
 
 /// <summary>
@@ -413,6 +422,22 @@ public sealed class ZahtjevStavka
     /// </summary>
     [JsonPropertyName("primarni")]
     public bool Primarni { get; set; }
+}
+
+/// <summary>Jedan stvarni izdatak iz naknade troškova (Tbr. 48.-51.).</summary>
+public sealed class NaknadaTroskovaStavkaRequest
+{
+    /// <summary>Jedna od vrijednosti u <see cref="VrstaTroska.Sve"/>.</summary>
+    [JsonPropertyName("vrsta")]
+    public string Vrsta { get; set; } = "";
+
+    /// <summary>Slobodan opis (npr. "Put Zagreb-Split, 340 km"). Neobavezno.</summary>
+    [JsonPropertyName("opis")]
+    public string? Opis { get; set; }
+
+    /// <summary>Stvarni iznos u EUR — Tarifa ne propisuje bodove za ove izdatke.</summary>
+    [JsonPropertyName("iznos")]
+    public decimal Iznos { get; set; }
 }
 
 public sealed class TroskovnikParty

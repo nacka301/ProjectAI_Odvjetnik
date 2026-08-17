@@ -101,6 +101,16 @@ public sealed class TroskovnikResponse
     [JsonPropertyName("ukupno_eur_s_pdv")]
     public decimal UkupnoEurSPdv { get; set; }
 
+    // ── Naknada troškova (Tbr. 48.-51.) — ulazi u osnovicu ─────────
+
+    /// <summary>Echo unesenih stavki, s razriješenim pravnim izvorom za ispis.</summary>
+    [JsonPropertyName("naknada_troskova_stavke")]
+    public List<NaknadaTroskovaStavkaResponse> NaknadaTroskovaStavke { get; set; } = [];
+
+    /// <summary>Zbroj naknade troškova — uključen u <see cref="UkupnoEurBezPdv"/>.</summary>
+    [JsonPropertyName("naknada_troskova_ukupno")]
+    public decimal NaknadaTroskovaUkupno { get; set; }
+
     [JsonPropertyName("vrijednost_boda")]
     public decimal VrijednostBoda { get; set; } = TarifaConstants.BodValue;
 
@@ -417,3 +427,21 @@ public sealed class TroskovnikLineItem
     [JsonPropertyName("tbr41_pravni_izvor")]
     public string Tbr41PravniIzvor { get; set; } = "";
 }
+
+/// <summary>Echo jedne stavke naknade troškova, s razriješenim pravnim izvorom.</summary>
+public sealed class NaknadaTroskovaStavkaResponse
+{
+    [JsonPropertyName("vrsta")]
+    public string Vrsta { get; set; } = "";
+
+    [JsonPropertyName("opis")]
+    public string? Opis { get; set; }
+
+    [JsonPropertyName("iznos")]
+    public decimal Iznos { get; set; }
+
+    /// <summary>Odredba Tarife uz vrstu izdatka — vidi <see cref="VrstaTroska.PravniIzvor"/>.</summary>
+    [JsonPropertyName("pravni_izvor")]
+    public string PravniIzvor { get; set; } = "";
+}
+
