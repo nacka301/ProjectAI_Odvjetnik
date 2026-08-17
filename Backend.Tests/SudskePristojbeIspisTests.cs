@@ -34,21 +34,30 @@ public class SudskePristojbeIspisTests
 
         Assert.Contains("Sudska pristojba — Tar. br. 1 st. 1", html);
         Assert.Contains("Sudska pristojba — Tar. br. 3 st. 1", html);
-        Assert.Contains("Ukupno sudske pristojbe", html);
+
+        // Odjeljak "II. Sudske pristojbe" nosi jedan zbroj, i on pokriva i ručno dodane
+        // pristojbe — zato "Ukupno pristojbe", a ne "Ukupno sudske pristojbe".
+        Assert.Contains("Ukupno pristojbe", html);
 
         Assert.Contains(FormatiraniIznos(620.00m), html);
         Assert.Contains(FormatiraniIznos(1_240.00m), html);
         Assert.Contains(FormatiraniIznos(1_860.00m), html);
     }
 
-    /// <summary>Jedna pristojba ne treba redak sa zbrojem — zbroj je ona sama.</summary>
+    /// <summary>
+    /// Uz jednu pristojbu zbroj odjeljka jednak je toj pristojbi — a ne, primjerice,
+    /// dvostrukom iznosu zbog retka koji bi se izbrojao dvaput.
+    /// </summary>
     [Fact]
-    public void JednaPristojba_BezSuvisnogZbroja()
+    public void JednaPristojba_ZbrojOdjeljkaJednakTojPristojbi()
     {
-        var html = Ispisi(Izracunaj(50_000m, null, "par_tuzba"));
+        var odgovor = Izracunaj(50_000m, null, "par_tuzba");
+        var html = Ispisi(odgovor);
 
         Assert.Contains("Sudska pristojba — Tar. br. 1 st. 1", html);
-        Assert.DoesNotContain("Ukupno sudske pristojbe", html);
+        Assert.Equal(620.00m, odgovor.SudskaPristojba);
+        Assert.Equal(620.00m, odgovor.UkupnoPristojbe);
+        Assert.Contains(FormatiraniIznos(620.00m), html);
     }
 
     /// <summary>Redak po staroj Uredbi mora reći da je star i po kojoj odredbi.</summary>

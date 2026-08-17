@@ -264,6 +264,43 @@ public sealed class TroskovnikResponse
     /// <summary>Grand total = odvjetnički trošak (s PDV) + sudska pristojba.</summary>
     [JsonPropertyName("sveukupni_trosak")]
     public decimal SveukupniTrosak { get; set; }
+
+    /// <summary>
+    /// Ručno dodane sudske pristojbe, ispod automatski izračunate — renumerirano serverski.
+    /// </summary>
+    [JsonPropertyName("dodatne_pristojbe")]
+    public List<TroskovnikTrosakStavka> DodatnePristojbe { get; set; } = [];
+
+    /// <summary>Automatski izračunata pristojba (<see cref="SudskaPristojba"/>) + zbroj ručnih.</summary>
+    [JsonPropertyName("ukupno_pristojbe")]
+    public decimal UkupnoPristojbe { get; set; }
+
+    /// <summary>Predujmovi (vještačenje i sl.) — vlastiti odjeljak, bez PDV-a.</summary>
+    [JsonPropertyName("predujmovi")]
+    public List<TroskovnikTrosakStavka> Predujmovi { get; set; } = [];
+
+    [JsonPropertyName("ukupno_predujmovi")]
+    public decimal UkupnoPredujmovi { get; set; }
+
+    /// <summary>Slobodni tekst napomene. Null kad je prazna — ispis tada izostavlja odjeljak.</summary>
+    [JsonPropertyName("napomena")]
+    public string? Napomena { get; set; }
+}
+
+/// <summary>Renumerirani redak ručno unesenog troška (dodatna pristojba ili predujam).</summary>
+public sealed class TroskovnikTrosakStavka
+{
+    [JsonPropertyName("rbr")]
+    public int Rbr { get; set; }
+
+    [JsonPropertyName("datum")]
+    public DateOnly? Datum { get; set; }
+
+    [JsonPropertyName("opis")]
+    public string Opis { get; set; } = "";
+
+    [JsonPropertyName("iznos")]
+    public decimal Iznos { get; set; }
 }
 
 /// <summary>
@@ -320,6 +357,10 @@ public sealed class TroskovnikLineItem
 
     [JsonPropertyName("item_id")]
     public string ItemId { get; set; } = "";
+
+    /// <summary>Datum kad je radnja poduzeta — echo iz zahtjeva. Null kad nije unesen.</summary>
+    [JsonPropertyName("datum")]
+    public DateOnly? Datum { get; set; }
 
     [JsonPropertyName("opis")]
     public string Opis { get; set; } = "";

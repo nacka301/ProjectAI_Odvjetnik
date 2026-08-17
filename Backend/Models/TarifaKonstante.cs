@@ -67,6 +67,11 @@ public static class TarifaConstants
     /// Umanjenje iz Tbr. 4. toč. 8 (zastupanje oštećenika) nosi sama stavka u katalogu.
     /// </summary>
     public const decimal ZastupnikDjetetaRate = 0.70m;
+
+    /// <summary>Ponuđeni tekst napomene; korisnik ga smije izmijeniti ili obrisati.</summary>
+    public const string ZadanaNapomena =
+        "Na traženi iznos obračunava se zakonska zatezna kamata sukladno članku 29. " +
+        "Zakona o obveznim odnosima.";
 }
 
 /// <summary>Zapriječena kazna → bodovi (Tbr. 4)</summary>

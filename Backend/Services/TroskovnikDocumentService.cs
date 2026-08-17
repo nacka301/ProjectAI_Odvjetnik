@@ -129,13 +129,14 @@ public sealed class TroskovnikDocumentService
             sb.AppendLine($"<p style=\"margin-top:12px;font-size:11px;color:#555\"><em>{System.Net.WebUtility.HtmlEncode(resp.NapomenaStjecaj)}</em></p>");
         }
 
-        // Line items (if any)
-        sb.AppendLine("<h3>Stavke</h3>");
-        sb.AppendLine("<table><tr><th>#</th><th>Opis</th><th>Tarifni broj</th><th>Pravni izvor</th><th>Količina</th><th>Bod/jed</th><th>Ukupno bodova</th><th>Iznos (EUR)</th></tr>");
+        // ── I. Odvjetničke radnje ──────────────────────────────────
+        sb.AppendLine("<h3>I. Odvjetničke radnje</h3>");
+        sb.AppendLine("<table><tr><th>#</th><th>Datum</th><th>Opis</th><th>Tarifni broj</th><th>Pravni izvor</th><th>Količina</th><th>Bod/jed</th><th>Ukupno bodova</th><th>Iznos (EUR)</th></tr>");
 
         foreach (var l in resp.Stavke ?? new List<TroskovnikLineItem>())
         {
             var izvor = string.IsNullOrWhiteSpace(l.PravniIzvor) ? l.TarifniBroj : l.PravniIzvor;
+            var datumCelija = l.Datum?.ToString("d", _hr) ?? "";
 
             // Tbr. 41 — uz prilagođenu stavku ide postotak i citat odredbe, da se svaki
             // odmak od tarifne stavke može provjeriti u izvoru.
@@ -153,37 +154,74 @@ public sealed class TroskovnikDocumentService
             var ukupnoSTbr41 = l.UkupnoBodova + l.Tbr41Bodovi;
             var iznosSTbr41 = ZaokruziNovac(ukupnoSTbr41 * TarifaConstants.BodValue);
 
-            sb.AppendLine($"<tr><td>{l.Rbr}</td><td>{System.Net.WebUtility.HtmlEncode(l.Opis)}{tbr41}</td><td>{System.Net.WebUtility.HtmlEncode(l.TarifniBroj)}</td><td style=\"font-size:10px;color:#555\">{System.Net.WebUtility.HtmlEncode(izvor)}</td><td>{l.Kolicina}</td><td>{FormatBodovi(l.BodovaPoJedinici)}</td><td>{FormatBodovi(ukupnoSTbr41)}</td><td style=\"text-align:right\">{FormatCurrency(iznosSTbr41)}</td></tr>");
+            sb.AppendLine($"<tr><td>{l.Rbr}</td><td>{datumCelija}</td><td>{System.Net.WebUtility.HtmlEncode(l.Opis)}{tbr41}</td><td>{System.Net.WebUtility.HtmlEncode(l.TarifniBroj)}</td><td style=\"font-size:10px;color:#555\">{System.Net.WebUtility.HtmlEncode(izvor)}</td><td>{l.Kolicina}</td><td>{FormatBodovi(l.BodovaPoJedinici)}</td><td>{FormatBodovi(ukupnoSTbr41)}</td><td style=\"text-align:right\">{FormatCurrency(iznosSTbr41)}</td></tr>");
         }
 
-        // Tbr. 40 — povišenje za zastupanje više osoba, kao vlastiti redak.
+        // Tbr. 40 — povišenje za zastupanje više osoba, kao vlastiti redak; ostaje unutar
+        // odjeljka "Odvjetničke radnje" jer je i sam povišenje nagrade, ne zaseban trošak.
         if (resp.PovisenjeViseOsobaPostotak > 0)
         {
             var povisenjeIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 40. toč. 1 — 10% za drugu i svaku sljedeću osobu, najviše 50%";
-            sb.AppendLine($"<tr><td></td><td>Povišenje za zastupanje {resp.BrojZastupanihOsoba} osoba</td><td>Tbr. 40</td><td style=\"font-size:10px;color:#555\">{System.Net.WebUtility.HtmlEncode(povisenjeIzvor)}</td><td></td><td>{resp.PovisenjeViseOsobaPostotak:P0}</td><td>{FormatBodovi(resp.PovisenjeViseOsobaBodovi)}</td><td style=\"text-align:right\">{FormatCurrency(resp.PovisenjeViseOsobaBodovi * TarifaConstants.BodValue)}</td></tr>");
+            sb.AppendLine($"<tr><td></td><td></td><td>Povišenje za zastupanje {resp.BrojZastupanihOsoba} osoba</td><td>Tbr. 40</td><td style=\"font-size:10px;color:#555\">{System.Net.WebUtility.HtmlEncode(povisenjeIzvor)}</td><td></td><td>{resp.PovisenjeViseOsobaPostotak:P0}</td><td>{FormatBodovi(resp.PovisenjeViseOsobaBodovi)}</td><td style=\"text-align:right\">{FormatCurrency(resp.PovisenjeViseOsobaBodovi * TarifaConstants.BodValue)}</td></tr>");
         }
 
         sb.AppendLine("</table>");
 
-        // Totals
-        sb.AppendLine("<h3>Ukupno</h3>");
-        sb.AppendLine("<table style=\"width:320px;float:right;\">");
+        // ── Zbroj nagrade ─────────────────────────────────────────
+        sb.AppendLine("<h3>Zbroj nagrade</h3>");
+        sb.AppendLine("<table style=\"width:320px;\">");
+        sb.AppendLine($"<tr><td>Ukupno bodova</td><td style=\"text-align:right\">{FormatBodovi(resp.UkupnoBodova)}</td></tr>");
+        sb.AppendLine($"<tr><th>Nagrada (bez PDV-a)</th><th style=\"text-align:right\">{FormatCurrency(resp.UkupnoEurBezPdv)}</th></tr>");
+        sb.AppendLine("</table>");
 
+        // ── PDV — samo kad je odvjetnik u sustavu PDV-a ────────────
         if (includeVat)
         {
-            sb.AppendLine($"<tr><td>Osnovica (bez PDV)</td><td style=\"text-align:right\">{FormatCurrency(resp.UkupnoEurBezPdv)}</td></tr>");
+            sb.AppendLine("<h3>PDV (25%)</h3>");
+            sb.AppendLine("<table style=\"width:320px;\">");
             sb.AppendLine($"<tr><td>PDV (25%)</td><td style=\"text-align:right\">{FormatCurrency(resp.Pdv)}</td></tr>");
-            sb.AppendLine($"<tr><th>Odvjetnički trošak s PDV-om</th><th style=\"text-align:right\">{FormatCurrency(resp.UkupnoEurSPdv)}</th></tr>");
-        }
-        else
-        {
-            sb.AppendLine($"<tr><th>Odvjetnički trošak</th><th style=\"text-align:right\">{FormatCurrency(resp.UkupnoEurBezPdv)}</th></tr>");
+            sb.AppendLine($"<tr><th>Nagrada s PDV-om</th><th style=\"text-align:right\">{FormatCurrency(resp.UkupnoEurSPdv)}</th></tr>");
+            sb.AppendLine("</table>");
         }
 
-        // Sudske pristojbe — jedan redak po pristojbenoj radnji, svaki sa svojim tarifnim
-        // brojem. Kad ih nema, ostaje jedan redak s razlogom, da "0,00 €" ne izgleda kao greška.
+        // ── II. Sudske pristojbe — automatske + ručno dodane ───────
+        // Uredba naplaćuje po RADNJI, pa je automatski dio lista: tužba, presuda i žalba
+        // u istoj parnici tri su zasebne pristojbe, svaka sa svojim tarifnim brojem.
+        sb.AppendLine("<h3>II. Sudske pristojbe</h3>");
+        sb.AppendLine("<table style=\"width:480px;\">");
+        sb.AppendLine("<tr><th>#</th><th>Datum</th><th>Opis</th><th style=\"text-align:right\">Iznos (EUR)</th></tr>");
+
         AppendPristojbe(sb, resp);
+
+        foreach (var t in resp.DodatnePristojbe ?? new List<TroskovnikTrosakStavka>())
+        {
+            var datumCelija = t.Datum?.ToString("d", _hr) ?? "";
+            sb.AppendLine($"<tr><td>{t.Rbr}</td><td>{datumCelija}</td><td>{System.Net.WebUtility.HtmlEncode(t.Opis)}</td><td style=\"text-align:right\">{FormatCurrency(t.Iznos)}</td></tr>");
+        }
+
+        sb.AppendLine($"<tr><th colspan=\"3\">Ukupno pristojbe</th><th style=\"text-align:right\">{FormatCurrency(resp.UkupnoPristojbe)}</th></tr>");
+        sb.AppendLine("</table>");
+        sb.AppendLine("<p style=\"font-size:10px;color:#555\">Na sudske pristojbe ne obračunava se PDV.</p>");
+
+        // ── III. Predujmovi — vještačenje i sl. ────────────────────
+        sb.AppendLine("<h3>III. Predujmovi</h3>");
+        sb.AppendLine("<table style=\"width:480px;\">");
+        sb.AppendLine("<tr><th>#</th><th>Datum</th><th>Opis</th><th style=\"text-align:right\">Iznos (EUR)</th></tr>");
+
+        foreach (var t in resp.Predujmovi ?? new List<TroskovnikTrosakStavka>())
+        {
+            var datumCelija = t.Datum?.ToString("d", _hr) ?? "";
+            sb.AppendLine($"<tr><td>{t.Rbr}</td><td>{datumCelija}</td><td>{System.Net.WebUtility.HtmlEncode(t.Opis)}</td><td style=\"text-align:right\">{FormatCurrency(t.Iznos)}</td></tr>");
+        }
+
+        sb.AppendLine($"<tr><th colspan=\"3\">Ukupno predujmovi</th><th style=\"text-align:right\">{FormatCurrency(resp.UkupnoPredujmovi)}</th></tr>");
+        sb.AppendLine("</table>");
+        sb.AppendLine("<p style=\"font-size:10px;color:#555\">Na predujmove ne obračunava se PDV.</p>");
+
+        // ── SVEUKUPNI TROŠAK ────────────────────────────────────────
+        sb.AppendLine("<table style=\"width:320px;\">");
         sb.AppendLine($"<tr><th>SVEUKUPNI TROŠAK</th><th style=\"text-align:right\">{FormatCurrency(resp.SveukupniTrosak)}</th></tr>");
+        sb.AppendLine("</table>");
 
         // Čl. 13 — pristojba koju umjesto oslobođene stranke plaća protivna, razmjerno
         // uspjehu. Stoji ISPOD sveukupnog troška jer u njega ne ulazi: obveza nastaje
@@ -212,14 +250,21 @@ public sealed class TroskovnikDocumentService
         // dijelove prema broju branjenika, odnosno zastupanih osoba."
         if (resp.BrojZastupanihOsoba > 1)
         {
+            sb.AppendLine("<table style=\"width:320px;\">");
             sb.AppendLine($"<tr><td>Nagrada po osobi ({resp.BrojZastupanihOsoba} branjenika)<br/><span style=\"font-size:10px;color:#555\">Tbr. 40. toč. 1 — dioba na jednake dijelove; {FormatBodovi(resp.BodoviPoOsobi)} bodova, bez PDV-a i sudske pristojbe</span></td><td style=\"text-align:right\">{FormatCurrency(resp.NagradaPoOsobi)}</td></tr>");
+            sb.AppendLine("</table>");
         }
-
-        sb.AppendLine("</table>");
 
         sb.AppendLine("<div style=\"clear:both;\"></div>");
 
-        // Tbr. 7.1 — VPS range reference table
+        // ── Napomena — slobodni tekst, izostaje kad je prazna ──────
+        if (!string.IsNullOrWhiteSpace(resp.Napomena))
+        {
+            sb.AppendLine("<h3>Napomena</h3>");
+            sb.AppendLine($"<p>{System.Net.WebUtility.HtmlEncode(resp.Napomena).Replace("\n", "<br/>")}</p>");
+        }
+
+        // Tbr. 7.1 — VPS range reference table, kao prilog na kraju
         AppendVpsRangeTable(sb);
 
         sb.AppendLine($"<p style=\"margin-top:32px;\">Datum izrade: {resp.DatumIzrade.ToString("g", _hr)}</p>");
@@ -248,10 +293,14 @@ public sealed class TroskovnikDocumentService
                 : $" (oslobođeno — {resp.OslobodjenjeNaziv})"
             : "";
 
+        // Četiri stupca (#, Datum, Opis, Iznos) — automatski izvedene pristojbe dijele
+        // tablicu s ručno dodanima. Redni broj i datum nose samo ručne: automatska
+        // pristojba nije radnja koju je odvjetnik datirao, nego posljedica odabrane.
         if (resp.PristojbeneStavke.Count == 0)
         {
             var razlog = $"{TarifaConstants.NazivUredbeOPristojbama} za odabrane radnje ne propisuje pristojbu";
-            sb.AppendLine($"<tr><td>Sudska pristojba{System.Net.WebUtility.HtmlEncode(oslobodjeno)}<br/><span style=\"font-size:10px;color:#555\">{System.Net.WebUtility.HtmlEncode(razlog)}</span></td><td style=\"text-align:right\">{FormatCurrency(0m)}</td></tr>");
+            sb.AppendLine($"<tr><td></td><td></td><td>Sudska pristojba{System.Net.WebUtility.HtmlEncode(oslobodjeno)}<br/><span style=\"font-size:10px;color:#555\">{System.Net.WebUtility.HtmlEncode(razlog)}</span></td><td style=\"text-align:right\">{FormatCurrency(0m)}</td></tr>");
+            AppendOsnovicaPristojbe(sb, resp);
             return;
         }
 
@@ -264,11 +313,8 @@ public sealed class TroskovnikDocumentService
             // pa se naznaka prijelaznog slučaja ne mora dodavati posebno.
             var izvor = $"{stavka.Opis}{kolicina} · {stavka.PravniIzvor}";
 
-            sb.AppendLine($"<tr><td>{System.Net.WebUtility.HtmlEncode(naslov)}<br/><span style=\"font-size:10px;color:#555\">{System.Net.WebUtility.HtmlEncode(izvor)}</span></td><td style=\"text-align:right\">{FormatCurrency(stavka.Iznos)}</td></tr>");
+            sb.AppendLine($"<tr><td></td><td></td><td>{System.Net.WebUtility.HtmlEncode(naslov)}<br/><span style=\"font-size:10px;color:#555\">{System.Net.WebUtility.HtmlEncode(izvor)}</span></td><td style=\"text-align:right\">{FormatCurrency(stavka.Iznos)}</td></tr>");
         }
-
-        if (resp.PristojbeneStavke.Count > 1)
-            sb.AppendLine($"<tr><td>Ukupno sudske pristojbe{System.Net.WebUtility.HtmlEncode(oslobodjeno)}</td><td style=\"text-align:right\">{FormatCurrency(resp.SudskaPristojba)}</td></tr>");
 
         AppendOsnovicaPristojbe(sb, resp);
     }
@@ -298,7 +344,7 @@ public sealed class TroskovnikDocumentService
             return;
 
         var tekst = string.Join(" ", napomene);
-        sb.AppendLine($"<tr><td colspan=\"2\" style=\"font-size:10px;color:#555\">{System.Net.WebUtility.HtmlEncode(tekst)}</td></tr>");
+        sb.AppendLine($"<tr><td colspan=\"4\" style=\"font-size:10px;color:#555\">{System.Net.WebUtility.HtmlEncode(tekst)}</td></tr>");
     }
 
     /// <summary>

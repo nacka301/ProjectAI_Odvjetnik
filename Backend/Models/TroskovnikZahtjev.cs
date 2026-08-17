@@ -266,6 +266,34 @@ public sealed class TroskovnikRequest
     /// </summary>
     [JsonPropertyName("tbr41_snizenje_postotak")]
     public decimal Tbr41SnizenjePostotak { get; set; }
+
+    /// <summary>Ručno dodane sudske pristojbe — ispod automatski izračunate, bez PDV-a.</summary>
+    [JsonPropertyName("dodatne_pristojbe")]
+    public List<TroskovnikTrosakRequest> DodatnePristojbe { get; set; } = [];
+
+    /// <summary>Predujmovi (vještačenje i sl.) — vlastiti odjeljak, bez PDV-a.</summary>
+    [JsonPropertyName("predujmovi")]
+    public List<TroskovnikTrosakRequest> Predujmovi { get; set; } = [];
+
+    /// <summary>Slobodni tekst napomene na kraju troškovnika. Prazan/whitespace izostavlja odjeljak.</summary>
+    [JsonPropertyName("napomena")]
+    public string? Napomena { get; set; }
+}
+
+/// <summary>
+/// Jedan ručno unesen trošak (dodatna pristojba ili predujam) — oba popisa dijele isti oblik.
+/// </summary>
+public sealed class TroskovnikTrosakRequest
+{
+    /// <summary>Datum troška. Opcionalan, kao i kod radnje.</summary>
+    [JsonPropertyName("datum")]
+    public DateOnly? Datum { get; set; }
+
+    [JsonPropertyName("opis")]
+    public string Opis { get; set; } = "";
+
+    [JsonPropertyName("iznos")]
+    public decimal Iznos { get; set; }
 }
 
 // New request DTOs for nested schema
@@ -326,6 +354,14 @@ public sealed class TroskovnikItemRequest
     /// <summary>Količina (broj radnji, sati, itd.).</summary>
     [JsonPropertyName("kolicina")]
     public int Kolicina { get; set; } = 1;
+
+    /// <summary>
+    /// Datum kad je radnja poduzeta. Opcionalan — prazan se ne ispisuje i ne blokira
+    /// izračun. <c>DateOnly?</c> namjerno umjesto <c>string</c>: neispravan datum tada
+    /// pada s greškom umjesto da završi kao smeće u dokumentu.
+    /// </summary>
+    [JsonPropertyName("datum")]
+    public DateOnly? Datum { get; set; }
 
     /// <summary>
     /// Tbr. 41. toč. 1 — povišenje ove stavke, 0–100 %. Null znači „koristi postotak
