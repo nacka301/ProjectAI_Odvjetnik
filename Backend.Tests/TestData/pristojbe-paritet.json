@@ -71,6 +71,11 @@
     { "odredba": "tbr29_zalba", "osnovica": 50000, "uredba": "NN 50/2026", "ocekivano": 140.00, "opis": "Tar. br. 29 — žalba u upravnom sporu" },
     { "odredba": "tbr30_odluka", "osnovica": 50000, "uredba": "NN 50/2026", "ocekivano": 140.00, "opis": "Tar. br. 30 — presuda u upravnom sporu" },
 
+    { "odredba": "tbr31_podnesak", "osnovica": 0, "uredba": "NN 50/2026", "ocekivano": 3.00, "opis": "Tar. br. 31 — podnesak kojim se traži uvjerenje" },
+    { "odredba": "tbr31_uvjerenje", "osnovica": 0, "uredba": "NN 50/2026", "ocekivano": 6.00, "opis": "Tar. br. 31 — uvjerenje" },
+    { "odredba": "tbr31_podnesak_egradani", "osnovica": 0, "uredba": "NN 50/2026", "ocekivano": 1.50, "opis": "Tar. br. 31 st. 3 — podnesak kroz e-Građane, polovica od 3,00" },
+    { "odredba": "tbr31_egradani", "osnovica": 0, "uredba": "NN 50/2026", "ocekivano": 3.00, "opis": "Tar. br. 31 st. 3 — uvjerenje kroz e-Građane, polovica od 6,00" },
+
     { "odredba": "tbr33", "osnovica": 0, "uredba": "NN 50/2026", "ocekivano": 30.00, "opis": "Tar. br. 33 — razmatranje spisa" },
     { "odredba": "tbr34", "osnovica": 1000, "uredba": "NN 50/2026", "ocekivano": 78.00, "opis": "Tar. br. 34 — 30,00 + 6,00 × ⌈1.000/130⌉ = 30 + 48" },
     { "odredba": "tbr34", "osnovica": 100000, "uredba": "NN 50/2026", "ocekivano": 560.00, "opis": "Tar. br. 34 — kapa" },

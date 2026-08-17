@@ -175,6 +175,7 @@ describe("Čl. 7 — sudar s umanjenjima koja Uredba sama daje", () => {
    */
   it.each([
     ["tbr25_enotar", 15.0],
+    ["tbr31_podnesak_egradani", 1.5],
     ["tbr26_enotar", 40.0],
     ["tbr31_egradani", 3.0],
   ])("%s ostaje na %s € i uz sve tri oznake", (id, ocekivano) => {

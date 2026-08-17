@@ -976,7 +976,8 @@ export const VRSTA_RADNJE: Record<string, VrstaRadnje> = {
   tbr30_odluka: "odluka", tbr30_obnova: "odluka", tbr30_vus: "odluka",
 
   // IX. Ostali slučajevi
-  tbr31_podnesak: "podnesak", tbr31_uvjerenje: "ostalo", tbr31_egradani: "ostalo",
+  tbr31_podnesak: "podnesak", tbr31_podnesak_egradani: "podnesak",
+  tbr31_uvjerenje: "ostalo", tbr31_egradani: "ostalo",
   tbr32: "ostalo", tbr33: "ostalo", tbr34: "podnesak",
   tbr35_pohrana: "ostalo", tbr35_odluka: "odluka",
 };
@@ -996,6 +997,7 @@ export const VRSTA_RADNJE: Record<string, VrstaRadnje> = {
 export const VEC_ELEKTRONICKO_UMANJENJE = new Set([
   "tbr25_enotar",
   "tbr26_enotar",
+  "tbr31_podnesak_egradani",
   "tbr31_egradani",
 ]);
 
@@ -1225,7 +1227,9 @@ export const PRISTOJBE_NN50_2026: PristojbenaOdredba[] = [
   // ── Poglavlje IX. — ostali slučajevi ──
   { id: "tbr31_podnesak", poglavlje: "IX. Ostali slučajevi", tarifni_broj: "Tar. br. 31", opis: "Podnesak kojim se traži uvjerenje", izracun: { vrsta: "fiksno", iznos: 3 } },
   { id: "tbr31_uvjerenje", poglavlje: "IX. Ostali slučajevi", tarifni_broj: "Tar. br. 31", opis: "Uvjerenje", izracun: { vrsta: "fiksno", iznos: 6 } },
-  { id: "tbr31_egradani", poglavlje: "IX. Ostali slučajevi", tarifni_broj: "Tar. br. 31", opis: "Uvjerenje zatraženo putem sustava e-Građani — polovica", izracun: { vrsta: "udio", odredba: "tbr31_uvjerenje", faktor: 0.5 } },
+  // St. 3 daje polovicu za OBOJE — i za podnesak i za uvjerenje.
+  { id: "tbr31_podnesak_egradani", poglavlje: "IX. Ostali slučajevi", tarifni_broj: "Tar. br. 31 st. 3", opis: "Podnesak kojim se traži uvjerenje, kroz sustav e-Građani i e-Ovlaštenja — polovica", izracun: { vrsta: "udio", odredba: "tbr31_podnesak", faktor: 0.5 } },
+  { id: "tbr31_egradani", poglavlje: "IX. Ostali slučajevi", tarifni_broj: "Tar. br. 31 st. 3", opis: "Uvjerenje zatraženo kroz sustav e-Građani i e-Ovlaštenja — polovica", izracun: { vrsta: "udio", odredba: "tbr31_uvjerenje", faktor: 0.5 } },
   { id: "tbr32", poglavlje: "IX. Ostali slučajevi", tarifni_broj: "Tar. br. 32", opis: "Ovjera ugovora o doživotnom ili dosmrtnom uzdržavanju", izracun: { vrsta: "fiksno", iznos: 80 } },
   { id: "tbr33", poglavlje: "IX. Ostali slučajevi", tarifni_broj: "Tar. br. 33", opis: "Razmatranje sudskog spisa", izracun: { vrsta: "fiksno", iznos: 30 } },
   {

@@ -444,8 +444,14 @@ public static class PristojbeTarifaNn50_2026
         new("tbr31_uvjerenje", PristojbaPoglavlje.OstaliSlucajevi, "Tar. br. 31",
             "Uvjerenje", new Fiksno(6.00m)),
 
-        new("tbr31_egradani", PristojbaPoglavlje.OstaliSlucajevi, "Tar. br. 31",
-            "Uvjerenje zatraženo putem sustava e-Građani — polovica",
+        // St. 3 daje polovicu za OBOJE — i za podnesak i za uvjerenje — pa su i ovdje
+        // dva retka, kao što su dva i u punom iznosu.
+        new("tbr31_podnesak_egradani", PristojbaPoglavlje.OstaliSlucajevi, "Tar. br. 31 st. 3",
+            "Podnesak kojim se traži uvjerenje, kroz sustav e-Građani i e-Ovlaštenja — polovica",
+            new UdioOd("tbr31_podnesak", 0.5m)),
+
+        new("tbr31_egradani", PristojbaPoglavlje.OstaliSlucajevi, "Tar. br. 31 st. 3",
+            "Uvjerenje zatraženo kroz sustav e-Građani i e-Ovlaštenja — polovica",
             new UdioOd("tbr31_uvjerenje", 0.5m)),
 
         new("tbr32", PristojbaPoglavlje.OstaliSlucajevi, "Tar. br. 32",
@@ -586,6 +592,7 @@ public static class PristojbeTarifaNn50_2026
 
             // ── IX. Ostali slučajevi ──
             ["tbr31_podnesak"] = VrstaRadnje.Podnesak,
+            ["tbr31_podnesak_egradani"] = VrstaRadnje.Podnesak,
             ["tbr31_uvjerenje"] = VrstaRadnje.Ostalo,
             ["tbr31_egradani"] = VrstaRadnje.Ostalo,
             ["tbr32"] = VrstaRadnje.Ostalo,
@@ -609,7 +616,10 @@ public static class PristojbeTarifaNn50_2026
     /// dana je zbog vrste podneska, ne zbog oblika, pa se s čl. 7 legitimno slaže.
     /// </summary>
     private static readonly IReadOnlySet<string> VecElektronicke =
-        new HashSet<string> { "tbr25_enotar", "tbr26_enotar", "tbr31_egradani" };
+        new HashSet<string>
+        {
+            "tbr25_enotar", "tbr26_enotar", "tbr31_podnesak_egradani", "tbr31_egradani"
+        };
 
     /// <summary>Poglavlja spojena redoslijedom iz Priloga, prije razvrstavanja.</summary>
     private static readonly PristojbenaOdredba[] PoRedu =
