@@ -403,6 +403,16 @@ function TroskovnikContent() {
   // (dioba/ostavina, stečaj/predstečaj) — zato se lista mora dati urediti.
   const [pristojbeDodane, setPristojbeDodane] = useState<RucnaPristojba[]>([]);
   const [pristojbeIskljucene, setPristojbeIskljucene] = useState<string[]>([]);
+
+  // ── Čl. 7 Zakona o sudskim pristojbama — elektronički oblik ──
+  // Tri stavka, tri uvjeta, pa dvije oznake na razini troškovnika i jedna po retku:
+  //   st. 1 — stranka podnijela elektronički i platila pri podnošenju
+  //   st. 3 — stranka predložila ZK UPIS elektronički i platila pri podnošenju
+  //   st. 2 — SUD dostavio odluku elektronički i plaćeno u roku od 3 dana (po odluci,
+  //           jer se rok može ispuniti za jednu, a za drugu ne)
+  const [podnesciElektronicki, setPodnesciElektronicki] = useState(false);
+  const [zkUpisElektronicki, setZkUpisElektronicki] = useState(false);
+  const [odlukeElektronicki, setOdlukeElektronicki] = useState<string[]>([]);
   // ── Oslobođenja — Zakon o sudskim pristojbama, čl. 11–13 ──
   const [oslobodjenjeKategorija, setOslobodjenjeKategorija] = useState("");
   const [brojOslobodjenihOsoba, setBrojOslobodjenihOsoba] = useState(0);
@@ -681,12 +691,19 @@ function TroskovnikContent() {
         datumPokretanjaUpravnogSpora: datumPokretanjaUpravnogSpora || null,
         dodane: pristojbeDodane,
         iskljucene: pristojbeIskljucene,
+        // Čl. 7 Zakona o sudskim pristojbama — elektronički oblik
+        podnesciElektronicki,
+        zkUpisElektronicki,
+        odlukeElektronicki,
       }),
     [
       vpsZakonski,
       odabraneDefinicije,
       isOslobodjenPristojbi,
       oslobodjenjeUlaz,
+      podnesciElektronicki,
+      zkUpisElektronicki,
+      odlukeElektronicki,
       datumOdgovoraNaTuzbu,
       datumPokretanjaUpravnogSpora,
       pristojbeDodane,
@@ -1140,6 +1157,10 @@ function TroskovnikContent() {
         datum_pokretanja_upravnog_spora: datumPokretanjaUpravnogSpora || null,
         pristojbe_dodane: pristojbeDodane,
         pristojbe_iskljucene: pristojbeIskljucene,
+        // Čl. 7 Zakona o sudskim pristojbama — elektronički oblik
+        podnesci_elektronicki: podnesciElektronicki,
+        zk_upis_elektronicki: zkUpisElektronicki,
+        odluke_elektronicki: odlukeElektronicki,
         broj_zastupanih_osoba: brojZastupanihOsoba,
         // Oslobođenja — Zakon o sudskim pristojbama, čl. 11–13
         oslobodjenje_kategorija: oslobodjenjeKategorija || undefined,
@@ -1244,6 +1265,10 @@ function TroskovnikContent() {
         datum_pokretanja_upravnog_spora: datumPokretanjaUpravnogSpora || null,
         pristojbe_dodane: pristojbeDodane,
         pristojbe_iskljucene: pristojbeIskljucene,
+        // Čl. 7 Zakona o sudskim pristojbama — elektronički oblik
+        podnesci_elektronicki: podnesciElektronicki,
+        zk_upis_elektronicki: zkUpisElektronicki,
+        odluke_elektronicki: odlukeElektronicki,
         broj_zastupanih_osoba: brojZastupanihOsoba,
         // Oslobođenja — Zakon o sudskim pristojbama, čl. 11–13
         oslobodjenje_kategorija: oslobodjenjeKategorija || undefined,
@@ -2672,8 +2697,36 @@ function TroskovnikContent() {
                                     {fmtEur(s.iznos)}
                                   </span>
                                 </div>
+                                {/* Čl. 7 st. 2 — uvjet je vezan uz POJEDINU odluku (dostava
+                                    suda + uplata u 3 dana), pa oznaka stoji uz redak.
+                                    Podnesci i zk idu na prekidače iznad. */}
+                                {s.cl7_rezim === "st_2" && (
+                                  <label className="flex items-start gap-1.5 text-[10px] text-slate-500 leading-snug pl-4">
+                                    <input
+                                      type="checkbox"
+                                      checked={odlukeElektronicki.includes(s.odredba_id)}
+                                      onChange={(e) =>
+                                        setOdlukeElektronicki((prev) =>
+                                          e.target.checked
+                                            ? [...prev, s.odredba_id]
+                                            : prev.filter((id) => id !== s.odredba_id),
+                                        )
+                                      }
+                                      className="mt-0.5 h-3 w-3"
+                                    />
+                                    <span>
+                                      Odluku je sud dostavio elektronički i pristojba je plaćena u
+                                      roku od 3 dana <span className="text-slate-400">(čl. 7 st. 2 — polovica)</span>
+                                    </span>
+                                  </label>
+                                )}
                                 <p className="text-[10px] text-slate-400 leading-snug">
                                   {s.opis}
+                                  {s.umanjeno_elektronicki && (
+                                    <span className="ml-1 text-emerald-700">
+                                      · umanjeno na polovicu (čl. 7 {s.cl7_rezim.replace("_", ". ")})
+                                    </span>
+                                  )}
                                   {s.uredba === "NN 37/2023" && (
                                     <span className="ml-1 text-amber-600">
                                       · po staroj Uredbi (NN 37/2023), čl. 2
@@ -2691,6 +2744,44 @@ function TroskovnikContent() {
                                 </span>
                               </div>
                             )}
+
+                            {/* Čl. 7 Zakona o sudskim pristojbama — elektronički oblik.
+                                Dvije oznake, ne jedna: st. 1 se veže uz oblik podneska,
+                                st. 3 uz oblik prijedloga za zk upis. Uvjet svake uključuje
+                                i plaćanje u roku — st. 4 propušten rok vraća puni iznos. */}
+                            <div className="pt-1.5 mt-1 border-t border-slate-100 space-y-1.5">
+                              <label className="flex items-start gap-1.5 text-[10px] text-slate-600 leading-snug">
+                                <input
+                                  type="checkbox"
+                                  checked={podnesciElektronicki}
+                                  onChange={(e) => setPodnesciElektronicki(e.target.checked)}
+                                  className="mt-0.5 h-3 w-3"
+                                />
+                                <span>
+                                  Podnesci predani elektronički i pristojba plaćena pri podnošenju
+                                  <span className="block text-slate-400">
+                                    Čl. 7 st. 1 — polovica propisanog iznosa. Ne odnosi se na odluke.
+                                  </span>
+                                </span>
+                              </label>
+
+                              {pristojbe.stavke.some((s) => s.cl7_rezim === "st_3") && (
+                                <label className="flex items-start gap-1.5 text-[10px] text-slate-600 leading-snug">
+                                  <input
+                                    type="checkbox"
+                                    checked={zkUpisElektronicki}
+                                    onChange={(e) => setZkUpisElektronicki(e.target.checked)}
+                                    className="mt-0.5 h-3 w-3"
+                                  />
+                                  <span>
+                                    Zemljišnoknjižni upis predložen elektronički, plaćeno pri podnošenju
+                                    <span className="block text-slate-400">
+                                      Čl. 7 st. 3 — polovica i za podneske i za odluke u tom postupku.
+                                    </span>
+                                  </span>
+                                </label>
+                              )}
+                            </div>
 
                             {/* Čl. 2 — datumi se traže samo kad je odabrana radnja na koju se odnose. */}
                             {(imaOdgovorNaTuzbu || imaUpravniSpor) && (

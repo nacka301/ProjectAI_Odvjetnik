@@ -148,6 +148,33 @@ public sealed class TroskovnikRequest
     [JsonPropertyName("pristojbe_iskljucene")]
     public List<string> PristojbeIskljucene { get; set; } = [];
 
+    // ── Čl. 7 Zakona o sudskim pristojbama — elektronički oblik ────
+    //
+    // Tri stavka, tri različita uvjeta, pa tri različita ulaza. Vidi PristojbeOpcije.
+
+    /// <summary>
+    /// Čl. 7 st. 1 — podnesci predani elektronički i pristojba plaćena u trenutku
+    /// podnošenja. Vrijedi za cijeli troškovnik.
+    /// </summary>
+    [JsonPropertyName("podnesci_elektronicki")]
+    public bool PodnesciElektronicki { get; set; }
+
+    /// <summary>
+    /// Čl. 7 st. 3 — zemljišnoknjižni upis predložen elektronički i plaćeno pri
+    /// podnošenju. Zaseban prekidač jer uvjet nije oblik pojedinog podneska nego oblik
+    /// prijedloga za upis.
+    /// </summary>
+    [JsonPropertyName("zk_upis_elektronicki")]
+    public bool ZkUpisElektronicki { get; set; }
+
+    /// <summary>
+    /// Čl. 7 st. 2 — ključevi odredbi (odluka) koje je sud dostavio elektronički i za
+    /// koje je pristojba uplaćena u roku od tri dana. Po retku, jer se rok može ispuniti
+    /// za jednu odluku, a za drugu ne.
+    /// </summary>
+    [JsonPropertyName("odluke_elektronicki")]
+    public List<string> OdlukeElektronicki { get; set; } = [];
+
     /// <summary>
     /// Po kojoj je točki čl. 11 stranka oslobođena. Vidi <see cref="Models.OslobodjenjeKategorija"/>.
     /// Null znači „oslobođena, bez navedene osnove" — staro ponašanje golog prekidača.

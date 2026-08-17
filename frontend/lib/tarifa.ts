@@ -909,6 +909,90 @@ export interface PristojbenaOdredba {
   osnovica_opis?: string;
 }
 
+// ── Čl. 7 Zakona o sudskim pristojbama — elektronički oblik ───────
+//
+// Zrcali `VrstaRadnje` i `Cl7Rezim` na backendu. Tri stavka, tri uvjeta:
+//   st. 1 — stranka je PODNIJELA elektronički i platila pri podnošenju
+//   st. 2 — SUD je dostavio odluku elektronički i plaćeno je u roku od 3 dana
+//   st. 3 — stranka je predložila ZK UPIS elektronički i platila pri podnošenju;
+//           tada se prepolovljuju i podnesci i odluke u tom postupku
+// St. 4 nema svoju oznaku: propušten rok znači neispunjen uvjet.
+
+export type VrstaRadnje = "ostalo" | "podnesak" | "odluka";
+export type Cl7Rezim = "" | "st_1" | "st_2" | "st_3";
+
+/**
+ * Razvrstavanje odredbi po vrsti radnje. Zrcali blok `Vrste` u
+ * `PristojbeTarifaNn50_2026`; odredba koje ovdje nema nikad se ne umanjuje.
+ * Paritetni test zaključava da se dva popisa ne raziđu.
+ */
+export const VRSTA_RADNJE: Record<string, VrstaRadnje> = {
+  // I. Parnični i ovršni
+  tbr1_st1: "podnesak", tbr1_st2: "podnesak", tbr1_st3: "podnesak",
+  tbr2_st1: "odluka", tbr2_st2: "odluka", tbr2_st3: "odluka", tbr2_st4: "odluka",
+  tbr2_st5: "odluka", tbr2_st5_strane: "odluka", tbr2_st6: "odluka",
+  tbr2_st7: "odluka", tbr2_st8: "odluka", tbr2_st9: "ostalo",
+  tbr3_st1: "podnesak", tbr3_st2: "podnesak", tbr3_st3: "podnesak", tbr3_st5: "podnesak",
+
+  // II. Izvanparnični
+  tbr4_prijedlog: "podnesak", tbr4_odluka: "odluka", tbr4_zalba: "podnesak",
+  tbr5: "podnesak", tbr5_odluka: "odluka", tbr5_zalba: "podnesak",
+  tbr6_prijedlog: "podnesak", tbr6_odluka: "odluka", tbr6_zalba: "podnesak",
+  tbr7_prijedlog: "podnesak", tbr7_odluka: "odluka", tbr7_zalba: "podnesak",
+  tbr8_tijelo: "ostalo", tbr8_tumac: "ostalo",
+  tbr9_prvi_upis: "odluka", tbr9_rjesenje: "odluka", tbr9_daljnji_upis: "odluka",
+  tbr9_zalba: "podnesak",
+
+  // III. Ostavinski
+  tbr11: "odluka", tbr12: "podnesak",
+  tbr13_sastavljanje: "ostalo", tbr13_cuvanje: "ostalo",
+
+  // IV. Zemljišnoknjižni — čl. 7 st. 3
+  tbr14_upis: "podnesak", tbr14_ispravni: "podnesak", tbr14_zakasnjeli: "podnesak",
+  tbr15_uknjizba: "odluka", tbr15_zabiljezba: "odluka", tbr15_poljoprivredni: "odluka",
+  tbr15_etaziranje: "odluka", tbr15_zakasnjelo: "odluka",
+  tbr16: "podnesak", tbr17_18: "ostalo",
+
+  // V. Kazneni po privatnoj tužbi
+  tbr19_tuzba: "podnesak", tbr19_povrat: "podnesak", tbr20: "odluka",
+  tbr21_zalba: "podnesak", tbr21_odgovor: "podnesak", tbr21_izvanredni: "podnesak",
+
+  // VI. Stečaj i likvidacija
+  tbr22_prijedlog: "podnesak", tbr22_zalba: "podnesak",
+  tbr23_st1: "podnesak", tbr23_st2: "podnesak", tbr23_zalba: "podnesak",
+  tbr24: "ostalo",
+
+  // VII. Sudski registar
+  tbr25_prijava: "podnesak", tbr25_jdoo: "podnesak", tbr25_enotar: "podnesak",
+  tbr26_osnivanje: "odluka", tbr26_osnivanje_jdoo: "odluka",
+  tbr26_promjena: "odluka", tbr26_promjena_jdoo: "odluka",
+  tbr26_fizicki: "ostalo", tbr26_enotar: "odluka",
+  tbr27_prijava: "podnesak", tbr27_upis: "odluka", tbr27_promjena: "odluka",
+  tbr28_preslika: "ostalo", tbr28_potvrda: "ostalo",
+
+  // VIII. Upravni spor
+  tbr29_tuzba: "podnesak", tbr29_obnova: "podnesak", tbr29_opci_akti: "podnesak",
+  tbr29_vus: "podnesak", tbr29_zalba: "podnesak",
+  tbr30_odluka: "odluka", tbr30_obnova: "odluka", tbr30_vus: "odluka",
+
+  // IX. Ostali slučajevi
+  tbr31_podnesak: "podnesak", tbr31_uvjerenje: "ostalo", tbr31_egradani: "ostalo",
+  tbr32: "ostalo", tbr33: "ostalo", tbr34: "podnesak",
+  tbr35_pohrana: "ostalo", tbr35_odluka: "odluka",
+};
+
+/**
+ * Koji stavak čl. 7 upravlja odredbom. Izvodi se iz vrste radnje i poglavlja, isto kao
+ * `PristojbenaOdredba.Cl7Rezim` na backendu: provjera vrste ide PRIJE provjere
+ * poglavlja, jer ovjera preslike stoji u zk poglavlju, a nije ni podnesak ni odluka.
+ */
+export function cl7Rezim(odredbaId: string, poglavlje: PristojbaPoglavlje): Cl7Rezim {
+  const vrsta = VRSTA_RADNJE[odredbaId] ?? "ostalo";
+  if (vrsta === "ostalo") return "";
+  if (poglavlje === "IV. Zemljišnoknjižni postupak") return "st_3";
+  return vrsta === "podnesak" ? "st_1" : "st_2";
+}
+
 // ── NN 50/2026, po poglavljima Priloga ────────────────────────────
 
 const VPS_OSNOVICA = "vrijednost predmeta spora";
@@ -1362,6 +1446,10 @@ export interface PristojbenaStavka {
   pravni_izvor: string;
   /** True kad je redak izveden iz odabranih stavki tarife, false kad je dodan ručno. */
   automatski: boolean;
+  /** Koji stavak čl. 7 uopće može umanjiti ovaj redak; "" kad nijedan. */
+  cl7_rezim: Cl7Rezim;
+  /** Je li umanjenje na polovicu stvarno primijenjeno. */
+  umanjeno_elektronicki: boolean;
 }
 
 export interface RucnaPristojba {
@@ -1385,6 +1473,12 @@ export interface PristojbeUlaz {
    * samo grubi prekidač `oslobodjen`.
    */
   oslobodjenje?: OslobodjenjeUlaz;
+  /** Čl. 7 st. 1 — podnesci predani elektronički i plaćeno pri podnošenju. */
+  podnesciElektronicki?: boolean;
+  /** Čl. 7 st. 3 — zk upis predložen elektronički i plaćeno pri podnošenju. */
+  zkUpisElektronicki?: boolean;
+  /** Čl. 7 st. 2 — ključevi odluka dostavljenih elektronički i plaćenih u roku od 3 dana. */
+  odlukeElektronicki?: string[];
 }
 
 export interface PristojbeRezultat {
@@ -1427,13 +1521,48 @@ function razrijesiVerziju(
   return "NN 50/2026";
 }
 
-function pravniIzvor(odredba: PristojbenaOdredba, verzija: UredbaVerzija): string {
+function pravniIzvor(
+  odredba: PristojbenaOdredba,
+  verzija: UredbaVerzija,
+  umanjenoCl7: boolean,
+): string {
   const naziv =
     verzija === "NN 37/2023"
       ? "Uredba o Tarifi sudskih pristojbi (NN 37/2023) — čl. 2 NN 50/2026"
       : "Uredba o Tarifi sudskih pristojbi (NN 50/2026)";
 
-  return `${naziv}, ${odredba.tarifni_broj}`;
+  const izvor = `${naziv}, ${odredba.tarifni_broj}`;
+  if (!umanjenoCl7) return izvor;
+
+  // Prepolovljena pristojba mora reći PO ČEMU je prepolovljena, inače se ne razlikuje
+  // od greške u računu.
+  const stavak: Record<Cl7Rezim, string> = {
+    "": "",
+    st_1: "st. 1 — podnesak u elektroničkom obliku",
+    st_2: "st. 2 — odluka dostavljena elektronički, plaćeno u roku od 3 dana",
+    st_3: "st. 3 — zemljišnoknjižni upis predložen elektronički",
+  };
+
+  const rezim = cl7Rezim(odredba.id, odredba.poglavlje);
+  return `${izvor} · umanjeno na polovicu: Zakon o sudskim pristojbama (NN 118/18, 51/23), čl. 7 ${stavak[rezim]}`;
+}
+
+/**
+ * Umanjuje li se redak na polovicu po čl. 7. Zrcali `SudskePristojbeCalculator.UmanjujeSeCl7`.
+ * St. 4 nema svoju granu: propušten rok znači neispunjen uvjet, a to je isto što i
+ * isključena oznaka.
+ */
+function umanjujeSeCl7(odredba: PristojbenaOdredba, ulaz: PristojbeUlaz): boolean {
+  switch (cl7Rezim(odredba.id, odredba.poglavlje)) {
+    case "st_1":
+      return ulaz.podnesciElektronicki === true;
+    case "st_3":
+      return ulaz.zkUpisElektronicki === true;
+    case "st_2":
+      return (ulaz.odlukeElektronicki ?? []).includes(odredba.id);
+    default:
+      return false;
+  }
 }
 
 /**
@@ -1484,7 +1613,15 @@ export function obracunajPristojbe(ulaz: PristojbeUlaz): PristojbeRezultat {
     // Čl. 12 umanjuje OSNOVICU, ne gotov iznos — Tar. br. 1 je progresivan.
     const osnovica = rucna?.osnovica ?? vpsUdio;
     const kolicina = Math.max(1, rucna?.kolicina ?? 1);
-    const poJedinici = potpuno ? 0 : izracunajPristojbu(odredbaId, osnovica, verzija);
+
+    // Čl. 7 — polovica se uzima od PROPISANOG iznosa, dakle nakon svih uputa i kapa iz
+    // Uredbe, a zaokružuje se jednom, na kraju.
+    const umanjeno = umanjujeSeCl7(odredba, ulaz);
+    const poJedinici = potpuno
+      ? 0
+      : umanjeno
+        ? zaokruziNovac(nezaokruzeno(odredbaId, osnovica, verzija, MAX_DUBINA_UPUTE) * 0.5)
+        : izracunajPristojbu(odredbaId, osnovica, verzija);
 
     stavke.push({
       odredba_id: odredbaId,
@@ -1496,8 +1633,10 @@ export function obracunajPristojbe(ulaz: PristojbeUlaz): PristojbeRezultat {
       iznos_po_jedinici: poJedinici,
       iznos: poJedinici * kolicina,
       uredba: verzija,
-      pravni_izvor: pravniIzvor(odredba, verzija),
+      pravni_izvor: pravniIzvor(odredba, verzija, umanjeno),
       automatski: rucna === null,
+      cl7_rezim: cl7Rezim(odredbaId, odredba.poglavlje),
+      umanjeno_elektronicki: umanjeno,
     });
   }
 

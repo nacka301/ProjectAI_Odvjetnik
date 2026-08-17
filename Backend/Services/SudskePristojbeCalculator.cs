@@ -224,7 +224,14 @@ public static class SudskePristojbeCalculator
         var osnovica = rucna?.Osnovica ?? vrijednostSpora;
         var kolicina = Math.Max(1, rucna?.Kolicina ?? 1);
 
-        var poJedinici = Izracunaj(odredbaId, osnovica, verzija);
+        // Čl. 7 — polovica se uzima od PROPISANOG iznosa, dakle nakon svih uputa i kapa
+        // iz Uredbe („polovica propisanog iznosa pristojbe utvrđene Tarifom"), a
+        // zaokružuje se jednom, na kraju: polovica od 546,4516 je 273,23, ne 273,22.
+        var umanjeno = UmanjujeSeCl7(odredba, opcije);
+
+        var poJedinici = umanjeno
+            ? ZaokruziNovac(Nezaokruzeno(odredbaId, osnovica, verzija, MaxDubinaUpute) * 0.5m)
+            : Izracunaj(odredbaId, osnovica, verzija);
 
         // Fiksni iznosi ne ovise o osnovici, pa je ne prikazuj — inače bi uz upravni
         // spor od 110,00 € stajao VPS od 50.000 € i sugerirao da je iznos iz njega izveden.
@@ -240,9 +247,33 @@ public static class SudskePristojbeCalculator
             IznosPoJedinici: poJedinici,
             Iznos: poJedinici * kolicina,
             Verzija: verzija,
-            PravniIzvor: PravniIzvor(odredba, verzija),
-            Automatski: rucna is null);
+            PravniIzvor: PravniIzvor(odredba, verzija, umanjeno),
+            Automatski: rucna is null,
+            Cl7Rezim: odredba.Cl7Rezim,
+            UmanjenoZaElektronickiOblik: umanjeno);
     }
+
+    // ── Čl. 7 — umanjenje za elektronički oblik ──────────────────
+
+    /// <summary>
+    /// Umanjuje li se ovaj redak na polovicu po čl. 7 Zakona o sudskim pristojbama.
+    ///
+    /// Tri stavka, tri uvjeta, i svaki se veže uz drugu činjenicu: st. 1 uz oblik
+    /// podneska, st. 2 uz dostavu odluke od suda, st. 3 uz oblik prijedloga za upis.
+    /// Zato ih ne pokriva jedan prekidač — vidi <see cref="PristojbeOpcije"/>.
+    ///
+    /// St. 4 nema svoju granu: propušten rok znači neispunjen uvjet, a to je isto što i
+    /// isključena oznaka.
+    /// </summary>
+    private static bool UmanjujeSeCl7(PristojbenaOdredba odredba, PristojbeOpcije opcije)
+        => odredba.Cl7Rezim switch
+        {
+            Cl7Rezim.St1Podnesak => opcije.PodnesciElektronicki,
+            Cl7Rezim.St3Zemljisnoknjizni => opcije.ZkUpisElektronicki,
+            Cl7Rezim.St2Odluka =>
+                opcije.OdlukeElektronicki?.Contains(odredba.Id) == true,
+            _ => false
+        };
 
     // ── Čl. 2 — koja se Uredba primjenjuje na ovaj redak ─────────
 
@@ -377,13 +408,29 @@ public static class SudskePristojbeCalculator
         _ => true
     };
 
-    private static string PravniIzvor(PristojbenaOdredba odredba, UredbaVerzija verzija)
+    private static string PravniIzvor(
+        PristojbenaOdredba odredba, UredbaVerzija verzija, bool umanjenoCl7)
     {
         var naziv = verzija == UredbaVerzija.Nn37_2023
             ? $"{TarifaConstants.NazivStareUredbeOPristojbama} — čl. 2 NN 50/2026"
             : TarifaConstants.NazivUredbeOPristojbama;
 
-        return $"{naziv}, {odredba.TarifniBroj}";
+        var izvor = $"{naziv}, {odredba.TarifniBroj}";
+
+        // Prepolovljena pristojba mora na ispisu reći PO ČEMU je prepolovljena, inače
+        // se ne razlikuje od greške u računu.
+        if (!umanjenoCl7)
+            return izvor;
+
+        var stavak = odredba.Cl7Rezim switch
+        {
+            Cl7Rezim.St1Podnesak => "st. 1 — podnesak u elektroničkom obliku",
+            Cl7Rezim.St2Odluka => "st. 2 — odluka dostavljena elektronički, plaćeno u roku od 3 dana",
+            Cl7Rezim.St3Zemljisnoknjizni => "st. 3 — zemljišnoknjižni upis predložen elektronički",
+            _ => ""
+        };
+
+        return $"{izvor} · umanjeno na polovicu: {TarifaConstants.NazivZakonaOPristojbama}, čl. 7 {stavak}";
     }
 
     private static int Poredak(PristojbenaStavka stavka)

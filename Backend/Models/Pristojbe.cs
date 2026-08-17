@@ -137,6 +137,69 @@ public sealed record PostotakVrijednosti(decimal Stopa, decimal Max) : Pristojba
 /// <param name="Stepenice">Uzlazno po gornjoj granici; zadnja se primjenjuje na sve iznad.</param>
 public sealed record Stepenasto(IReadOnlyList<Razred> Stepenice) : PristojbaIzracun;
 
+// ── Čl. 7 Zakona o sudskim pristojbama — elektronički oblik ──────
+//
+// Doslovan tekst (NN 118/18, 51/23), https://www.zakon.hr/z/224/zakon-o-sudskim-pristojbama:
+//
+//  (1) Za podneske koji se podnose u elektroničkom obliku sukladno posebnim propisima
+//      putem informacijskog sustava u primjeni u poslovanju suda pristojba se plaća u
+//      trenutku njihova podnošenja u visini polovice propisanog iznosa pristojbe
+//      utvrđene Tarifom.
+//  (2) Na odluke koje sud dostavlja u elektroničkom obliku sukladno posebnim propisima
+//      putem informacijskog sustava u primjeni u poslovanju suda pristojba se plaća u
+//      visini polovice propisanog iznosa pristojbe utvrđene Tarifom ako je uplaćena u
+//      roku od tri dana od dana elektroničke dostave odluke.
+//  (3) Za podneske i odluke u zemljišnoknjižnom postupku za koje je zemljišnoknjižni
+//      upis predložen u elektroničkom obliku sukladno posebnim propisima putem
+//      informacijskog sustava u primjeni u poslovanju suda pristojba se plaća u
+//      trenutku podnošenja u visini polovice propisanog iznosa pristojbe utvrđene
+//      Tarifom.
+//  (4) Ako se sudska pristojba sukladno odredbama ovoga članka ne plati u utvrđenim
+//      rokovima, sudska pristojba plaća se u iznosima utvrđenim Tarifom.
+//
+// Tri stavka, tri različita uvjeta, pa ni jedan prekidač ne pokriva sva tri:
+//   st. 1 — stranka je PODNIJELA elektronički i platila pri podnošenju
+//   st. 2 — SUD je dostavio odluku elektronički i plaćeno je u roku od 3 dana
+//   st. 3 — stranka je predložila ZK UPIS elektronički i platila pri podnošenju;
+//           tada se prepolovljuju i podnesci i odluke u tom postupku
+// St. 4 nema svoje polje: propušten rok znači da uvjet nije ispunjen, a to je isto
+// što i isključena oznaka.
+
+/// <summary>
+/// Što se pod odredbom naplaćuje: nešto što stranka PODNOSI, nešto što sud DONOSI,
+/// ili radnja koja nije ni jedno ni drugo (ovjera, preslika, potvrda, pohrana, paušal).
+///
+/// Razvrstavanje je PODATAK uz odredbu, a ne pogađanje iz opisa — „Prijedlog za ovrhu"
+/// i „Rješenje o ovrsi" razlikuju se jednom riječju, a nose suprotan stavak čl. 7.
+/// </summary>
+public enum VrstaRadnje
+{
+    /// <summary>Ovjere, preslike, potvrde, pohrana, paušalne pristojbe — čl. 7 ih ne dira.</summary>
+    Ostalo = 0,
+
+    /// <summary>Stranka podnosi sudu: tužba, prijedlog, žalba, revizija, prijava, odgovor.</summary>
+    Podnesak = 1,
+
+    /// <summary>Sud donosi ili upisuje: presuda, rješenje, odluka, upis.</summary>
+    Odluka = 2
+}
+
+/// <summary>Koji stavak čl. 7 upravlja umanjenjem za pojedinu odredbu.</summary>
+public enum Cl7Rezim
+{
+    /// <summary>Nijedan — odredba nije ni podnesak ni odluka.</summary>
+    Nema = 0,
+
+    /// <summary>St. 1 — podnesak predan elektronički, plaćeno pri podnošenju.</summary>
+    St1Podnesak = 1,
+
+    /// <summary>St. 2 — sud dostavio odluku elektronički, plaćeno u roku od 3 dana.</summary>
+    St2Odluka = 2,
+
+    /// <summary>St. 3 — zk upis predložen elektronički; pokriva i podneske i odluke.</summary>
+    St3Zemljisnoknjizni = 3
+}
+
 // ── Odredba i rezultat ───────────────────────────────────────────
 
 /// <summary>
@@ -151,13 +214,38 @@ public sealed record Stepenasto(IReadOnlyList<Razred> Stepenice) : PristojbaIzra
 /// Što je osnovica ove odredbe („vrijednost predmeta spora", „čista ostavina",
 /// „broj etažnih dijelova"). Prazno kad odredba osnovicu ne koristi.
 /// </param>
+/// <param name="Vrsta">
+/// Podnosi li se ili donosi — vidi <see cref="VrstaRadnje"/>. Zadano
+/// <see cref="VrstaRadnje.Ostalo"/>, jer nerazvrstana odredba ne smije tiho dobiti
+/// umanjenje po čl. 7; da nijedna ne ostane nerazvrstana slučajno, brine test
+/// <c>SvakaOdredbaJeRazvrstana</c>.
+/// </param>
 public sealed record PristojbenaOdredba(
     string Id,
     PristojbaPoglavlje Poglavlje,
     string TarifniBroj,
     string Opis,
     PristojbaIzracun Izracun,
-    string OsnovicaOpis = "");
+    string OsnovicaOpis = "",
+    VrstaRadnje Vrsta = VrstaRadnje.Ostalo)
+{
+    /// <summary>
+    /// Koji stavak čl. 7 upravlja ovom odredbom. Izvodi se, a ne sprema: st. 3 je
+    /// izuzetak po POSTUPKU (zemljišnoknjižni), st. 1 i st. 2 po VRSTI radnje, pa bi
+    /// zasebno polje bilo treći podatak koji se mora slagati s prva dva.
+    ///
+    /// Ovjera preslike (Tar. br. 17 i 18) stoji u zk poglavlju, ali nije ni podnesak ni
+    /// odluka — zato provjera vrste ide prije provjere poglavlja.
+    /// </summary>
+    public Cl7Rezim Cl7Rezim => Vrsta switch
+    {
+        VrstaRadnje.Ostalo => Cl7Rezim.Nema,
+        _ when Poglavlje == PristojbaPoglavlje.Zemljisnoknjizni => Cl7Rezim.St3Zemljisnoknjizni,
+        VrstaRadnje.Podnesak => Cl7Rezim.St1Podnesak,
+        VrstaRadnje.Odluka => Cl7Rezim.St2Odluka,
+        _ => Cl7Rezim.Nema
+    };
+}
 
 // ── Izlaz ────────────────────────────────────────────────────────
 
@@ -175,6 +263,14 @@ public sealed record PristojbenaOdredba(
 /// True kad je redak izveden iz odabranih stavki tarife, false kad ga je korisnik dodao ručno.
 /// Sučelje po tome zna koji se retci smiju tiho promijeniti kad se promijeni odabir stavki.
 /// </param>
+/// <param name="Cl7Rezim">
+/// Koji stavak čl. 7 uopće može umanjiti ovaj redak. Sučelje po tome zna smije li uz
+/// redak ponuditi kvačicu za elektroničku dostavu odluke.
+/// </param>
+/// <param name="UmanjenoZaElektronickiOblik">
+/// Je li umanjenje stvarno primijenjeno. Ide u ispis: prepolovljena pristojba bez
+/// obrazloženja ne razlikuje se od greške u računu.
+/// </param>
 public sealed record PristojbenaStavka(
     string OdredbaId,
     string TarifniBroj,
@@ -186,7 +282,9 @@ public sealed record PristojbenaStavka(
     decimal Iznos,
     UredbaVerzija Verzija,
     string PravniIzvor,
-    bool Automatski);
+    bool Automatski,
+    Cl7Rezim Cl7Rezim = Cl7Rezim.Nema,
+    bool UmanjenoZaElektronickiOblik = false);
 
 /// <summary>
 /// Ishod obračuna sudskih pristojbi za cijeli troškovnik.
@@ -248,11 +346,31 @@ public sealed record RucnaPristojba(string OdredbaId, decimal? Osnovica = null, 
 /// Čl. 2 NN 50/2026, drugi slučaj — upravni spor pokrenut prije 1.6.2026. ide po
 /// staroj Uredbi, i to cijeli, ne samo tužba.
 /// </param>
+/// <param name="PodnesciElektronicki">
+/// Čl. 7 st. 1 — podnesci su predani elektronički I pristojba je plaćena u trenutku
+/// podnošenja. Oba uvjeta zajedno; st. 4 propušten rok vraća na puni iznos, pa
+/// isključena oznaka znači i „nije plaćeno na vrijeme".
+/// </param>
+/// <param name="ZkUpisElektronicki">
+/// Čl. 7 st. 3 — zemljišnoknjižni upis je predložen elektronički I plaćeno je pri
+/// podnošenju. Zaseban od st. 1 jer uvjet nije oblik pojedinog podneska nego oblik
+/// prijedloga za upis; kad je ispunjen, prepolovljuju se i podnesci i odluke u tom
+/// postupku.
+/// </param>
+/// <param name="OdlukeElektronicki">
+/// Čl. 7 st. 2 — ključevi odredbi (odluka) koje je sud dostavio elektronički i za koje
+/// je pristojba uplaćena u roku od tri dana. PO RETKU, jer se rok može ispuniti za
+/// jednu odluku, a za drugu ne. Ista se odredba u troškovniku pojavljuje najviše
+/// jednom, pa je ključ odredbe dovoljan.
+/// </param>
 public sealed record PristojbeOpcije(
     DateOnly? DatumPodnosenjaOdgovoraNaTuzbu = null,
     DateOnly? DatumPokretanjaUpravnogSpora = null,
     IReadOnlyList<RucnaPristojba>? Dodane = null,
-    IReadOnlySet<string>? Iskljucene = null)
+    IReadOnlySet<string>? Iskljucene = null,
+    bool PodnesciElektronicki = false,
+    bool ZkUpisElektronicki = false,
+    IReadOnlySet<string>? OdlukeElektronicki = null)
 {
     /// <summary>Nema prijelaznih datuma ni ručnih izmjena — sve po NN 50/2026.</summary>
     public static readonly PristojbeOpcije Zadano = new();

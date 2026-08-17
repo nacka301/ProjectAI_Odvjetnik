@@ -470,14 +470,154 @@ public static class PristojbeTarifaNn50_2026
             "Odluka o pohrani opće punomoći", new Fiksno(60.00m))
     ];
 
-    /// <summary>Sve odredbe NN 50/2026, redoslijedom poglavlja iz Priloga.</summary>
-    public static readonly IReadOnlyList<PristojbenaOdredba> Sve =
+    // ═══════════════════════════════════════════════════════════════
+    // RAZVRSTAVANJE — podnosi li stranka, ili sud donosi
+    // ═══════════════════════════════════════════════════════════════
+    //
+    // Stoji u jednom bloku, odvojeno od iznosa, da se može pročitati uz Prilog Uredbe
+    // odjednom. Od toga ovisi koji stavak čl. 7 Zakona umanjuje redak, pa razlika od
+    // jedne riječi mijenja iznos: „Prijedlog za ovrhu" je podnesak, „Rješenje o ovrsi"
+    // nije.
+    //
+    // Odredba koje ovdje nema ostaje `Ostalo` i NIKAD se ne umanjuje. Da nijedna ne
+    // ispadne slučajno, brine test SvakaOdredbaJeRazvrstana.
+
+    private static readonly IReadOnlyDictionary<string, VrstaRadnje> Vrste =
+        new Dictionary<string, VrstaRadnje>
+        {
+            // ── I. Parnični i ovršni ──
+            [Tbr1St1] = VrstaRadnje.Podnesak,
+            [Tbr1St2] = VrstaRadnje.Podnesak,
+            ["tbr1_st3"] = VrstaRadnje.Podnesak,
+            ["tbr2_st1"] = VrstaRadnje.Odluka,
+            ["tbr2_st2"] = VrstaRadnje.Odluka,
+            ["tbr2_st3"] = VrstaRadnje.Odluka,
+            ["tbr2_st4"] = VrstaRadnje.Odluka,
+            ["tbr2_st5"] = VrstaRadnje.Odluka,
+            ["tbr2_st5_strane"] = VrstaRadnje.Odluka,
+            ["tbr2_st6"] = VrstaRadnje.Odluka,
+            ["tbr2_st7"] = VrstaRadnje.Odluka,
+            ["tbr2_st8"] = VrstaRadnje.Odluka,
+            ["tbr2_st9"] = VrstaRadnje.Ostalo,        // nagodba — pristojba se ne plaća
+            ["tbr3_st1"] = VrstaRadnje.Podnesak,
+            ["tbr3_st2"] = VrstaRadnje.Podnesak,
+            ["tbr3_st3"] = VrstaRadnje.Podnesak,
+            ["tbr3_st5"] = VrstaRadnje.Podnesak,
+
+            // ── II. Izvanparnični ──
+            ["tbr4_prijedlog"] = VrstaRadnje.Podnesak,
+            ["tbr4_odluka"] = VrstaRadnje.Odluka,
+            ["tbr4_zalba"] = VrstaRadnje.Podnesak,
+            ["tbr5"] = VrstaRadnje.Podnesak,
+            ["tbr5_odluka"] = VrstaRadnje.Odluka,
+            ["tbr5_zalba"] = VrstaRadnje.Podnesak,
+            ["tbr6_prijedlog"] = VrstaRadnje.Podnesak,
+            ["tbr6_odluka"] = VrstaRadnje.Odluka,
+            ["tbr6_zalba"] = VrstaRadnje.Podnesak,
+            ["tbr7_prijedlog"] = VrstaRadnje.Podnesak,
+            ["tbr7_odluka"] = VrstaRadnje.Odluka,
+            ["tbr7_zalba"] = VrstaRadnje.Podnesak,
+            ["tbr8_tijelo"] = VrstaRadnje.Ostalo,     // ovjera isprave za inozemstvo
+            ["tbr8_tumac"] = VrstaRadnje.Ostalo,
+            ["tbr9_prvi_upis"] = VrstaRadnje.Odluka,
+            ["tbr9_rjesenje"] = VrstaRadnje.Odluka,
+            ["tbr9_daljnji_upis"] = VrstaRadnje.Odluka,
+            ["tbr9_zalba"] = VrstaRadnje.Podnesak,
+
+            // ── III. Ostavinski ──
+            ["tbr11"] = VrstaRadnje.Odluka,           // rješenje o nasljeđivanju
+            ["tbr12"] = VrstaRadnje.Podnesak,
+            ["tbr13_sastavljanje"] = VrstaRadnje.Ostalo,
+            ["tbr13_cuvanje"] = VrstaRadnje.Ostalo,
+
+            // ── IV. Zemljišnoknjižni — čl. 7 st. 3 ──
+            ["tbr14_upis"] = VrstaRadnje.Podnesak,    // PRIJEDLOG za upis, ne sam upis
+            ["tbr14_ispravni"] = VrstaRadnje.Podnesak,
+            ["tbr14_zakasnjeli"] = VrstaRadnje.Podnesak,
+            ["tbr15_uknjizba"] = VrstaRadnje.Odluka,
+            ["tbr15_zabiljezba"] = VrstaRadnje.Odluka,
+            ["tbr15_poljoprivredni"] = VrstaRadnje.Odluka,
+            ["tbr15_etaziranje"] = VrstaRadnje.Odluka,
+            ["tbr15_zakasnjelo"] = VrstaRadnje.Odluka,
+            ["tbr16"] = VrstaRadnje.Podnesak,
+            ["tbr17_18"] = VrstaRadnje.Ostalo,        // ovjera preslike — ni podnesak ni odluka
+
+            // ── V. Kazneni po privatnoj tužbi ──
+            ["tbr19_tuzba"] = VrstaRadnje.Podnesak,
+            ["tbr19_povrat"] = VrstaRadnje.Podnesak,
+            ["tbr20"] = VrstaRadnje.Odluka,
+            ["tbr21_zalba"] = VrstaRadnje.Podnesak,
+            ["tbr21_odgovor"] = VrstaRadnje.Podnesak,
+            ["tbr21_izvanredni"] = VrstaRadnje.Podnesak,
+
+            // ── VI. Stečaj i likvidacija ──
+            ["tbr22_prijedlog"] = VrstaRadnje.Podnesak,
+            ["tbr22_zalba"] = VrstaRadnje.Podnesak,
+            ["tbr23_st1"] = VrstaRadnje.Podnesak,
+            ["tbr23_st2"] = VrstaRadnje.Podnesak,      // prijava potraživanja
+            ["tbr23_zalba"] = VrstaRadnje.Podnesak,
+            ["tbr24"] = VrstaRadnje.Ostalo,            // paušal na diobnu masu
+
+            // ── VII. Sudski registar ──
+            ["tbr25_prijava"] = VrstaRadnje.Podnesak,
+            ["tbr25_jdoo"] = VrstaRadnje.Podnesak,
+            ["tbr25_enotar"] = VrstaRadnje.Podnesak,
+            ["tbr26_osnivanje"] = VrstaRadnje.Odluka,
+            ["tbr26_osnivanje_jdoo"] = VrstaRadnje.Odluka,
+            ["tbr26_promjena"] = VrstaRadnje.Odluka,
+            ["tbr26_promjena_jdoo"] = VrstaRadnje.Odluka,
+            ["tbr26_fizicki"] = VrstaRadnje.Ostalo,    // doplata upravo ZA fizički oblik
+            ["tbr26_enotar"] = VrstaRadnje.Odluka,
+            ["tbr27_prijava"] = VrstaRadnje.Podnesak,
+            ["tbr27_upis"] = VrstaRadnje.Odluka,
+            ["tbr27_promjena"] = VrstaRadnje.Odluka,
+            ["tbr28_preslika"] = VrstaRadnje.Ostalo,
+            ["tbr28_potvrda"] = VrstaRadnje.Ostalo,
+
+            // ── VIII. Upravni spor ──
+            [Tbr29Tuzba] = VrstaRadnje.Podnesak,
+            ["tbr29_obnova"] = VrstaRadnje.Podnesak,
+            ["tbr29_opci_akti"] = VrstaRadnje.Podnesak,
+            ["tbr29_vus"] = VrstaRadnje.Podnesak,
+            ["tbr29_zalba"] = VrstaRadnje.Podnesak,
+            ["tbr30_odluka"] = VrstaRadnje.Odluka,
+            ["tbr30_obnova"] = VrstaRadnje.Odluka,
+            ["tbr30_vus"] = VrstaRadnje.Odluka,
+
+            // ── IX. Ostali slučajevi ──
+            ["tbr31_podnesak"] = VrstaRadnje.Podnesak,
+            ["tbr31_uvjerenje"] = VrstaRadnje.Ostalo,
+            ["tbr31_egradani"] = VrstaRadnje.Ostalo,
+            ["tbr32"] = VrstaRadnje.Ostalo,
+            ["tbr33"] = VrstaRadnje.Ostalo,
+            ["tbr34"] = VrstaRadnje.Podnesak,          // prijedlog o pologu
+            ["tbr35_pohrana"] = VrstaRadnje.Ostalo,
+            ["tbr35_odluka"] = VrstaRadnje.Odluka
+        };
+
+    /// <summary>Poglavlja spojena redoslijedom iz Priloga, prije razvrstavanja.</summary>
+    private static readonly PristojbenaOdredba[] PoRedu =
     [
         .. PoglavljeI, .. PoglavljeII, .. PoglavljeIII, .. PoglavljeIV, .. PoglavljeV,
         .. PoglavljeVI, .. PoglavljeVII, .. PoglavljeVIII, .. PoglavljeIX
     ];
 
+    /// <summary>
+    /// Sve odredbe NN 50/2026, redoslijedom poglavlja iz Priloga, s razvrstavanjem po
+    /// vrsti radnje (za čl. 7 Zakona).
+    /// </summary>
+    public static readonly IReadOnlyList<PristojbenaOdredba> Sve =
+        [.. PoRedu.Select(o => o with { Vrsta = VrstaZa(o.Id) })];
+
     /// <summary>Odredbe po ključu, za razrješavanje uputa iz <see cref="UdioOd"/>.</summary>
     public static readonly IReadOnlyDictionary<string, PristojbenaOdredba> PoId =
         Sve.ToDictionary(o => o.Id);
+
+    /// <summary>
+    /// Razvrstavanje po ključu odredbe. Stara Uredba dijeli ključeve s novom (ista
+    /// pristojbena radnja, drugi iznos), pa dijeli i razvrstavanje — čl. 7 Zakona ne
+    /// ovisi o tome koja se Uredba na redak primjenjuje.
+    /// </summary>
+    public static VrstaRadnje VrstaZa(string odredbaId)
+        => Vrste.GetValueOrDefault(odredbaId, VrstaRadnje.Ostalo);
 }

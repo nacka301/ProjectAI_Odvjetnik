@@ -678,7 +678,10 @@ public sealed class TroskovnikService : ITroskovnikService
         Dodane: [.. request.PristojbeDodane
             .Where(p => !string.IsNullOrWhiteSpace(p.OdredbaId))
             .Select(p => new RucnaPristojba(p.OdredbaId, p.Osnovica, p.Kolicina))],
-        Iskljucene: request.PristojbeIskljucene.ToHashSet());
+        Iskljucene: request.PristojbeIskljucene.ToHashSet(),
+        PodnesciElektronicki: request.PodnesciElektronicki,
+        ZkUpisElektronicki: request.ZkUpisElektronicki,
+        OdlukeElektronicki: request.OdlukeElektronicki.ToHashSet());
 
     /// <summary>
     /// Naslijeđena oznaka osnove, izvedena iz gotove liste pristojbi.
@@ -899,7 +902,15 @@ public sealed class TroskovnikService : ITroskovnikService
         Iznos = stavka.Iznos,
         Uredba = stavka.Verzija == UredbaVerzija.Nn37_2023 ? "NN 37/2023" : "NN 50/2026",
         PravniIzvor = stavka.PravniIzvor,
-        Automatski = stavka.Automatski
+        Automatski = stavka.Automatski,
+        Cl7Rezim = stavka.Cl7Rezim switch
+        {
+            Models.Cl7Rezim.St1Podnesak => "st_1",
+            Models.Cl7Rezim.St2Odluka => "st_2",
+            Models.Cl7Rezim.St3Zemljisnoknjizni => "st_3",
+            _ => ""
+        },
+        UmanjenoElektronicki = stavka.UmanjenoZaElektronickiOblik
     };
 
     /// <summary>

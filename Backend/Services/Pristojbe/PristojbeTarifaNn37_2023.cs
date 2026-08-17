@@ -80,7 +80,15 @@ public static class PristojbeTarifaNn37_2023
             "Prvostupanjska odluka Visokog upravnog suda", new Fiksno(66.36m))
     ];
 
-    /// <summary>Odredbe stare Uredbe po ključu.</summary>
+    /// <summary>
+    /// Odredbe stare Uredbe po ključu.
+    ///
+    /// Razvrstavanje (podnesak / odluka) uzima se iz nove tablice: ključevi su isti jer
+    /// je riječ o istoj pristojbenoj radnji, a čl. 7 Zakona o sudskim pristojbama ne
+    /// ovisi o tome koja se Uredba na redak primjenjuje.
+    /// </summary>
     public static readonly IReadOnlyDictionary<string, PristojbenaOdredba> PoId =
-        Odredbe.ToDictionary(o => o.Id);
+        Odredbe
+            .Select(o => o with { Vrsta = PristojbeTarifaNn50_2026.VrstaZa(o.Id) })
+            .ToDictionary(o => o.Id);
 }

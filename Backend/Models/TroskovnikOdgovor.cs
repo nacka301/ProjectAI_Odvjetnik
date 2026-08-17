@@ -358,6 +358,18 @@ public sealed class PristojbenaStavkaDto
     /// <summary>True kad je redak izveden iz odabranih tarifnih stavaka, false kad je dodan ručno.</summary>
     [JsonPropertyName("automatski")]
     public bool Automatski { get; set; }
+
+    /// <summary>
+    /// Koji stavak čl. 7 Zakona uopće može umanjiti ovaj redak: „" (nijedan), „st_1",
+    /// „st_2" ili „st_3". Sučelje po tome zna smije li uz redak ponuditi kvačicu za
+    /// elektroničku dostavu odluke — ta se nudi samo uz „st_2".
+    /// </summary>
+    [JsonPropertyName("cl7_rezim")]
+    public string Cl7Rezim { get; set; } = "";
+
+    /// <summary>Je li umanjenje na polovicu stvarno primijenjeno na ovaj redak.</summary>
+    [JsonPropertyName("umanjeno_elektronicki")]
+    public bool UmanjenoElektronicki { get; set; }
 }
 
 public sealed class TroskovnikLineItem

@@ -66,6 +66,15 @@ public class KontrolniIzracuniTests
     }
 
     /// <summary>
+    /// F — elektronički podnesak. Ista tužba kao u A, predana elektronički:
+    /// 620,00 / 2 = 310,00 € (čl. 7 st. 1 Zakona o sudskim pristojbama).
+    /// Preostala dva stavka čl. 7 pokriva <c>ElektronickiPodnesakTests</c>.
+    /// </summary>
+    [Fact]
+    public void F_ElektronickiPodnesak_Daje310()
+        => Assert.Equal(310.00m, Izracunaj(z => z.PodnesciElektronicki = true).SudskaPristojba);
+
+    /// <summary>
     /// G — PDV, odvjetnik u sustavu. Nagrada 1.000,00 + putni 100,00 → osnovica 1.100,00;
     /// PDV 275,00; sudska pristojba 620,00 IZVAN osnovice. Ukupno 1.995,00.
     /// </summary>
