@@ -266,7 +266,10 @@ public static class SudskePristojbeCalculator
     /// isključena oznaka.
     /// </summary>
     private static bool UmanjujeSeCl7(PristojbenaOdredba odredba, PristojbeOpcije opcije)
-        => odredba.Cl7Rezim switch
+        // Uredba na tri mjesta sama propisuje polovicu ZA ELEKTRONIČKO PODNOŠENJE
+        // (Tar. br. 25 st. 3, 26 st. 6, 31 st. 3). To je isti razlog zbog kojeg umanjuje
+        // i čl. 7, pa bi drugo umanjenje spustilo iznos na 25 % propisanog.
+        => !odredba.VecImaElektronickoUmanjenje && odredba.Cl7Rezim switch
         {
             Cl7Rezim.St1Podnesak => opcije.PodnesciElektronicki,
             Cl7Rezim.St3Zemljisnoknjizni => opcije.ZkUpisElektronicki,

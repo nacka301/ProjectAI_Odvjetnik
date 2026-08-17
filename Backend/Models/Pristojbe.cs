@@ -220,6 +220,15 @@ public enum Cl7Rezim
 /// umanjenje po čl. 7; da nijedna ne ostane nerazvrstana slučajno, brine test
 /// <c>SvakaOdredbaJeRazvrstana</c>.
 /// </param>
+/// <param name="VecImaElektronickoUmanjenje">
+/// Iznos ove odredbe VEĆ je polovica, i to dana iz istog razloga zbog kojeg umanjuje i
+/// čl. 7 — zbog elektroničkog oblika. Takav se redak ne umanjuje drugi put.
+///
+/// <para>Kriterij je RAZLOG, ne to što u odredbi piše „polovica". Polovica iz Tar. br. 1
+/// st. 2 dana je zbog VRSTE podneska (odgovor na tužbu), ne zbog oblika, pa se s čl. 7
+/// legitimno slaže: odgovor na tužbu predan elektronički ide Tar. br. 1 st. 1 → polovica
+/// po st. 2 → pa još polovica po čl. 7.</para>
+/// </param>
 public sealed record PristojbenaOdredba(
     string Id,
     PristojbaPoglavlje Poglavlje,
@@ -227,7 +236,8 @@ public sealed record PristojbenaOdredba(
     string Opis,
     PristojbaIzracun Izracun,
     string OsnovicaOpis = "",
-    VrstaRadnje Vrsta = VrstaRadnje.Ostalo)
+    VrstaRadnje Vrsta = VrstaRadnje.Ostalo,
+    bool VecImaElektronickoUmanjenje = false)
 {
     /// <summary>
     /// Koji stavak čl. 7 upravlja ovom odredbom. Izvodi se, a ne sprema: st. 3 je

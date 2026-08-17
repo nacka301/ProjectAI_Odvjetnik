@@ -982,6 +982,24 @@ export const VRSTA_RADNJE: Record<string, VrstaRadnje> = {
 };
 
 /**
+ * Odredbe čiji je iznos VEĆ polovica, i to dana zbog elektroničkog oblika — isti razlog
+ * zbog kojeg umanjuje i čl. 7 Zakona, pa se ne umanjuju drugi put:
+ *
+ *   Tar. br. 25 st. 3 — prijava za upis preko sustava e-Notar i START
+ *   Tar. br. 26 st. 6 — odluke koje sud dostavlja preko e-Notara i START-a
+ *   Tar. br. 31 st. 3 — podnesak i uvjerenje kroz e-Građane i e-Ovlaštenja
+ *
+ * Kriterij je RAZLOG, ne riječ „polovica" u tekstu: polovica iz Tar. br. 1 st. 2 dana
+ * je zbog vrste podneska, ne zbog oblika, pa se s čl. 7 legitimno slaže.
+ * Zrcali `VecElektronicke` na backendu.
+ */
+export const VEC_ELEKTRONICKO_UMANJENJE = new Set([
+  "tbr25_enotar",
+  "tbr26_enotar",
+  "tbr31_egradani",
+]);
+
+/**
  * Koji stavak čl. 7 upravlja odredbom. Izvodi se iz vrste radnje i poglavlja, isto kao
  * `PristojbenaOdredba.Cl7Rezim` na backendu: provjera vrste ide PRIJE provjere
  * poglavlja, jer ovjera preslike stoji u zk poglavlju, a nije ni podnesak ni odluka.
@@ -1553,6 +1571,10 @@ function pravniIzvor(
  * isključena oznaka.
  */
 function umanjujeSeCl7(odredba: PristojbenaOdredba, ulaz: PristojbeUlaz): boolean {
+  // Uredba na tri mjesta sama propisuje polovicu za elektroničko podnošenje; drugo
+  // umanjenje spustilo bi iznos na 25 % propisanog.
+  if (VEC_ELEKTRONICKO_UMANJENJE.has(odredba.id)) return false;
+
   switch (cl7Rezim(odredba.id, odredba.poglavlje)) {
     case "st_1":
       return ulaz.podnesciElektronicki === true;

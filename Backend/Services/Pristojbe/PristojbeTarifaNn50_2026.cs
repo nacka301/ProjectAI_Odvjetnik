@@ -595,6 +595,22 @@ public static class PristojbeTarifaNn50_2026
             ["tbr35_odluka"] = VrstaRadnje.Odluka
         };
 
+    /// <summary>
+    /// Odredbe čiji je iznos VEĆ polovica, i to dana zbog elektroničkog oblika — isti
+    /// razlog zbog kojeg umanjuje i čl. 7 Zakona, pa se ne umanjuju drugi put.
+    ///
+    /// <list type="bullet">
+    /// <item>Tar. br. 25 st. 3 — prijava za upis preko sustava e-Notar i START</item>
+    /// <item>Tar. br. 26 st. 6 — odluke koje sud dostavlja preko e-Notara i START-a</item>
+    /// <item>Tar. br. 31 st. 3 — podnesak i uvjerenje kroz e-Građane i e-Ovlaštenja</item>
+    /// </list>
+    ///
+    /// Kriterij je RAZLOG, ne riječ „polovica" u tekstu: polovica iz Tar. br. 1 st. 2
+    /// dana je zbog vrste podneska, ne zbog oblika, pa se s čl. 7 legitimno slaže.
+    /// </summary>
+    private static readonly IReadOnlySet<string> VecElektronicke =
+        new HashSet<string> { "tbr25_enotar", "tbr26_enotar", "tbr31_egradani" };
+
     /// <summary>Poglavlja spojena redoslijedom iz Priloga, prije razvrstavanja.</summary>
     private static readonly PristojbenaOdredba[] PoRedu =
     [
@@ -607,7 +623,13 @@ public static class PristojbeTarifaNn50_2026
     /// vrsti radnje (za čl. 7 Zakona).
     /// </summary>
     public static readonly IReadOnlyList<PristojbenaOdredba> Sve =
-        [.. PoRedu.Select(o => o with { Vrsta = VrstaZa(o.Id) })];
+    [
+        .. PoRedu.Select(o => o with
+        {
+            Vrsta = VrstaZa(o.Id),
+            VecImaElektronickoUmanjenje = VecElektronickoUmanjenjeZa(o.Id)
+        })
+    ];
 
     /// <summary>Odredbe po ključu, za razrješavanje uputa iz <see cref="UdioOd"/>.</summary>
     public static readonly IReadOnlyDictionary<string, PristojbenaOdredba> PoId =
@@ -620,4 +642,8 @@ public static class PristojbeTarifaNn50_2026
     /// </summary>
     public static VrstaRadnje VrstaZa(string odredbaId)
         => Vrste.GetValueOrDefault(odredbaId, VrstaRadnje.Ostalo);
+
+    /// <summary>Nosi li odredba već elektroničko umanjenje — vidi <see cref="VecElektronicke"/>.</summary>
+    public static bool VecElektronickoUmanjenjeZa(string odredbaId)
+        => VecElektronicke.Contains(odredbaId);
 }

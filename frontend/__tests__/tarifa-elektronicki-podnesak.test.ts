@@ -6,6 +6,7 @@ import {
   PRISTOJBE_NN50_2026,
   VRSTA_RADNJE,
   cl7Rezim,
+  VEC_ELEKTRONICKO_UMANJENJE,
   obracunajPristojbe,
   type TarifnaStavka,
 } from "@/lib/tarifa";
@@ -166,7 +167,58 @@ describe("Čl. 7 — doseg", () => {
   });
 });
 
+describe("Čl. 7 — sudar s umanjenjima koja Uredba sama daje", () => {
+  /**
+   * Uredba na tri mjesta već propisuje polovicu ZBOG ELEKTRONIČKOG PODNOŠENJA — isti
+   * razlog kao čl. 7, pa bi drugo umanjenje dalo 25 % propisanog.
+   * Prije popravka: prijava preko e-Notara 30 → 15 → 7,50 €.
+   */
+  it.each([
+    ["tbr25_enotar", 15.0],
+    ["tbr26_enotar", 40.0],
+    ["tbr31_egradani", 3.0],
+  ])("%s ostaje na %s € i uz sve tri oznake", (id, ocekivano) => {
+    const r = obracunajPristojbe({
+      vrijednostSpora: 0,
+      odabraneStavke: [],
+      oslobodjen: false,
+      dodane: [{ odredba_id: id }],
+      podnesciElektronicki: true,
+      zkUpisElektronicki: true,
+      odlukeElektronicki: [id],
+    });
+
+    expect(r.ukupno).toBe(ocekivano);
+    expect(r.stavke[0].umanjeno_elektronicki).toBe(false);
+  });
+
+  /**
+   * Suprotan slučaj: polovica iz Tar. br. 1 st. 2 dana je zbog VRSTE podneska, ne zbog
+   * oblika, pa se s čl. 7 legitimno slaže. 620,00 → 310,00 → 155,00.
+   */
+  it("polovica zbog vrste podneska se s čl. 7 slaže", () => {
+    expect(obracun("par_odgovor_tuzba").ukupno).toBe(310.0);
+    expect(obracun("par_odgovor_tuzba", { podnesciElektronicki: true }).ukupno).toBe(155.0);
+  });
+});
+
 describe("Čl. 7 — paritet razvrstavanja s backendom", () => {
+  it("VEC_ELEKTRONICKO_UMANJENJE se poklapa s `VecElektronicke` na backendu", () => {
+    const cs = readFileSync(
+      join(__dirname, "../../Backend/Services/Pristojbe/PristojbeTarifaNn50_2026.cs"),
+      "utf8",
+    );
+
+    const blok = cs.slice(
+      cs.indexOf("IReadOnlySet<string> VecElektronicke"),
+      cs.indexOf("private static readonly PristojbenaOdredba[] PoRedu"),
+    );
+
+    const backend = [...blok.matchAll(/"(tbr\w+)"/g)].map((m) => m[1]).sort();
+
+    expect(backend).toEqual([...VEC_ELEKTRONICKO_UMANJENJE].sort());
+  });
+
   /**
    * Dva ručno održavana popisa razišla bi se u tišini, pa bi ista odredba u sučelju
    * bila podnesak, a na backendu odluka — i klijent bi vidio jedan iznos, a na

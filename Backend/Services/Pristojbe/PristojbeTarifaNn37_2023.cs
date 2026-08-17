@@ -89,6 +89,11 @@ public static class PristojbeTarifaNn37_2023
     /// </summary>
     public static readonly IReadOnlyDictionary<string, PristojbenaOdredba> PoId =
         Odredbe
-            .Select(o => o with { Vrsta = PristojbeTarifaNn50_2026.VrstaZa(o.Id) })
+            .Select(o => o with
+            {
+                Vrsta = PristojbeTarifaNn50_2026.VrstaZa(o.Id),
+                VecImaElektronickoUmanjenje =
+                    PristojbeTarifaNn50_2026.VecElektronickoUmanjenjeZa(o.Id)
+            })
             .ToDictionary(o => o.Id);
 }

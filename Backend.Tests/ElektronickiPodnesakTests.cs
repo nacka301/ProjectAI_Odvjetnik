@@ -260,6 +260,99 @@ public class ElektronickiPodnesakTests
         Assert.Contains("st. 1", izvor);
     }
 
+    // ── Sudar s umanjenjima koja Uredba sama daje ─────────────────
+    //
+    // Uredba na tri mjesta već propisuje polovicu ZBOG ELEKTRONIČKOG PODNOŠENJA. To je
+    // isti razlog zbog kojeg umanjuje i čl. 7, pa bi drugo umanjenje spustilo iznos na
+    // 25 % propisanog. Prije popravka: prijava preko e-Notara 30 → 15 → 7,50 €.
+
+    /// <summary>Tar. br. 25 st. 3 — prijava preko e-Notara i START-a ostaje 15,00 €.</summary>
+    [Fact]
+    public void VecElektronicka_Tbr25_NeUmanjujeSeDrugiPut()
+    {
+        var iznos = SudskePristojbeCalculator.Obracunaj(
+                0m, [], oslobodjen: false,
+                new PristojbeOpcije(
+                    Dodane: [new RucnaPristojba("tbr25_enotar")],
+                    PodnesciElektronicki: true))
+            .Ukupno;
+
+        Assert.Equal(15.00m, iznos);
+    }
+
+    /// <summary>Tar. br. 26 st. 6 — odluka dostavljena e-Notarom ostaje 40,00 €.</summary>
+    [Fact]
+    public void VecElektronicka_Tbr26_NeUmanjujeSeDrugiPut()
+    {
+        var iznos = SudskePristojbeCalculator.Obracunaj(
+                0m, [], oslobodjen: false,
+                new PristojbeOpcije(
+                    Dodane: [new RucnaPristojba("tbr26_enotar")],
+                    OdlukeElektronicki: new HashSet<string> { "tbr26_enotar" }))
+            .Ukupno;
+
+        Assert.Equal(40.00m, iznos);
+    }
+
+    /// <summary>Tar. br. 31 st. 3 — uvjerenje kroz e-Građane ostaje 3,00 €.</summary>
+    [Fact]
+    public void VecElektronicka_Tbr31_NeUmanjujeSeDrugiPut()
+    {
+        var iznos = SudskePristojbeCalculator.Obracunaj(
+                0m, [], oslobodjen: false,
+                new PristojbeOpcije(
+                    Dodane: [new RucnaPristojba("tbr31_egradani")],
+                    PodnesciElektronicki: true,
+                    OdlukeElektronicki: new HashSet<string> { "tbr31_egradani" }))
+            .Ukupno;
+
+        Assert.Equal(3.00m, iznos);
+    }
+
+    /// <summary>
+    /// Suprotan slučaj, koji se NE smije zahvatiti istom zaštitom: polovica iz Tar. br. 1
+    /// st. 2 dana je zbog VRSTE podneska, ne zbog oblika, pa se s čl. 7 legitimno slaže.
+    /// Odgovor na tužbu uz VPS 50.000: 620,00 → 310,00 (st. 2) → 155,00 (čl. 7).
+    /// </summary>
+    [Fact]
+    public void PolovicaZbogVrstePodneska_SlazeSeSCl7()
+    {
+        var bez = Izracunaj("par_odgovor_tuzba", _ => { });
+        var sCl7 = Izracunaj("par_odgovor_tuzba", z => z.PodnesciElektronicki = true);
+
+        Assert.Equal(310.00m, bez.SudskaPristojba);
+        Assert.Equal(155.00m, sCl7.SudskaPristojba);
+    }
+
+    /// <summary>
+    /// Zaštita se veže uz oznaku, ne uz popis ključeva u testu: svaka odredba s
+    /// oznakom mora ostati na punom iznosu uz sve tri oznake čl. 7 uključene.
+    /// </summary>
+    [Fact]
+    public void SvakaVecElektronickaOdredba_OstajeNepromijenjena()
+    {
+        var vecElektronicke = PristojbeTarifaNn50_2026.Sve
+            .Where(o => o.VecImaElektronickoUmanjenje)
+            .ToList();
+
+        Assert.NotEmpty(vecElektronicke);
+
+        foreach (var odredba in vecElektronicke)
+        {
+            decimal Iznos(PristojbeOpcije opcije)
+                => SudskePristojbeCalculator.Obracunaj(0m, [], oslobodjen: false, opcije).Ukupno;
+
+            var bez = Iznos(new PristojbeOpcije(Dodane: [new RucnaPristojba(odredba.Id)]));
+            var sve = Iznos(new PristojbeOpcije(
+                Dodane: [new RucnaPristojba(odredba.Id)],
+                PodnesciElektronicki: true,
+                ZkUpisElektronicki: true,
+                OdlukeElektronicki: new HashSet<string> { odredba.Id }));
+
+            Assert.Equal(bez, sve);
+        }
+    }
+
     // ── Zaštita razvrstavanja ─────────────────────────────────────
 
     /// <summary>
