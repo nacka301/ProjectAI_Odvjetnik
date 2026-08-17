@@ -799,8 +799,9 @@ public sealed class TroskovnikService : ITroskovnikService
     /// Izračunava bodove za stavke s KazneniBase = true.
     /// Koristi ZaprijecenaKaznaTiers lookup i primjenjuje modifikatore:
     ///   - KazneniPovecanje (npr. +50% za žalbu)
-    ///   - IsZastupnikDjeteta → 70% od Tbr. 4.8 (= 70% × 50% = 35% baze)
-    ///   - IsPoSluzbenojDuznosti / IsNaTeretProracuna → 50% umanjenje
+    ///   - IsZastupnikDjeteta → 70% baze (Pravilnik NN 22/2022, čl. 2)
+    ///   - IsPoSluzbenojDuznosti / IsNaTeretProracuna → 50% baze (isti Pravilnik, čl. 1)
+    /// Te dvije stope se ne množe — primjenjuje se najviše jedna.
     /// </summary>
     private static decimal IzracunajKazneneBodove(TarifnaStavka definicija, int tierBodovi, TroskovnikRequest req)
     {
@@ -819,14 +820,16 @@ public sealed class TroskovnikService : ITroskovnikService
         if (povecanje.HasValue)
             bodovi *= 1 + povecanje.Value;
 
-        // Opunomoćenik djeteta žrtve kaznenog djela →
-        //   Tbr. 4.8: zastupanje oštećenika = 50% od Tbr. 4
-        //   Dijete žrtve = 70% od Tbr. 4.8  ⇒ efektivno 35%
+        // Pravilnik NN 22/2022 br. 271 — obje stope idu od iste osnovice: nagrade koja bi
+        // odvjetniku pripadala za pojedinu radnju prema Tarifi. Ne množe se međusobno.
+        //   čl. 1 — obrana po sl. dužnosti / na teret proračuna → 50%
+        //   čl. 2 — opunomoćenik djeteta žrtve kaznenog djela  → 70%
+        // Uloge se isključuju (obrana okrivljenika vs. zastupanje djeteta žrtve), pa se
+        // primjenjuje najviše jedna stopa i kad zahtjev ipak stigne s obje zastavice.
+        // Novu proturječnu kombinaciju odbija TroskovnikRequestValidator.
         if (req.IsZastupnikDjeteta)
-            bodovi *= TarifaConstants.Tbr4t8Rate * TarifaConstants.ZastupnikDjetetaRate;
-
-        // Branitelj po službenoj dužnosti ili na teret proračunskih sredstava → 50%
-        if (req.IsPoSluzbenojDuznosti || req.IsNaTeretProracuna)
+            bodovi *= TarifaConstants.ZastupnikDjetetaRate;
+        else if (req.IsPoSluzbenojDuznosti || req.IsNaTeretProracuna)
             bodovi *= TarifaConstants.KazneniReductionRate;
 
         return ClampBodovi(bodovi, definicija);

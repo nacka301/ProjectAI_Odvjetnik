@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   KAZNENO_UMANJENJE_STOPA,
-  TBR_4_8_STOPA,
   ZAPRIJECENA_KAZNA_TIERS,
   ZASTUPNIK_DJETETA_STOPA,
   izracunajKazneneBodove,
@@ -11,7 +10,8 @@ import {
 /**
  * Paritet s Backend.Tests/TarifaUmanjenjaTests.cs.
  *
- * Obje stope dolaze iz Pravilnika, NN 22/2022 br. 271.
+ * Obje stope dolaze iz Pravilnika, NN 22/2022 br. 271 (čl. 1 → 50%, čl. 2 → 70%) i idu
+ * od iste osnovice — nagrade za pojedinu radnju prema Tarifi — pa se ne množe.
  */
 
 const obrana: TarifnaStavka = {
@@ -57,21 +57,28 @@ describe("branitelj po službenoj dužnosti / na teret proračuna", () => {
 });
 
 describe("opunomoćenik djeteta žrtve kaznenog djela", () => {
-  it("efektivna stopa je 35%, ne 70%", () => {
-    expect(TBR_4_8_STOPA * ZASTUPNIK_DJETETA_STOPA).toBeCloseTo(0.35, 10);
+  it("stopa je 70%", () => {
+    expect(ZASTUPNIK_DJETETA_STOPA).toBe(0.7);
   });
 
   it.each([
-    ["novcana_do3", 35],
-    ["do_5", 70],
-    ["do_10", 105],
-    ["preko_10", 140],
-    ["dugotrajni", 175],
+    ["novcana_do3", 70],
+    ["do_5", 140],
+    ["do_10", 210],
+    ["preko_10", 280],
+    ["dugotrajni", 350],
   ])("%s → %i bodova", (kazna, ocekivano) => {
     expect(bodovi(kazna, { dijete: true })).toBeCloseTo(ocekivano, 10);
   });
 
-  it("dugotrajni zatvor nije 350 (to bi bilo 70% pune tarife)", () => {
-    expect(bodovi("dugotrajni", { dijete: true })).not.toBe(350);
+  it("dugotrajni zatvor nije 175 (to je bio umnožak 0,50 × 0,70)", () => {
+    expect(bodovi("dugotrajni", { dijete: true })).not.toBe(175);
+  });
+});
+
+describe("uloge se isključuju — stope se ne množe", () => {
+  it("obje zastavice daju 70%, ne 0,35 × 0,50", () => {
+    expect(bodovi("dugotrajni", { dijete: true, sluzbena: true })).toBe(350);
+    expect(bodovi("dugotrajni", { dijete: true, proracun: true })).toBe(350);
   });
 });

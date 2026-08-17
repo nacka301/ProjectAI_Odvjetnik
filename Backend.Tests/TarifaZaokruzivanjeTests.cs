@@ -116,8 +116,8 @@ public class TarifaZaokruzivanjeTests
     }
 
     /// <summary>
-    /// Opunomoćenik djeteta žrtve pri osnovici od 100 bodova daje 35 bodova —
-    /// bez Math.Ceiling koji bi 35,0 ostavio, ali 17,5 podigao na 18.
+    /// Opunomoćenik djeteta žrtve uz povišenje po Tbr. 4. toč. 2 daje polovicu boda —
+    /// bez Math.Ceiling koji bi 262,5 podigao na 263.
     /// </summary>
     [Fact]
     public void ZastupnikDjeteta_NaNeparnojOsnovici_OstajeDecimalan()
@@ -126,12 +126,11 @@ public class TarifaZaokruzivanjeTests
         {
             ZaprijecenaKazna = "do_10",          // 300 bodova
             IsZastupnikDjeteta = true,
-            IsPoSluzbenojDuznosti = true,        // dodatnih 50%
             IsPdvUkljucen = false,
-            Stavke = [new TroskovnikItemRequest { ItemId = "kaz_obrana", Kolicina = 1 }]
+            Stavke = [new TroskovnikItemRequest { ItemId = "kaz_rasprava_drugostupanjska", Kolicina = 1 }]
         });
 
-        // 300 × 0,50 × 0,70 = 105; × 0,50 = 52,5
-        Assert.Equal(52.5m, rezultat.UkupnoBodova);
+        // 300 × 1,25 (Tbr. 4. toč. 2 al. 3) = 375; × 0,70 (Pravilnik čl. 2) = 262,5
+        Assert.Equal(262.5m, rezultat.UkupnoBodova);
     }
 }

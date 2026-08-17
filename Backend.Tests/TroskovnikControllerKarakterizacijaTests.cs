@@ -108,6 +108,39 @@ public class TroskovnikControllerKarakterizacijaTests
         Assert.Equal("Morate odabrati barem jednu stavku.", Svojstvo(odgovor.Value, "error"));
     }
 
+    /// <summary>
+    /// Pravilnik NN 22/2022 br. 271: čl. 1 je obrana okrivljenika, čl. 2 zastupanje
+    /// djeteta žrtve. Isti odvjetnik ne može u istom postupku biti oboje, pa se zahtjev
+    /// s obje uloge odbija umjesto da se stope tiho pomnože.
+    /// </summary>
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task Izracunaj_ObranaIZastupanjeDjeteta_Vraca400(bool sluzbena, bool proracun)
+    {
+        var kontroler = StvoriKontroler(new FakeClientCaseService());
+        var zahtjev = ValjanZahtjev();
+        zahtjev.IsZastupnikDjeteta = true;
+        zahtjev.IsPoSluzbenojDuznosti = sluzbena;
+        zahtjev.IsNaTeretProracuna = proracun;
+
+        var odgovor = Assert.IsType<BadRequestObjectResult>(await kontroler.Izracunaj(zahtjev));
+
+        var poruka = Assert.IsType<string>(Svojstvo(odgovor.Value, "error"));
+        Assert.Contains("te se uloge isključuju", poruka);
+    }
+
+    [Fact]
+    public async Task Izracunaj_SamoJednaUloga_Prolazi()
+    {
+        var kontroler = StvoriKontroler(new FakeClientCaseService());
+        var zahtjev = ValjanZahtjev();
+        zahtjev.IsZastupnikDjeteta = true;
+
+        Assert.IsType<OkObjectResult>(await kontroler.Izracunaj(zahtjev));
+    }
+
     [Fact]
     public async Task Izracunaj_NepoznataStavka_Vraca400SPorukomIzServisa()
     {

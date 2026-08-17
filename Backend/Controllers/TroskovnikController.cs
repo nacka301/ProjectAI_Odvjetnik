@@ -35,6 +35,13 @@ public class TroskovnikController : ControllerBase
 
         if (zahtjev.Stavke is null || zahtjev.Stavke.Count == 0)
             throw new TroskovnikValidationException("Morate odabrati barem jednu stavku.");
+
+        // Pravilnik NN 22/2022 br. 271: čl. 1 je obrana okrivljenika, čl. 2 zastupanje
+        // djeteta žrtve. Isti odvjetnik ne može u istom postupku biti oboje — sukob
+        // interesa — pa se ni stope ne zbrajaju ni ne množe.
+        if (zahtjev.IsZastupnikDjeteta && (zahtjev.IsPoSluzbenojDuznosti || zahtjev.IsNaTeretProracuna))
+            throw new TroskovnikValidationException(
+                "Odvjetnik ne može u istom postupku biti branitelj okrivljenika i opunomoćenik djeteta žrtve — te se uloge isključuju.");
     }
 
     /// <summary>

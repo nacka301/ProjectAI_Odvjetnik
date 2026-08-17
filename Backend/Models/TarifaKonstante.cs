@@ -38,26 +38,26 @@ public static class TarifaConstants
     /// koji je određen za branitelja po službenoj dužnosti, sukladno odredbama Zakona o
     /// odvjetništvu, određuje se Pravilnikom ministarstva nadležnog za poslove pravosuđa."
     ///
-    /// Izvor stope: Pravilnik, Narodne novine 22/2022, br. 271, ČL. 1.
+    /// Izvor stope: Pravilnik, Narodne novine 22/2022, br. 271, ČL. 1:
+    /// "Nagrada za rad odvjetnika prilikom obrana po službenoj dužnosti i obrana na teret
+    /// proračunskih sredstava određuje se u visini od 50% od nagrade za rad koja bi
+    /// odvjetniku pripadala za pojedine radnje u postupku prema Tarifi (...)"
     /// https://narodne-novine.nn.hr/clanci/sluzbeni/2022_02_22_271.html
     /// </summary>
     public const decimal KazneniReductionRate = 0.50m;
 
     /// <summary>
-    /// Tbr. 4. toč. 8: "Odvjetniku koji zastupa oštećenika u postupku koji se vodi pred
-    /// policijom, državnim odvjetništvom (...) te na raspravi pred sudom, pripada 50%
-    /// nagrade iz ovog tarifnog broja."
-    /// </summary>
-    public const decimal Tbr4t8Rate = 0.50m;
-
-    /// <summary>
-    /// Opunomoćenik djeteta žrtve kaznenog djela — 70% od nagrade iz Tbr. 4. toč. 8.
+    /// Opunomoćenik djeteta žrtve kaznenog djela — 70% pune tarife.
     ///
-    /// Izvor stope: Pravilnik, Narodne novine 22/2022, br. 271, ČL. 2.
+    /// Izvor stope: Pravilnik, Narodne novine 22/2022, br. 271, ČL. 2:
+    /// "Nagrada za rad odvjetnika kao opunomoćenika djeteta žrtve kaznenog djela određuje
+    /// se u visini od 70% od nagrade za rad koja bi odvjetniku pripadala za pojedine
+    /// radnje u postupku prema Tarifi (...)"
     /// https://narodne-novine.nn.hr/clanci/sluzbeni/2022_02_22_271.html
     ///
-    /// Budući da je Tbr. 4. toč. 8 već 50% nagrade iz Tbr. 4, efektivna stopa je
-    /// 0,50 × 0,70 = 35% pune tarife — ne 70%. Vidi TarifaUmanjenjaTests.
+    /// Osnovica je ista kao u čl. 1 — nagrada za pojedinu radnju prema Tarifi. Čl. 2 se
+    /// ne poziva na Tbr. 4. toč. 8, pa se te dvije stope ne množe: 70% je 70%.
+    /// Umanjenje iz Tbr. 4. toč. 8 (zastupanje oštećenika) nosi sama stavka u katalogu.
     /// </summary>
     public const decimal ZastupnikDjetetaRate = 0.70m;
 }

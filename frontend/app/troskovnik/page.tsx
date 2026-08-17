@@ -166,6 +166,28 @@ interface TroskovnikResponse {
   sveukupni_trosak?: number;
 }
 
+// ── Uloga odvjetnika u kaznenom postupku ──
+
+/**
+ * Pravilnik o visini nagrade za rad odvjetnika prilikom obrana po službenoj dužnosti
+ * (NN 22/2022, br. 271) poznaje dvije stope, obje od iste osnovice — nagrade koja bi
+ * odvjetniku pripadala za pojedinu radnju prema Tarifi:
+ *
+ *   čl. 1 — obrana po sl. dužnosti i obrana na teret proračunskih sredstava → 50%
+ *   čl. 2 — opunomoćenik djeteta žrtve kaznenog djela                       → 70%
+ *
+ * Uloge se isključuju: čl. 1 je obrana okrivljenika, čl. 2 zastupanje djeteta žrtve,
+ * pa je to jedan izbor, a ne tri neovisne kvačice.
+ */
+type KazneniStatus = "puna" | "sluzbena" | "proracun" | "dijete";
+
+const KAZNENI_STATUS_OPCIJE: { value: KazneniStatus; label: string; napomena: string }[] = [
+  { value: "puna", label: "Puna tarifa", napomena: "bez umanjenja" },
+  { value: "sluzbena", label: "Branitelj po službenoj dužnosti", napomena: "50% — Pravilnik NN 22/2022, čl. 1" },
+  { value: "proracun", label: "Branitelj na teret proračunskih sredstava", napomena: "50% — čl. 1" },
+  { value: "dijete", label: "Opunomoćenik djeteta žrtve kaznenog djela", napomena: "70% — čl. 2" },
+];
+
 // ── Format helpers ──
 
 function fmtEur(n: number) {
@@ -256,9 +278,15 @@ function TroskovnikContent() {
 
   // ── Kazneni postupak state ──
   const [zaprijecenaKazna, setZaprijecenaKazna] = useState("");
-  const [isPoSluzbenojDuznosti, setIsPoSluzbenojDuznosti] = useState(false);
-  const [isNaTeretProracuna, setIsNaTeretProracuna] = useState(false);
-  const [isZastupnikDjeteta, setIsZastupnikDjeteta] = useState(false);
+  // Uloga odvjetnika po Pravilniku NN 22/2022 br. 271 je izbor između isključivih
+  // mogućnosti, ne skup neovisnih zastavica: čl. 1 je obrana okrivljenika, čl. 2
+  // zastupanje djeteta žrtve, a isti odvjetnik ne može u istom postupku biti oboje.
+  // Jedno stanje umjesto tri boolean-a čini proturječan odabir nereprezentabilnim,
+  // pa se stope ne mogu pomnožiti.
+  const [kazneniStatus, setKazneniStatus] = useState<KazneniStatus>("puna");
+  const isPoSluzbenojDuznosti = kazneniStatus === "sluzbena";
+  const isNaTeretProracuna = kazneniStatus === "proracun";
+  const isZastupnikDjeteta = kazneniStatus === "dijete";
   const [isStjecaj, setIsStjecaj] = useState(false);
   const [isOduzimanjePrekrsaj, setIsOduzimanjePrekrsaj] = useState(false);
   const [vrijednostOduzimanja, setVrijednostOduzimanja] = useState("");
@@ -1333,33 +1361,25 @@ function TroskovnikContent() {
 
               {/* Boolean modifiers */}
               <div className="space-y-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={isPoSluzbenojDuznosti}
-                    onChange={(e) => setIsPoSluzbenojDuznosti(e.target.checked)}
-                    className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
-                  />
-                  <span className="text-xs text-slate-700">Branitelj po službenoj dužnosti <span className="text-slate-400">(–50%)</span></span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={isNaTeretProracuna}
-                    onChange={(e) => setIsNaTeretProracuna(e.target.checked)}
-                    className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
-                  />
-                  <span className="text-xs text-slate-700">Branitelj na teret proračunskih sredstava <span className="text-slate-400">(–50%)</span></span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={isZastupnikDjeteta}
-                    onChange={(e) => setIsZastupnikDjeteta(e.target.checked)}
-                    className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
-                  />
-                  <span className="text-xs text-slate-700">Opunomoćenik djeteta žrtve kaznenog djela <span className="text-slate-400">(70% od Tbr. 4.8 = 35%)</span></span>
-                </label>
+                {/* Uloga odvjetnika — isključive mogućnosti, vidi KAZNENI_STATUS_OPCIJE */}
+                <fieldset className="space-y-2">
+                  <legend className="text-xs font-semibold text-slate-600 mb-1">Uloga odvjetnika</legend>
+                  {KAZNENI_STATUS_OPCIJE.map((opcija) => (
+                    <label key={opcija.value} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="kazneniStatus"
+                        value={opcija.value}
+                        checked={kazneniStatus === opcija.value}
+                        onChange={() => setKazneniStatus(opcija.value)}
+                        className="h-4 w-4 border-slate-300 text-red-600 focus:ring-red-500"
+                      />
+                      <span className="text-xs text-slate-700">
+                        {opcija.label} <span className="text-slate-400">({opcija.napomena})</span>
+                      </span>
+                    </label>
+                  ))}
+                </fieldset>
 
                 {/* Stjecaj / produljeno kazneno djelo */}
                 <label className="flex items-center gap-2 cursor-pointer">
