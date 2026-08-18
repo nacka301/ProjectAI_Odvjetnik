@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { Scale, Clock, ShieldAlert, ShieldCheck, Shield, LogOut, Search, Zap, Crown } from "lucide-react";
-import { createSupabaseBrowser } from "@/lib/supabase/client";
+import { signOutCompletely } from "@/lib/sign-out";
 import { useUserId } from "@/lib/useUserId";
 import { useCredits } from "@/lib/useCredits";
 import { useSubscription } from "@/lib/useSubscription";
@@ -172,8 +172,7 @@ function AppHeaderInner({ extraStart }: AppHeaderProps) {
 
           <button
             onClick={async () => {
-              const supabase = createSupabaseBrowser();
-              await supabase.auth.signOut();
+              await signOutCompletely();
               router.push("/auth/login");
               router.refresh();
             }}

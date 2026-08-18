@@ -3,7 +3,8 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2, Shield, ServerCrash, RefreshCw } from "lucide-react";
-import { createSupabaseBrowser } from "@/lib/supabase/client";
+import { signOutCompletely } from "@/lib/sign-out";
+import { safeNextPath } from "@/lib/auth-redirect";
 import type { UnknownReason } from "@/lib/second-factor";
 
 /**
@@ -58,8 +59,7 @@ function GateUnavailableContent() {
   const [reason, setReason] = useState<string | null>(searchParams.get("razlog"));
   const cancelled = useRef(false);
 
-  const next = searchParams.get("next");
-  const destination = next && next.startsWith("/") ? next : "/";
+  const destination = safeNextPath(searchParams.get("next"));
 
   const goThrough = useCallback(() => {
     setRetrying(true);
@@ -132,8 +132,7 @@ function GateUnavailableContent() {
   }, [attempt, exhausted, retrying, recheck, goThrough]);
 
   const handleSignOut = async () => {
-    const supabase = createSupabaseBrowser();
-    await supabase.auth.signOut();
+    await signOutCompletely();
     router.push("/auth/login");
     router.refresh();
   };
@@ -166,10 +165,21 @@ function GateUnavailableContent() {
         }}
       >
         <div className="px-6 pt-6 pb-2 sm:px-8 sm:pt-8">
+          {/* Two readings of the same state, because they are not the same
+              event to the person looking at it. While the page is still
+              retrying, the overwhelming likelihood is a backend waking from
+              sleep — presenting that as a failure, with the reason string and a
+              crashed-server icon, alarms a paying user over something that
+              resolves itself in seconds. The blunt version is still there; it
+              just waits until retrying has actually run out. */}
           <h2 className="font-serif text-lg font-semibold text-slate-900 mb-1">
-            Provjera trenutno nije moguća
+            {stillTrying ? "Pripremamo Vaš račun" : "Provjera trenutno nije moguća"}
           </h2>
-          <p className="text-sm text-slate-500">{describe(reason)}</p>
+          <p className="text-sm text-slate-500">
+            {stillTrying
+              ? "Poslužitelj se budi. Traje nekoliko sekundi."
+              : describe(reason)}
+          </p>
         </div>
 
         <div className="px-6 pb-6 sm:px-8 sm:pb-8 space-y-5">
@@ -178,18 +188,32 @@ function GateUnavailableContent() {
               className="w-16 h-16 rounded-2xl flex items-center justify-center"
               style={{ background: "var(--auth-navy)" }}
             >
-              <ServerCrash className="h-8 w-8" style={{ color: "var(--auth-gold)" }} />
+              {stillTrying ? (
+                <Loader2
+                  className="h-8 w-8 animate-spin"
+                  style={{ color: "var(--auth-gold)" }}
+                />
+              ) : (
+                <ServerCrash className="h-8 w-8" style={{ color: "var(--auth-gold)" }} />
+              )}
             </div>
 
             <p className="text-xs text-slate-500 text-center leading-relaxed max-w-xs">
-              Ne možemo utvrditi je li na vašem računu uključena dvofaktorska
-              provjera, pa vas iz opreza ne puštamo dalje.{" "}
-              <strong className="text-slate-600">Nije potreban nikakav kod</strong> i
-              niste ništa krivo napravili.
               {stillTrying ? (
-                <> Sami pokušavamo ponovo — ne morate ništa raditi.</>
+                <>
+                  Sve je u redu s Vašim računom —{" "}
+                  <strong className="text-slate-600">nije potreban nikakav kod</strong> i
+                  niste ništa krivo napravili. Pustit ćemo Vas dalje čim
+                  poslužitelj odgovori. Ne morate ništa raditi.
+                </>
               ) : (
-                <> Provjeru smo pokušali nekoliko puta bez uspjeha.</>
+                <>
+                  Ne možemo utvrditi je li na vašem računu uključena dvofaktorska
+                  provjera, pa vas iz opreza ne puštamo dalje.{" "}
+                  <strong className="text-slate-600">Nije potreban nikakav kod</strong> i
+                  niste ništa krivo napravili. Provjeru smo pokušali nekoliko puta
+                  bez uspjeha.
+                </>
               )}
             </p>
 

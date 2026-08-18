@@ -184,7 +184,40 @@ describe("checkSecondFactor", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it("reports unreachable only when neither attempt landed", async () => {
+  it("absorbs a cold start — two slow answers, then a real one", async () => {
+    // The failure this exists for: Render's free tier stops the instance and
+    // takes up to ~50 s to serve the first request. Two attempts covered 15 s,
+    // so the first person through the door in the morning — a lawyer who had
+    // just registered, most painfully — met the "provjera nije moguća" screen
+    // for a machine that was only waking up.
+    respondWith("throw", { status: 503, body: {} }, { status: 200, body: { enabled: false } });
+
+    await expect(checkSecondFactor(TOKEN)).resolves.toEqual({ outcome: "not-enrolled" });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("gives up after three attempts rather than blocking forever", async () => {
+    // A middleware that waited out a real outage would be worse than the gate
+    // screen, which keeps retrying on its own without holding the navigation.
+    respondWith({ status: 503, body: {} });
+
+    await expect(checkSecondFactor(TOKEN)).resolves.toEqual({
+      outcome: "unknown",
+      reason: "backend",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("still refuses to let anyone in while waking up", async () => {
+    // The extra patience must not become a way past the gate. Three transient
+    // answers are still not an "enabled: false", so nobody gets through.
+    respondWith({ status: 503, body: {} });
+
+    const result = await checkSecondFactor(TOKEN);
+    expect(result.outcome).not.toBe("not-enrolled");
+  });
+
+  it("reports unreachable only when no attempt landed", async () => {
     respondWith("throw", "throw");
 
     await expect(checkSecondFactor(TOKEN)).resolves.toEqual({

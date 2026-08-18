@@ -31,6 +31,13 @@ export function isEmailValid(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
+// ── OIB ─────────────────────────────────────────────────────────
+// Re-exported from lib/utils so the signup form and the rest of the app cannot
+// drift apart on what a valid OIB is. Registration used to accept "any eleven
+// digits", which passes for 24 out of 25 mistyped numbers — and the office OIB
+// it records goes on to print on every troškovnik and invoice the firm issues.
+export { validateOib } from "@/lib/utils";
+
 // ── Rate-limit for brute-force protection ───────────────────────
 // Client-side tracking — the real enforcement is Supabase-side,
 // but this gives immediate UX feedback.

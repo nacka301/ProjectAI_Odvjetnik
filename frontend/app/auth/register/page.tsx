@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Eye,
@@ -20,6 +20,7 @@ import {
   isEmailValid,
   isPasswordValid,
   validatePassword,
+  validateOib,
 } from "@/lib/auth-validation";
 
 // ── Google Logo SVG ──
@@ -40,6 +41,10 @@ export default function RegisterPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  // A typo in a password nobody can see means an account the owner cannot open,
+  // and the way out — "zaboravili lozinku" — needs the very email that may not
+  // have arrived yet. Cheaper to catch it here.
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [agreed, setAgreed] = useState(false);
 
@@ -52,8 +57,51 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
+  // ── Resending the confirmation email ──
+  // Without this the success screen is a dead end: if the mail does not arrive
+  // — greylisted, mistyped address, provider slow — the only way to try again
+  // is to fill the whole form in a second time, and on an address that now
+  // exists the second attempt looks identical to the first and sends nothing.
+  const [resending, setResending] = useState(false);
+  const [resentAt, setResentAt] = useState<number | null>(null);
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = setTimeout(() => setCooldown((s) => s - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [cooldown]);
+
+  const handleResend = async () => {
+    setResending(true);
+    try {
+      await supabase.auth.resend({
+        type: "signup",
+        email,
+        options: {
+          emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/auth/callback?next=/dobrodosli`,
+        },
+      });
+      // Deliberately not surfacing the error. Supabase answers differently for
+      // "no such pending signup" than for "sent", and showing that difference
+      // here would turn this button into the account-existence oracle the rest
+      // of these screens are careful not to be.
+      setResentAt(Date.now());
+    } catch {
+      // Same reasoning — the confirmation below is about what we attempted.
+      setResentAt(Date.now());
+    } finally {
+      setResending(false);
+      // Long enough that the button cannot be used to hammer the mail server,
+      // short enough that someone genuinely waiting is not stuck.
+      setCooldown(60);
+    }
+  };
+
   const checks = validatePassword(password);
   const pwValid = isPasswordValid(password);
+  const oibValid = validateOib(firmOib.trim());
+  const pwMatch = password === confirmPassword && confirmPassword.length > 0;
 
   // ── Email/Password Register ──
   const handleSubmit = async (e: React.FormEvent) => {
@@ -68,8 +116,15 @@ export default function RegisterPage() {
       setError("Unesite naziv odvjetničkog ureda.");
       return;
     }
-    if (firmOib.trim() && (firmOib.trim().length !== 11 || !/^\d{11}$/.test(firmOib.trim()))) {
-      setError("OIB mora imati točno 11 znamenki.");
+    // Checksum, not just length. Eleven digits is a shape, not a number — the
+    // ISO 7064 check digit is what separates a real OIB from a typo, and this
+    // value ends up printed on the firm's invoices.
+    if (firmOib.trim() && !validateOib(firmOib.trim())) {
+      setError(
+        firmOib.trim().length !== 11
+          ? "OIB mora imati točno 11 znamenki."
+          : "OIB nije ispravan — provjerite znamenke.",
+      );
       return;
     }
     if (!isEmailValid(email)) {
@@ -78,6 +133,10 @@ export default function RegisterPage() {
     }
     if (!pwValid) {
       setError("Lozinka ne zadovoljava sigurnosne zahtjeve.");
+      return;
+    }
+    if (!pwMatch) {
+      setError("Lozinke se ne podudaraju.");
       return;
     }
     if (!agreed) {
@@ -99,7 +158,10 @@ export default function RegisterPage() {
             firm_name: firmName.trim(),
             firm_oib: firmOib.trim() || null,
           },
-          emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/auth/callback`,
+          // Registration and sign-in must not end in the same place. This is
+          // the only thing that tells the app, three redirects later, that the
+          // person arriving has never been here before.
+          emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/auth/callback?next=/dobrodosli`,
         },
       });
 
@@ -132,7 +194,13 @@ export default function RegisterPage() {
       const { error: authError } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/auth/callback`,
+          // Same call as the login screen makes — OAuth cannot distinguish
+          // "register" from "sign in". The destination is the only place the
+          // distinction can still be made, and /dobrodosli says the right thing
+          // in both cases: it greets a genuinely new user, and tells someone who
+          // already had an account that we signed them in rather than creating
+          // a second one.
+          redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/auth/callback?next=/dobrodosli`,
         },
       });
       if (authError) throw authError;
@@ -175,29 +243,60 @@ export default function RegisterPage() {
           <div className="w-14 h-14 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <CheckCircle className="h-7 w-7 text-emerald-600" />
           </div>
-          <h2 className="font-serif text-lg font-semibold text-slate-900 mb-2">Zahtjev zaprimljen</h2>
+          <h2 className="font-serif text-lg font-semibold text-slate-900 mb-2">Provjerite email</h2>
           <p className="text-sm text-slate-500 mb-4 leading-relaxed">
-            Poslali smo verifikacijski link na{" "}
+            Poslali smo link za potvrdu na{" "}
             <span className="font-semibold text-slate-700">{email}</span>.
             <br />
-            Kliknite na link u emailu da aktivirate račun.
+            Kliknite na link i račun je spreman — nema daljnjeg čekanja.
           </p>
-          <div className="flex items-center justify-center gap-2 mb-4 px-4 py-2.5 rounded-lg" style={{ background: "var(--auth-gold-muted)" }}>
-            <Shield className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--auth-gold)" }} />
-            <p className="text-xs text-slate-600">
-              Vaš zahtjev podliježe ručnoj verifikaciji od strane tima.
+          {/* The screen used to promise "ručna verifikacija od strane tima" and
+              approval "unutar 24 sata". No such step exists anywhere in the
+              codebase: confirming the email is the last gate. The first user to
+              read that would have sat waiting for an approval nobody was going
+              to give. */}
+          <div
+            className="flex items-start gap-2 mb-4 px-4 py-3 rounded-lg text-left"
+            style={{ background: "var(--auth-gold-muted)" }}
+          >
+            <Shield className="h-3.5 w-3.5 shrink-0 mt-0.5" style={{ color: "var(--auth-gold)" }} />
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Ne stigne li email za nekoliko minuta, provjerite spam. Ako ga i
+              dalje nema, možda već imate račun na ovoj adresi — pokušajte se
+              prijaviti ili zatražite novu lozinku.
             </p>
           </div>
-          <p className="text-xs text-slate-400 mb-6">
-            Ne vidite email? Provjerite spam/junk folder.
-          </p>
-          <Link
-            href="/auth/login"
-            className="inline-flex items-center gap-2 text-white text-sm font-semibold px-6 py-2.5 rounded-xl transition shadow-lg"
-            style={{ background: "var(--auth-navy)", boxShadow: "0 4px 14px rgba(27,42,74,0.4)" }}
-          >
-            Natrag na prijavu
-          </Link>
+          {resentAt && (
+            <p className="text-xs text-emerald-600 mb-3">
+              Poslali smo novi link na {email}.
+            </p>
+          )}
+
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={handleResend}
+              disabled={resending || cooldown > 0}
+              className="inline-flex items-center justify-center gap-2 text-sm font-semibold px-6 py-2.5 rounded-xl transition border disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ borderColor: "var(--auth-gold)", color: "var(--auth-navy)" }}
+            >
+              {resending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+              {cooldown > 0
+                ? `Pošalji ponovo (${cooldown} s)`
+                : "Nije stigao? Pošalji ponovo"}
+            </button>
+
+            <Link
+              href="/auth/login"
+              className="inline-flex items-center justify-center gap-2 text-white text-sm font-semibold px-6 py-2.5 rounded-xl transition shadow-lg"
+              style={{ background: "var(--auth-navy)", boxShadow: "0 4px 14px rgba(27,42,74,0.4)" }}
+            >
+              Natrag na prijavu
+            </Link>
+          </div>
         </div>
       </>
     );
@@ -232,7 +331,7 @@ export default function RegisterPage() {
         }}
       >
         <div className="px-6 pt-6 pb-2 sm:px-8 sm:pt-8">
-          <h2 className="font-serif text-lg font-semibold text-slate-900 mb-1">Zatražite pristup uredu</h2>
+          <h2 className="font-serif text-lg font-semibold text-slate-900 mb-1">Otvorite račun</h2>
           <p className="text-sm text-slate-500">Kreirajte račun za PravoTek platformu</p>
         </div>
 
@@ -320,9 +419,19 @@ export default function RegisterPage() {
                   onChange={(e) => setFirmOib(e.target.value.replace(/\D/g, "").slice(0, 11))}
                   disabled={isDisabled}
                   placeholder="12345678901"
-                  className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 outline-none transition disabled:bg-slate-50 disabled:text-slate-400 bg-white"
+                  className={`w-full px-3.5 py-2.5 border rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 outline-none transition disabled:bg-slate-50 disabled:text-slate-400 bg-white ${
+                    firmOib.length === 11 && !oibValid ? "border-red-300" : "border-slate-200"
+                  }`}
                   style={{ "--tw-ring-color": "var(--auth-gold)" } as React.CSSProperties}
                 />
+                {/* Verdict only once eleven digits are in — complaining at the
+                    fourth keystroke that the number is wrong is just noise. */}
+                {firmOib.length === 11 && (
+                  <p className={`mt-1 flex items-center gap-1 text-xs ${oibValid ? "text-emerald-600" : "text-red-500"}`}>
+                    {oibValid ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
+                    {oibValid ? "OIB je ispravan" : "Kontrolna znamenka se ne poklapa"}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -390,6 +499,29 @@ export default function RegisterPage() {
               )}
             </div>
 
+            {/* Confirm password */}
+            <div>
+              <label htmlFor="confirmPassword" className="block text-xs font-semibold text-slate-700 mb-1.5">
+                Potvrdite lozinku
+              </label>
+              <input
+                id="confirmPassword"
+                type={showPw ? "text" : "password"}
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                disabled={isDisabled}
+                placeholder="••••••••"
+                className={`w-full px-3.5 py-2.5 border rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 outline-none transition disabled:bg-slate-50 disabled:text-slate-400 ${
+                  confirmPassword.length > 0 && !pwMatch ? "border-red-300" : "border-slate-200"
+                }`}
+                style={{ "--tw-ring-color": "var(--auth-gold)" } as React.CSSProperties}
+              />
+              {confirmPassword.length > 0 && !pwMatch && (
+                <p className="mt-1 text-xs text-red-500">Lozinke se ne podudaraju</p>
+              )}
+            </div>
+
             {/* Terms */}
             <label className="flex items-start gap-2.5 cursor-pointer">
               <input
@@ -407,18 +539,18 @@ export default function RegisterPage() {
               </span>
             </label>
 
-            {/* Manual verification note */}
+            {/* What actually happens next — no approval step exists. */}
             <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg" style={{ background: "var(--auth-gold-muted)" }}>
               <Shield className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--auth-gold)" }} />
               <p className="text-[11px] text-slate-500 leading-relaxed">
-                Svi zahtjevi podliježu ručnoj verifikaciji. Odobrenje pristupa obično unutar 24 sata.
+                Šaljemo Vam link za potvrdu email adrese. Nakon potvrde ulazite odmah.
               </p>
             </div>
 
             {/* Submit */}
             <button
               type="submit"
-              disabled={isDisabled || !pwValid || !agreed}
+              disabled={isDisabled || !pwValid || !pwMatch || !agreed || (firmOib.length > 0 && !oibValid)}
               className="w-full flex items-center justify-center gap-2 text-white text-sm font-semibold py-2.5 rounded-xl transition shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
               style={{
                 background: "var(--auth-navy)",
@@ -430,7 +562,7 @@ export default function RegisterPage() {
               ) : (
                 <Send className="h-4 w-4" />
               )}
-              {loading ? "Slanje zahtjeva..." : "Pošalji zahtjev"}
+              {loading ? "Otvaranje računa..." : "Otvori račun"}
             </button>
           </form>
         </div>

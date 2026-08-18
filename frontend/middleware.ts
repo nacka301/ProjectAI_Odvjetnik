@@ -38,8 +38,23 @@ export async function middleware(request: NextRequest) {
   const isAuthRoute =
     pathname.startsWith("/auth/");
 
+  // Pravni dokumenti moraju biti čitljivi BEZ prijave.
+  //
+  // Obrazac za registraciju traži da korisnik potvrdi „Prihvaćam Uvjete
+  // korištenja i Politiku privatnosti", a oba linka su do sada vodila ovamo,
+  // gdje ih je middleware presretao i slao natrag na prijavu. Čovjek je morao
+  // prihvatiti dokument koji nije mogao otvoriti — što je i pravno neodrživo
+  // (privola po GDPR-u pretpostavlja da je informacija bila dostupna prije
+  // pristanka) i razlog zbog kojeg Google odbija verifikaciju brendinga, jer
+  // traži da su te dvije adrese javno dostupne.
+  const isLegalPage =
+    pathname === "/privatnost" ||
+    pathname === "/uvjeti" ||
+    pathname === "/dpa";
+
   const isPublicRoute =
     isAuthRoute ||
+    isLegalPage ||
     pathname.startsWith("/api/") ||
     pathname.startsWith("/_next/") ||
     pathname === "/favicon.ico";

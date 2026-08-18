@@ -14,6 +14,7 @@ import {
   Building2,
 } from "lucide-react";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
+import { signOutCompletely } from "@/lib/sign-out";
 import { API_BASE } from "@/lib/api";
 
 /**
@@ -140,8 +141,7 @@ export default function PrivacyPanel({ userEmail }: PrivacyPanelProps) {
         return;
       }
 
-      const supabase = createSupabaseBrowser();
-      await supabase.auth.signOut();
+      await signOutCompletely();
       router.push("/auth/login?reason=deleted");
       router.refresh();
     } catch {

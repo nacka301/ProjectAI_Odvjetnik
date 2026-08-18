@@ -77,10 +77,15 @@ public static class DomainServiceCollectionExtensions
         services.AddSingleton<IEmailService>(sp => sp.GetRequiredService<ResendEmailService>());
         services.AddSingleton<IResendEmailService>(sp => sp.GetRequiredService<ResendEmailService>());
 
-        // ── Auth registration (MailKit email + Supabase Admin API) ──
-        services.AddSingleton<IAuthEmailService, AuthEmailService>();
-        services.AddHttpClient<AuthService>();
-        services.AddScoped<IAuthService>(sp => sp.GetRequiredService<AuthService>());
+        // REMOVED: the AuthService registration trio.
+        //
+        // It backed POST /api/auth/register and /api/auth/verify — a second
+        // registration flow, with its own SMTP sender and its own use of the
+        // Supabase Admin API, that this application stopped using when signup
+        // moved to supabase.auth.signUp in the browser and profile creation moved
+        // to the `handle_new_user` trigger (migration 015). Nothing called it:
+        // not the web app, not the e2e suite. Registering it kept a second way to
+        // create accounts alive behind an endpoint no feature needed.
 
         // ── Audit logging (GDPR-safe, fire-and-forget) ──
         services.AddHttpClient<AuditLogService>();

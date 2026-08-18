@@ -27,6 +27,7 @@ import {
   Zap,
 } from "lucide-react";
 import { getRecentActivity, type ActivityItem, type ActivityType } from "@/lib/supabase";
+import { cachedOnboardedHint, loadOnboardingState, markOnboarded } from "@/lib/onboarding";
 import AppHeader from "@/components/AppHeader";
 import { useUserId } from "@/lib/useUserId";
 import { useCredits } from "@/lib/useCredits";
@@ -299,12 +300,23 @@ export default function Dashboard() {
   const [showTour, setShowTour] = useState(false);
   const [tourStep, setTourStep] = useState(0);
 
-  // Check if first visit (tour hasn't been seen)
+  // Is this user new? The answer comes from user_profiles.onboarded_at, not
+  // from this browser. `pravotek_tour_seen` made "new" a property of a browser
+  // profile: the same lawyer was new again on their phone, new again after
+  // clearing history, and nobody could tell whether anyone had ever finished.
+  //
+  // The cached hint suppresses the tour immediately for anyone known to have
+  // done it, so the overlay does not flash while the query is in flight. It is
+  // only ever used to say "not new" — never the other way round.
   useEffect(() => {
-    try {
-      const seen = localStorage.getItem("pravotek_tour_seen");
-      if (!seen) setShowTour(true);
-    } catch { /* localStorage unavailable */ }
+    if (cachedOnboardedHint()) return;
+
+    let cancelled = false;
+    (async () => {
+      const { isNew } = await loadOnboardingState();
+      if (!cancelled && isNew === true) setShowTour(true);
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   // Check if banner was dismissed
@@ -336,7 +348,8 @@ export default function Dashboard() {
   const endTour = useCallback(() => {
     setShowTour(false);
     setTourStep(0);
-    try { localStorage.setItem("pravotek_tour_seen", "1"); } catch { /* storage unavailable */ }
+    // Finishing and skipping record the same thing: do not offer this again.
+    void markOnboarded();
   }, []);
 
   const nextTourStep = useCallback(() => {
@@ -414,13 +427,17 @@ export default function Dashboard() {
                 <Sparkles className="h-7 w-7 text-blue-400" />
               </div>
               <div>
+                {/* No longer a welcome. A returning user saw "Dobrodošli" on
+                    every visit until they dismissed it, and a genuinely new one
+                    now gets a real greeting on /dobrodosli. What is left is the
+                    one thing about this screen that is not self-evident. */}
                 <h2 className="text-xl sm:text-2xl font-bold tracking-tight mb-2">
-                  Dobrodošli u Vaš Pravni Ured
+                  Povucite dokument bilo gdje na ovaj ekran
                 </h2>
                 <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-2xl">
-                  Ovo je Vaš centar za analizu spisa. Odaberite modul u nastavku ili jednostavno{" "}
-                  <span className="text-blue-400 font-medium">povucite (Drag &amp; Drop)</span>{" "}
-                  bilo koji dokument da sustav sam prepozna što treba učiniti.
+                  Ne morate prvo birati modul. Ugovor, ZK izvadak ili oglas —
+                  sustav prepozna vrstu dokumenta i otvori pravi modul sam.
+                  Ili odaberite modul ispod.
                 </p>
                 <div className="flex items-center gap-3 mt-4">
                   <Link

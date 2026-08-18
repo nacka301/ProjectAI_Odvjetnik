@@ -12,8 +12,10 @@ import {
   AlertCircle,
   Lock,
   Shield,
+  Info,
 } from "lucide-react";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
+import { safeNextPath } from "@/lib/auth-redirect";
 import {
   isEmailValid,
   isLockedOut,
@@ -48,6 +50,11 @@ function LoginContent() {
   const supabase = createSupabaseBrowser();
   const idleLogout = searchParams.get("reason") === "idle";
 
+  // The middleware already records where the user was headed when it stopped
+  // them. Nothing read it, so everyone landed on the dashboard and had to find
+  // their way back to the page they had actually asked for.
+  const nextPath = safeNextPath(searchParams.get("next"));
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -55,6 +62,9 @@ function LoginContent() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Set by any rejected password attempt. Drives the Google note in the render.
+  const [credentialFailure, setCredentialFailure] = useState(false);
 
   // Rate limiting
   const [lockout, setLockout] = useState<{ locked: boolean; remainingSeconds: number }>({ locked: false, remainingSeconds: 0 });
@@ -105,6 +115,7 @@ function LoginContent() {
         // The "you signed up with Google" hint is gone for the same reason;
         // if we want to keep helping that user, it has to go out by email.
         recordFailedAttempt();
+        setCredentialFailure(true);
         const remaining = attemptsRemaining();
         setError(
           remaining <= 0
@@ -120,7 +131,7 @@ function LoginContent() {
       // covers Google sign-in and anyone who types a URL instead of following
       // the redirect — neither of which this component ever saw. If the account
       // has TOTP enabled, the navigation below lands on /auth/2fa.
-      router.push("/");
+      router.push(nextPath);
       router.refresh();
     } catch {
       setError("Greška pri povezivanju sa serverom. Pokušajte ponovo.");
@@ -137,7 +148,7 @@ function LoginContent() {
       const { error: authError } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/auth/callback`,
+          redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`,
         },
       });
       if (authError) throw authError;
@@ -217,6 +228,31 @@ function LoginContent() {
                     <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-red-500" />
                   )}
                   <span>{error}</span>
+                </div>
+              )}
+
+              {/* A Google-created account has no password, so signInWithPassword
+                  answers "Invalid login credentials" — the same thing a typo
+                  produces. The lawyer reads "wrong password", tries four more
+                  times and hits the lockout, with nothing anywhere telling them
+                  the account was never meant to have a password.
+
+                  Shown after EVERY rejected attempt, deliberately. Showing it
+                  only for Google accounts would answer "does this address have
+                  an account here, and of what kind" — the exact question the
+                  single generic error message exists to refuse. Unconditional,
+                  it tells an attacker nothing and gives the one person who needs
+                  it the only sentence that gets them in. */}
+              {credentialFailure && (
+                <div
+                  className="flex items-start gap-2 rounded-xl p-3 text-sm login-step-enter"
+                  style={{ background: "var(--auth-gold-muted)" }}
+                >
+                  <Info className="h-4 w-4 shrink-0 mt-0.5" style={{ color: "var(--auth-gold)" }} />
+                  <span className="text-slate-600">
+                    Ako ste račun otvorili preko Googlea, on nema lozinku —
+                    prijavite se gumbom <strong className="font-semibold">Prijava putem Googlea</strong>.
+                  </span>
                 </div>
               )}
 
@@ -332,7 +368,7 @@ function LoginContent() {
           className="font-semibold transition"
           style={{ color: "var(--auth-gold)" }}
         >
-          Zatražite pristup
+          Otvorite račun
         </Link>
       </p>
       <div className="flex items-center justify-center gap-2 mt-4 text-xs text-slate-500">

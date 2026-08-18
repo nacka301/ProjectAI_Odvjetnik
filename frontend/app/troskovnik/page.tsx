@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   Calculator,
   ChevronDown,
+  Compass,
   ChevronRight,
   ChevronUp,
   ClipboardList,
@@ -32,6 +33,9 @@ import { API_BASE } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
 import { useCredits, getModuleQuota } from "@/lib/useCredits";
 import { CreditQuotaBadge, CreditExhaustedWarning } from "@/components/CreditQuotaBadge";
+import TroskovnikVodic, { highlightClasses } from "@/components/TroskovnikVodic";
+import { clearDraft, loadDraft, saveDraft, type LoadedDraft } from "@/lib/troskovnik-draft";
+import { cachedOnboardedHint, loadOnboardingState } from "@/lib/onboarding";
 import { formatEur, formatNumber, formatThreshold } from "@/lib/format";
 import {
   BOD_VALUE,
@@ -327,6 +331,35 @@ function TroskovnikContent() {
   const searchParams = useSearchParams();
   const preselectedClientId = searchParams.get("clientId");
 
+  // ── Vodič kroz prvi troškovnik ──
+  // Opens from three places: `?vodic=1` (the welcome screen's button), the
+  // header button, or — for someone who has never been through it — the answer
+  // from user_profiles.onboarded_at. `vodicTarget` is the id of the element the
+  // current step rings.
+  const [vodicOpen, setVodicOpen] = useState(searchParams.get("vodic") === "1");
+  const [vodicTarget, setVodicTarget] = useState<string | null>(null);
+  const zatvoriVodic = useCallback(() => setVodicOpen(false), []);
+
+  useEffect(() => {
+    // The cached hint answers "not new" without a round trip, so the overlay
+    // cannot flash on a returning lawyer's screen while the query is in flight.
+    if (cachedOnboardedHint()) return;
+
+    let cancelled = false;
+    (async () => {
+      const { isNew } = await loadOnboardingState();
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- the answer
+      // arrives from the database, which is exactly the "external system" case
+      // the rule carves out; there is nowhere earlier to know it.
+      if (!cancelled && isNew === true) setVodicOpen(true);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+  const vodicHighlight = useCallback(
+    (id: string) => highlightClasses(vodicTarget === id),
+    [vodicTarget],
+  );
+
   // ── Catalog state ──
   const [katalog, setKatalog] = useState<TarifnaStavka[]>([]);
   const [loadingKatalog, setLoadingKatalog] = useState(true);
@@ -472,6 +505,130 @@ function TroskovnikContent() {
   const [result, setResult] = useState<TroskovnikResponse | null>(null);
   const [calculating, setCalculating] = useState(false);
   const [calcError, setCalcError] = useState<string | null>(null);
+
+  // ═══════════════════════════════════════════════════════════
+  //  Nacrt — preživljava odjavu zbog neaktivnosti
+  //
+  //  Everything the user types, in one object. Deriving the draft TYPE from
+  //  this snapshot (`typeof draftSnapshot`) rather than declaring it separately
+  //  means restore below is type-checked against the real state — a renamed
+  //  field breaks the build instead of silently restoring nothing.
+  //
+  //  Excluded on purpose: the catalog and client list (fetched), the search box
+  //  and expanded categories (view state, and a Set does not survive JSON), and
+  //  the computed result (recomputed from the inputs anyway).
+  // ═══════════════════════════════════════════════════════════
+  const draftSnapshot = useMemo(
+    () => ({
+      vrijednostSpora, redci, selectedClientId, napomena,
+      odvjetnikIme, odvjetnikOib, odvjetnikAdresa, odvjetnikGrad, odvjetnikIban,
+      klijentIme, klijentOib, klijentAdresa, klijentGrad,
+      opisPredmeta, predmetSud, predmetPoslovniBroj, showParties, isPdvUkljucen,
+      naknadaTroskovaStavke,
+      protustrankaIme, protustrankaOib, protustrankaAdresa, protustrankaGrad,
+      protustrankaPolozaj, zastupanaPolozaj,
+      zaprijecenaKazna, kazneniStatus, isStjecaj, isOduzimanjePrekrsaj,
+      vrijednostOduzimanja,
+      isOslobodjenPristojbi, datumOdgovoraNaTuzbu, datumPokretanjaUpravnogSpora,
+      pristojbeDodane, pristojbeIskljucene,
+      podnesciElektronicki, zkUpisElektronicki, odlukeElektronicki,
+      oslobodjenjeKategorija, brojOslobodjenihOsoba, udioUVps, postotakUspjeha,
+      vrstaPostupka, uzdrzavanjeMjesecno, zahtjevi, zahtjeviNacin,
+      pravniLijek, pravniLijekIznos, vpsPrimijeniNaNagradu,
+      brojZastupanihOsoba, osnovicaTbr7, razinaSuda, tbr45Nacin,
+      rentaIznos, rentaRazdoblje, tbr41Povisenje, tbr41Snizenje,
+      dodatnePristojbe, predujmovi,
+    }),
+    [
+      vrijednostSpora, redci, selectedClientId, napomena,
+      odvjetnikIme, odvjetnikOib, odvjetnikAdresa, odvjetnikGrad, odvjetnikIban,
+      klijentIme, klijentOib, klijentAdresa, klijentGrad,
+      opisPredmeta, predmetSud, predmetPoslovniBroj, showParties, isPdvUkljucen,
+      naknadaTroskovaStavke,
+      protustrankaIme, protustrankaOib, protustrankaAdresa, protustrankaGrad,
+      protustrankaPolozaj, zastupanaPolozaj,
+      zaprijecenaKazna, kazneniStatus, isStjecaj, isOduzimanjePrekrsaj,
+      vrijednostOduzimanja,
+      isOslobodjenPristojbi, datumOdgovoraNaTuzbu, datumPokretanjaUpravnogSpora,
+      pristojbeDodane, pristojbeIskljucene,
+      podnesciElektronicki, zkUpisElektronicki, odlukeElektronicki,
+      oslobodjenjeKategorija, brojOslobodjenihOsoba, udioUVps, postotakUspjeha,
+      vrstaPostupka, uzdrzavanjeMjesecno, zahtjevi, zahtjeviNacin,
+      pravniLijek, pravniLijekIznos, vpsPrimijeniNaNagradu,
+      brojZastupanihOsoba, osnovicaTbr7, razinaSuda, tbr45Nacin,
+      rentaIznos, rentaRazdoblje, tbr41Povisenje, tbr41Snizenje,
+      dodatnePristojbe, predujmovi,
+    ],
+  );
+
+  type Nacrt = typeof draftSnapshot;
+
+  const [ponudjeniNacrt, setPonudjeniNacrt] = useState<LoadedDraft<Nacrt> | null>(null);
+
+  /** Worth keeping only once the user has actually put something in. */
+  const nacrtVrijedanSpremanja =
+    redci.length > 0 || vrijednostSpora.trim() !== "" || klijentIme.trim() !== "";
+
+  // Offer whatever survived, once, on arrival. Deliberately an offer and not an
+  // automatic restore: this page can also be opened with ?clientId=… prefilled,
+  // and silently overwriting that with an older draft would be its own bug.
+  useEffect(() => {
+    if (!userId) return;
+    const found = loadDraft<Nacrt>(userId);
+    if (found) setPonudjeniNacrt(found);
+    // Runs once per user — re-offering after the user dismissed it would make
+    // the banner impossible to get rid of.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
+
+  // Debounced, so typing does not serialise sixty fields on every keystroke.
+  useEffect(() => {
+    if (!userId || !nacrtVrijedanSpremanja) return;
+    const timer = setTimeout(() => saveDraft(userId, draftSnapshot), 1500);
+    return () => clearTimeout(timer);
+  }, [userId, draftSnapshot, nacrtVrijedanSpremanja]);
+
+  /** Puts a recovered draft back into the form, field by field. */
+  const vratiNacrt = useCallback((d: Nacrt) => {
+    setVrijednostSpora(d.vrijednostSpora); setRedci(d.redci);
+    setSelectedClientId(d.selectedClientId); setNapomena(d.napomena);
+    setOdvjetnikIme(d.odvjetnikIme); setOdvjetnikOib(d.odvjetnikOib);
+    setOdvjetnikAdresa(d.odvjetnikAdresa); setOdvjetnikGrad(d.odvjetnikGrad);
+    setOdvjetnikIban(d.odvjetnikIban);
+    setKlijentIme(d.klijentIme); setKlijentOib(d.klijentOib);
+    setKlijentAdresa(d.klijentAdresa); setKlijentGrad(d.klijentGrad);
+    setOpisPredmeta(d.opisPredmeta); setPredmetSud(d.predmetSud);
+    setPredmetPoslovniBroj(d.predmetPoslovniBroj);
+    setShowParties(d.showParties); setIsPdvUkljucen(d.isPdvUkljucen);
+    setNaknadaTroskovaStavke(d.naknadaTroskovaStavke);
+    setProtustrankaIme(d.protustrankaIme); setProtustrankaOib(d.protustrankaOib);
+    setProtustrankaAdresa(d.protustrankaAdresa); setProtustrankaGrad(d.protustrankaGrad);
+    setProtustrankaPolozaj(d.protustrankaPolozaj); setZastupanaPolozaj(d.zastupanaPolozaj);
+    setZaprijecenaKazna(d.zaprijecenaKazna); setKazneniStatus(d.kazneniStatus);
+    setIsStjecaj(d.isStjecaj); setIsOduzimanjePrekrsaj(d.isOduzimanjePrekrsaj);
+    setVrijednostOduzimanja(d.vrijednostOduzimanja);
+    setIsOslobodjenPristojbi(d.isOslobodjenPristojbi);
+    setDatumOdgovoraNaTuzbu(d.datumOdgovoraNaTuzbu);
+    setDatumPokretanjaUpravnogSpora(d.datumPokretanjaUpravnogSpora);
+    setPristojbeDodane(d.pristojbeDodane); setPristojbeIskljucene(d.pristojbeIskljucene);
+    setPodnesciElektronicki(d.podnesciElektronicki);
+    setZkUpisElektronicki(d.zkUpisElektronicki);
+    setOdlukeElektronicki(d.odlukeElektronicki);
+    setOslobodjenjeKategorija(d.oslobodjenjeKategorija);
+    setBrojOslobodjenihOsoba(d.brojOslobodjenihOsoba);
+    setUdioUVps(d.udioUVps); setPostotakUspjeha(d.postotakUspjeha);
+    setVrstaPostupka(d.vrstaPostupka); setUzdrzavanjeMjesecno(d.uzdrzavanjeMjesecno);
+    setZahtjevi(d.zahtjevi); setZahtjeviNacin(d.zahtjeviNacin);
+    setPravniLijek(d.pravniLijek); setPravniLijekIznos(d.pravniLijekIznos);
+    setVpsPrimijeniNaNagradu(d.vpsPrimijeniNaNagradu);
+    setBrojZastupanihOsoba(d.brojZastupanihOsoba);
+    setOsnovicaTbr7(d.osnovicaTbr7); setRazinaSuda(d.razinaSuda);
+    setTbr45Nacin(d.tbr45Nacin);
+    setRentaIznos(d.rentaIznos); setRentaRazdoblje(d.rentaRazdoblje);
+    setTbr41Povisenje(d.tbr41Povisenje); setTbr41Snizenje(d.tbr41Snizenje);
+    setDodatnePristojbe(d.dodatnePristojbe); setPredujmovi(d.predujmovi);
+    setPonudjeniNacrt(null);
+  }, []);
 
   // ── Load catalog ──
   // Waits for userId, exactly like the client fetch below. useAuth() fills
@@ -1318,6 +1475,10 @@ function TroskovnikContent() {
       setResult(data.troskovnik);
       setSavedId(data.savedId ?? null);
 
+      // It is in the database now. Keeping a copy in the tab would only make it
+      // possible to be offered a stale version of something already filed.
+      clearDraft(userId);
+
       // If backend auto-created a client, update local state
       if (data.createdClientId) {
         setSelectedClientId(data.createdClientId);
@@ -1434,6 +1595,12 @@ function TroskovnikContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
+      <TroskovnikVodic
+        open={vodicOpen}
+        onClose={zatvoriVodic}
+        onStepChange={setVodicTarget}
+      />
+
       {/* ── Sticky Header ── */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-40 print:hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-4">
@@ -1456,6 +1623,16 @@ function TroskovnikContent() {
           </div>
           {/* Action buttons */}
           <div className="ml-auto flex items-center gap-2">
+            {/* Way back into the walkthrough. Skipping it is remembered for
+                good, so without this there would be no way to see it again. */}
+            <button
+              onClick={() => setVodicOpen(true)}
+              className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 transition px-2.5 py-1.5 rounded-lg hover:bg-slate-100"
+              title="Pokreni vodič kroz troškovnik"
+            >
+              <Compass className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Vodič</span>
+            </button>
             {liveCalc.lines.length > 0 && (
               <>
                 <button
@@ -1479,6 +1656,43 @@ function TroskovnikContent() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+        {/* ── Nedovršeni troškovnik iz prekinutog rada ── */}
+        {ponudjeniNacrt && (
+          <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4 print:hidden">
+            <div className="flex flex-wrap items-center gap-3">
+              <ClipboardList className="h-5 w-5 text-amber-600 shrink-0" />
+              <p className="text-sm text-amber-900 flex-1 min-w-[16rem]">
+                Imate nedovršen troškovnik od{" "}
+                <span className="font-semibold">
+                  {ponudjeniNacrt.savedAt.toLocaleTimeString("hr-HR", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
+                . Želite li nastaviti gdje ste stali?
+              </p>
+              <div className="flex items-center gap-2 ml-auto">
+                <button
+                  onClick={() => {
+                    clearDraft(userId);
+                    setPonudjeniNacrt(null);
+                  }}
+                  className="text-xs text-amber-700 hover:text-amber-900 transition px-3 py-2"
+                >
+                  Odbaci
+                </button>
+                <button
+                  onClick={() => vratiNacrt(ponudjeniNacrt.data)}
+                  className="inline-flex items-center gap-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium px-4 py-2 rounded-lg transition"
+                >
+                  Nastavi
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── Info Banner ── */}
         <div className="mb-6 bg-indigo-50 border border-indigo-200 rounded-xl p-4 print:hidden">
           <div className="flex items-start gap-3">
@@ -1500,7 +1714,7 @@ function TroskovnikContent() {
           <div className="lg:col-span-2 space-y-4 print:hidden">
             {/* ── Case value input (hidden when only kazneni items) ── */}
             {!isOnlyKazneni && (
-            <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+            <div id="vodic-vps" className={`bg-white rounded-xl border border-slate-200 p-4 shadow-sm transition ${vodicHighlight("vodic-vps")}`}>
               <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
                 <Euro className="h-3.5 w-3.5 inline mr-1 -mt-0.5" />
                 Vrijednost predmeta spora (EUR)
@@ -2003,7 +2217,7 @@ function TroskovnikContent() {
             )}
 
             {/* ── Search ── */}
-            <div className="relative">
+            <div id="vodic-radnje" className={`relative rounded-xl transition ${vodicHighlight("vodic-radnje")}`}>
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <input
                 type="text"
@@ -2151,7 +2365,7 @@ function TroskovnikContent() {
             })}
 
             {/* ── Party info (Collapsible) ── */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div id="vodic-stranke" className={`bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden transition ${vodicHighlight("vodic-stranke")}`}>
               <button
                 onClick={() => setShowParties(!showParties)}
                 className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition"
@@ -2391,7 +2605,7 @@ function TroskovnikContent() {
           ═══════════════════════════════════════════════════════ */}
           <div className="space-y-4 print:hidden">
             {/* Sticky summary */}
-            <div className="lg:sticky lg:top-20 space-y-4">
+            <div id="vodic-rezultat" className={`lg:sticky lg:top-20 space-y-4 rounded-xl transition ${vodicHighlight("vodic-rezultat")}`}>
               {/* ── Selected items summary ── */}
               <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 px-4 py-3 flex items-center justify-between">

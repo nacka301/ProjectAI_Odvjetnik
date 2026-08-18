@@ -8,7 +8,7 @@ import {
   Mail,
   Scale,
   AlertCircle,
-  CheckCircle,
+  Info,
 } from "lucide-react";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
 import { isEmailValid } from "@/lib/auth-validation";
@@ -34,7 +34,11 @@ export default function ForgotPasswordPage() {
     try {
       const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
       await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${siteUrl}/auth/callback`,
+        // The destination travels in the URL rather than being inferred from
+        // `type`, which Supabase does not forward in the PKCE redirect. Without
+        // it the reset link signed the user in and left them on the dashboard,
+        // with no field to type a new password into.
+        redirectTo: `${siteUrl}/auth/callback?next=/auth/reset-password`,
       });
 
       // ANTI-ENUMERATION: always the same screen. Surfacing Supabase's error
@@ -86,6 +90,21 @@ export default function ForgotPasswordPage() {
             <span className="font-semibold text-slate-700">{email}</span>,
             poslali smo link za promjenu lozinke.
           </p>
+          {/* Same reasoning as the note on the login screen: shown to everyone,
+              so it cannot be read as confirmation that this address exists or
+              which provider it uses. A lawyer whose account came from Google has
+              no password to recover and would otherwise wait for an email that
+              tells them nothing useful. */}
+          <div
+            className="flex items-start gap-2 rounded-lg p-3 mb-4 text-left"
+            style={{ background: "var(--auth-gold-muted)" }}
+          >
+            <Info className="h-4 w-4 shrink-0 mt-0.5" style={{ color: "var(--auth-gold)" }} />
+            <span className="text-xs text-slate-600 leading-relaxed">
+              Ako ste račun otvorili preko Googlea, nemate lozinku za oporaviti —
+              vratite se na prijavu i upotrijebite <strong className="font-semibold">Prijava putem Googlea</strong>.
+            </span>
+          </div>
           <p className="text-xs text-slate-400 mb-6">
             Ne vidite email? Provjerite spam/junk folder.
           </p>
