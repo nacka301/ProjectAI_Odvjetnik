@@ -59,8 +59,14 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/_next/") ||
     pathname === "/favicon.ico";
 
+  // `/` is the one protected path a signed-out visitor is allowed to reach: it
+  // renders the public landing page instead of the dashboard (see app/page.tsx).
+  // It is NOT in `isPublicRoute`, deliberately — a signed-in user opening "/"
+  // gets the dashboard and must still pass the second-factor gate below.
+  const isLandingPage = pathname === "/";
+
   // If not authenticated and trying to access a protected page → redirect to login
-  if (!user && !isPublicRoute) {
+  if (!user && !isPublicRoute && !isLandingPage) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/auth/login";
     loginUrl.searchParams.set("next", pathname);
