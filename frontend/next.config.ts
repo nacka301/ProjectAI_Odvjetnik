@@ -71,7 +71,12 @@ const nextConfig: NextConfig = {
             value: [
               "default-src 'self'",
               "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com https://apis.google.com",
-              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+              // accounts.google.com is here for the Identity Services button,
+              // which pulls its own stylesheet from /gsi/style. Without it the
+              // policy blocks that request and Google renders an unstyled
+              // element in the middle of the sign-in card — the script loads,
+              // no error surfaces, and only the console says why.
+              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com",
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: blob: https://*.supabase.co https://*.googleusercontent.com",
               "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://openrouter.ai https://accounts.google.com https://*.onrender.com",
