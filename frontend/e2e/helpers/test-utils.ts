@@ -6,6 +6,20 @@ import { type Page } from "@playwright/test";
 export const API = "http://localhost:5078";
 export const APP = "http://localhost:3000";
 
+/**
+ * Modules still in development are reachable only by the ADMIN_EMAIL account —
+ * the route redirects and the API answers 403 for everyone else (see
+ * `frontend/lib/modules.ts` and `Backend/Middleware/AdminGuardMiddleware.cs`).
+ *
+ * So the specs covering those modules are skipped unless the run is signed in
+ * as that account. Set E2E_ADMIN=1 when it is. They are skipped rather than
+ * deleted because they still pass, and still matter, for the admin.
+ */
+export const LOCKED_MODULE_E2E_DISABLED = !process.env.E2E_ADMIN;
+
+export const LOCKED_MODULE_E2E_REASON =
+  "Modul je u razvoju — dostupan samo adminu. Postavi E2E_ADMIN=1 uz admin sesiju.";
+
 /** Simple console logger with timestamps. */
 export function createLogger(prefix: string) {
   return {

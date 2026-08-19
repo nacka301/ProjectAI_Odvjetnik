@@ -18,6 +18,8 @@ import {
   Loader2,
 } from "lucide-react";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
+import { useIsAdmin } from "@/lib/useIsAdmin";
+import { isPathLocked } from "@/lib/modules";
 
 /* ── Types ── */
 interface SearchResult {
@@ -58,6 +60,7 @@ export default function CommandPalette() {
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const isAdmin = useIsAdmin();
 
   // Ctrl+K listener
   useEffect(() => {
@@ -92,9 +95,12 @@ export default function CommandPalette() {
     setSearching(true);
     const lower = q.toLowerCase();
 
-    // Filter nav items
-    const navResults = NAV_ITEMS.filter((item) =>
-      item.label.toLowerCase().includes(lower)
+    // Filter nav items. Modules still in development are left out entirely —
+    // offering a shortcut that lands on a redirect is worse than not offering it.
+    const navResults = NAV_ITEMS.filter(
+      (item) =>
+        item.label.toLowerCase().includes(lower) &&
+        !isPathLocked(item.href, isAdmin)
     );
 
     // Search clients & cases from Supabase
@@ -146,7 +152,7 @@ export default function CommandPalette() {
     setResults([...clientResults, ...caseResults, ...navResults]);
     setActiveIndex(0);
     setSearching(false);
-  }, []);
+  }, [isAdmin]);
 
   // Debounced search
   useEffect(() => {

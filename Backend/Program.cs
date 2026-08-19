@@ -181,8 +181,11 @@ app.UseCors("Frontend");
 // Fails closed: anything outside its public allowlist is 401 without a valid token.
 app.UseMiddleware<SupabaseJwtMiddleware>();
 
-// ── Admin Guard Middleware — blocks non-admin users from /api/rag/, /api/admin/, etc. ──
-// MUST run after SupabaseJwtMiddleware (needs AuthEmail in HttpContext.Items).
+// ── Admin Guard Middleware ──
+// Blocks non-admin users from /api/rag/, /api/admin/, etc., and from modules
+// still in development (see ModuleRegistry).
+// MUST run after SupabaseJwtMiddleware (needs AuthEmail in HttpContext.Items)
+// and before MapControllers, so a refused call never spends a credit.
 app.UseMiddleware<AdminGuardMiddleware>();
 
 // ── Audit Logging Middleware ──

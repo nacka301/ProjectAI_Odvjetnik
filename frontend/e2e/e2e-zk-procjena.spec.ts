@@ -2,7 +2,12 @@
  * E2E ZK Procjena — ZK Due Diligence + Valuation (text mode)
  */
 import { test, expect } from "@playwright/test";
-import { createLogger, setupRequestLogging } from "./helpers/test-utils";
+import {
+  createLogger,
+  setupRequestLogging,
+  LOCKED_MODULE_E2E_DISABLED,
+  LOCKED_MODULE_E2E_REASON,
+} from "./helpers/test-utils";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -14,6 +19,8 @@ const zkText = fs.readFileSync(
 );
 
 test.describe("ZK Procjena (Due Diligence)", () => {
+  test.skip(LOCKED_MODULE_E2E_DISABLED, LOCKED_MODULE_E2E_REASON);
+
   test("analyzes ZK extract text and estimates value", async ({ page }) => {
     test.setTimeout(20 * 60 * 1000); // 20 min for AI
     setupRequestLogging(page, log);

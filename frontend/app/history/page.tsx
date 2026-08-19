@@ -28,6 +28,8 @@ import { generateValuationPdf } from "@/lib/generatePdf";
 import { formatNumber } from "@/lib/format";
 import type { ValuationResult } from "@/app/wizard/types";
 import AppHeader from "@/components/AppHeader";
+import { useIsAdmin } from "@/lib/useIsAdmin";
+import { isModuleLocked } from "@/lib/modules";
 
 // ── Tab definitions ──
 type TabKey = "all" | ActivityType;
@@ -86,6 +88,12 @@ export default function HistoryPage() {
   const [pdfLoadingId, setPdfLoadingId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>("all");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const isAdmin = useIsAdmin();
+
+  // Past records stay listed — they are the user's own work, read straight from
+  // Supabase, and none of them opens a locked module. Only the "start a new one"
+  // buttons go, because those lead to /wizard and would bounce off the middleware.
+  const canStartValuation = !isModuleLocked("procjena", isAdmin);
 
   useEffect(() => {
     (async () => {
@@ -230,7 +238,7 @@ export default function HistoryPage() {
             <p className="text-gray-500 font-medium">
               {searchQuery || activeTab !== "all" ? "Nema rezultata za odabrane filtere." : "Još nema spremljenih predmeta."}
             </p>
-            {!searchQuery && activeTab === "all" && (
+            {!searchQuery && activeTab === "all" && canStartValuation && (
               <Link href="/wizard" className="mt-4 inline-flex items-center gap-2 text-sm text-blue-600 hover:underline">
                 Pokreni prvu procjenu →
               </Link>
@@ -363,12 +371,14 @@ export default function HistoryPage() {
                           <FileDown className="h-3.5 w-3.5" />
                           {pdfLoadingId === item.id ? "Generiram..." : "Preuzmi PDF"}
                         </button>
-                        <Link
-                          href="/wizard"
-                          className="rounded-lg bg-gray-100 px-4 py-2 text-xs font-medium text-gray-700 hover:bg-gray-200 transition flex items-center gap-1.5"
-                        >
-                          <Eye className="h-3.5 w-3.5" /> Nova procjena
-                        </Link>
+                        {canStartValuation && (
+                          <Link
+                            href="/wizard"
+                            className="rounded-lg bg-gray-100 px-4 py-2 text-xs font-medium text-gray-700 hover:bg-gray-200 transition flex items-center gap-1.5"
+                          >
+                            <Eye className="h-3.5 w-3.5" /> Nova procjena
+                          </Link>
+                        )}
                       </div>
                     </div>
                   )}

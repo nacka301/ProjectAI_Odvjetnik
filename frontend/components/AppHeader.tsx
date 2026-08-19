@@ -8,6 +8,8 @@ import { createSupabaseBrowser } from "@/lib/supabase/client";
 import { useUserId } from "@/lib/useUserId";
 import { useCredits } from "@/lib/useCredits";
 import { useSubscription } from "@/lib/useSubscription";
+import { useIsAdmin } from "@/lib/useIsAdmin";
+import { isPathLocked } from "@/lib/modules";
 import React from "react";
 
 // ── Plan badge styling ──
@@ -41,7 +43,12 @@ function AppHeaderInner({ extraStart }: AppHeaderProps) {
   const subscription = useSubscription();
 
   // ── Admin detection (cookie set by middleware) ──
-  const isAdmin = typeof document !== "undefined" && document.cookie.split(";").some((c) => c.trim() === "is-admin=1");
+  const isAdmin = useIsAdmin();
+
+  // A link to a module still in development is a link to a redirect. Neither
+  // /history nor /postavke belongs to a module, so both always stay; this
+  // guards future nav items that do.
+  const visibleNavItems = navItems.filter(({ href }) => !isPathLocked(href, isAdmin));
 
   return (
     <header className="bg-slate-900 text-white">
@@ -76,7 +83,7 @@ function AppHeaderInner({ extraStart }: AppHeaderProps) {
 
           {extraStart}
 
-          {navItems.map(({ href, label, icon: Icon }) => {
+          {visibleNavItems.map(({ href, label, icon: Icon }) => {
             const isActive = pathname === href;
             return (
               <Link
