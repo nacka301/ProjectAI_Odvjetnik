@@ -99,11 +99,6 @@ export default function RegisterPage() {
   const oibValid = validateOib(firmOib.trim());
   const pwMatch = password === confirmPassword && confirmPassword.length > 0;
 
-  const step1Valid =
-    name.trim().length > 0 && isEmailValid(email) && pwValid && pwMatch;
-  const step2Valid =
-    firmName.trim().length > 0 && agreed && (firmOib.length === 0 || oibValid);
-
   // Everything step 1 asks for, checked in the order the fields appear so the
   // message points at the first thing that is actually wrong.
   const firstStepOneError = (): string | null => {
@@ -507,10 +502,13 @@ export default function RegisterPage() {
                   )}
                 </div>
 
-                {/* Next */}
+                {/* Next — enabled even when the step is incomplete. A button
+                    that greys itself out says "no" without saying why, and the
+                    reason is often a field further up the screen. Clicking it
+                    names the problem instead. */}
                 <button
                   type="submit"
-                  disabled={isDisabled || !step1Valid}
+                  disabled={isDisabled}
                   className="w-full flex items-center justify-center gap-2 text-white text-sm font-semibold py-2.5 rounded-xl transition shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
                   style={{
                     background: "var(--auth-navy)",
@@ -566,8 +564,17 @@ export default function RegisterPage() {
                       }`}
                       style={ringStyle}
                     />
-                    {/* Verdict only once eleven digits are in — complaining at the
-                        fourth keystroke that the number is wrong is just noise. */}
+                    {/* A half-typed OIB blocks the registration just as surely
+                        as a wrong one, so it cannot stay silent — it only says
+                        how many digits are missing rather than crying "wrong"
+                        at the fourth keystroke. The verdict on the check digit
+                        waits for all eleven. */}
+                    {firmOib.length > 0 && firmOib.length < 11 && (
+                      <p className="mt-1 text-xs text-slate-500">
+                        OIB ima 11 znamenki — upisano {firmOib.length}. Ostavite
+                        prazno ako ga ne želite unijeti.
+                      </p>
+                    )}
                     {firmOib.length === 11 && (
                       <p className={`mt-1 flex items-center gap-1 text-xs ${oibValid ? "text-emerald-600" : "text-red-500"}`}>
                         {oibValid ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
@@ -616,7 +623,7 @@ export default function RegisterPage() {
 
                   <button
                     type="submit"
-                    disabled={isDisabled || !step2Valid}
+                    disabled={isDisabled}
                     className="flex-1 flex items-center justify-center gap-2 text-white text-sm font-semibold py-2.5 rounded-xl transition shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
                     style={{
                       background: "var(--auth-navy)",
