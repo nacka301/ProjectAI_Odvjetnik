@@ -136,18 +136,6 @@ public static class DomainServiceCollectionExtensions
         // ── DataSeeder (admin-only, uses ClientCaseService) ──
         services.AddScoped<DataSeederService>();
 
-        services.AddHttpClient<PerplexityAuditService>(client =>
-        {
-            client.Timeout = TimeSpan.FromMinutes(2);
-        });
-        services.AddScoped<IPerplexityAuditService>(sp => sp.GetRequiredService<PerplexityAuditService>());
-
-        services.AddHttpClient<PerplexityTestValidationService>(client =>
-        {
-            client.Timeout = TimeSpan.FromMinutes(3);
-        });
-        services.AddScoped<IPerplexityTestValidationService>(sp => sp.GetRequiredService<PerplexityTestValidationService>());
-
         return services;
     }
 }

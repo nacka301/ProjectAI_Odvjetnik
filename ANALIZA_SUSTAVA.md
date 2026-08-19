@@ -11,7 +11,6 @@
 | **Baza podataka** | Supabase (PostgreSQL + PostgREST + pgvector) |
 | **AI Gateway** | OpenRouter → GPT-4o-mini (Fast), DeepSeek V3 (Heavy/Reasoning) |
 | **Tržišno istraživanje** | Tavily API (web search) + BrightData (web scraping) |
-| **Audit sloj** | Perplexity API (sonar-pro model s web pretragom) |
 | **Email** | Brevo (Sendinblue) transakcijski API |
 | **Embeddinzi** | OpenAI text-embedding-3-small (1536 dimenzija) |
 | **PDF ekstrakcija** | PdfPig (dual-strategy: word-level layout + basic) |
@@ -27,7 +26,7 @@ Reasoning (DeepSeek V3)       → duboka logika, detekcija zamki, drugo mišljen
 
 ### Supabase Shema (PostgreSQL)
 
-Tablice: `evaluations`, `zk_analyses`, `contract_analyses`, `chronologies`, `legal_strategies`, `invoices`, `valuation_audits`, `audit_logs`, `norms`, `norm_amendments`, `law_chunks` (pgvector)
+Tablice: `evaluations`, `zk_analyses`, `contract_analyses`, `chronologies`, `legal_strategies`, `invoices`, `audit_logs`, `norms`, `norm_amendments`, `law_chunks` (pgvector)
 
 RLS politike: `service_role` ima puni pristup, `anon` ima samo SELECT. Backend piše isključivo putem service_role ključa.
 
@@ -738,65 +737,6 @@ norm_amendments (
 
 ---
 
-## MODUL 9: Perplexity Audit (AI Revizija Procjena)
-
-### Frontend
-
-**Ruta:** `/audit` (`frontend/app/audit/page.tsx`, 624 redaka)
-
-**Prikazuje:**
-- Verdikti: `CONFIRMED` (zeleno) / `SUSPICIOUS` (žuto) / `REJECTED` (crveno)
-- 4 dimenzije s score-ovima (0-100): cijena, lokacija, metodologija, kvaliteta podataka
-- Nalazi po ozbiljnosti: INFO / WARNING / CRITICAL
-- Tržišni kontekst iz Perplexity web pretrage
-- Decision reasoning — detaljno obrazloženje s URL-ovima i brojevima
-
-### API Endpoints (AuditController.cs)
-
-| Metoda | Ruta | Opis |
-|--------|------|------|
-| GET | `/api/audit/status` | Provjera Perplexity konfiguracije |
-| POST | `/api/audit/single` | Audit jedne procjene |
-| POST | `/api/audit/batch` | Batch audit (max 20, 1s delay) |
-
-### Backend Pipeline (PerplexityAuditService.cs, 388 redaka)
-
-```
-1. Dohvat procjene iz Supabase → deserijalizacija FullEvaluationResult
-2. Konstrukcija prompta:
-   - System: "Ti si stručni AI revizor za procjene nekretnina u Hrvatskoj"
-   - User: Kompletni podaci procjene (lokacija, cijena, comps, korekcije, mišljenje)
-3. API poziv → Perplexity (sonar-pro model, temperature=0.1, web search enabled)
-4. Parse strukturiranog JSON odgovora:
-   - verdict, overall_confidence, summary, recommendation
-   - price_check, location_check, methodology_check, data_quality_check (0-100 svaki)
-   - findings[] s category, severity, description, evidence
-   - market_context, decision_reasoning
-   - citations (URL-ovi koje je Perplexity koristio)
-5. Verdikt pravila:
-   - CONFIRMED: Svi dimenzijski score-ovi ≥60, nema CRITICAL
-   - SUSPICIOUS: Barem 1 score <60 ILI 1 CRITICAL
-   - REJECTED: 2+ score-a <40 ILI 2+ CRITICAL
-6. Spremanje → `valuation_audits` tablica (UNIQUE po evaluation_id)
-```
-
-### Supabase Tablica
-
-```sql
-valuation_audits (
-    id UUID PK, created_at, evaluation_id UUID FK→evaluations (UNIQUE),
-    verdict TEXT, overall_confidence INTEGER,
-    summary TEXT, recommendation TEXT,
-    price_score INTEGER, location_score INTEGER,
-    methodology_score INTEGER, data_quality_score INTEGER,
-    findings_count INTEGER, critical_count INTEGER,
-    model_used TEXT, prompt_tokens INTEGER, completion_tokens INTEGER,
-    raw_json_output JSONB
-)
-```
-
----
-
 ## MODUL 10: Povijest i Dashboard
 
 ### Frontend
@@ -896,7 +836,7 @@ law_chunks (
 ┌─────────────────────────────────────────────────────────────────┐
 │                        FRONTEND (Next.js)                       │
 │  /valuation  /wizard  /zk-procjena  /ugovor  /kronologija      │
-│  /sudska-praksa  /fiskalizacija  /audit  /history               │
+│  /sudska-praksa  /fiskalizacija  /history                       │
 └────────────────────────────┬────────────────────────────────────┘
                              │ SSE / REST (fetch)
                              ▼
@@ -922,7 +862,6 @@ law_chunks (
 │    LegalController ─────→ LegalIntelligenceService              │
 │    InvoiceController ───→ InvoiceService                        │
 │    NormController ──────→ NormValidityService                   │
-│    AuditController ─────→ PerplexityAuditService                │
 │    RagController ───────→ LawRAGService + EmbeddingService      │
 │    ValuationDraftController → FluentValidation                  │
 │    HealthController ────→ /api/health                           │
@@ -943,7 +882,6 @@ law_chunks (
 │  chronologies       — kronologije                               │
 │  legal_strategies   — pravne strategije (+ audit_trail JSONB)   │
 │  invoices           — e-računi (UBL 2.1)                        │
-│  valuation_audits   — Perplexity revizije                       │
 │  audit_logs         — EU AI Act compliance trail                │
 │  norms              — registar zakona                           │
 │  norm_amendments    — amandmani zakona                          │
@@ -964,7 +902,7 @@ law_chunks (
 
 3. **SSE Streaming** — Svi dugi pipeline-ovi koriste Server-Sent Events za real-time feedback korisniku. `SseHelpers` klasa centralizira logiku.
 
-4. **Graceful Degradation** — Svaki vanjski servis (Perplexity, Supabase, BrightData) ima fallback. RAG radi bez vektorske pretrage, audit radi bez Perplexity-ja, tržišno istraživanje radi bez BrightData-e.
+4. **Graceful Degradation** — Svaki vanjski servis (Supabase, BrightData) ima fallback. RAG radi bez vektorske pretrage, tržišno istraživanje radi bez BrightData-e.
 
 5. **EU AI Act Compliance (V45)** — Svaka pravna analiza zapisuje audit trail s modelom, temperaturom, pravnom bazom i razlozima. Pohranjeno u `audit_logs` tablici.
 

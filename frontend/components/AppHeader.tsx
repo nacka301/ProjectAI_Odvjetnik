@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
-import { Scale, Clock, ShieldAlert, ShieldCheck, Shield, LogOut, Search, Zap, Crown } from "lucide-react";
+import { Scale, Clock, ShieldCheck, Shield, LogOut, Search, Zap, Crown } from "lucide-react";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
 import { useUserId } from "@/lib/useUserId";
 import { useCredits } from "@/lib/useCredits";
@@ -25,7 +25,6 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { href: "/history", label: "Povijest", icon: Clock },
-  { href: "/audit", label: "Revizija", icon: ShieldAlert },
   { href: "/postavke", label: "Postavke", icon: Shield },
 ];
 
