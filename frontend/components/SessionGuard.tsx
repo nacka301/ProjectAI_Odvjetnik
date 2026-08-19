@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { createSupabaseBrowser } from "@/lib/supabase/client";
+import { signOutCompletely } from "@/lib/sign-out";
 import { ShieldAlert } from "lucide-react";
 
 // ═══════════════════════════════════════════════════════════
@@ -38,12 +38,7 @@ export default function SessionGuard({
 
   // ── Sign out ──
   const signOut = useCallback(async () => {
-    try {
-      const supabase = createSupabaseBrowser();
-      await supabase.auth.signOut();
-    } catch {
-      // ignore
-    }
+    await signOutCompletely();
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch {

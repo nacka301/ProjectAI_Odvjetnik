@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
 import { Loader2, Lock, Shield, AlertCircle, KeyRound, Check } from "lucide-react";
-import { createSupabaseBrowser } from "@/lib/supabase/client";
+import { signOutCompletely } from "@/lib/sign-out";
+import { safeNextPath } from "@/lib/auth-redirect";
 import type { SecondFactorResult } from "@/lib/second-factor";
 
 /**
@@ -50,8 +51,7 @@ function TwoFactorContent() {
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
 
   // Where the middleware wanted to send the user before it stopped them.
-  const next = searchParams.get("next");
-  const destination = next && next.startsWith("/") ? next : "/";
+  const destination = safeNextPath(searchParams.get("next"));
 
   /** Hard navigation so the middleware re-evaluates the gate with the new cookie. */
   const enterApp = useCallback(() => {
@@ -184,8 +184,7 @@ function TwoFactorContent() {
   };
 
   const handleSignOut = async () => {
-    const supabase = createSupabaseBrowser();
-    await supabase.auth.signOut();
+    await signOutCompletely();
     router.push("/auth/login");
     router.refresh();
   };

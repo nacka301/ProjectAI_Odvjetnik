@@ -65,6 +65,7 @@ interface InvoiceResult {
 }
 
 import { API_BASE } from "@/lib/api";
+import { validateOib } from "@/lib/utils";
 import { useAuth } from "@/lib/useAuth";
 import { useCredits, getModuleQuota } from "@/lib/useCredits";
 import { CreditQuotaBadge, CreditExhaustedWarning } from "@/components/CreditQuotaBadge";
@@ -83,19 +84,10 @@ const PDV_RATES = [
   { value: 0, label: "0% — Oslobođeno PDV-a" },
 ];
 
-// ── OIB Validation (ISO 7064 MOD 11,10) ──
-
-function validateOib(oib: string): boolean {
-  if (!oib || oib.length !== 11 || !/^\d{11}$/.test(oib)) return false;
-  let remainder = 10;
-  for (let i = 0; i < 10; i++) {
-    remainder = (remainder + parseInt(oib[i])) % 10;
-    if (remainder === 0) remainder = 10;
-    remainder = (remainder * 2) % 11;
-  }
-  const checkDigit = (11 - remainder) % 10;
-  return checkDigit === parseInt(oib[10]);
-}
+// OIB validation now comes from lib/utils — it was copied here verbatim, and a
+// third caller (registration) had meanwhile grown its own weaker version that
+// only counted digits. One implementation means the invoice screen and the
+// signup form cannot disagree about whether an OIB is real.
 
 // ── Main Page ──
 

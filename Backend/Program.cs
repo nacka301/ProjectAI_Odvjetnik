@@ -155,8 +155,9 @@ var heavyModel = builder.Configuration["OpenRouter:HeavyModel"] ?? "deepseek/dee
 var reasoningModel = builder.Configuration["OpenRouter:ReasoningModel"] ?? "deepseek/deepseek-chat-v3-0324";
 builder.Services.AddSingleton(new ChatClientProvider(openRouterKey, baseUrl, fastModel, heavyModel, reasoningModel));
 
-// ── SMTP postavke (čita ih AuthEmailService preko IOptions) ──
-builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection(SmtpSettings.SectionName));
+// SmtpSettings je uklonjen zajedno s AuthEmailService-om — jedini čitatelj.
+// Transakcijska pošta ide kroz ResendEmailService, koji svoje postavke čita iz
+// sekcije "Resend".
 
 // ── Svi domenski servisi ──
 // Registracije žive u Backend.Extensions.DomainServiceCollectionExtensions kako bi ih

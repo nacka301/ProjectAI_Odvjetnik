@@ -61,10 +61,22 @@ public sealed class SupabaseJwtMiddleware
     private static readonly string[] PublicPaths =
     [
         "/api/health",
-        "/api/auth/register",
-        "/api/auth/verify",
         "/swagger",
     ];
+
+    // REMOVED: "/api/auth/register" and "/api/auth/verify".
+    //
+    // They belonged to a registration flow this application no longer performs.
+    // The frontend signs users up through Supabase directly (supabase.auth.signUp
+    // in app/auth/register), and the profile and firm are created by the
+    // `handle_new_user` trigger from migration 015. Nothing — not the web app,
+    // not the e2e suite — has called either endpoint.
+    //
+    // What they were, until now, was an unauthenticated surface that could create
+    // accounts and send mail, kept reachable only by this list. AuthController and
+    // AuthService are still in the tree and should be deleted; until they are,
+    // dropping them from here means a caller without a valid token is refused by
+    // this middleware before a controller ever runs.
 
     public SupabaseJwtMiddleware(
         RequestDelegate next,

@@ -30,11 +30,25 @@ export type SecondFactorResult =
   | { outcome: "required" | "not-enrolled" }
   | { outcome: "unknown"; reason: UnknownReason };
 
-/** Long enough for a warm backend, short enough to leave room for one retry. */
-const FIRST_ATTEMPT_TIMEOUT_MS = 5_000;
-
-/** The retry absorbs a Render free-tier instance waking up mid-request. */
-const RETRY_TIMEOUT_MS = 10_000;
+/**
+ * How long to wait on each successive attempt.
+ *
+ * The backend runs on Render's free tier, which stops the instance after a spell
+ * of inactivity and takes **up to about 50 seconds** to serve the first request
+ * after that. Two attempts totalling 15 seconds could not cover it, so the very
+ * first person through the door in the morning — including a lawyer who has just
+ * this second finished registering — was handed the "provjera nije moguća"
+ * screen for what was only a machine waking up.
+ *
+ * Three attempts, 35 seconds in total, absorb an ordinary cold start silently.
+ * Past that the gate screen takes over and keeps retrying on its own, so nothing
+ * is lost by not waiting longer here — and a middleware that blocked for a full
+ * minute on a real outage would be worse than the screen.
+ *
+ * This does not run on every navigation: the signed marker cookie is minted on
+ * the first success and answers for the next 12 hours.
+ */
+const ATTEMPT_TIMEOUTS_MS = [5_000, 10_000, 20_000];
 
 /**
  * Classifies one answer from `GET /api/2fa/status`.
@@ -111,24 +125,31 @@ export async function checkSecondFactor(
     return report({ outcome: "unknown", reason: "no-session" });
   }
 
-  const first = await attempt(accessToken, FIRST_ATTEMPT_TIMEOUT_MS);
+  // The most recent attempt that produced an actual HTTP response. Kept so a
+  // later attempt that gets nowhere cannot erase what an earlier one told us —
+  // reporting "unreachable" after the backend already said 503 would throw away
+  // the more accurate diagnosis.
+  let lastReached: { status: number; body: unknown } | null = null;
 
-  // A backend that gave a real verdict has answered. One that timed out, threw,
-  // or said "not now" is worth asking again — a cold Render instance takes over
-  // ten seconds to serve its first request, which is longer than one attempt.
-  if (first.reached && !isTransient(first.status)) {
-    return report(classifySecondFactor(first.status, first.body), first);
+  for (const timeout of ATTEMPT_TIMEOUTS_MS) {
+    const current = await attempt(accessToken, timeout);
+    if (!current.reached) continue;
+
+    lastReached = { status: current.status, body: current.body };
+
+    // A real verdict ends it. Only "not now" — a waking instance, a rate limit —
+    // is worth asking again; asking again after a 401 would burn a second to be
+    // told the same thing about the same token.
+    if (!isTransient(current.status)) {
+      return report(classifySecondFactor(current.status, current.body), current);
+    }
   }
 
-  const second = await attempt(accessToken, RETRY_TIMEOUT_MS);
-  if (second.reached) {
-    return report(classifySecondFactor(second.status, second.body), second);
-  }
-
-  // The retry got nowhere, but the first attempt did produce a real answer —
-  // reporting "unreachable" would throw away what we actually learned.
-  if (first.reached) {
-    return report(classifySecondFactor(first.status, first.body), first);
+  if (lastReached) {
+    return report(
+      classifySecondFactor(lastReached.status, lastReached.body),
+      { reached: true, ...lastReached },
+    );
   }
 
   return report({ outcome: "unknown", reason: "unreachable" });
