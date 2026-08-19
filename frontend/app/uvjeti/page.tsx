@@ -35,9 +35,10 @@ export default function UvjetiPage() {
           <h2>1. Opće odredbe</h2>
           <p>
             1.1. Ovi Uvjeti korištenja (u daljnjem tekstu: „Uvjeti") uređuju prava i obveze
-            između trgovačkog društva <strong>PravoTek d.o.o.</strong>, OIB: [OIB], sa sjedištem
-            u [ADRESA], Republika Hrvatska (u daljnjem tekstu: „Pružatelj usluge" ili „PravoTek"),
-            i pravne ili fizičke osobe koja koristi aplikaciju PravoTek (u daljnjem tekstu: „Korisnik").
+            između <strong>Davida Vacke</strong>, fizičke osobe koja pruža uslugu PravoTek
+            (u daljnjem tekstu: „Pružatelj usluge" ili „PravoTek"), kontakt:{" "}
+            <a href="mailto:podrska@pravotek.hr">podrska@pravotek.hr</a>, i pravne ili fizičke
+            osobe koja koristi aplikaciju PravoTek (u daljnjem tekstu: „Korisnik").
           </p>
           <p>
             1.2. PravoTek je softverska aplikacija u oblaku (SaaS — Software as a Service) namijenjena
@@ -178,10 +179,11 @@ export default function UvjetiPage() {
           <h2>6. Korištenje tehnologije za analizu dokumenata</h2>
           <p>
             6.1. Određeni moduli aplikacije (analiza ugovora, ZK due diligence, procjena nekretnina,
-            kronologija spisa, pravna strategija, sudski tumač) koriste usluge obrade prirodnog jezika
-            putem šifriranog API sučelja.
+            kronologija spisa, pravna strategija, sudski tumač) oslanjaju se na umjetnu inteligenciju.
+            Kada Korisnik koristi te module, uneseni tekst šalje se prema uslugama obrade prirodnog
+            jezika putem šifriranog API sučelja.
           </p>
-          <p>6.2. Podaci koji se obrađuju putem API-ja:</p>
+          <p>6.2. Kada se ti moduli koriste, podaci koji se tako obrađuju:</p>
           <ul>
             <li><strong>ne koriste se za treniranje</strong> javnih modela,</li>
             <li><strong>ne pohranjuju se trajno</strong> na poslužiteljima pružatelja API usluge,</li>
@@ -221,7 +223,7 @@ export default function UvjetiPage() {
           </p>
           <p>
             8.2. Korisnik može u svakom trenutku zatražiti zatvaranje svog korisničkog računa i brisanje
-            svih podataka putem postavki aplikacije ili pisanim zahtjevom na adresu elektroničke pošte{" "}
+            svih podataka pisanim zahtjevom na adresu elektroničke pošte{" "}
             <a href="mailto:podrska@pravotek.hr">podrska@pravotek.hr</a>.
           </p>
           <p>

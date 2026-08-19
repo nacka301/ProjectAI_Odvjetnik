@@ -41,8 +41,9 @@ export default function DpaPage() {
             — u daljnjem tekstu: „Voditelj"
           </p>
           <p>
-            <strong>Izvršitelj obrade:</strong> PravoTek d.o.o., OIB: [OIB], sa sjedištem u [ADRESA]
-            — u daljnjem tekstu: „Izvršitelj" ili „PravoTek"
+            <strong>Izvršitelj obrade:</strong> David Vacka, fizička osoba, kontakt:{" "}
+            <a href="mailto:podrska@pravotek.hr">podrska@pravotek.hr</a> — u daljnjem tekstu:
+            „Izvršitelj" ili „PravoTek"
           </p>
 
           {/* §2 */}
@@ -60,8 +61,9 @@ export default function DpaPage() {
           <h2>3. Priroda i svrha obrade</h2>
           <p>
             3.1. <strong>Svrha:</strong> Tehnička pohrana, organizacija, pretraživanje i prikaz
-            podataka koje Voditelj unosi u aplikaciju, te automatska analiza dokumenata putem API
-            usluga u svrhu pružanja funkcionalnosti aplikacije.
+            podataka koje Voditelj unosi u aplikaciju, te — kada Voditelj koristi module koji se
+            oslanjaju na umjetnu inteligenciju — automatska analiza dokumenata putem API usluga u
+            svrhu pružanja funkcionalnosti aplikacije.
           </p>
           <p>
             3.2. <strong>Vrste obrade:</strong> Pohrana, strukturiranje, pretraživanje, korištenje
@@ -175,7 +177,10 @@ export default function DpaPage() {
               </tbody>
             </table>
           </div>
-          <p>6.2. U odnosu na obradu putem API-ja za analizu dokumenata, Izvršitelj jamči da:</p>
+          <p>
+            6.2. U odnosu na obradu putem API-ja za analizu dokumenata, kada se ta obrada odvija,
+            Izvršitelj jamči da:
+          </p>
           <ul>
             <li>se podaci <strong>ne koriste za treniranje</strong> javnih modela,</li>
             <li>se podaci <strong>ne pohranjuju trajno</strong> na poslužiteljima podizvršitelja,</li>

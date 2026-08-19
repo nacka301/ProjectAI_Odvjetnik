@@ -51,8 +51,8 @@ export function LoginTrustText() {
 export function TrustBadges() {
   return (
     <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 py-3">
-      {/* AES-256 Encryption */}
-      <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+      {/* Enkripcija */}
+      <div className="flex items-center gap-1.5 text-[11px] text-slate-400" title="AES-256 u mirovanju, TLS 1.3 u prijenosu">
         <svg
           className="h-4 w-4 text-slate-400"
           viewBox="0 0 24 24"
@@ -65,7 +65,7 @@ export function TrustBadges() {
           <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
           <path d="M7 11V7a5 5 0 0 1 10 0v4" />
         </svg>
-        <span>256-bit AES</span>
+        <span>Podaci su šifrirani</span>
       </div>
 
       {/* Divider */}
@@ -85,28 +85,7 @@ export function TrustBadges() {
           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
           <path d="m9 12 2 2 4-4" />
         </svg>
-        <span>GDPR sukladno</span>
-      </div>
-
-      {/* Divider */}
-      <div className="h-3 w-px bg-slate-200" />
-
-      {/* Zero-Data Retention */}
-      <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
-        <svg
-          className="h-4 w-4 text-slate-400"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <circle cx="12" cy="12" r="10" />
-          <path d="M12 6v6l4 2" />
-          <line x1="4" y1="4" x2="20" y2="20" />
-        </svg>
-        <span>Zero-Data Retention</span>
+        <span>Usklađeno s GDPR-om i odvjetničkom tajnom</span>
       </div>
     </div>
   );
@@ -121,13 +100,13 @@ export function SecurityFooter() {
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-4">
         {/* Trust Badges — centered */}
         <div className="flex flex-wrap items-center justify-center gap-5 sm:gap-8">
-          {/* AES-256 */}
-          <div className="flex items-center gap-2 text-xs text-slate-500">
+          {/* Enkripcija */}
+          <div className="flex items-center gap-2 text-xs text-slate-500" title="AES-256 u mirovanju, TLS 1.3 u prijenosu">
             <svg className="h-4 w-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
               <path d="M7 11V7a5 5 0 0 1 10 0v4" />
             </svg>
-            <span>256-bit AES</span>
+            <span>Podaci su šifrirani</span>
           </div>
           <div className="h-3.5 w-px bg-slate-200" />
           {/* GDPR */}
@@ -136,17 +115,7 @@ export function SecurityFooter() {
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
               <path d="m9 12 2 2 4-4" />
             </svg>
-            <span>GDPR sukladno</span>
-          </div>
-          <div className="h-3.5 w-px bg-slate-200" />
-          {/* Zero-Data Retention */}
-          <div className="flex items-center gap-2 text-xs text-slate-500">
-            <svg className="h-4 w-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <path d="M12 6v6l4 2" />
-              <line x1="4" y1="4" x2="20" y2="20" />
-            </svg>
-            <span>Zero-Data Retention</span>
+            <span>Usklađeno s GDPR-om i odvjetničkom tajnom</span>
           </div>
         </div>
 
@@ -154,7 +123,7 @@ export function SecurityFooter() {
         <div className="text-center space-y-2 max-w-4xl mx-auto">
           <p className="text-xs text-slate-400 leading-relaxed">
             Analiza ne predstavlja pravni savjet sukladno čl. 1. Zakona o odvjetništvu (NN 9/94, 18/11).
-            Obrada osobnih podataka sukladno Uredbi (EU) 2016/679 (GDPR). Svi pozivi prema analitičkim servisima koriste Zero-Data Retention politiku — vaši tekstovi se ne pohranjuju niti koriste za treniranje modela.
+            Obrada osobnih podataka sukladno Uredbi (EU) 2016/679 (GDPR).
           </p>
           {/* Legal links */}
           <div className="flex items-center justify-center gap-1 text-xs text-slate-400">

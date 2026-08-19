@@ -35,8 +35,8 @@ export default function PrivatnostPage() {
           <h2>1. Voditelj obrade i kontakt</h2>
           <p>
             1.1. Voditelj obrade osobnih podataka prikupljenih pri registraciji i korištenju aplikacije
-            PravoTek je <strong>PravoTek d.o.o.</strong>, OIB: [OIB], sa sjedištem u [ADRESA],
-            Republika Hrvatska.
+            PravoTek je <strong>David Vacka</strong>, fizička osoba, kontakt:{" "}
+            <a href="mailto:podrska@pravotek.hr">podrska@pravotek.hr</a>.
           </p>
           <p>
             1.2. Kontakt za pitanja o zaštiti osobnih podataka:{" "}
@@ -87,10 +87,11 @@ export default function PrivatnostPage() {
           {/* §4 */}
           <h2>4. Korištenje tehnologije za analizu dokumenata</h2>
           <p>
-            4.1. Za funkcionalnosti analize dokumenata, PravoTek koristi sigurne API usluge
-            specijaliziranih tehnoloških partnera za obradu prirodnog jezika.
+            4.1. Za funkcionalnosti analize dokumenata, kada su dostupne i kada ih Korisnik koristi,
+            PravoTek koristi sigurne API usluge specijaliziranih tehnoloških partnera za obradu
+            prirodnog jezika.
           </p>
-          <p>4.2. Podaci preneseni putem API-ja:</p>
+          <p>4.2. Kada se ti moduli koriste, podaci preneseni putem API-ja:</p>
           <ul>
             <li><strong>ne koriste se za treniranje</strong> javnih modela,</li>
             <li>obrađuju se u realnom vremenu i <strong>ne pohranjuju trajno</strong> na poslužiteljima pružatelja,</li>
