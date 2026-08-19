@@ -14,6 +14,8 @@ import {
   Send,
   Shield,
   Building2,
+  ArrowLeft,
+  ArrowRight,
 } from "lucide-react";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
 import GoogleSignIn from "@/components/GoogleSignIn";
@@ -26,6 +28,11 @@ import {
 
 export default function RegisterPage() {
   const supabase = createSupabaseBrowser();
+
+  // The form was one column tall enough to need scrolling on a laptop, which
+  // pushed the terms checkbox and the submit button below the fold. Split in
+  // two: who you are and how you sign in, then which office you are opening.
+  const [step, setStep] = useState<1 | 2>(1);
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -92,13 +99,55 @@ export default function RegisterPage() {
   const oibValid = validateOib(firmOib.trim());
   const pwMatch = password === confirmPassword && confirmPassword.length > 0;
 
+  const step1Valid =
+    name.trim().length > 0 && isEmailValid(email) && pwValid && pwMatch;
+  const step2Valid =
+    firmName.trim().length > 0 && agreed && (firmOib.length === 0 || oibValid);
+
+  // Everything step 1 asks for, checked in the order the fields appear so the
+  // message points at the first thing that is actually wrong.
+  const firstStepOneError = (): string | null => {
+    if (!name.trim()) return "Unesite ime i prezime.";
+    if (!isEmailValid(email)) return "Unesite ispravnu email adresu.";
+    if (!pwValid) return "Lozinka ne zadovoljava sigurnosne zahtjeve.";
+    if (!pwMatch) return "Lozinke se ne podudaraju.";
+    return null;
+  };
+
+  const goToStep2 = () => {
+    const problem = firstStepOneError();
+    if (problem) {
+      setError(problem);
+      return;
+    }
+    setError(null);
+    setStep(2);
+  };
+
+  const goToStep1 = () => {
+    setError(null);
+    setStep(1);
+  };
+
   // ── Email/Password Register ──
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Enter on step 1 advances rather than registering half a form.
+    if (step === 1) {
+      goToStep2();
+      return;
+    }
+
     setError(null);
 
-    if (!name.trim()) {
-      setError("Unesite ime i prezime.");
+    // Step-1 fields are still validated here — the person can walk back, break
+    // one, and return. Send them to the step where the broken field lives,
+    // otherwise the error names something they cannot see.
+    const stepOneProblem = firstStepOneError();
+    if (stepOneProblem) {
+      setError(stepOneProblem);
+      setStep(1);
       return;
     }
     if (!firmName.trim()) {
@@ -114,18 +163,6 @@ export default function RegisterPage() {
           ? "OIB mora imati točno 11 znamenki."
           : "OIB nije ispravan — provjerite znamenke.",
       );
-      return;
-    }
-    if (!isEmailValid(email)) {
-      setError("Unesite ispravnu email adresu.");
-      return;
-    }
-    if (!pwValid) {
-      setError("Lozinka ne zadovoljava sigurnosne zahtjeve.");
-      return;
-    }
-    if (!pwMatch) {
-      setError("Lozinke se ne podudaraju.");
       return;
     }
     if (!agreed) {
@@ -183,6 +220,10 @@ export default function RegisterPage() {
   const GOOGLE_DESTINATION = "/dobrodosli";
 
   const isDisabled = loading || googleLoading;
+
+  const inputClass =
+    "w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 outline-none transition disabled:bg-slate-50 disabled:text-slate-400";
+  const ringStyle = { "--tw-ring-color": "var(--auth-gold)" } as React.CSSProperties;
 
   // ── Success state ──
   if (success) {
@@ -304,7 +345,25 @@ export default function RegisterPage() {
       >
         <div className="px-6 pt-6 pb-2 sm:px-8 sm:pt-8">
           <h2 className="font-serif text-lg font-semibold text-slate-900 mb-1">Otvorite račun</h2>
-          <p className="text-sm text-slate-500">Kreirajte račun za PravoTek platformu</p>
+          <p className="text-sm text-slate-500">
+            {step === 1 ? "Vaši podaci i lozinka" : "Podaci o odvjetničkom uredu"}
+          </p>
+
+          {/* Progress — two bars and a count, so the second step does not come
+              as a surprise once the first one is filled in. */}
+          <div className="flex items-center gap-2 mt-4">
+            <div
+              className="h-1 flex-1 rounded-full transition-colors"
+              style={{ background: "var(--auth-navy)" }}
+            />
+            <div
+              className="h-1 flex-1 rounded-full transition-colors"
+              style={{ background: step === 2 ? "var(--auth-navy)" : "#e2e8f0" }}
+            />
+            <span className="text-[11px] font-semibold text-slate-400 shrink-0">
+              Korak {step} od 2
+            </span>
+          </div>
         </div>
 
         <div className="px-6 pb-6 sm:px-8 sm:pb-8 space-y-5">
@@ -317,225 +376,263 @@ export default function RegisterPage() {
           )}
 
           {/* Google — Google's own button, drawn here, so the consent screen
-              names pravotek.com rather than the Supabase project host. */}
-          <GoogleSignIn
-            mode="register"
-            nextPath={GOOGLE_DESTINATION}
-            onError={setError}
-            onBusyChange={setGoogleLoading}
-            disabled={loading}
-          />
+              names pravotek.com rather than the Supabase project host. Step 1
+              only: it replaces the email/password half, and cannot supply the
+              firm details that step 2 asks for. */}
+          {step === 1 && (
+            <>
+              <GoogleSignIn
+                mode="register"
+                nextPath={GOOGLE_DESTINATION}
+                onError={setError}
+                onBusyChange={setGoogleLoading}
+                disabled={loading}
+              />
 
-          {/* Divider */}
-          <div className="flex items-center gap-3">
-            <div className="flex-1 h-px bg-slate-200" />
-            <span className="text-xs text-slate-400">ili s emailom</span>
-            <div className="flex-1 h-px bg-slate-200" />
-          </div>
+              {/* Divider */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-px bg-slate-200" />
+                <span className="text-xs text-slate-400">ili s emailom</span>
+                <div className="flex-1 h-px bg-slate-200" />
+              </div>
+            </>
+          )}
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Name */}
-            <div>
-              <label htmlFor="name" className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Ime i prezime
-              </label>
-              <input
-                id="name"
-                type="text"
-                autoComplete="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                disabled={isDisabled}
-                placeholder="Ivan Horvat"
-                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 outline-none transition disabled:bg-slate-50 disabled:text-slate-400"
-                style={{ "--tw-ring-color": "var(--auth-gold)" } as React.CSSProperties}
-              />
-            </div>
-
-            {/* Law Firm Section */}
-            <div className="rounded-xl p-4 space-y-3" style={{ background: "var(--auth-gold-muted)" }}>
-              <div className="flex items-center gap-2 mb-1">
-                <Building2 className="h-3.5 w-3.5" style={{ color: "var(--auth-gold)" }} />
-                <span className="text-xs font-semibold text-slate-600">Odvjetnički ured</span>
-              </div>
-
-              {/* Firm Name */}
-              <div>
-                <label htmlFor="firmName" className="block text-xs font-semibold text-slate-700 mb-1.5">
-                  Naziv ureda <span className="text-red-400">*</span>
-                </label>
-                <input
-                  id="firmName"
-                  type="text"
-                  value={firmName}
-                  onChange={(e) => setFirmName(e.target.value)}
-                  disabled={isDisabled}
-                  placeholder="Odvjetnički ured Horvat"
-                  className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 outline-none transition disabled:bg-slate-50 disabled:text-slate-400 bg-white"
-                  style={{ "--tw-ring-color": "var(--auth-gold)" } as React.CSSProperties}
-                />
-              </div>
-
-              {/* Firm OIB */}
-              <div>
-                <label htmlFor="firmOib" className="block text-xs font-semibold text-slate-700 mb-1.5">
-                  OIB ureda <span className="text-slate-400 font-normal">(opcionalno)</span>
-                </label>
-                <input
-                  id="firmOib"
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={11}
-                  value={firmOib}
-                  onChange={(e) => setFirmOib(e.target.value.replace(/\D/g, "").slice(0, 11))}
-                  disabled={isDisabled}
-                  placeholder="12345678901"
-                  className={`w-full px-3.5 py-2.5 border rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 outline-none transition disabled:bg-slate-50 disabled:text-slate-400 bg-white ${
-                    firmOib.length === 11 && !oibValid ? "border-red-300" : "border-slate-200"
-                  }`}
-                  style={{ "--tw-ring-color": "var(--auth-gold)" } as React.CSSProperties}
-                />
-                {/* Verdict only once eleven digits are in — complaining at the
-                    fourth keystroke that the number is wrong is just noise. */}
-                {firmOib.length === 11 && (
-                  <p className={`mt-1 flex items-center gap-1 text-xs ${oibValid ? "text-emerald-600" : "text-red-500"}`}>
-                    {oibValid ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
-                    {oibValid ? "OIB je ispravan" : "Kontrolna znamenka se ne poklapa"}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Email */}
-            <div>
-              <label htmlFor="email" className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Email adresa
-              </label>
-              <input
-                id="email"
-                type="email"
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={isDisabled}
-                placeholder="ime@odvjetnik.hr"
-                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 outline-none transition disabled:bg-slate-50 disabled:text-slate-400"
-                style={{ "--tw-ring-color": "var(--auth-gold)" } as React.CSSProperties}
-              />
-            </div>
-
-            {/* Password */}
-            <div>
-              <label htmlFor="password" className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Lozinka
-              </label>
-              <div className="relative">
-                <input
-                  id="password"
-                  type={showPw ? "text" : "password"}
-                  autoComplete="new-password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={isDisabled}
-                  placeholder="••••••••"
-                  className="w-full px-3.5 py-2.5 pr-10 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 outline-none transition disabled:bg-slate-50 disabled:text-slate-400"
-                  style={{ "--tw-ring-color": "var(--auth-gold)" } as React.CSSProperties}
-                />
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  onClick={() => setShowPw(!showPw)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition"
-                >
-                  {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-
-              {/* Password strength checklist */}
-              {password.length > 0 && (
-                <div className="mt-2 space-y-1">
-                  {checks.map((c) => (
-                    <div key={c.label} className="flex items-center gap-1.5 text-xs">
-                      {c.met ? (
-                        <Check className="h-3.5 w-3.5 text-emerald-500" />
-                      ) : (
-                        <X className="h-3.5 w-3.5 text-slate-300" />
-                      )}
-                      <span className={c.met ? "text-emerald-600" : "text-slate-400"}>
-                        {c.label}
-                      </span>
-                    </div>
-                  ))}
+            {step === 1 ? (
+              <>
+                {/* Name */}
+                <div>
+                  <label htmlFor="name" className="block text-xs font-semibold text-slate-700 mb-1.5">
+                    Ime i prezime
+                  </label>
+                  <input
+                    id="name"
+                    type="text"
+                    autoComplete="name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    disabled={isDisabled}
+                    placeholder="Ivan Horvat"
+                    className={inputClass}
+                    style={ringStyle}
+                  />
                 </div>
-              )}
-            </div>
 
-            {/* Confirm password */}
-            <div>
-              <label htmlFor="confirmPassword" className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Potvrdite lozinku
-              </label>
-              <input
-                id="confirmPassword"
-                type={showPw ? "text" : "password"}
-                autoComplete="new-password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                disabled={isDisabled}
-                placeholder="••••••••"
-                className={`w-full px-3.5 py-2.5 border rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 outline-none transition disabled:bg-slate-50 disabled:text-slate-400 ${
-                  confirmPassword.length > 0 && !pwMatch ? "border-red-300" : "border-slate-200"
-                }`}
-                style={{ "--tw-ring-color": "var(--auth-gold)" } as React.CSSProperties}
-              />
-              {confirmPassword.length > 0 && !pwMatch && (
-                <p className="mt-1 text-xs text-red-500">Lozinke se ne podudaraju</p>
-              )}
-            </div>
+                {/* Email */}
+                <div>
+                  <label htmlFor="email" className="block text-xs font-semibold text-slate-700 mb-1.5">
+                    Email adresa
+                  </label>
+                  <input
+                    id="email"
+                    type="email"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    disabled={isDisabled}
+                    placeholder="ime@odvjetnik.hr"
+                    className={inputClass}
+                    style={ringStyle}
+                  />
+                </div>
 
-            {/* Terms */}
-            <label className="flex items-start gap-2.5 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={agreed}
-                onChange={(e) => setAgreed(e.target.checked)}
-                disabled={isDisabled}
-                className="mt-0.5 h-4 w-4 rounded border-slate-300 transition"
-                style={{ accentColor: "var(--auth-navy)" }}
-              />
-              <span className="text-xs text-slate-500 leading-relaxed">
-                Prihvaćam{" "}
-                <a href="/uvjeti" target="_blank" className="font-medium underline underline-offset-2 hover:opacity-80 transition" style={{ color: "var(--auth-navy)" }}>Uvjete korištenja</a> i{" "}
-                <a href="/privatnost" target="_blank" className="font-medium underline underline-offset-2 hover:opacity-80 transition" style={{ color: "var(--auth-navy)" }}>Politiku privatnosti</a>
-              </span>
-            </label>
+                {/* Password */}
+                <div>
+                  <label htmlFor="password" className="block text-xs font-semibold text-slate-700 mb-1.5">
+                    Lozinka
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="password"
+                      type={showPw ? "text" : "password"}
+                      autoComplete="new-password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      disabled={isDisabled}
+                      placeholder="••••••••"
+                      className={`${inputClass} pr-10`}
+                      style={ringStyle}
+                    />
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      onClick={() => setShowPw(!showPw)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition"
+                    >
+                      {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
 
-            {/* What actually happens next — no approval step exists. */}
-            <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg" style={{ background: "var(--auth-gold-muted)" }}>
-              <Shield className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--auth-gold)" }} />
-              <p className="text-[11px] text-slate-500 leading-relaxed">
-                Šaljemo Vam link za potvrdu email adrese. Nakon potvrde ulazite odmah.
-              </p>
-            </div>
+                  {/* Password strength checklist */}
+                  {password.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {checks.map((c) => (
+                        <div key={c.label} className="flex items-center gap-1.5 text-xs">
+                          {c.met ? (
+                            <Check className="h-3.5 w-3.5 text-emerald-500" />
+                          ) : (
+                            <X className="h-3.5 w-3.5 text-slate-300" />
+                          )}
+                          <span className={c.met ? "text-emerald-600" : "text-slate-400"}>
+                            {c.label}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
-            {/* Submit */}
-            <button
-              type="submit"
-              disabled={isDisabled || !pwValid || !pwMatch || !agreed || (firmOib.length > 0 && !oibValid)}
-              className="w-full flex items-center justify-center gap-2 text-white text-sm font-semibold py-2.5 rounded-xl transition shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
-              style={{
-                background: "var(--auth-navy)",
-                boxShadow: "0 4px 14px rgba(27,42,74,0.4)",
-              }}
-            >
-              {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-              {loading ? "Otvaranje računa..." : "Otvori račun"}
-            </button>
+                {/* Confirm password */}
+                <div>
+                  <label htmlFor="confirmPassword" className="block text-xs font-semibold text-slate-700 mb-1.5">
+                    Potvrdite lozinku
+                  </label>
+                  <input
+                    id="confirmPassword"
+                    type={showPw ? "text" : "password"}
+                    autoComplete="new-password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    disabled={isDisabled}
+                    placeholder="••••••••"
+                    className={`w-full px-3.5 py-2.5 border rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 outline-none transition disabled:bg-slate-50 disabled:text-slate-400 ${
+                      confirmPassword.length > 0 && !pwMatch ? "border-red-300" : "border-slate-200"
+                    }`}
+                    style={ringStyle}
+                  />
+                  {confirmPassword.length > 0 && !pwMatch && (
+                    <p className="mt-1 text-xs text-red-500">Lozinke se ne podudaraju</p>
+                  )}
+                </div>
+
+                {/* Next */}
+                <button
+                  type="submit"
+                  disabled={isDisabled || !step1Valid}
+                  className="w-full flex items-center justify-center gap-2 text-white text-sm font-semibold py-2.5 rounded-xl transition shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
+                  style={{
+                    background: "var(--auth-navy)",
+                    boxShadow: "0 4px 14px rgba(27,42,74,0.4)",
+                  }}
+                >
+                  Dalje
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+              </>
+            ) : (
+              <>
+                {/* Law Firm Section */}
+                <div className="rounded-xl p-4 space-y-3" style={{ background: "var(--auth-gold-muted)" }}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Building2 className="h-3.5 w-3.5" style={{ color: "var(--auth-gold)" }} />
+                    <span className="text-xs font-semibold text-slate-600">Odvjetnički ured</span>
+                  </div>
+
+                  {/* Firm Name */}
+                  <div>
+                    <label htmlFor="firmName" className="block text-xs font-semibold text-slate-700 mb-1.5">
+                      Naziv ureda <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      id="firmName"
+                      type="text"
+                      value={firmName}
+                      onChange={(e) => setFirmName(e.target.value)}
+                      disabled={isDisabled}
+                      placeholder="Odvjetnički ured Horvat"
+                      className={`${inputClass} bg-white`}
+                      style={ringStyle}
+                    />
+                  </div>
+
+                  {/* Firm OIB */}
+                  <div>
+                    <label htmlFor="firmOib" className="block text-xs font-semibold text-slate-700 mb-1.5">
+                      OIB ureda <span className="text-slate-400 font-normal">(opcionalno)</span>
+                    </label>
+                    <input
+                      id="firmOib"
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={11}
+                      value={firmOib}
+                      onChange={(e) => setFirmOib(e.target.value.replace(/\D/g, "").slice(0, 11))}
+                      disabled={isDisabled}
+                      placeholder="12345678901"
+                      className={`w-full px-3.5 py-2.5 border rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 outline-none transition disabled:bg-slate-50 disabled:text-slate-400 bg-white ${
+                        firmOib.length === 11 && !oibValid ? "border-red-300" : "border-slate-200"
+                      }`}
+                      style={ringStyle}
+                    />
+                    {/* Verdict only once eleven digits are in — complaining at the
+                        fourth keystroke that the number is wrong is just noise. */}
+                    {firmOib.length === 11 && (
+                      <p className={`mt-1 flex items-center gap-1 text-xs ${oibValid ? "text-emerald-600" : "text-red-500"}`}>
+                        {oibValid ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
+                        {oibValid ? "OIB je ispravan" : "Kontrolna znamenka se ne poklapa"}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Terms */}
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={agreed}
+                    onChange={(e) => setAgreed(e.target.checked)}
+                    disabled={isDisabled}
+                    className="mt-0.5 h-4 w-4 rounded border-slate-300 transition"
+                    style={{ accentColor: "var(--auth-navy)" }}
+                  />
+                  <span className="text-xs text-slate-500 leading-relaxed">
+                    Prihvaćam{" "}
+                    <a href="/uvjeti" target="_blank" className="font-medium underline underline-offset-2 hover:opacity-80 transition" style={{ color: "var(--auth-navy)" }}>Uvjete korištenja</a> i{" "}
+                    <a href="/privatnost" target="_blank" className="font-medium underline underline-offset-2 hover:opacity-80 transition" style={{ color: "var(--auth-navy)" }}>Politiku privatnosti</a>
+                  </span>
+                </label>
+
+                {/* What actually happens next — no approval step exists. */}
+                <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg" style={{ background: "var(--auth-gold-muted)" }}>
+                  <Shield className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--auth-gold)" }} />
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    Šaljemo Vam link za potvrdu email adrese. Nakon potvrde ulazite odmah.
+                  </p>
+                </div>
+
+                {/* Back + Submit */}
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={goToStep1}
+                    disabled={isDisabled}
+                    className="flex items-center justify-center gap-2 text-sm font-semibold px-4 py-2.5 rounded-xl transition border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    Natrag
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={isDisabled || !step2Valid}
+                    className="flex-1 flex items-center justify-center gap-2 text-white text-sm font-semibold py-2.5 rounded-xl transition shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
+                    style={{
+                      background: "var(--auth-navy)",
+                      boxShadow: "0 4px 14px rgba(27,42,74,0.4)",
+                    }}
+                  >
+                    {loading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                    {loading ? "Otvaranje računa..." : "Otvori račun"}
+                  </button>
+                </div>
+              </>
+            )}
           </form>
         </div>
       </div>
