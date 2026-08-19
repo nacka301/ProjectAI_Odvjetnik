@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { API_BASE } from "@/lib/api";
+import { API_BASE, describeFetchError } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
 
 // ═══════════════════════════════════════════════════════════════
@@ -174,7 +174,8 @@ export function CreditProvider({ children }: { children: ReactNode }) {
         }
       } catch (err) {
         if (!cancelled && !ac.signal.aborted) {
-          setError(err instanceof Error ? err.message : "Mrežna greška");
+          console.error("Credits fetch error:", err);
+          setError(describeFetchError(err));
         }
       } finally {
         if (!cancelled) setLoading(false);

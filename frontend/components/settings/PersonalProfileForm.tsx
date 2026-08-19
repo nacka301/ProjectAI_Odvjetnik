@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Loader2, Save, User, Phone, Mail } from "lucide-react";
-import { API_BASE } from "@/lib/api";
+import { API_BASE, describeFetchError } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
 
 interface Props {
@@ -41,7 +41,7 @@ export default function PersonalProfileForm({ userId: _propUserId, userEmail }: 
         }
       } catch (err) {
         console.error("Profile fetch error:", err);
-        setError("Greška pri učitavanju profila.");
+        setError(describeFetchError(err));
       } finally {
         setLoading(false);
       }

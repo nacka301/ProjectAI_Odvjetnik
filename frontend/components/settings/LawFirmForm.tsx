@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Loader2, Save, Building2, Hash, MapPin, Landmark, Receipt } from "lucide-react";
-import { API_BASE } from "@/lib/api";
+import { API_BASE, describeFetchError } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
 
 interface Props {
@@ -50,7 +50,7 @@ export default function LawFirmForm({ userId: _propUserId }: Props) {
         // 404 = firm not set up yet → show empty form
       } catch (err) {
         console.error("Firm fetch error:", err);
-        setError("Greška pri učitavanju podataka o uredu.");
+        setError(describeFetchError(err));
       } finally {
         setLoading(false);
       }
