@@ -89,7 +89,6 @@ const STEPS: MethodologyStep[] = [
     details: [
       "Generira se tekstualno obrazloženje koje objašnjava logiku procjene, odabrane usporedive nekretnine i primijenjene korekcije.",
       "Elaborat sadrži: rekapitulaciju, tablicu usporedbi, korekcijske faktore i konačnu vrijednost.",
-      "Neovisni revizijski sloj automatski provjerava procjenu prema tržišnim podacima (cross-validation).",
       "Rezultat se može preuzeti kao PDF dokument spreman za sudsku ili odvjetničku uporabu.",
     ],
     legal: "Čl. 26. ZoPVN — Sadržaj procjembenog elaborata",

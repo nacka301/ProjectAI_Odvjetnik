@@ -19,10 +19,8 @@ import {
 import {
   getRecentActivity,
   deleteActivityItem,
-  getAuditResults,
   type ActivityItem,
   type ActivityType,
-  type AuditRow,
   getEvaluations,
   type EvaluationRow,
 } from "@/lib/supabase";
@@ -64,12 +62,6 @@ const BADGE_COLORS: Record<string, string> = {
   red: "bg-red-100 text-red-800",
 };
 
-const AUDIT_VERDICT_LABELS: Record<string, { label: string; color: string; icon: string }> = {
-  CONFIRMED:  { label: "Potvrđeno",  color: "bg-green-100 text-green-800 border-green-300",  icon: "✅" },
-  SUSPICIOUS: { label: "Sumnjivo",   color: "bg-yellow-100 text-yellow-800 border-yellow-300", icon: "⚠️" },
-  REJECTED:   { label: "Odbijeno",   color: "bg-red-100 text-red-800 border-red-300",     icon: "❌" },
-};
-
 function formatPrice(n: number) {
   return n.toLocaleString("hr-HR");
 }
@@ -87,7 +79,6 @@ function formatDate(iso: string) {
 export default function HistoryPage() {
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [evaluationMap, setEvaluationMap] = useState<Map<string, EvaluationRow>>(new Map());
-  const [auditMap, setAuditMap] = useState<Map<string, AuditRow>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -99,18 +90,14 @@ export default function HistoryPage() {
   useEffect(() => {
     (async () => {
       try {
-        const [items, evals, audits] = await Promise.all([
+        const [items, evals] = await Promise.all([
           getRecentActivity(100),
           getEvaluations(100),
-          getAuditResults(100),
         ]);
         setActivity(items);
         const map = new Map<string, EvaluationRow>();
         for (const e of evals) map.set(e.id, e);
         setEvaluationMap(map);
-        const aMap = new Map<string, AuditRow>();
-        for (const a of audits) aMap.set(a.evaluation_id, a);
-        setAuditMap(aMap);
       } catch {
         setError("Greška pri dohvaćanju povijesti. Provjerite Supabase konfiguraciju.");
       } finally {
@@ -259,8 +246,6 @@ export default function HistoryPage() {
               const isValuation = item.type === "valuation";
               const ev = isValuation ? evaluationMap.get(item.id) : null;
               const raw = ev ? (ev.raw_json_output as unknown as ValuationResult) : null;
-              const audit = isValuation ? auditMap.get(item.id) : null;
-              const verdictInfo = audit ? AUDIT_VERDICT_LABELS[audit.verdict] : null;
 
               return (
                 <div key={item.id} className="rounded-xl bg-white border border-gray-200 overflow-hidden transition hover:border-gray-300 hover:shadow-sm">
@@ -287,14 +272,6 @@ export default function HistoryPage() {
                         {formatDate(item.created_at)}
                         {item.subtitle ? ` · ${item.subtitle}` : ""}
                       </p>
-                      {verdictInfo && (
-                        <span className={`inline-flex items-center gap-1 mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${verdictInfo.color}`}>
-                          {verdictInfo.icon} Neovisna provjera: {verdictInfo.label}
-                          {audit && audit.overall_confidence > 0 && (
-                            <span className="opacity-70">({audit.overall_confidence}%)</span>
-                          )}
-                        </span>
-                      )}
                     </div>
 
                     <div className="text-right shrink-0">
@@ -374,51 +351,6 @@ export default function HistoryPage() {
                         <div className="rounded-lg bg-white border border-gray-200 p-3">
                           <p className="text-xs text-gray-500 mb-1">Stručno mišljenje</p>
                           <p className="text-xs text-gray-700 leading-relaxed line-clamp-4">{raw.valuation_reasoning}</p>
-                        </div>
-                      )}
-
-                      {/* Independent Audit Result */}
-                      {audit && verdictInfo && (
-                        <div className={`rounded-lg border p-3 ${
-                          audit.verdict === "CONFIRMED" ? "bg-green-50 border-green-200" :
-                          audit.verdict === "SUSPICIOUS" ? "bg-yellow-50 border-yellow-200" :
-                          "bg-red-50 border-red-200"
-                        }`}>
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-sm">{verdictInfo.icon}</span>
-                            <p className="text-xs font-bold">
-                              Neovisna provjera: {verdictInfo.label}
-                            </p>
-                            {audit.overall_confidence > 0 && (
-                              <span className="text-[10px] font-medium opacity-70">
-                                Pouzdanost: {audit.overall_confidence}%
-                              </span>
-                            )}
-                          </div>
-                          {audit.summary && (
-                            <p className="text-xs text-gray-700 leading-relaxed line-clamp-3">{audit.summary}</p>
-                          )}
-                          {audit.recommendation && (
-                            <p className="text-xs text-gray-500 mt-1 italic">💡 {audit.recommendation}</p>
-                          )}
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2">
-                            <div className="text-center">
-                              <p className="text-[10px] text-gray-500">Cijena</p>
-                              <p className="text-xs font-bold">{audit.price_score}/100</p>
-                            </div>
-                            <div className="text-center">
-                              <p className="text-[10px] text-gray-500">Lokacija</p>
-                              <p className="text-xs font-bold">{audit.location_score}/100</p>
-                            </div>
-                            <div className="text-center">
-                              <p className="text-[10px] text-gray-500">Metoda</p>
-                              <p className="text-xs font-bold">{audit.methodology_score}/100</p>
-                            </div>
-                            <div className="text-center">
-                              <p className="text-[10px] text-gray-500">Podaci</p>
-                              <p className="text-xs font-bold">{audit.data_quality_score}/100</p>
-                            </div>
-                          </div>
                         </div>
                       )}
 

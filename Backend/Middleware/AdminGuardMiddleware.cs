@@ -10,7 +10,6 @@ namespace Backend.Middleware;
 /// Protected paths:
 ///   - /api/rag/*          — RAG seeding/testing
 ///   - /api/admin/*        — admin dashboard endpoints
-///   - /api/audit/test-*   — test validation endpoints
 /// </summary>
 public sealed class AdminGuardMiddleware
 {
@@ -22,7 +21,6 @@ public sealed class AdminGuardMiddleware
     [
         "/api/rag/",
         "/api/admin/",
-        "/api/audit/test-",
     ];
 
     public AdminGuardMiddleware(RequestDelegate next, IConfiguration config, ILogger<AdminGuardMiddleware> logger)

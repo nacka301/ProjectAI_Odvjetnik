@@ -21,19 +21,10 @@ public interface ISupabaseService
 
     Task<string?> SaveInvoiceAsync(InvoiceRecord record) ;
 
-    Task<string?> SaveAuditResultAsync(AuditResultRecord record) ;
-
     Task<string?> SaveZkAnalysisAsync(ZkAnalysisRecord record) ;
 
     Task<string?> SaveAuditLogAsync(AuditLogRecord record) ;
 
 /// <summary>Save multiple audit log entries in a single batch POST to PostgREST.</summary>
     Task SaveAuditLogBatchAsync(IEnumerable<AuditLogRecord> records) ;
-
-    Task<EvaluationReadRecord?> GetEvaluationByIdAsync(string evaluationId) ;
-
-/// <summary>
-    /// Fetch recent evaluations that have NOT been audited yet.
-    /// </summary>
-    Task<List<EvaluationReadRecord>> GetUnauditedEvaluationsAsync(int limit = 20) ;
 }

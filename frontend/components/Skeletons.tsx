@@ -75,42 +75,6 @@ export function HistoryListSkeleton({ count = 5 }: { count?: number }) {
   );
 }
 
-/* ── Audit result card skeleton ── */
-export function AuditItemSkeleton() {
-  return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
-      <div className="flex items-start gap-3">
-        <SkeletonBox className="h-8 w-20 rounded-full" />
-        <div className="flex-1 space-y-2">
-          <SkeletonBox className="h-4 w-3/5" />
-          <SkeletonBox className="h-3 w-2/5" />
-        </div>
-        <SkeletonBox className="h-6 w-12 rounded" />
-      </div>
-      <SkeletonBox className="h-3 w-full" />
-      <SkeletonBox className="h-3 w-4/5" />
-      <div className="grid grid-cols-4 gap-3 pt-2">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="space-y-1.5">
-            <SkeletonBox className="h-2 w-full" />
-            <SkeletonBox className="h-3 w-1/2 mx-auto" />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-export function AuditListSkeleton({ count = 4 }: { count?: number }) {
-  return (
-    <div className="space-y-3">
-      {Array.from({ length: count }).map((_, i) => (
-        <AuditItemSkeleton key={i} />
-      ))}
-    </div>
-  );
-}
-
 /* ── Client detail page skeleton ── */
 export function ClientDetailSkeleton() {
   return (
