@@ -31,8 +31,6 @@ import {
 } from "lucide-react";
 import { API_BASE } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
-import { useCredits, getModuleQuota } from "@/lib/useCredits";
-import { CreditQuotaBadge, CreditExhaustedWarning } from "@/components/CreditQuotaBadge";
 import TroskovnikVodic, { highlightClasses } from "@/components/TroskovnikVodic";
 import { clearDraft, loadDraft, saveDraft, type LoadedDraft } from "@/lib/troskovnik-draft";
 import { cachedOnboardedHint, loadOnboardingState } from "@/lib/onboarding";
@@ -326,8 +324,6 @@ export default function TroskovnikPage() {
 
 function TroskovnikContent() {
   const { userId, authHeaders } = useAuth();
-  const { rows: creditRows, loading: creditsLoading } = useCredits(userId);
-  const troskovnikQuota = getModuleQuota(creditRows, "troskovnik");
   const searchParams = useSearchParams();
   const preselectedClientId = searchParams.get("clientId");
 
@@ -3315,10 +3311,9 @@ function TroskovnikContent() {
                         ))}
                       </div>
                     )}
-                    <CreditQuotaBadge quota={troskovnikQuota} loading={creditsLoading} className="mb-1" />
                     <button
                       onClick={handleCalculate}
-                      disabled={calculating || troskovnikQuota.exhausted || sviNedostaci.length > 0}
+                      disabled={calculating || sviNedostaci.length > 0}
                       className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white text-sm font-semibold py-2.5 rounded-lg transition"
                     >
                       {calculating ? (

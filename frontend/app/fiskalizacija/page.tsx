@@ -67,8 +67,6 @@ interface InvoiceResult {
 import { API_BASE } from "@/lib/api";
 import { validateOib } from "@/lib/utils";
 import { useAuth } from "@/lib/useAuth";
-import { useCredits, getModuleQuota } from "@/lib/useCredits";
-import { CreditQuotaBadge, CreditExhaustedWarning } from "@/components/CreditQuotaBadge";
 
 const MODULE_LABELS: Record<string, string> = {
   valuation: "Procjena nekretnine",
@@ -92,9 +90,7 @@ const PDV_RATES = [
 // ── Main Page ──
 
 export default function FiskalizacijaPage() {
-  const { userId, authHeaders } = useAuth();
-  const { rows: creditRows, loading: creditsLoading } = useCredits(userId);
-  const invoiceQuota = getModuleQuota(creditRows, "invoice");
+  const { authHeaders } = useAuth();
   // Form state
   const [module, setModule] = useState("legal");
   const [analysisId, setAnalysisId] = useState("");
@@ -706,10 +702,9 @@ export default function FiskalizacijaPage() {
 
           {/* Submit */}
           <div className="flex flex-col items-end gap-2">
-            <CreditQuotaBadge quota={invoiceQuota} loading={creditsLoading} />
             <button
               type="submit"
-              disabled={loading || netNum <= 0 || !issuerName || !clientName || (issuerOib.length > 0 && !issuerOibValid) || (clientOib.length > 0 && !clientOibValid) || invoiceQuota.exhausted}
+              disabled={loading || netNum <= 0 || !issuerName || !clientName || (issuerOib.length > 0 && !issuerOibValid) || (clientOib.length > 0 && !clientOibValid)}
               className="inline-flex items-center gap-2 bg-emerald-600 text-white text-sm font-semibold px-8 py-3 rounded-xl hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-sm"
             >
               {loading ? (
@@ -724,7 +719,6 @@ export default function FiskalizacijaPage() {
                 </>
               )}
             </button>
-            <CreditExhaustedWarning quota={invoiceQuota} />
           </div>
         </form>
       </main>

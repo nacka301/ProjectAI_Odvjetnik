@@ -36,11 +36,11 @@ export default function PrivatnostPage() {
           <p>
             1.1. Voditelj obrade osobnih podataka prikupljenih pri registraciji i korištenju aplikacije
             PravoTek je <strong>David Vacka</strong>, fizička osoba, kontakt:{" "}
-            <a href="mailto:podrska@pravotek.hr">podrska@pravotek.hr</a>.
+            <a href="mailto:vackadavid@gmail.com">vackadavid@gmail.com</a>.
           </p>
           <p>
             1.2. Kontakt za pitanja o zaštiti osobnih podataka:{" "}
-            <a href="mailto:podrska@pravotek.hr">podrska@pravotek.hr</a>
+            <a href="mailto:vackadavid@gmail.com">vackadavid@gmail.com</a>
           </p>
 
           {/* §2 */}
@@ -143,7 +143,7 @@ export default function PrivatnostPage() {
           </ul>
           <p>
             Zahtjeve možete uputiti na:{" "}
-            <a href="mailto:podrska@pravotek.hr">podrska@pravotek.hr</a>.
+            <a href="mailto:vackadavid@gmail.com">vackadavid@gmail.com</a>.
             Odgovorit ćemo u roku od <strong>30 dana</strong>.
           </p>
           <p>

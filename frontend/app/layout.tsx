@@ -3,7 +3,6 @@ import { Geist, Geist_Mono, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import SessionGuard from "@/components/SessionGuard";
 import { ConditionalSecurityFooter } from "@/components/ConditionalFooter";
-import CommandPalette from "@/components/CommandPalette";
 import { CreditProvider } from "@/contexts/CreditContext";
 
 const geistSans = Geist({
@@ -57,7 +56,6 @@ export default function RootLayout({
             14 idle, then a 60-second countdown. */}
         <SessionGuard>
           <CreditProvider>
-            <CommandPalette />
             <main className="flex-1">{children}</main>
             <ConditionalSecurityFooter />
           </CreditProvider>

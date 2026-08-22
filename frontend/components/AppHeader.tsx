@@ -2,11 +2,8 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
-import { Scale, Clock, ShieldAlert, ShieldCheck, Shield, LogOut, Search, Zap, Crown } from "lucide-react";
+import { Scale, Clock, ShieldCheck, Shield, LogOut, Crown } from "lucide-react";
 import { signOutCompletely } from "@/lib/sign-out";
-import { useUserId } from "@/lib/useUserId";
-import { useCredits } from "@/lib/useCredits";
 import { useSubscription } from "@/lib/useSubscription";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import { isPathLocked } from "@/lib/modules";
@@ -38,8 +35,6 @@ interface AppHeaderProps {
 function AppHeaderInner({ extraStart }: AppHeaderProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const userId = useUserId();
-  const credits = useCredits(userId);
   const subscription = useSubscription();
 
   // ── Admin detection (cookie set by middleware) ──
@@ -68,19 +63,8 @@ function AppHeaderInner({ extraStart }: AppHeaderProps) {
           </div>
         </Link>
 
-        {/* ── Right side: search trigger + optional extras + nav links + logout ── */}
+        {/* ── Right side: optional extras + nav links + logout ── */}
         <div className="flex items-center gap-2 sm:gap-4">
-          {/* Search trigger */}
-          <button
-            onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true }))}
-            className="hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1 text-xs text-slate-400 hover:text-white hover:border-slate-500 transition"
-            title="Pretraži (Ctrl+K)"
-          >
-            <Search className="h-3.5 w-3.5" />
-            <span>Pretraži</span>
-            <kbd className="ml-1 rounded border border-slate-600 bg-slate-700/50 px-1 py-0.5 text-[9px] font-mono">⌘K</kbd>
-          </button>
-
           {extraStart}
 
           {visibleNavItems.map(({ href, label, icon: Icon }) => {
@@ -149,29 +133,6 @@ function AppHeaderInner({ extraStart }: AppHeaderProps) {
               <span className="h-1.5 w-1.5 rounded-full bg-slate-500 animate-pulse" />
               Plan…
             </span>
-          )}
-
-          {/* Credit badge */}
-          {!credits.loading && credits.total > 0 && (
-            <Link
-              href="/postavke"
-              className="hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1 text-xs transition hover:border-slate-500"
-              title={`${credits.remaining} / ${credits.total} kredita preostalo`}
-            >
-              <Zap className="h-3 w-3 text-amber-400" />
-              <span className="tabular-nums text-white font-medium">{credits.remaining}</span>
-              <span className="text-slate-500">/ {credits.total}</span>
-            </Link>
-          )}
-          {!credits.loading && credits.total === 0 && !credits.error && userId && (
-            <Link
-              href="/postavke"
-              className="hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1 text-xs text-slate-400 transition hover:border-slate-500 hover:text-white"
-              title="Krediti"
-            >
-              <Zap className="h-3 w-3" />
-              <span>0 kredita</span>
-            </Link>
           )}
 
           <div className="h-4 w-px bg-slate-700 hidden sm:block" />

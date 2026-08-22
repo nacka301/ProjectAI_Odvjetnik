@@ -42,7 +42,7 @@ export default function DpaPage() {
           </p>
           <p>
             <strong>Izvršitelj obrade:</strong> David Vacka, fizička osoba, kontakt:{" "}
-            <a href="mailto:podrska@pravotek.hr">podrska@pravotek.hr</a> — u daljnjem tekstu:
+            <a href="mailto:vackadavid@gmail.com">vackadavid@gmail.com</a> — u daljnjem tekstu:
             „Izvršitelj" ili „PravoTek"
           </p>
 

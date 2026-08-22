@@ -37,7 +37,7 @@ export default function UvjetiPage() {
             1.1. Ovi Uvjeti korištenja (u daljnjem tekstu: „Uvjeti") uređuju prava i obveze
             između <strong>Davida Vacke</strong>, fizičke osobe koja pruža uslugu PravoTek
             (u daljnjem tekstu: „Pružatelj usluge" ili „PravoTek"), kontakt:{" "}
-            <a href="mailto:podrska@pravotek.hr">podrska@pravotek.hr</a>, i pravne ili fizičke
+            <a href="mailto:vackadavid@gmail.com">vackadavid@gmail.com</a>, i pravne ili fizičke
             osobe koja koristi aplikaciju PravoTek (u daljnjem tekstu: „Korisnik").
           </p>
           <p>
@@ -224,7 +224,7 @@ export default function UvjetiPage() {
           <p>
             8.2. Korisnik može u svakom trenutku zatražiti zatvaranje svog korisničkog računa i brisanje
             svih podataka pisanim zahtjevom na adresu elektroničke pošte{" "}
-            <a href="mailto:podrska@pravotek.hr">podrska@pravotek.hr</a>.
+            <a href="mailto:vackadavid@gmail.com">vackadavid@gmail.com</a>.
           </p>
           <p>
             8.3. Pružatelj usluge može, uz prethodnu obavijest od <strong>15 (petnaest) dana</strong>,

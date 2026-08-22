@@ -24,13 +24,10 @@ import {
   Calculator,
   Users,
   Languages,
-  Zap,
 } from "lucide-react";
 import { getRecentActivity, type ActivityItem, type ActivityType } from "@/lib/supabase";
 import { cachedOnboardedHint, loadOnboardingState, markOnboarded } from "@/lib/onboarding";
 import AppHeader from "@/components/AppHeader";
-import { useUserId } from "@/lib/useUserId";
-import { useCredits } from "@/lib/useCredits";
 import { useSubscription } from "@/lib/useSubscription";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import { isModuleLocked, moduleTitle } from "@/lib/modules";
@@ -302,8 +299,6 @@ const FEATURE_CARDS: FeatureCard[] = [
 
 export default function Dashboard() {
   const router = useRouter();
-  const userId = useUserId();
-  const credits = useCredits(userId);
   const subscription = useSubscription();
   const isAdmin = useIsAdmin();
   const [activity, setActivity] = useState<ActivityItem[]>([]);
@@ -787,61 +782,12 @@ export default function Dashboard() {
                       <p className="text-base font-bold text-slate-900">
                         PravoTek {subscription.planLabel}
                       </p>
-                      {subscription.data?.ai_credits_limit != null && subscription.data.ai_credits_limit > 0 && (
-                        <p className="text-[11px] text-slate-400">
-                          {subscription.data.ai_credits_limit} AI kredita/mj
-                          {subscription.data.max_cases != null && subscription.data.max_cases > 0 && (
-                            <> · {subscription.data.max_cases === -1 ? "∞" : subscription.data.max_cases} predmeta</>
-                          )}
-                        </p>
-                      )}
-                      {(!subscription.data?.ai_credits_limit || subscription.data.ai_credits_limit === 0) && (
-                        <p className="text-[11px] text-slate-400">
-                          {subscription.data?.max_cases === -1 ? "Neograničeno predmeta" : `${subscription.data?.max_cases ?? 5} predmeta`}
-                          {subscription.data?.max_invoices === -1 && " · ∞ računa"}
-                        </p>
-                      )}
+                      <p className="text-[11px] text-slate-400">
+                        {subscription.data?.max_cases === -1 ? "Neograničeno predmeta" : `${subscription.data?.max_cases ?? 5} predmeta`}
+                        {subscription.data?.max_invoices === -1 && " · ∞ računa"}
+                      </p>
                     </div>
                   </div>
-
-                  {/* AI Token mini progress (if plan has credits) */}
-                  {!credits.loading && credits.total > 0 && (
-                    <div className="space-y-1.5 pt-1">
-                      <div className="flex items-center justify-between text-[11px]">
-                        <span className="text-slate-400 flex items-center gap-1">
-                          <Zap className="h-3 w-3 text-amber-400" />
-                          AI Tokeni
-                        </span>
-                        <span className="font-semibold tabular-nums text-slate-600">
-                          {credits.remaining} / {credits.total}
-                        </span>
-                      </div>
-                      <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all duration-500"
-                          style={{
-                            width: `${credits.total > 0 ? Math.min(100, Math.round((credits.used / credits.total) * 100)) : 0}%`,
-                            background:
-                              credits.remaining === 0
-                                ? "#ef4444"
-                                : credits.used / credits.total >= 0.9
-                                  ? "#f59e0b"
-                                  : "#1B2A4A",
-                          }}
-                        />
-                      </div>
-                      {credits.remaining === 0 && (
-                        <p className="text-[10px] text-red-500 font-medium">
-                          Limit dosegnut — nadogradite plan za više kredita
-                        </p>
-                      )}
-                      {credits.remaining > 0 && credits.used / credits.total >= 0.85 && (
-                        <p className="text-[10px] text-amber-600">
-                          Preostalo samo {credits.remaining} kredita
-                        </p>
-                      )}
-                    </div>
-                  )}
                 </div>
               </Link>
             )}
@@ -875,62 +821,6 @@ export default function Dashboard() {
                   })}
                 </div>
               </div>
-            )}
-
-            {/* ── Credit Summary Card ── */}
-            {!credits.loading && credits.total > 0 && (
-              <Link href="/postavke" className="block">
-                <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3 hover:border-slate-300 hover:shadow-sm transition">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-[11px] text-slate-400 uppercase tracking-wider font-medium">
-                      Beta Krediti
-                    </h3>
-                    <Zap className="h-3.5 w-3.5 text-amber-400" />
-                  </div>
-
-                  {/* Summary numbers */}
-                  <div className="flex items-end gap-1">
-                    <span className="text-2xl font-bold tabular-nums" style={{ color: "#1B2A4A" }}>
-                      {credits.remaining}
-                    </span>
-                    <span className="text-sm text-slate-400 mb-0.5">/ {credits.total}</span>
-                  </div>
-
-                  {/* Progress bar */}
-                  <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all duration-500"
-                      style={{
-                        width: `${credits.total > 0 ? Math.min(100, Math.round((credits.used / credits.total) * 100)) : 0}%`,
-                        background: credits.remaining === 0 ? "#ef4444" : credits.used / credits.total >= 0.9 ? "#f59e0b" : "#1B2A4A",
-                      }}
-                    />
-                  </div>
-
-                  <p className="text-[10px] text-slate-400">
-                    {credits.remaining === 0
-                      ? "Limit dosegnut — otvorite Postavke za više info"
-                      : `Preostalo ${credits.remaining} kredita ovaj mjesec`}
-                  </p>
-                </div>
-              </Link>
-            )}
-
-            {/* ── Credits empty state ── */}
-            {!credits.loading && credits.total === 0 && !credits.error && userId && (
-              <Link href="/postavke" className="block">
-                <div className="bg-white rounded-xl border border-slate-200 p-4 hover:border-slate-300 hover:shadow-sm transition">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center">
-                      <Zap className="h-4 w-4 text-slate-300" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-slate-500 font-medium">Beta Krediti</p>
-                      <p className="text-[10px] text-slate-400">Krediti se kreiraju pri prvom korištenju modula</p>
-                    </div>
-                  </div>
-                </div>
-              </Link>
             )}
           </div>
         </section>
