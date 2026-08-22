@@ -25,8 +25,14 @@ describe("which modules are open", () => {
     expect(ready.sort()).toEqual(["stranke", "troskovnik"]);
   });
 
-  it("holds back the four AI modules", () => {
-    expect(lockedIds()).toEqual(["prijevod", "procjena", "ugovor", "zk"]);
+  it("holds back the four AI modules and Fiskalizacija", () => {
+    expect(lockedIds()).toEqual([
+      "fiskalizacija",
+      "prijevod",
+      "procjena",
+      "ugovor",
+      "zk",
+    ]);
   });
 
   it("gives every module a distinct id", () => {
@@ -49,6 +55,10 @@ describe("route matching", () => {
     "/ugovor",
     "/zk-procjena",
     "/prijevod",
+    // Not an AI module, but unfinished all the same. It had no dashboard card
+    // and no entry here, so it stayed reachable by URL long after the rest
+    // were locked.
+    "/fiskalizacija",
   ])("blocks %s for an ordinary user", (path) => {
     expect(isPathLocked(path, false)).toBe(true);
   });
@@ -60,7 +70,7 @@ describe("route matching", () => {
     },
   );
 
-  it.each(["/history", "/postavke", "/", "/fiskalizacija"])(
+  it.each(["/history", "/postavke", "/"])(
     "does not touch %s, which belongs to no module",
     (path) => {
       expect(isPathLocked(path, false)).toBe(false);

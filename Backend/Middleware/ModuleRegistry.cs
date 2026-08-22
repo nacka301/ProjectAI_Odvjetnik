@@ -35,6 +35,7 @@ public static class ModuleRegistry
         new("ugovor", ["/api/contract"], ModuleStatus.URazvoju),
         new("zk", ["/api/zk"], ModuleStatus.URazvoju),
         new("prijevod", ["/api/translation"], ModuleStatus.URazvoju),
+        new("fiskalizacija", ["/api/invoice"], ModuleStatus.URazvoju),
     ];
 
     /// <summary>API prefixes belonging to modules that are not finished yet.</summary>

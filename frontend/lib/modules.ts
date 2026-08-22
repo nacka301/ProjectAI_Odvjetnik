@@ -53,6 +53,16 @@ export const MODULES: ModuleDefinition[] = [
     status: "spreman",
   },
   {
+    id: "fiskalizacija",
+    title: "Fiskalizacija",
+    // Never had a dashboard card — it was reachable only by typing the URL,
+    // which is exactly why it went unnoticed while every other unfinished
+    // module was locked.
+    routes: ["/fiskalizacija"],
+    apiPrefixes: ["/api/invoice"],
+    status: "u-razvoju",
+  },
+  {
     id: "procjena",
     title: "Tržišna Procjena",
     // /valuation is a second, unlinked entry point into the same module. It is

@@ -76,13 +76,15 @@ test.describe("Backend API Health", () => {
     log.info(`contract/analyze-text-stream → ${status}`);
   });
 
-  test("POST invoice/generate validates input", async ({ request }) => {
+  test("POST invoice/generate is gated before it validates input", async ({ request }) => {
     const res = await request.post(`${API}/api/invoice/generate`, {
       data: {},
       headers: { "Content-Type": "application/json" },
     });
-    // Should return 400/422/500 for empty input, or 429 if rate-limited
-    expect([400, 422, 429, 500]).toContain(res.status());
-    log.info(`invoice/generate empty → ${res.status()} (validation works)`);
+    // Fiskalizacija is "u-razvoju", so AdminGuardMiddleware answers first:
+    // 401 unauthenticated, 403 for a signed-in non-admin. Validation only ever
+    // runs for the admin — hence 400/422/500 — and 429 if rate-limited.
+    expect([401, 403, 400, 422, 429, 500]).toContain(res.status());
+    log.info(`invoice/generate empty → ${res.status()} (module gate works)`);
   });
 });
