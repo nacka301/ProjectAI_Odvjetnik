@@ -234,7 +234,10 @@ public sealed class CreditService
 
             var subBody = await subRes.Content.ReadAsStringAsync();
             using var subDoc = JsonDocument.Parse(subBody);
-            int aiLimit = SubscriptionPlans.FreeAiCreditsPerMonth;
+            // No AI credits are sold on this plan. The modules that spend them
+            // are all still in development and admin-only, so an office with no
+            // subscription row starts at zero rather than at a free allowance.
+            int aiLimit = 0;
             if (subDoc.RootElement.GetArrayLength() > 0)
             {
                 var s = subDoc.RootElement[0];

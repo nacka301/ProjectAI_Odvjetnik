@@ -72,9 +72,8 @@ public sealed class UsageService
 
         if (currentUsed >= limitValue)
         {
-            var planLabel = SubscriptionPlans.LabelFor(snap.PlanId);
             return UsageCheckResult.Blocked(
-                $"Dosegli ste besplatni limit od {numericLimit} {resourceLabel}. Molimo nadogradite plan.",
+                $"Dosegli ste limit od {numericLimit} {resourceLabel}.",
                 numericLimit,
                 currentUsed);
         }
@@ -188,15 +187,19 @@ public sealed class UsageService
             var subBody = await subRes.Content.ReadAsStringAsync();
             using var subDoc = JsonDocument.Parse(subBody);
 
-            string planId = "free";
-            int maxCases = SubscriptionPlans.FreeCasesLimit;
-            int maxInvoices = SubscriptionPlans.FreeInvoicesLimit;
-            int aiLimit = SubscriptionPlans.FreeAiCreditsPerMonth;
+            // One plan, and it does not cap cases or invoices. These defaults
+            // apply when the office has no subscription row at all; they are
+            // deliberately open, because the thing that closes access now is
+            // SubscriptionGate, not a per-tier ceiling.
+            string planId = SubscriptionPlans.PlanId;
+            int maxCases = SubscriptionPlans.Unlimited;
+            int maxInvoices = SubscriptionPlans.Unlimited;
+            int aiLimit = 0;
 
             if (subDoc.RootElement.GetArrayLength() > 0)
             {
                 var s = subDoc.RootElement[0];
-                planId      = s.TryGetProperty("plan_id",          out var p) ? p.GetString() ?? "free" : "free";
+                planId      = s.TryGetProperty("plan_id",          out var p) ? p.GetString() ?? SubscriptionPlans.PlanId : SubscriptionPlans.PlanId;
                 maxCases    = s.TryGetProperty("max_cases",        out var c) ? c.GetInt32() : maxCases;
                 maxInvoices = s.TryGetProperty("max_invoices",     out var i) ? i.GetInt32() : maxInvoices;
                 aiLimit     = s.TryGetProperty("ai_credits_limit", out var a) ? a.GetInt32() : aiLimit;
@@ -271,7 +274,7 @@ public sealed class UsageService
 
     private sealed class TenantSnapshot
     {
-        public string PlanId { get; init; } = "free";
+        public string PlanId { get; init; } = SubscriptionPlans.PlanId;
         public int MaxCases { get; init; }
         public int MaxInvoices { get; init; }
         public int AiCreditsLimit { get; init; }

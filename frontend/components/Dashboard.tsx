@@ -24,6 +24,8 @@ import {
   Calculator,
   Users,
   Languages,
+  Lock,
+  Scale,
 } from "lucide-react";
 import { getRecentActivity, type ActivityItem, type ActivityType } from "@/lib/supabase";
 import { cachedOnboardedHint, loadOnboardingState, markOnboarded } from "@/lib/onboarding";
@@ -44,6 +46,19 @@ function timeAgo(iso: string) {
   const days = Math.floor(hrs / 24);
   if (days < 7) return `prije ${days}d`;
   return new Date(iso).toLocaleDateString("hr-HR");
+}
+
+/** A plain Croatian date, for "vrijedi do". */
+function formatDatum(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString("hr-HR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  } catch {
+    return iso;
+  }
 }
 
 const ACTIVITY_ICONS: Record<ActivityType, React.ReactNode> = {
@@ -747,25 +762,27 @@ export default function Dashboard() {
 
           {/* ── RIGHT: Stats ── */}
           <div className="space-y-4">
-            {/* ── Subscription Plan Card ── */}
+            {/* ── Subscription Card ── */}
+            {/* One plan, so there is nothing to name here — what the user needs
+                to know is which state they are in and until when. */}
             {!subscription.loading && (
               <Link href="/postavke" className="block">
                 <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3 hover:border-slate-300 hover:shadow-sm transition">
                   <div className="flex items-center justify-between">
                     <h3 className="text-[11px] text-slate-400 uppercase tracking-wider font-medium">
-                      Vaš Plan
+                      Pretplata
                     </h3>
                     <span
                       className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
-                        subscription.planId === "pro"
-                          ? "bg-amber-50 text-amber-700 border-amber-200"
-                          : subscription.planId === "starter"
-                            ? "bg-blue-50 text-blue-700 border-blue-200"
-                            : "bg-slate-50 text-slate-500 border-slate-200"
+                        subscription.state === "isteklo"
+                          ? "bg-red-50 text-red-700 border-red-200"
+                          : subscription.state === "proba"
+                            ? "bg-amber-50 text-amber-700 border-amber-200"
+                            : "bg-emerald-50 text-emerald-700 border-emerald-200"
                       }`}
                     >
-                      {subscription.planId === "pro" && <Sparkles className="h-2.5 w-2.5" />}
-                      {subscription.isActive ? "Aktivno" : "Neaktivno"}
+                      {subscription.state === "pretplata" && <Sparkles className="h-2.5 w-2.5" />}
+                      {subscription.state === "isteklo" ? "Zatvoreno" : "Aktivno"}
                     </span>
                   </div>
 
@@ -774,17 +791,22 @@ export default function Dashboard() {
                       className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
                       style={{ background: "#1B2A4A" }}
                     >
-                      <span className="text-sm font-bold" style={{ color: "#C9A84C" }}>
-                        {subscription.planId === "pro" ? "P" : subscription.planId === "starter" ? "S" : "F"}
-                      </span>
+                      {subscription.state === "isteklo" ? (
+                        <Lock className="h-4 w-4" style={{ color: "#C9A84C" }} />
+                      ) : (
+                        <Scale className="h-4 w-4" style={{ color: "#C9A84C" }} />
+                      )}
                     </div>
                     <div>
                       <p className="text-base font-bold text-slate-900">
-                        PravoTek {subscription.planLabel}
+                        {subscription.badgeLabel}
                       </p>
                       <p className="text-[11px] text-slate-400">
-                        {subscription.data?.max_cases === -1 ? "Neograničeno predmeta" : `${subscription.data?.max_cases ?? 5} predmeta`}
-                        {subscription.data?.max_invoices === -1 && " · ∞ računa"}
+                        {subscription.state === "isteklo"
+                          ? "Troškovnik i Stranke su zatvoreni"
+                          : subscription.accessUntil
+                            ? `Vrijedi do ${formatDatum(subscription.accessUntil)}`
+                            : "Pristup je otvoren"}
                       </p>
                     </div>
                   </div>
@@ -795,7 +817,7 @@ export default function Dashboard() {
               <div className="bg-white rounded-xl border border-slate-200 p-4">
                 <div className="flex items-center gap-2">
                   <span className="h-2 w-2 rounded-full bg-slate-300 animate-pulse" />
-                  <span className="text-xs text-slate-400">Učitavanje plana…</span>
+                  <span className="text-xs text-slate-400">Učitavanje pretplate…</span>
                 </div>
               </div>
             )}

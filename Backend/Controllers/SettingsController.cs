@@ -23,12 +23,18 @@ public class SettingsController : ControllerBase
 {
     private readonly ISettingsService _service;
     private readonly ICreditService _creditService;
+    private readonly ISubscriptionGate _gate;
     private readonly ILogger<SettingsController> _logger;
 
-    public SettingsController(ISettingsService service, ICreditService creditService, ILogger<SettingsController> logger)
+    public SettingsController(
+        ISettingsService service,
+        ICreditService creditService,
+        ISubscriptionGate gate,
+        ILogger<SettingsController> logger)
     {
         _service = service;
         _creditService = creditService;
+        _gate = gate;
         _logger = logger;
     }
 
@@ -174,9 +180,21 @@ public class SettingsController : ControllerBase
 
         try
         {
-            var sub = await _service.GetSubscriptionAsync(userId);
-            if (sub == null)
-                return Ok(new SubscriptionResponse { PlanId = "free", Status = "active" });
+            var sub = await _service.GetSubscriptionAsync(userId)
+                      ?? new SubscriptionResponse { Status = "active" };
+
+            // The state the user is shown comes from the same service the API
+            // guard consults, not from a second reading of the same columns.
+            // Two independent computations of "is this office still allowed to
+            // work" is how an interface ends up saying one thing while the API
+            // does another.
+            var access = await _gate.EvaluateAsync(
+                HttpContext.Items["AuthTenantId"] as string,
+                HttpContext.RequestAborted);
+
+            sub.State = access.State;
+            sub.DaysRemaining = access.DaysRemaining;
+            sub.AccessUntil = access.AccessUntil;
 
             return Ok(sub);
         }

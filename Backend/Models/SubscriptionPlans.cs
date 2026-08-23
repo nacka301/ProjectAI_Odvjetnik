@@ -1,81 +1,44 @@
 namespace Backend.Models;
 
 /// <summary>
-/// Authoritative pricing / limit constants for the three PravoTek tiers.
-/// All money values are in EUR.  Limits of -1 mean "unlimited".
+/// The one plan PravoTek sells, and the one place its numbers live.
 ///
-/// Free  (0 €)  – Max 5 predmeta, 3 računa, 5 AI kredita/mj
-/// Starter (19 €) – Neograničeno predmeta/računa, 0 AI kredita
-/// Pro  (39 €) – Neograničeno predmeta/računa, 100 AI kredita/mj
+/// There used to be three tiers — free / starter / pro — none of which was ever
+/// sold, and whose names were copied by hand into four more files that then
+/// drifted apart. What replaced them is a single path: seven days of trial from
+/// the day the office is opened, then a paid subscription.
+///
+/// ─── TRAJANJE PROBE ───
+/// <see cref="TrialDays"/> is the only place the length of the trial is written.
+/// Change it here and every office currently on trial is recomputed on the next
+/// request — no migration, no database edit. The SQL trigger that creates the
+/// row also writes a valid_until seven days out, but only so that a row read
+/// straight out of Supabase is not misleading; for status='trial' the backend
+/// derives the expiry from valid_from + TrialDays and ignores that column.
+///
+/// Payment is manual: the user writes an e-mail, and the admin sets status and
+/// valid_until in /admin. There is no payment provider, by design.
 /// </summary>
 public static class SubscriptionPlans
 {
-    // ─── Plan identifiers (stored in tenant_subscriptions.plan_id) ───
-    public const string FreePlanId     = "free";
-    public const string StarterPlanId  = "starter";
-    public const string ProPlanId      = "pro";
+    /// <summary>Stored in tenant_subscriptions.plan_id. One value, because there is one plan.</summary>
+    public const string PlanId = "pravotek";
 
-    // ─── Display labels (Croatian) ───
-    public const string FreePlanLabel     = "Besplatno";
-    public const string StarterPlanLabel  = "Starter";
-    public const string ProPlanLabel      = "Pro";
+    /// <summary>
+    /// How long a new office may work before paying.
+    /// THIS IS THE ONLY PLACE TO CHANGE IT.
+    /// </summary>
+    public const int TrialDays = 7;
 
-    // ─── Monthly price (EUR, net) ───
-    public const decimal FreePriceEur     = 0m;
-    public const decimal StarterPriceEur  = 19m;
-    public const decimal ProPriceEur      = 39m;
+    // ─── Price (EUR, net) ───
+    public const decimal MonthlyPriceEur = 19m;
+    public const decimal YearlyPriceEur  = 190m;
 
-    // ─── Hard limits (-1 = unlimited) ───
+    /// <summary>
+    /// -1 means "no limit". Kept because UsageService still counts cases and
+    /// invoices against a ceiling, and on this plan that ceiling is absent.
+    /// </summary>
+    public const int Unlimited = -1;
 
-    // Cases (predmeti)
-    public const int FreeCasesLimit      = 5;
-    public const int StarterCasesLimit   = -1;
-    public const int ProCasesLimit       = -1;
-
-    // Invoices (računi)
-    public const int FreeInvoicesLimit     = 3;
-    public const int StarterInvoicesLimit  = -1;
-    public const int ProInvoicesLimit      = -1;
-
-    // AI credits per billing period (month)
-    public const int FreeAiCreditsPerMonth     = 5;
-    public const int StarterAiCreditsPerMonth  = 0;
-    public const int ProAiCreditsPerMonth      = 100;
-
-    // ─── Helper: is the limit unlimited? ───
     public static bool IsUnlimited(int limit) => limit < 0;
-
-    /// <summary>
-    /// Returns (casesLimit, invoicesLimit, aiCreditsPerMonth) for a given plan_id.
-    /// Falls back to Free limits for unknown plan identifiers.
-    /// </summary>
-    public static (int Cases, int Invoices, int AiCredits) LimitsFor(string? planId) =>
-        planId switch
-        {
-            StarterPlanId => (StarterCasesLimit, StarterInvoicesLimit, StarterAiCreditsPerMonth),
-            ProPlanId     => (ProCasesLimit,     ProInvoicesLimit,     ProAiCreditsPerMonth),
-            _             => (FreeCasesLimit,    FreeInvoicesLimit,    FreeAiCreditsPerMonth),
-        };
-
-    /// <summary>
-    /// Returns the Croatian display label for a plan_id.
-    /// </summary>
-    public static string LabelFor(string? planId) =>
-        planId switch
-        {
-            StarterPlanId => StarterPlanLabel,
-            ProPlanId     => ProPlanLabel,
-            _             => FreePlanLabel,
-        };
-
-    /// <summary>
-    /// Returns monthly price in EUR for a plan_id.
-    /// </summary>
-    public static decimal PriceFor(string? planId) =>
-        planId switch
-        {
-            StarterPlanId => StarterPriceEur,
-            ProPlanId     => ProPriceEur,
-            _             => FreePriceEur,
-        };
 }

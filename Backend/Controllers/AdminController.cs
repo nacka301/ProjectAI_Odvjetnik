@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Backend.Models;
 using Backend.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -23,17 +24,37 @@ public class AdminUserDto
     [JsonPropertyName("last_sign_in")]  public string? LastSignIn { get; set; }
 
     // Firm info
+    [JsonPropertyName("law_firm_id")]   public string? LawFirmId { get; set; }
     [JsonPropertyName("firm_name")]     public string? FirmName { get; set; }
     [JsonPropertyName("firm_oib")]      public string? FirmOib { get; set; }
 
-    // Subscription (from subscriptions table linked to law_firm)
-    [JsonPropertyName("plan")]          public string? Plan { get; set; }
+    // Subscription (tenant_subscriptions row for this user's law firm).
+    // law_firm_id above is what the admin screen PATCHes; without it the
+    // subscription is visible but not editable.
     [JsonPropertyName("sub_status")]    public string? SubStatus { get; set; }
+    [JsonPropertyName("valid_from")]    public string? ValidFrom { get; set; }
     [JsonPropertyName("valid_until")]   public string? ValidUntil { get; set; }
 
     // Credit usage (summed across modules)
     [JsonPropertyName("used_credits")]  public int UsedCredits { get; set; }
     [JsonPropertyName("max_credits")]   public int MaxCredits { get; set; }
+}
+
+/// <summary>
+/// What the admin screen sends when it changes an office's subscription.
+/// </summary>
+public class AdminSubscriptionUpdate
+{
+    /// <summary>One of: trial, active, canceled, expired.</summary>
+    [JsonPropertyName("status")]      public string Status { get; set; } = "";
+
+    /// <summary>
+    /// When access ends. Required for active and canceled. Ignored for trial —
+    /// a trial ends at valid_from + SubscriptionPlans.TrialDays, and letting the
+    /// admin type a different date here would create a second, contradicting
+    /// answer to "how long is the trial".
+    /// </summary>
+    [JsonPropertyName("valid_until")] public DateTimeOffset? ValidUntil { get; set; }
 }
 
 /// <summary>
@@ -43,6 +64,7 @@ public class AdminUserDto
 ///   GET  /api/admin/users                             → Structured user overview
 ///   GET  /api/admin/audit-logs?limit=25&amp;offset=0  → Paginated audit logs
 ///   GET  /api/admin/subscriptions                     → All tenant subscriptions
+///   PATCH /api/admin/subscriptions/{lawFirmId}        → Set status + valid_until
 ///   POST /api/admin/seed-demo-data                    → Seed 10 clients / 10 cases / 100 events
 /// </summary>
 [ApiController]
@@ -51,6 +73,7 @@ public class AdminUserDto
 public class AdminController : ControllerBase
 {
     private readonly DataSeederService _seeder;
+    private readonly ISubscriptionGate _gate;
     private readonly HttpClient _httpClient;
     private readonly string? _supabaseUrl;
     private readonly string? _serviceKey;
@@ -65,11 +88,13 @@ public class AdminController : ControllerBase
 
     public AdminController(
         DataSeederService seeder,
+        ISubscriptionGate gate,
         IHttpClientFactory httpClientFactory,
         IConfiguration config,
         ILogger<AdminController> logger)
     {
         _seeder = seeder;
+        _gate = gate;
         _httpClient = httpClientFactory.CreateClient("AdminPostgREST");
         _logger = logger;
 
@@ -173,7 +198,7 @@ public class AdminController : ControllerBase
             // so it now comes in as an embedded resource rather than a column.
             var profilesUrl = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/user_profiles" +
                 "?select=user_id,full_name,phone_number,role,created_at,user_mfa(totp_enabled)," +
-                "law_firms(id,name,oib,tenant_subscriptions(plan_id,status,valid_until,price_eur,max_cases,max_invoices,ai_credits_limit),firm_usage(module_name,used_credits,max_credits),tenant_usage_stats(ai_credits_used,period_start))";
+                "law_firms(id,name,oib,tenant_subscriptions(status,valid_from,valid_until,price_eur,max_cases,max_invoices,ai_credits_limit),firm_usage(module_name,used_credits,max_credits),tenant_usage_stats(ai_credits_used,period_start))";
             var profilesReq = CreateRequest(HttpMethod.Get, profilesUrl);
             var profilesRes = await _httpClient.SendAsync(profilesReq);
             var profilesBody = await profilesRes.Content.ReadAsStringAsync();
@@ -208,6 +233,7 @@ public class AdminController : ControllerBase
                     // Law firm + subscriptions + usage
                     if (p.TryGetProperty("law_firms", out var firm) && firm.ValueKind == JsonValueKind.Object)
                     {
+                        dto.LawFirmId = firm.TryGetProperty("id", out var fid) ? fid.GetString() : null;
                         dto.FirmName = firm.TryGetProperty("name", out var n) ? n.GetString() : null;
                         dto.FirmOib = firm.TryGetProperty("oib", out var o) ? o.GetString() : null;
 
@@ -217,10 +243,10 @@ public class AdminController : ControllerBase
                             foreach (var s in subs.EnumerateArray())
                             {
                                 var status = s.TryGetProperty("status", out var st) ? st.GetString() : "";
-                                if (status == "active" || status == "trial" || dto.Plan == null)
+                                if (status == "active" || status == "trial" || dto.SubStatus == null)
                                 {
-                                    dto.Plan = s.TryGetProperty("plan_id", out var pn) ? pn.GetString() : null;
                                     dto.SubStatus = status;
+                                    dto.ValidFrom = s.TryGetProperty("valid_from", out var vf) ? vf.GetString() : null;
                                     dto.ValidUntil = s.TryGetProperty("valid_until", out var vu) ? vu.GetString() : null;
                                     if (status == "active" || status == "trial") break;
                                 }
@@ -365,6 +391,111 @@ public class AdminController : ControllerBase
             _logger.LogError(ex, "Error fetching subscriptions");
             return StatusCode(500, new { error = "Interna greška." });
         }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  PATCH /api/admin/subscriptions/{lawFirmId}
+    //
+    //  How an office gets paid access. There is no payment provider: the user
+    //  writes an e-mail, and this is where that becomes a subscription.
+    // ═══════════════════════════════════════════════════════════
+
+    private static readonly string[] AllowedStatuses = ["trial", "active", "canceled", "expired"];
+
+    [HttpPatch("subscriptions/{lawFirmId}")]
+    public async Task<IActionResult> UpdateSubscription(string lawFirmId, [FromBody] AdminSubscriptionUpdate update)
+    {
+        if (!_isConfigured)
+            return StatusCode(503, new { error = "Supabase nije konfiguriran." });
+
+        if (!Guid.TryParse(lawFirmId, out _))
+            return BadRequest(new { error = "Neispravan identifikator ureda." });
+
+        // Checked here rather than left to the database, whose CHECK constraint
+        // answers an unknown status with a 400 that says nothing about which
+        // value it disliked.
+        if (!AllowedStatuses.Contains(update.Status, StringComparer.Ordinal))
+            return BadRequest(new
+            {
+                error = $"Nepoznato stanje '{update.Status}'. Dopusteno: {string.Join(", ", AllowedStatuses)}."
+            });
+
+        if ((update.Status == "active" || update.Status == "canceled") && update.ValidUntil == null)
+            return BadRequest(new { error = "Za aktivnu i otkazanu pretplatu datum isteka je obavezan." });
+
+        try
+        {
+            var payload = BuildSubscriptionPayload(update);
+
+            var url = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/tenant_subscriptions" +
+                      $"?law_firm_id=eq.{Uri.EscapeDataString(lawFirmId)}";
+            var request = CreateRequest(HttpMethod.Patch, url, payload);
+            var response = await _httpClient.SendAsync(request);
+            var body = await response.Content.ReadAsStringAsync();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogError("Admin subscription PATCH failed ({Status}): {Body}", response.StatusCode, body);
+                return StatusCode((int)response.StatusCode, new { error = "Greska pri spremanju pretplate." });
+            }
+
+            // PostgREST answers 200 with an empty array when the filter matched
+            // nothing. Without this the screen would report success for an
+            // office that has no subscription row at all.
+            using (var doc = JsonDocument.Parse(body))
+            {
+                if (doc.RootElement.ValueKind == JsonValueKind.Array && doc.RootElement.GetArrayLength() == 0)
+                    return NotFound(new { error = "Ovaj ured nema zapis o pretplati." });
+            }
+
+            // Without this the change would sit behind the gate cache for up to
+            // a minute, which from the admin screen looks exactly like a button
+            // that does nothing.
+            _gate.InvalidateCache(lawFirmId);
+
+            _logger.LogInformation(
+                "Admin je uredu {LawFirmId} postavio stanje {Status} do {ValidUntil}.",
+                lawFirmId, update.Status, update.ValidUntil);
+
+            return Content(body, "application/json");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating subscription for firm {LawFirmId}", lawFirmId);
+            return StatusCode(500, new { error = "Interna greska." });
+        }
+    }
+
+    /// <summary>
+    /// Builds the PATCH body. A trial gets its clock restarted from now, because
+    /// the only reason to move an office back to "trial" is to give it a fresh
+    /// one; leaving the old valid_from would hand it a trial that is already over.
+    /// </summary>
+    private static string BuildSubscriptionPayload(AdminSubscriptionUpdate update)
+    {
+        var now = DateTimeOffset.UtcNow;
+
+        if (update.Status == "trial")
+        {
+            return JsonSerializer.Serialize(new
+            {
+                plan_id     = SubscriptionPlans.PlanId,
+                status      = "trial",
+                valid_from  = now,
+                // Informational only — SubscriptionGate derives a trial's expiry
+                // from valid_from + TrialDays and never reads this column.
+                valid_until = now.AddDays(SubscriptionPlans.TrialDays),
+                is_active   = true,
+            }, JsonOpts);
+        }
+
+        return JsonSerializer.Serialize(new
+        {
+            plan_id     = SubscriptionPlans.PlanId,
+            status      = update.Status,
+            valid_until = update.ValidUntil,
+            is_active   = update.Status != "expired",
+        }, JsonOpts);
     }
 
     // ═══════════════════════════════════════════════════════════

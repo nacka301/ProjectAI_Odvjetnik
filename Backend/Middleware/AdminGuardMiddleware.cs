@@ -27,7 +27,7 @@ namespace Backend.Middleware;
 public sealed class AdminGuardMiddleware
 {
     private readonly RequestDelegate _next;
-    private readonly string? _adminEmail;
+    private readonly AdminIdentity _admin;
     private readonly ILogger<AdminGuardMiddleware> _logger;
 
     private static readonly string[] AdminPrefixes =
@@ -36,17 +36,15 @@ public sealed class AdminGuardMiddleware
         "/api/admin/",
     ];
 
-    public AdminGuardMiddleware(RequestDelegate next, IConfiguration config, ILogger<AdminGuardMiddleware> logger)
+    public AdminGuardMiddleware(RequestDelegate next, AdminIdentity admin, ILogger<AdminGuardMiddleware> logger)
     {
         _next = next;
+        _admin = admin;
         _logger = logger;
-
-        _adminEmail = Environment.GetEnvironmentVariable("ADMIN_EMAIL")
-            ?? config["Admin:Email"];
 
         // Fail closed: with no admin to recognise, nobody is one — which now
         // also means every in-development module stays shut for everybody.
-        if (string.IsNullOrWhiteSpace(_adminEmail))
+        if (!admin.IsConfigured)
             logger.LogWarning(
                 "ADMIN_EMAIL not configured — admin endpoints and in-development modules will reject all requests");
     }
@@ -81,8 +79,7 @@ public sealed class AdminGuardMiddleware
         }
 
         // Check admin email
-        if (string.IsNullOrWhiteSpace(_adminEmail) ||
-            !string.Equals(email, _adminEmail, StringComparison.OrdinalIgnoreCase))
+        if (!_admin.IsAdmin(email))
         {
             if (lockedModuleId is not null)
             {

@@ -1,3 +1,5 @@
+using Backend.Services;
+
 namespace Backend.Models;
 
 // ═══════════════════════════════════════════════════════════
@@ -55,7 +57,7 @@ public class LawFirmUpdateRequest
 public class SubscriptionResponse
 {
     public string Id { get; set; } = "";
-    public string PlanId { get; set; } = "free";
+    public string PlanId { get; set; } = SubscriptionPlans.PlanId;
     public string Status { get; set; } = "";
     public string? ValidFrom { get; set; }
     public string? ValidUntil { get; set; }
@@ -65,8 +67,23 @@ public class SubscriptionResponse
     public int AiCreditsLimit { get; set; }
     public string? LawFirmId { get; set; }
 
-    // Back-compat alias so existing code reading PlanName still works
-    public string PlanName => SubscriptionPlans.LabelFor(PlanId);
+    // ── What the user is actually shown ──
+    //
+    // Filled by the controller from SubscriptionGate, never computed in the
+    // browser. The badge in the header and the middleware that refuses the API
+    // therefore read the same verdict; when they were computed separately, the
+    // interface could say "everything is fine" while the API answered 402.
+    //
+    // Status above is the raw database value and stays for the admin screen.
+
+    /// <summary>"proba" | "pretplata" | "isteklo".</summary>
+    public string State { get; set; } = SubscriptionState.Paid;
+
+    /// <summary>Whole days of trial left. 0 means the last day. Null when not on trial.</summary>
+    public int? DaysRemaining { get; set; }
+
+    /// <summary>When access ends. Null means open-ended.</summary>
+    public DateTimeOffset? AccessUntil { get; set; }
 }
 
 // ── Registration Extension ──

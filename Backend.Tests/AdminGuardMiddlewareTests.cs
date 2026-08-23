@@ -17,6 +17,7 @@ namespace Backend.Tests;
 /// Stranke go dark and nobody can work), or leaving something open that should
 /// be locked (the whole feature is theatre).
 /// </summary>
+[Collection(AdminEmailEnvCollection.Name)]
 public class AdminGuardMiddlewareTests
 {
     private const string AdminEmail = "admin@odvjetnik.hr";
@@ -71,7 +72,7 @@ public class AdminGuardMiddlewareTests
         var reached = false;
         var middleware = new AdminGuardMiddleware(
             _ => { reached = true; return Task.CompletedTask; },
-            new ConfigurationBuilder().Build(),
+            new AdminIdentity(new ConfigurationBuilder().Build()),
             NullLogger<AdminGuardMiddleware>.Instance);
 
         var context = new DefaultHttpContext();

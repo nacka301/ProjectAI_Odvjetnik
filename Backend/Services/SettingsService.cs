@@ -316,7 +316,15 @@ public sealed class SettingsService
                 return null;
 
             var safeId = Uri.EscapeDataString(profile.LawFirmId);
-            var url = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/tenant_subscriptions?law_firm_id=eq.{safeId}&status=in.(active,trial)&select=id,plan_id,status,valid_from,valid_until,price_eur,max_cases,max_invoices,ai_credits_limit,law_firm_id&order=created_at.desc&limit=1";
+
+            // No status filter, on purpose. It used to read
+            // "&status=in.(active,trial)", which meant an expired row matched
+            // nothing, this method returned null, and the controller answered
+            // with its own free/active fallback — so the one user whose access
+            // had just been closed was the one told everything was fine.
+            // Take the newest row whatever its status and let SubscriptionGate
+            // judge it.
+            var url = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/tenant_subscriptions?law_firm_id=eq.{safeId}&select=id,plan_id,status,valid_from,valid_until,price_eur,max_cases,max_invoices,ai_credits_limit,law_firm_id&order=created_at.desc&limit=1";
             var request = CreateRequest(HttpMethod.Get, url);
 
             var response = await _httpClient.SendAsync(request);
@@ -364,7 +372,7 @@ public sealed class SettingsService
                 FullName = req.FullName
             });
 
-            // 3. Create default Pro subscription (1 year)
+            // 3. Make sure the office has its trial row
             await CreateDefaultSubscriptionAsync(firm.Id);
 
             return firm;
@@ -443,19 +451,26 @@ public sealed class SettingsService
     {
         try
         {
-            // The DB trigger auto_provision_free_tier already creates a Free row
+            // The DB trigger auto_provision_trial already creates the trial row
             // on law_firms INSERT.  This method is kept as a safety net — if the
-            // trigger row is missing we upsert a Free-tier subscription.
+            // trigger row is missing we upsert the same thing.
+            //
+            // valid_until is written for the benefit of anyone reading the row
+            // straight out of Supabase; the backend derives a trial's expiry
+            // from valid_from + SubscriptionPlans.TrialDays and ignores it.
             var url = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/tenant_subscriptions";
+            var now = DateTimeOffset.UtcNow;
             var payload = JsonSerializer.Serialize(new
             {
                 law_firm_id = firmId,
-                plan_id     = "free",
-                status      = "active",
-                price_eur   = 0,
-                max_cases   = 5,
-                max_invoices    = 3,
-                ai_credits_limit = 5
+                plan_id     = SubscriptionPlans.PlanId,
+                status      = "trial",
+                valid_from  = now,
+                valid_until = now.AddDays(SubscriptionPlans.TrialDays),
+                price_eur   = SubscriptionPlans.MonthlyPriceEur,
+                max_cases   = SubscriptionPlans.Unlimited,
+                max_invoices    = SubscriptionPlans.Unlimited,
+                ai_credits_limit = 0
             }, JsonOpts);
 
             // service_role: tenant_subscriptions is SELECT-only for users, so a
@@ -473,7 +488,7 @@ public sealed class SettingsService
             }
             else
             {
-                _logger.LogInformation("Ensured Free-tier subscription for firm {FirmId}", firmId);
+                _logger.LogInformation("Ensured trial subscription for firm {FirmId}", firmId);
             }
         }
         catch (Exception ex)

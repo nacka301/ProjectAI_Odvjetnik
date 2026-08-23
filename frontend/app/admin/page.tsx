@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/useAuth";
 import { API_BASE } from "@/lib/api";
+import SubscriptionEditor from "@/components/admin/SubscriptionEditor";
 import {
   ShieldCheck,
   Users,
@@ -39,8 +40,9 @@ interface AdminUser {
   last_sign_in: string | null;
   firm_name: string | null;
   firm_oib: string | null;
-  plan: string | null;
+  law_firm_id: string | null;
   sub_status: string | null;
+  valid_from: string | null;
   valid_until: string | null;
   used_credits: number;
   max_credits: number;
@@ -104,60 +106,70 @@ function timeAgo(iso: string | null): string {
 //  Badge components
 // ═══════════════════════════════════════════════════════════
 
-function PlanBadge({ plan }: { plan: string | null }) {
-  if (!plan) return <span className="text-xs text-slate-400">—</span>;
-  const colors: Record<string, string> = {
-    free: "bg-slate-100 text-slate-600",
-    starter: "bg-blue-100 text-blue-700",
-    pro: "bg-violet-100 text-violet-700",
-    // legacy capitalised values (back-compat)
-    Free: "bg-slate-100 text-slate-600",
-    Starter: "bg-blue-100 text-blue-700",
-    Pro: "bg-violet-100 text-violet-700",
-    Premium: "bg-amber-100 text-amber-700",
-    Enterprise: "bg-emerald-100 text-emerald-700",
-  };
-  const labels: Record<string, string> = {
-    free: "Besplatno",
-    starter: "Starter",
-    pro: "Pro",
-  };
-  return (
-    <span
-      className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${colors[plan] || "bg-slate-100 text-slate-600"}`}
-    >
-      {labels[plan] || plan}
-    </span>
-  );
+/**
+ * One badge for the whole subscription, replacing the pair that used to sit
+ * here.
+ *
+ * The old PlanBadge named a tier (and still listed "Premium" and "Enterprise",
+ * which existed in no other file); SubStatusBadge named a status beside it, in
+ * a different Croatian gender. With one plan there is one thing to say: is this
+ * office on trial, paying, or shut out.
+ *
+ * The trial's end is derived here the same way the backend derives it —
+ * valid_from + TRIAL_DAYS — rather than from valid_until, which for a trial row
+ * is written for readability and is not what the gate consults.
+ */
+const TRIAL_DAYS = 7;
+
+type OfficeState = "proba" | "pretplata" | "isteklo" | "bez";
+
+function officeState(u: {
+  sub_status: string | null;
+  valid_from: string | null;
+  valid_until: string | null;
+}): OfficeState {
+  if (!u.sub_status) return "bez";
+
+  const now = Date.now();
+
+  if (u.sub_status === "trial") {
+    const start = u.valid_from ? new Date(u.valid_from).getTime() : now;
+    return start + TRIAL_DAYS * 86_400_000 > now ? "proba" : "isteklo";
+  }
+
+  if (u.sub_status === "active" || u.sub_status === "canceled") {
+    if (!u.valid_until) return "pretplata";
+    return new Date(u.valid_until).getTime() > now ? "pretplata" : "isteklo";
+  }
+
+  return "isteklo";
 }
 
-function SubStatusBadge({ status, validUntil }: { status: string | null; validUntil: string | null }) {
-  if (!status)
+function StateBadge({ state }: { state: OfficeState }) {
+  if (state === "bez")
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2.5 py-0.5 text-xs font-medium text-slate-500 ring-1 ring-inset ring-slate-200">
         Bez pretplate
       </span>
     );
 
-  const expired = validUntil ? new Date(validUntil) < new Date() : false;
-
-  if (status === "active" && !expired)
+  if (state === "pretplata")
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200">
-        <CheckCircle2 className="h-3 w-3" /> Aktivna
+        <CheckCircle2 className="h-3 w-3" /> Pretplata
       </span>
     );
 
-  if (status === "trial")
+  if (state === "proba")
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-200">
-        <Clock className="h-3 w-3" /> Trial
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-200">
+        <Clock className="h-3 w-3" /> Proba
       </span>
     );
 
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-200">
-      <XCircle className="h-3 w-3" /> {expired ? "Istekla" : status === "canceled" ? "Otkazana" : "Neaktivna"}
+      <XCircle className="h-3 w-3" /> Isteklo
     </span>
   );
 }
@@ -279,7 +291,6 @@ export default function AdminDashboard() {
           u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
           u.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
           (u.firm_name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (u.plan || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
           (u.sub_status || "").toLowerCase().includes(searchQuery.toLowerCase())
       )
     : users;
@@ -287,9 +298,9 @@ export default function AdminDashboard() {
   // Summary stats
   const totalUsers = users.length;
   const usersWithFirm = users.filter((u) => u.firm_name).length;
-  const activeSubs = users.filter(
-    (u) => u.sub_status === "active" && (!u.valid_until || new Date(u.valid_until) >= new Date())
-  ).length;
+  // Counted through officeState so the tile agrees with the badge beside it —
+  // it used to run its own date comparison and ignore trials entirely.
+  const activeSubs = users.filter((u) => officeState(u) === "pretplata").length;
   const profileComplete = users.filter((u) => u.full_name && u.firm_name).length;
 
   return (
@@ -427,10 +438,7 @@ export default function AdminDashboard() {
                     Ured
                   </th>
                   <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    Plan
-                  </th>
-                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    Status
+                    Pretplata
                   </th>
                   <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                     Krediti
@@ -446,7 +454,7 @@ export default function AdminDashboard() {
               <tbody className="divide-y divide-slate-100">
                 {loadingUsers ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center">
+                    <td colSpan={6} className="px-4 py-12 text-center">
                       <RefreshCw className="h-5 w-5 text-slate-400 animate-spin mx-auto mb-2" />
                       <p className="text-xs text-slate-500">
                         Učitavanje korisnika...
@@ -456,7 +464,7 @@ export default function AdminDashboard() {
                 ) : filtered.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={6}
                       className="px-4 py-12 text-center text-sm text-slate-400"
                     >
                       {searchQuery
@@ -516,13 +524,7 @@ export default function AdminDashboard() {
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        <PlanBadge plan={user.plan} />
-                      </td>
-                      <td className="px-4 py-3">
-                        <SubStatusBadge
-                          status={user.sub_status}
-                          validUntil={user.valid_until}
-                        />
+                        <StateBadge state={officeState(user)} />
                       </td>
                       <td className="px-4 py-3">
                         <CreditBar
@@ -584,11 +586,7 @@ export default function AdminDashboard() {
                             {user.full_name || user.email || "—"}
                           </p>
                           <div className="flex items-center gap-2 mt-0.5">
-                            <PlanBadge plan={user.plan} />
-                            <SubStatusBadge
-                              status={user.sub_status}
-                              validUntil={user.valid_until}
-                            />
+                            <StateBadge state={officeState(user)} />
                           </div>
                         </div>
                       </div>
@@ -633,6 +631,19 @@ export default function AdminDashboard() {
                             {formatDateOnly(user.valid_until)}
                           </p>
                         )}
+
+                        <div className="pt-3 mt-2 border-t border-slate-200">
+                          <p className="font-semibold text-slate-500 uppercase tracking-wider mb-2 text-[10px]">
+                            Uredi pretplatu
+                          </p>
+                          <SubscriptionEditor
+                            lawFirmId={user.law_firm_id}
+                            currentStatus={user.sub_status}
+                            currentValidUntil={user.valid_until}
+                            authHeaders={authHeaders}
+                            onSaved={loadUsers}
+                          />
+                        </div>
                       </div>
                     )}
                   </div>
@@ -689,6 +700,20 @@ export default function AdminDashboard() {
                         </p>
                       </div>
                     )}
+
+                    {/* This is where an e-mail saying "I paid" becomes access. */}
+                    <div className="col-span-2 md:col-span-4 pt-3 border-t border-slate-200">
+                      <p className="font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                        Uredi pretplatu
+                      </p>
+                      <SubscriptionEditor
+                        lawFirmId={user.law_firm_id}
+                        currentStatus={user.sub_status}
+                        currentValidUntil={user.valid_until}
+                        authHeaders={authHeaders}
+                        onSaved={loadUsers}
+                      />
+                    </div>
                   </div>
                 );
               })()}

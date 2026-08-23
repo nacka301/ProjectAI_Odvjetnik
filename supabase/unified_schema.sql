@@ -78,21 +78,22 @@ CREATE TABLE IF NOT EXISTS tenant_subscriptions (
     created_at          TIMESTAMPTZ     DEFAULT now()   NOT NULL,
     updated_at          TIMESTAMPTZ     DEFAULT now()   NOT NULL,
     law_firm_id         UUID            NOT NULL REFERENCES law_firms(id) ON DELETE CASCADE,
-    plan_id             TEXT            NOT NULL DEFAULT 'free',
+    plan_id             TEXT            NOT NULL DEFAULT 'pravotek',
     status              TEXT            NOT NULL DEFAULT 'active',
     valid_from          TIMESTAMPTZ     DEFAULT now()   NOT NULL,
     valid_until         TIMESTAMPTZ     NOT NULL DEFAULT (now() + interval '30 days'),
     is_active           BOOLEAN         NOT NULL DEFAULT TRUE,
-    price_eur           NUMERIC(10,2)   NOT NULL DEFAULT 0,
-    max_cases           INTEGER         NOT NULL DEFAULT 5,
-    max_invoices        INTEGER         NOT NULL DEFAULT 3,
-    ai_credits_limit    INTEGER         NOT NULL DEFAULT 5
+    price_eur           NUMERIC(10,2)   NOT NULL DEFAULT 19,
+    max_cases           INTEGER         NOT NULL DEFAULT -1,   -- -1 = neograniceno
+    max_invoices        INTEGER         NOT NULL DEFAULT -1,
+    ai_credits_limit    INTEGER         NOT NULL DEFAULT 0
 );
 
--- plan_id enum
+-- plan_id: jedna vrijednost, jer postoji jedan plan (migracija 024).
+-- Stupac je ostao radi kompatibilnosti; vise ne nosi informaciju.
 DO $$ BEGIN
     ALTER TABLE tenant_subscriptions ADD CONSTRAINT chk_tenant_sub_plan_id
-        CHECK (plan_id IN ('free', 'starter', 'pro'));
+        CHECK (plan_id = 'pravotek');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
@@ -1110,20 +1111,30 @@ CREATE TRIGGER trg_case_status_change
 -- │  3.6  AUTO-PROVISION FREE TIER on law_firms INSERT      │
 -- └─────────────────────────────────────────────────────────┘
 
-CREATE OR REPLACE FUNCTION auto_provision_free_tier()
-RETURNS TRIGGER AS $$
+-- Novi ured dobiva probu, ne besplatni plan (migracija 024).
+-- valid_until je informativan: backend istek probe racuna kao
+-- valid_from + SubscriptionPlans.TrialDays i ovaj stupac za probu ne cita.
+CREATE OR REPLACE FUNCTION auto_provision_trial()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
 BEGIN
-    INSERT INTO tenant_subscriptions (law_firm_id, plan_id, status, price_eur, max_cases, max_invoices, ai_credits_limit)
-    VALUES (NEW.id, 'free', 'active', 0, 5, 3, 5)
+    INSERT INTO public.tenant_subscriptions (
+        law_firm_id, plan_id, status, valid_from, valid_until,
+        is_active, price_eur, max_cases, max_invoices, ai_credits_limit)
+    VALUES (NEW.id, 'pravotek', 'trial', now(), now() + interval '7 days',
+            TRUE, 19, -1, -1, 0)
     ON CONFLICT DO NOTHING;
     RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+END $$;
 
 DROP TRIGGER IF EXISTS trg_auto_provision_free_tier ON law_firms;
-CREATE TRIGGER trg_auto_provision_free_tier
+DROP TRIGGER IF EXISTS trg_auto_provision_trial ON law_firms;
+CREATE TRIGGER trg_auto_provision_trial
     AFTER INSERT ON law_firms
-    FOR EACH ROW EXECUTE FUNCTION auto_provision_free_tier();
+    FOR EACH ROW EXECUTE FUNCTION auto_provision_trial();
 
 
 -- ┌─────────────────────────────────────────────────────────┐

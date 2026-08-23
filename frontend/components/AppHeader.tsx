@@ -2,18 +2,21 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Scale, Clock, ShieldCheck, Shield, LogOut, Crown } from "lucide-react";
+import { Scale, Clock, ShieldCheck, Shield, LogOut } from "lucide-react";
 import { signOutCompletely } from "@/lib/sign-out";
 import { useSubscription } from "@/lib/useSubscription";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import { isPathLocked } from "@/lib/modules";
 import React from "react";
 
-// ── Plan badge styling ──
-const PLAN_BADGE_STYLES: Record<string, { bg: string; text: string; border: string; icon?: boolean }> = {
-  pro:     { bg: "bg-amber-500/10", text: "text-amber-400", border: "border-amber-500/30", icon: true },
-  starter: { bg: "bg-blue-500/10",  text: "text-blue-400",  border: "border-blue-500/30" },
-  free:    { bg: "bg-slate-500/10", text: "text-slate-400", border: "border-slate-600" },
+// ── Subscription badge styling ──
+// Three states, not three plans. Amber while the trial runs down, green once
+// it is paid for, red when access has closed — the colour carries the urgency
+// so the wording does not have to shout.
+const STATE_BADGE_STYLES: Record<string, { bg: string; text: string; border: string }> = {
+  proba:     { bg: "bg-amber-500/10",   text: "text-amber-400",   border: "border-amber-500/30" },
+  pretplata: { bg: "bg-emerald-500/10", text: "text-emerald-400", border: "border-emerald-500/30" },
+  isteklo:   { bg: "bg-red-500/10",     text: "text-red-400",     border: "border-red-500/30" },
 };
 
 interface NavItem {
@@ -109,29 +112,26 @@ function AppHeaderInner({ extraStart }: AppHeaderProps) {
 
           <div className="h-4 w-px bg-slate-700 hidden sm:block" />
 
-          {/* Plan badge */}
+          {/* Subscription badge */}
           {!subscription.loading && (
             <Link
               href="/postavke"
               className={`hidden sm:inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold uppercase tracking-wider transition hover:opacity-90 ${
-                PLAN_BADGE_STYLES[subscription.planId]?.bg ?? PLAN_BADGE_STYLES.free.bg
+                STATE_BADGE_STYLES[subscription.state]?.bg ?? STATE_BADGE_STYLES.pretplata.bg
               } ${
-                PLAN_BADGE_STYLES[subscription.planId]?.text ?? PLAN_BADGE_STYLES.free.text
+                STATE_BADGE_STYLES[subscription.state]?.text ?? STATE_BADGE_STYLES.pretplata.text
               } ${
-                PLAN_BADGE_STYLES[subscription.planId]?.border ?? PLAN_BADGE_STYLES.free.border
+                STATE_BADGE_STYLES[subscription.state]?.border ?? STATE_BADGE_STYLES.pretplata.border
               }`}
-              title={`Plan: ${subscription.planLabel}`}
+              title="Pretplata — otvori postavke"
             >
-              {PLAN_BADGE_STYLES[subscription.planId]?.icon && (
-                <Crown className="h-3 w-3" />
-              )}
-              {subscription.planLabel}
+              {subscription.badgeLabel}
             </Link>
           )}
           {subscription.loading && (
             <span className="hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1 text-xs text-slate-500">
               <span className="h-1.5 w-1.5 rounded-full bg-slate-500 animate-pulse" />
-              Plan…
+              Pretplata…
             </span>
           )}
 

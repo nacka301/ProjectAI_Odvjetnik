@@ -93,58 +93,55 @@ export default function UvjetiPage() {
           </p>
 
           {/* §4 */}
-          <h2>4. Pretplatni modeli i plaćanje</h2>
-          <p>4.1. PravoTek nudi sljedeće pretplatne razine:</p>
+          <h2>4. Pretplata i plaćanje</h2>
+          <p>
+            4.1. <strong>Probno razdoblje.</strong> Otvaranjem korisničkog računa Korisnik dobiva
+            besplatno probno razdoblje u trajanju od <strong>7 (sedam) dana</strong>, računajući
+            od dana otvaranja računa. Tijekom probnog razdoblja Korisniku su dostupni svi
+            moduli koji su u tom trenutku pušteni u rad.
+          </p>
+          <p>
+            4.2. <strong>Cijena.</strong> Po isteku probnog razdoblja korištenje aplikacije
+            naplaćuje se prema sljedećim cijenama:
+          </p>
           <div className="overflow-x-auto">
             <table>
               <thead>
                 <tr>
-                  <th></th>
-                  <th>Free</th>
-                  <th>Starter</th>
-                  <th>Pro</th>
+                  <th>Razdoblje</th>
+                  <th>Cijena</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <td className="font-medium">Cijena</td>
-                  <td>0,00 €/mj</td>
-                  <td>19,00 €/mj</td>
-                  <td>39,00 €/mj</td>
+                  <td className="font-medium">Mjesečno</td>
+                  <td>19,00 €</td>
                 </tr>
                 <tr>
-                  <td className="font-medium">Predmeti</td>
-                  <td>do 5</td>
-                  <td>Neograničeno</td>
-                  <td>Neograničeno</td>
-                </tr>
-                <tr>
-                  <td className="font-medium">Računi</td>
-                  <td>do 3</td>
-                  <td>Neograničeno</td>
-                  <td>Neograničeno</td>
-                </tr>
-                <tr>
-                  <td className="font-medium">AI krediti</td>
-                  <td>5/mj</td>
-                  <td>0</td>
-                  <td>100/mj</td>
+                  <td className="font-medium">Godišnje</td>
+                  <td>190,00 €</td>
                 </tr>
               </tbody>
             </table>
           </div>
           <p>
-            4.2. Pružatelj usluge zadržava pravo izmjene cijena uz prethodnu pisanu obavijest
+            4.3. <strong>Način plaćanja.</strong> Plaćanje se dogovara e-poštom na adresu{" "}
+            <a href="mailto:vackadavid@gmail.com">vackadavid@gmail.com</a>, nakon čega Pružatelj
+            usluge pretplatu aktivira ručno. Aplikacija <strong>ne pohranjuje</strong> podatke o
+            karticama niti druge podatke o plaćanju i pretplata se <strong>ne obnavlja
+            automatski</strong> — svako produljenje Korisnik ugovara zasebno.
+          </p>
+          <p>
+            4.4. <strong>Istek pretplate.</strong> Istekom probnog razdoblja ili plaćene pretplate
+            Korisniku se zatvara pristup modulima aplikacije. Podaci Korisnika (stranke, predmeti,
+            troškovnici i ostali sadržaj) <strong>ostaju sačuvani</strong> i ponovno su dostupni
+            čim pretplata bude aktivirana. Brisanje podataka provodi se isključivo na zahtjev
+            Korisnika, sukladno članku 8. ovih Uvjeta.
+          </p>
+          <p>
+            4.5. Pružatelj usluge zadržava pravo izmjene cijena uz prethodnu pisanu obavijest
             Korisniku najmanje <strong>30 (trideset) dana</strong> prije primjene nove cjenovne politike.
             Za Korisnike s aktivnom pretplatom, nova cijena primjenjuje se od početka sljedećeg obračunskog razdoblja.
-          </p>
-          <p>
-            4.3. Pretplata se automatski obnavlja na početku svakog obračunskog razdoblja (mjesečno),
-            osim ako je Korisnik prethodno otkazao pretplatu.
-          </p>
-          <p>
-            4.4. AI krediti se mjesečno resetiraju na početku svakog obračunskog razdoblja.
-            Neiskorišteni krediti se <strong>ne prenose</strong> u sljedeće razdoblje.
           </p>
 
           {/* §5 */}

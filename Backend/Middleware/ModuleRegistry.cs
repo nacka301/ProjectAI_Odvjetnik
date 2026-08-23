@@ -38,6 +38,17 @@ public static class ModuleRegistry
         new("fiskalizacija", ["/api/invoice"], ModuleStatus.URazvoju),
     ];
 
+    /// <summary>
+    /// API prefixes belonging to finished modules — the ones a subscription pays
+    /// for. Derived from the same list, so a module that later flips to Spreman
+    /// lands behind the paywall by that edit alone; nobody has to remember to
+    /// add it in a second place.
+    /// </summary>
+    public static readonly string[] PaidApiPrefixes =
+        All.Where(m => m.Status == ModuleStatus.Spreman)
+           .SelectMany(m => m.ApiPrefixes)
+           .ToArray();
+
     /// <summary>API prefixes belonging to modules that are not finished yet.</summary>
     public static readonly string[] LockedApiPrefixes =
         All.Where(m => m.Status == ModuleStatus.URazvoju)
@@ -55,6 +66,10 @@ public static class ModuleRegistry
     public static bool MatchesPrefix(string path, string prefix) =>
         string.Equals(path, prefix, StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith($"{prefix}/", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>True when this path belongs to a module the subscription pays for.</summary>
+    public static bool IsPaidPath(string path) =>
+        PaidApiPrefixes.Any(p => MatchesPrefix(path, p));
 
     /// <summary>The id of the in-development module owning this path, or null.</summary>
     public static string? FindLockedModuleId(string path) =>
