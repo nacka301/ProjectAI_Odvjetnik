@@ -191,8 +191,8 @@ export default function WelcomePage() {
                   style={{ "--tw-ring-color": "var(--auth-gold)" } as React.CSSProperties}
                 />
                 <p className="text-[11px] text-slate-500 leading-relaxed">
-                  Ispisuje se u zaglavlju svakog troškovnika. Možete ga i kasnije
-                  promijeniti u Postavkama.
+                  Ispisuje se u zaglavlju svakog troškovnika. Njega, OIB, adresu i
+                  IBAN možete kasnije dopuniti u Postavkama → Odvjetnički ured.
                 </p>
               </div>
             )}

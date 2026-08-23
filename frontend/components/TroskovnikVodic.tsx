@@ -47,17 +47,19 @@ export const TROSKOVNIK_KORACI: VodicKorak[] = [
     target: "vodic-stranke",
     title: "3/4 · Stranke i PDV",
     text:
-      "Otvorite ovaj odjeljak ako troškovnik ide na ispis — podaci suda, stranke i " +
-      "protustranke idu u zaglavlje. Prekidač „U sustavu PDV-a\" desno određuje " +
-      "obračunava li se PDV na nagradu.",
+      "Odjeljak je neobavezan i služi samo zaglavlju ispisa. Vaši podaci — naziv " +
+      "ureda, OIB, adresa, IBAN — povlače se iz Postavki → Odvjetnički ured; ondje " +
+      "ih upišete jednom, a ovdje ih mijenjate samo za ovaj troškovnik. Sud i " +
+      "stranke dodajte ako troškovnik ide sudu. Prekidač „U sustavu PDV-a\" desno " +
+      "određuje obračunava li se PDV na nagradu.",
   },
   {
     target: "vodic-rezultat",
     title: "4/4 · Rezultat",
     text:
       "Iznos se osvježava dok unosite. Kad ste gotovi, troškovnik se sprema uz " +
-      "stranku i predmet, i izvozi u PDF. Ovime je vodič gotov — otvorite ga opet " +
-      "gumbom „Vodič\" u zaglavlju.",
+      "stranku i predmet; „Ispis\" daje dokument za sud, „Excel\" tablicu za daljnji " +
+      "rad. Ovime je vodič gotov — otvorite ga opet gumbom „Vodič\" u zaglavlju.",
   },
 ];
 
