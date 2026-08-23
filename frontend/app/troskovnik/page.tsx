@@ -34,7 +34,10 @@ import { useAuth } from "@/lib/useAuth";
 import TroskovnikVodic, { highlightClasses } from "@/components/TroskovnikVodic";
 import { clearDraft, loadDraft, saveDraft, type LoadedDraft } from "@/lib/troskovnik-draft";
 import { cachedOnboardedHint, loadOnboardingState } from "@/lib/onboarding";
-import { formatEur, formatNumber, formatThreshold } from "@/lib/format";
+import { formatThreshold } from "@/lib/format";
+import TroskovnikIspis from "@/components/troskovnik/TroskovnikIspis";
+import { buildIzvozModel } from "@/lib/troskovnik-izvoz-model";
+import { STUPCI, buildTroskovnikSheet, nazivDatoteke } from "@/lib/troskovnik-xlsx";
 import {
   BOD_VALUE,
   KATEGORIJA_KAZNENI,
@@ -1521,93 +1524,48 @@ function TroskovnikContent() {
     window.print();
   }, []);
 
-  // ── CSV export ──
-  const handleExportCsv = useCallback(() => {
-    const source = result?.stavke ?? liveCalc.lines.map((l, i) => ({ rbr: i + 1, ...l }));
-    if (source.length === 0) return;
+  // ── Model za izvoz i ispis ──
+  // Jedan izvor za obje putanje: `.xlsx` i ispis. Dok su bile odvojene, svaka je
+  // imala vlastita pravila o tome koji je odjeljak prisutan.
+  const izvozModel = useMemo(
+    () =>
+      buildIzvozModel({
+        result,
+        liveCalc,
+        pristojbeneStavke: pristojbe.stavke,
+        dodatnePristojbe: trosakZaSlanje(dodatnePristojbe),
+        predujmovi: trosakZaSlanje(predujmovi),
+        isPdvUkljucen,
+        napomena,
+        polja: {
+          odvjetnikIme, odvjetnikOib, odvjetnikAdresa, odvjetnikGrad, odvjetnikIban,
+          klijentIme, zastupanaPolozaj,
+          protustrankaIme, protustrankaPolozaj,
+          predmetSud, predmetPoslovniBroj,
+        },
+      }),
+    // `pristojbe` je ovdje jer izvoz bez spremljenog rezultata ispisuje retke iz
+    // živog pregleda; bez te ovisnosti nosio bi pristojbe od prošle promjene.
+    [
+      result, liveCalc, pristojbe, dodatnePristojbe, predujmovi, trosakZaSlanje,
+      isPdvUkljucen, napomena,
+      odvjetnikIme, odvjetnikOib, odvjetnikAdresa, odvjetnikGrad, odvjetnikIban,
+      klijentIme, zastupanaPolozaj, protustrankaIme, protustrankaPolozaj,
+      predmetSud, predmetPoslovniBroj,
+    ],
+  );
 
-    const header = "Rbr;Datum;Tarifni broj;Pravni izvor;Opis;Količina;Bodova/jed.;Ukupno bodova;Iznos EUR\n";
-    const rows = source
-      .map((l, i) => {
-        const rbr = "rbr" in l ? l.rbr : i + 1;
-        const izvor = (l.pravni_izvor ?? l.tarifni_broj).replace(/"/g, "'");
-        return `${rbr};${l.datum ?? ""};"${l.tarifni_broj}";"${izvor}";"${l.opis}";${l.kolicina};${fmtNum(l.bodova_po_jedinici)};${fmtNum(l.ukupno_bodova)};${formatNumber(l.iznos_eur)}`;
-      })
-      .join("\n");
-
-    // Conditionally include PDV rows in CSV based on toggle
-    const csvPdvActive = result ? (result.is_pdv_ukljucen ?? result.has_vat ?? isPdvUkljucen) : isPdvUkljucen;
-    const csvSveukupni = result?.sveukupni_trosak ?? liveCalc.sveukupniTrosak;
-
-
-    // Naknada troškova ulazi u osnovicu, pa se navodi uz nju — a ne uz pristojbe i
-    // predujmove, koji su prolazne stavke i imaju vlastite odjeljke niže.
-    const csvNaknada = result?.naknada_troskova_ukupno ?? liveCalc.naknadaTroskovaUkupno;
-    const naknadaRedak =
-      csvNaknada > 0 ? `\n;;;;;;;Naknada troškova (Tbr. 48.-51.);${formatNumber(csvNaknada)}` : "";
-
-    let totals: string;
-    if (csvPdvActive) {
-      const base = result ? result.ukupno_eur_bez_pdv : liveCalc.ukupnoEur + liveCalc.naknadaTroskovaUkupno;
-      const pdvAmt = result ? result.pdv : liveCalc.pdv;
-      const grand = result ? result.ukupno_eur_s_pdv : liveCalc.ukupnoSPdv;
-      const bodova = result ? result.ukupno_bodova : liveCalc.ukupnoBodova;
-      totals = `\n\n;;;;;;;Ukupno bodova;${bodova}${naknadaRedak}\n;;;;;;;Osnovica (bez PDV);${formatNumber(base)}\n;;;;;;;PDV (25%);${formatNumber(pdvAmt)}\n;;;;;;;Odvjetnički trošak s PDV-om;${formatNumber(grand)}`;
-    } else {
-      const base = result ? result.ukupno_eur_bez_pdv : liveCalc.ukupnoEur + liveCalc.naknadaTroskovaUkupno;
-      const bodova = result ? result.ukupno_bodova : liveCalc.ukupnoBodova;
-      totals = `\n\n;;;;;;;Ukupno bodova;${bodova}${naknadaRedak}\n;;;;;;;Odvjetnički trošak;${formatNumber(base)}`;
-    }
-
-    // ── II. Sudske pristojbe (automatska + ručno dodane) ──
-    const csvSudskaPristojba = result?.sudska_pristojba ?? liveCalc.sudskaPristojba;
-    const csvDodatnePristojbe = result?.dodatne_pristojbe ?? trosakZaSlanje(dodatnePristojbe);
-    const csvUkupnoPristojbe = result?.ukupno_pristojbe ?? liveCalc.ukupnoPristojbe;
-    // Uredba naplaćuje po radnji, pa svaka automatski izvedena pristojba ide u svoj
-    // redak — zbroj bez razrade ne bi se dao provjeriti, a troškovnik ide sudu.
-    const csvPristojbeneStavke = result?.pristojbene_stavke ?? pristojbe.stavke;
-    let pristojbeCsv = `\n\nII. Sudske pristojbe\nDatum;Opis;Iznos EUR`;
-
-    if (csvPristojbeneStavke.length === 0) {
-      pristojbeCsv += `\n;Sudska pristojba;${formatNumber(csvSudskaPristojba)}`;
-    } else {
-      for (const s of csvPristojbeneStavke) {
-        const kolicina = s.kolicina > 1 ? ` × ${s.kolicina}` : "";
-        const stara = s.uredba === "NN 37/2023" ? " (NN 37/2023, čl. 2)" : "";
-        pristojbeCsv += `\n;"Sudska pristojba — ${s.tarifni_broj}${kolicina}${stara}";${formatNumber(s.iznos)}`;
-      }
-    }
-
-    for (const t of csvDodatnePristojbe) {
-      pristojbeCsv += `\n${t.datum ?? ""};"${t.opis.replace(/"/g, "'")}";${formatNumber(t.iznos)}`;
-    }
-    pristojbeCsv += `\n;Ukupno pristojbe;${formatNumber(csvUkupnoPristojbe)}`;
-
-    // ── III. Predujmovi ──
-    const csvPredujmovi = result?.predujmovi ?? trosakZaSlanje(predujmovi);
-    const csvUkupnoPredujmovi = result?.ukupno_predujmovi ?? liveCalc.ukupnoPredujmovi;
-    let predujmoviCsv = `\n\nIII. Predujmovi\nDatum;Opis;Iznos EUR`;
-    for (const t of csvPredujmovi) {
-      predujmoviCsv += `\n${t.datum ?? ""};"${t.opis.replace(/"/g, "'")}";${formatNumber(t.iznos)}`;
-    }
-    predujmoviCsv += `\n;Ukupno predujmovi;${formatNumber(csvUkupnoPredujmovi)}`;
-
-    const sveukupnoCsv = `\n\nSVEUKUPNI TROŠAK;${formatNumber(csvSveukupni)}`;
-
-    const bom = "\uFEFF";
-    const blob = new Blob(
-      [bom + header + rows + totals + pristojbeCsv + predujmoviCsv + sveukupnoCsv],
-      { type: "text/csv;charset=utf-8" },
-    );
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `troskovnik-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    // `pristojbe` je ovdje jer izvoz bez spremljenog rezultata ispisuje retke iz živog
-    // pregleda; bez te ovisnosti CSV bi nosio pristojbe od prošle promjene.
-  }, [result, liveCalc, pristojbe, isPdvUkljucen]);
+  // ── Izvoz u Excel ──
+  const handleExportXlsx = useCallback(async () => {
+    if (izvozModel.radnje.length === 0) return;
+    // Dinamički, da biblioteka ne uđe u početni bundle stranice.
+    const { default: writeXlsxFile } = await import("write-excel-file/browser");
+    // Preglednička inačica vraća { toBlob, toFile } — datoteka se preuzima tek ovdje.
+    await writeXlsxFile(buildTroskovnikSheet(izvozModel), {
+      sheet: "Troškovnik",
+      columns: STUPCI,
+    }).toFile(nazivDatoteke(new Date()));
+  }, [izvozModel]);
 
   // ═══════════════════════════════════════════════════════════════
   //  RENDER
@@ -1656,11 +1614,11 @@ function TroskovnikContent() {
             {liveCalc.lines.length > 0 && (
               <>
                 <button
-                  onClick={handleExportCsv}
+                  onClick={handleExportXlsx}
                   className="hidden sm:flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 transition px-2.5 py-1.5 rounded-lg hover:bg-slate-100"
                 >
                   <Download className="h-3.5 w-3.5" />
-                  CSV
+                  Excel
                 </button>
                 <button
                   onClick={handlePrint}
@@ -1675,7 +1633,7 @@ function TroskovnikContent() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 print:hidden">
         {/* ── Nedovršeni troškovnik iz prekinutog rada ── */}
         {ponudjeniNacrt && (
           <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4 print:hidden">
@@ -3374,11 +3332,11 @@ function TroskovnikContent() {
                     )}
                     <div className="flex gap-2">
                       <button
-                        onClick={handleExportCsv}
+                        onClick={handleExportXlsx}
                         className="flex-1 flex items-center justify-center gap-1.5 text-xs text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 py-2 rounded-lg transition"
                       >
                         <Download className="h-3.5 w-3.5" />
-                        CSV
+                        Excel
                       </button>
                       <button
                         onClick={handlePrint}
@@ -3468,9 +3426,9 @@ function TroskovnikContent() {
                   <div>
                     <div className="font-semibold text-xs uppercase text-slate-600 mb-1">SUD I POSLOVNI BROJ</div>
                     <div className="text-sm">
-                      { (result as any).sud || (result as any).broj_predmeta ? (
+                      { result.sud || result.broj_predmeta ? (
                         <>
-                          <div>{(result as any).sud ?? ""}{(result as any).broj_predmeta ? ` · ${ (result as any).broj_predmeta}` : ""}</div>
+                          <div>{result.sud ?? ""}{result.broj_predmeta ? ` · ${result.broj_predmeta}` : ""}</div>
                         </>
                       ) : (
                         <div className="text-slate-500">—</div>
@@ -3839,12 +3797,88 @@ function TroskovnikContent() {
         )}
       </main>
 
-      {/* ── Print Styles ── */}
+      {/* ── Dokument za sud ──
+          Susjed <main>-a, koji je pod ispisom skriven u cijelosti. Vidljiv je
+          samo pod @media print, pa window.print() ostaje neizmijenjen. */}
+      {result && <TroskovnikIspis model={izvozModel} />}
+
+      {/* ── Ispis ── */}
       <style jsx global>{`
+        #troskovnik-ispis { display: none; }
+
+        @page { size: A4 portrait; margin: 20mm 18mm; }
+
         @media print {
-          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          body { background: #fff; }
           .print\\:hidden { display: none !important; }
-          #troskovnik-result { border: none !important; box-shadow: none !important; margin: 0 !important; border-radius: 0 !important; }
+
+          #troskovnik-ispis {
+            display: block;
+            font: 11pt/1.35 Arial, Helvetica, sans-serif;
+            color: #000;
+          }
+
+          /* Zaglavlje odvjetnika — gore lijevo, bez okvira i logotipa. */
+          #troskovnik-ispis .zaglavlje { margin-bottom: 10mm; }
+          #troskovnik-ispis .zaglavlje .ime { text-transform: uppercase; }
+
+          #troskovnik-ispis h1 {
+            font-size: 16pt;
+            font-weight: normal;
+            letter-spacing: 0.5pt;
+            margin: 0 0 8mm 22mm;
+          }
+
+          /* Predmet — oznake desno, vrijednosti lijevo, oko sredine stranice. */
+          #troskovnik-ispis .predmet { margin: 0 0 6mm 0; }
+          #troskovnik-ispis .predmet-redak { display: flex; gap: 6mm; margin-bottom: 1mm; }
+          #troskovnik-ispis .predmet-oznaka { flex: 0 0 42%; text-align: right; }
+          #troskovnik-ispis .predmet-vrijednost { flex: 1; }
+
+          #troskovnik-ispis table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 10pt;
+          }
+          #troskovnik-ispis th,
+          #troskovnik-ispis td {
+            border: 1px solid #000;
+            padding: 3pt 4pt;
+            vertical-align: top;
+          }
+          #troskovnik-ispis th { font-weight: normal; text-align: center; }
+
+          /* Zaglavlje se ponavlja na svakoj stranici, redak se ne prelama. */
+          #troskovnik-ispis thead { display: table-header-group; }
+          #troskovnik-ispis tr { break-inside: avoid; page-break-inside: avoid; }
+
+          #troskovnik-ispis .st-radnja { width: 42%; }
+          #troskovnik-ispis .st-tarifa { width: 13%; }
+          #troskovnik-ispis .st-datum { width: 14%; }
+          #troskovnik-ispis .st-iznos { width: 15%; }
+          #troskovnik-ispis .st-napomena { width: 16%; }
+
+          #troskovnik-ispis .datum { text-align: center; }
+          #troskovnik-ispis .oznaka { text-align: right; }
+          #troskovnik-ispis .tarifa { text-align: center; }
+          #troskovnik-ispis .iznos { text-align: right; white-space: nowrap; }
+          #troskovnik-ispis .bold { font-weight: bold; }
+          #troskovnik-ispis .razmak td { height: 5mm; }
+
+          #troskovnik-ispis .potpis {
+            margin-top: 10mm;
+            text-align: center;
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+          #troskovnik-ispis .potpis .ime { font-weight: bold; text-transform: uppercase; }
+
+          #troskovnik-ispis .napomena {
+            margin-top: 12mm;
+            white-space: pre-line;
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
         }
       `}</style>
     </div>
