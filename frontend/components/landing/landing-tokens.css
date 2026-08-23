@@ -1,0 +1,154 @@
+/*
+ * Modernist design tokens for the public landing page only.
+ *
+ * Scoped under .ptk-landing (not :root) and prefixed --ptk- so nothing here
+ * can collide with the app-wide --auth-* palette or Tailwind's @theme block
+ * in app/globals.css. Values are copied verbatim from the design handoff's
+ * styles.css — see frontend/Frontend aplikacije popravka/design_handoff_pravotek_landing/.
+ *
+ * Layout (grid columns, padding, type sizes) is done with Tailwind arbitrary
+ * values in each component; this file only holds tokens, the handful of
+ * primitives the handoff's own system defines (.btn/.input/.table/.tag —
+ * translated here as .ptk-btn etc. so seven sections don't each reinvent
+ * them), and the two responsive breakpoints that restructure the section
+ * grid (a Tailwind utility swap can't drop a grid column).
+ */
+
+.ptk-landing {
+  --ptk-bg: #f3f2f2;
+  --ptk-surface: #eae9e9;
+  --ptk-text: #201e1d;
+  --ptk-accent: #ec3013;
+  --ptk-accent-400: #ff9783;
+  --ptk-accent-500: #ff563c;
+  --ptk-accent-600: #dd2b0f;
+  --ptk-accent-700: #ae1800;
+  --ptk-divider: color-mix(in srgb, #201e1d 40%, transparent);
+  --ptk-white: #ffffff;
+
+  background: var(--ptk-bg);
+  color: var(--ptk-text);
+  font-family: var(--font-archivo), system-ui, sans-serif;
+}
+
+.ptk-landing h1,
+.ptk-landing h2,
+.ptk-landing h3,
+.ptk-landing h4 {
+  font-family: var(--font-archivo), system-ui, sans-serif;
+  font-weight: 800;
+}
+
+/* — buttons — */
+.ptk-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  text-decoration: none;
+  font-family: var(--font-archivo), system-ui, sans-serif;
+  font-weight: 800;
+  border: 1px solid transparent;
+  border-radius: 0;
+  color: var(--ptk-text);
+  background: transparent;
+}
+.ptk-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.ptk-btn-primary { background: var(--ptk-accent); color: var(--ptk-bg); }
+.ptk-btn-primary:hover:not(:disabled) { background: var(--ptk-accent-600); }
+.ptk-btn-primary:active:not(:disabled) { background: var(--ptk-accent-700); }
+.ptk-btn-secondary { border-color: var(--ptk-divider); }
+.ptk-btn-secondary:hover:not(:disabled) { background: color-mix(in srgb, var(--ptk-text) 7%, transparent); }
+.ptk-btn-secondary:active:not(:disabled) { background: color-mix(in srgb, var(--ptk-text) 14%, transparent); }
+.ptk-btn-block { width: 100%; justify-content: flex-start; text-align: left; }
+
+/* — form — */
+.ptk-input {
+  width: 100%;
+  font: inherit;
+  color: var(--ptk-text);
+  caret-color: var(--ptk-accent);
+  background: var(--ptk-surface);
+  border: 1px solid var(--ptk-divider);
+  border-radius: 0;
+}
+.ptk-input:hover { border-color: color-mix(in srgb, var(--ptk-text) 45%, transparent); }
+.ptk-input:focus-visible { border-color: var(--ptk-accent); outline: 2px solid var(--ptk-accent); outline-offset: 0; }
+
+/* — table — */
+.ptk-table { width: 100%; border-collapse: collapse; }
+.ptk-table th {
+  text-align: left;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--ptk-text) 60%, transparent);
+  padding: 8px;
+  border-bottom: 2px solid var(--ptk-divider);
+}
+.ptk-table td { padding: 8px; border-bottom: 1px solid var(--ptk-divider); }
+.ptk-table tbody tr:hover { background: color-mix(in srgb, var(--ptk-text) 4%, transparent); }
+
+/* — tags — */
+.ptk-tag { display: inline-flex; align-items: center; font-size: 11px; letter-spacing: 0.02em; padding: 3px 10px; border-radius: 0; }
+.ptk-tag-accent { background: #fff2ef; color: #7c1405; }
+.ptk-tag-neutral { background: #f8f4f4; color: #444141; }
+
+/* — FAQ: native <details>, custom marker — */
+.ptk-landing details > summary { list-style: none; cursor: pointer; }
+.ptk-landing details > summary::-webkit-details-marker { display: none; }
+.ptk-landing details[open] .ptk-plus { transform: rotate(45deg); }
+
+/* — keyboard focus, everywhere in the landing — */
+.ptk-landing :focus { outline: none; }
+.ptk-landing :focus-visible { outline: 2px solid var(--ptk-accent); outline-offset: 2px; }
+
+/* — demo troškovnik: blinking caret — */
+@keyframes ptk-blink {
+  0%, 45% { opacity: 1; }
+  55%, 100% { opacity: 0; }
+}
+.ptk-caret { animation: ptk-blink 1s steps(1) infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .ptk-caret { animation: none; opacity: 1; }
+}
+
+/* — source strip: infinite marquee — */
+@keyframes ptk-slide {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.ptk-marquee-track { animation: ptk-slide 40s linear infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ptk-marquee-track { animation: none; }
+}
+
+/* — section grid: 88px number column collapses below ~1100px —
+   minmax(0, 1fr), not bare 1fr: a grid track's implicit min-width is "auto"
+   (= its content's max-content size), so a wide child — the troškovnik demo
+   table, the comparison table — would otherwise force the whole column, and
+   the page, wider than the viewport regardless of overflow-x-auto on that
+   child. minmax(0, …) removes that implicit floor so the track can actually
+   shrink to the viewport and let the child's own scroll container do its job. */
+.ptk-section-grid {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+}
+.ptk-section-left {
+  border-right: 2px solid var(--ptk-divider);
+}
+@media (max-width: 1100px) {
+  .ptk-section-grid { grid-template-columns: minmax(0, 1fr); }
+  .ptk-section-left {
+    border-right: 0;
+    border-bottom: 1px solid var(--ptk-divider);
+    padding: 12px 24px 0 !important;
+    text-align: left !important;
+    writing-mode: horizontal-tb !important;
+  }
+}
+@media (max-width: 720px) {
+  .ptk-section-right { padding: 24px 20px !important; }
+}
