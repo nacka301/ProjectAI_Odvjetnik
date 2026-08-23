@@ -654,19 +654,43 @@ function TroskovnikContent() {
     })();
   }, [userId]);
 
-  // ── Zadana vrijednost PDV prekidača iz postavki ureda ──
-  // Samo predlaže vrijednost pri prvom učitavanju; ako je korisnik već ručno
-  // dirao checkbox (npr. jer je stigao fetch nakon što je već odgovorio),
-  // dohvat ovdje ništa ne mijenja. Neuspjeh fetcha tiho zadržava default false —
-  // ovo je samo prijedlog, ne kritična funkcionalnost.
+  /** Odgovor `/api/settings/firm` — samo polja koja ova stranica troši. */
+  type FirmSettings = {
+    name?: string | null;
+    oib?: string | null;
+    address?: string | null;
+    iban?: string | null;
+    pdv_obveznik?: boolean;
+  };
+
+  // ── Podaci ureda iz postavki ──
+  //
+  // Odvjetnik svoje ime, OIB, adresu i IBAN upisuje jednom, u Postavke →
+  // Odvjetnički ured. Odatle idu u zaglavlje svakog ispisa, pa ih ne mora
+  // pretipkavati u svaki troškovnik.
+  //
+  // Popunjava se samo ono što je prazno: unos u obrascu uvijek pobjeđuje, jer
+  // se troškovnik zna podnositi i pod drukčijim podacima od onih u postavkama
+  // (zamjena, zajednički ured). Iz istog razloga vraćeni nacrt, koji stiže
+  // kasnije i na izričit zahtjev korisnika, mirno pregazi ovo.
+  //
+  // Grad se ne popunjava — `law_firms` nema taj stupac, adresa je jedno
+  // slobodno polje („Ilica 1, 10000 Zagreb").
+  //
+  // PDV prekidač je isto samo prijedlog: ako je korisnik već dirao checkbox
+  // (npr. jer je fetch stigao nakon što je već odgovorio), dohvat ga ne mijenja.
+  // Neuspjeh fetcha tiho ostavlja sve kako jest — ovo nije kritična putanja.
   useEffect(() => {
     if (!userId) return;
     fetch(`${API_BASE}/api/settings/firm`, { headers: authHeaders })
       .then((r) => (r.ok ? r.json() : null))
-      .then((data: { pdv_obveznik?: boolean } | null) => {
-        if (data && !pdvManuallySet.current) {
-          setIsPdvUkljucen(Boolean(data.pdv_obveznik));
-        }
+      .then((data: FirmSettings | null) => {
+        if (!data) return;
+        if (!pdvManuallySet.current) setIsPdvUkljucen(Boolean(data.pdv_obveznik));
+        setOdvjetnikIme((prev) => prev || data.name || "");
+        setOdvjetnikOib((prev) => prev || data.oib || "");
+        setOdvjetnikAdresa((prev) => prev || data.address || "");
+        setOdvjetnikIban((prev) => prev || data.iban || "");
       })
       .catch(() => {});
   }, [userId]);

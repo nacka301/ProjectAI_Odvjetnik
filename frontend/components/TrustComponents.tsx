@@ -96,7 +96,7 @@ export function TrustBadges() {
 
 export function SecurityFooter() {
   return (
-    <footer className="w-full border-t border-slate-200 bg-white mt-auto">
+    <footer className="w-full border-t border-slate-200 bg-white mt-auto print:hidden">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-4">
         {/* Trust Badges — centered */}
         <div className="flex flex-wrap items-center justify-center gap-5 sm:gap-8">
