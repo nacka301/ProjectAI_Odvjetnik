@@ -30,6 +30,7 @@ import {
 import { getRecentActivity, type ActivityItem, type ActivityType } from "@/lib/supabase";
 import { cachedOnboardedHint, loadOnboardingState, markOnboarded } from "@/lib/onboarding";
 import AppHeader from "@/components/AppHeader";
+import { SecurityFooter } from "@/components/TrustComponents";
 import { useSubscription } from "@/lib/useSubscription";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import { isModuleLocked, moduleTitle } from "@/lib/modules";
@@ -847,6 +848,10 @@ export default function Dashboard() {
           </div>
         </section>
       </main>
+      {/* ConditionalSecurityFooter (app/layout.tsx) skips "/" so the public
+          landing page's own Podnožje doesn't get a second footer stacked
+          under it — Dashboard renders here directly instead. */}
+      <SecurityFooter />
     </div>
   );
 }
