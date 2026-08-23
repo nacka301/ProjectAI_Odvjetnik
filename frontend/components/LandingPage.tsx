@@ -28,10 +28,13 @@ import Footer from "./landing/Footer";
  * frontend/Frontend aplikacije popravka/design_handoff_pravotek_landing/ —
  * tokens in components/landing/landing-tokens.css, sections in
  * components/landing/*.
+ *
+ * The 1440px cap the design is authored at lives on each section's inner
+ * .ptk-shell, not on this wrapper — see the note in landing-tokens.css.
  */
 export default function LandingPage() {
   return (
-    <div className="ptk-landing max-w-[1440px] mx-auto">
+    <div className="ptk-landing">
       <Nav />
       <AnnouncementBar />
       <Hero />

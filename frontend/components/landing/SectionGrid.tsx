@@ -5,6 +5,11 @@ import type { ReactNode } from "react";
  * different `left`/`padding`, by Hero and TroskovnikDemo too) — see README
  * "Layout (desktop, 1440px)". Kept in one place so seven section files don't
  * each re-type the grid, the divider and the responsive collapse.
+ *
+ * Two elements, deliberately: the outer one spans the full viewport and owns
+ * the background and the 2px rule between sections, so both run edge to edge
+ * on a monitor wider than 1440px; the inner one is the .ptk-shell that keeps
+ * the grid itself at the authored 1440px.
  */
 export default function SectionGrid({
   left,
@@ -21,12 +26,14 @@ export default function SectionGrid({
 }) {
   return (
     <div
-      className={`ptk-section-grid border-b-2 border-[var(--ptk-divider)] ${className}`}
+      className={`border-b-2 border-[var(--ptk-divider)] ${className}`}
       style={background === "surface" ? { background: "var(--ptk-surface)" } : undefined}
     >
-      <div className="ptk-section-left">{left}</div>
-      <div className="ptk-section-right" style={{ padding }}>
-        {children}
+      <div className="ptk-section-grid ptk-shell">
+        <div className="ptk-section-left">{left}</div>
+        <div className="ptk-section-right" style={{ padding }}>
+          {children}
+        </div>
       </div>
     </div>
   );

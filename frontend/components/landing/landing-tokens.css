@@ -125,6 +125,19 @@
   .ptk-marquee-track { animation: none; }
 }
 
+/* — the 1440px content shell —
+   The design is authored at 1440px, but capping the whole page there left
+   the full-bleed bands (announcement bar, closing poster, footer) and every
+   section rule stopping mid-screen on a wider monitor, with the body's own
+   background showing through on both sides. So each section spans the full
+   viewport and carries its own background and bottom rule, while its
+   contents sit on this shell — the grid stays exactly as authored, the
+   colour planes and rules run edge to edge. */
+.ptk-shell {
+  max-width: 1440px;
+  margin-inline: auto;
+}
+
 /* — section grid: 88px number column collapses below ~1100px —
    minmax(0, 1fr), not bare 1fr: a grid track's implicit min-width is "auto"
    (= its content's max-content size), so a wide child — the troškovnik demo
