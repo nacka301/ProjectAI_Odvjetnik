@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono, Playfair_Display } from "next/font/google";
+import { Archivo, Geist, Geist_Mono, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import SessionGuard from "@/components/SessionGuard";
 import { ConditionalSecurityFooter } from "@/components/ConditionalFooter";
@@ -19,6 +19,15 @@ const playfair = Playfair_Display({
   variable: "--font-playfair",
   subsets: ["latin"],
   weight: ["400", "600", "700"],
+});
+
+// Used only by the public landing page (components/landing/**). Exposed as a
+// CSS variable on <body> like the other fonts so nothing outside the landing
+// has to know it exists — no other component references --font-archivo.
+const archivo = Archivo({
+  variable: "--font-archivo",
+  subsets: ["latin"],
+  weight: ["400", "600", "800"],
 });
 
 export const viewport: Viewport = {
@@ -47,7 +56,7 @@ export default function RootLayout({
     <html lang="hr" suppressHydrationWarning>
       <body
         suppressHydrationWarning
-        className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} antialiased overflow-x-hidden min-h-screen flex flex-col`}
+        className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} ${archivo.variable} antialiased overflow-x-hidden min-h-screen flex flex-col`}
       >
         {/* One idle timer. There used to be two — AutoLogoutProvider at 15 min
             and SessionGuard at 25 — sharing a localStorage key. The shorter one
