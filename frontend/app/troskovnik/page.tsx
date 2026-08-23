@@ -3806,7 +3806,17 @@ function TroskovnikContent() {
       <style jsx global>{`
         #troskovnik-ispis { display: none; }
 
-        @page { size: A4 portrait; margin: 20mm 18mm; }
+        /* Margina je nula, a razmak do ruba papira daje padding dokumenta.
+           Razlog nije estetika: u marginu stranice preglednik crta vlastito
+           zaglavlje i podnožje — naslov kartice („PravoTek — …") i URL
+           (pravotek.hr/troskovnik) — pa bi ime aplikacije završilo na
+           dokumentu koji ide sudu. Bez margine nema gdje, i izostavlja ih.
+           Cijena: padding se ne ponavlja po stranicama, pa kod troškovnika
+           duljeg od jedne stranice druga i daljnje počinju uz sam gornji rub.
+           Bočni razmak ostaje na svima. Ako to zasmeta, alternativa je vratiti
+           margin na @page — ali onda se URL vraća s njom, i gasi se jedino
+           rukom, kvačicom „Zaglavlja i podnožja" u dijalogu za ispis. */
+        @page { size: A4 portrait; margin: 0; }
 
         @media print {
           body { background: #fff; }
@@ -3814,6 +3824,7 @@ function TroskovnikContent() {
 
           #troskovnik-ispis {
             display: block;
+            padding: 20mm 18mm;
             font: 11pt/1.35 Arial, Helvetica, sans-serif;
             color: #000;
           }
