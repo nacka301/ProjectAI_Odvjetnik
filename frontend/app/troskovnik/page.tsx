@@ -36,6 +36,7 @@ import { clearDraft, loadDraft, saveDraft, type LoadedDraft } from "@/lib/trosko
 import { cachedOnboardedHint, loadOnboardingState } from "@/lib/onboarding";
 import { formatThreshold } from "@/lib/format";
 import TroskovnikIspis from "@/components/troskovnik/TroskovnikIspis";
+import StrankaPicker from "@/components/troskovnik/StrankaPicker";
 import { buildIzvozModel } from "@/lib/troskovnik-izvoz-model";
 import { STUPCI, buildTroskovnikSheet, nazivDatoteke } from "@/lib/troskovnik-xlsx";
 import {
@@ -2526,6 +2527,20 @@ function TroskovnikContent() {
                         <User className="h-3.5 w-3.5 text-slate-400" />
                         <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Protustranka</span>
                       </div>
+                      {/* Protivnik iz jednog predmeta redovito je već spremljen kao
+                          stranka u drugom — odabir prepisuje četiri polja ispod. */}
+                      <StrankaPicker
+                        stranke={clients}
+                        loading={loadingClients}
+                        izostaviId={selectedClientId || undefined}
+                        placeholder="Odaberi iz spremljenih stranaka…"
+                        onSelect={(s) => {
+                          setProtustrankaIme(s.ime_naziv);
+                          setProtustrankaOib(s.oib ?? "");
+                          setProtustrankaAdresa(s.adresa ?? "");
+                          setProtustrankaGrad(s.grad ?? "");
+                        }}
+                      />
                       <input type="text" value={protustrankaIme} onChange={(e) => setProtustrankaIme(e.target.value)} placeholder="Ime / Naziv" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
                       <input type="text" value={protustrankaOib} onChange={(e) => setProtustrankaOib(e.target.value)} placeholder="OIB" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
                       <input type="text" value={protustrankaAdresa} onChange={(e) => setProtustrankaAdresa(e.target.value)} placeholder="Adresa" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
