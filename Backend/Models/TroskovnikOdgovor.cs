@@ -390,6 +390,17 @@ public sealed class TroskovnikLineItem
     [JsonPropertyName("tarifni_broj")]
     public string TarifniBroj { get; set; } = "";
 
+    /// <summary>
+    /// Kategorija stavke iz kataloga — „Parnični postupak", „Kazneni postupak", …
+    ///
+    /// Odgovor je nosio tarifni broj, ali ne i vrstu postupka, pa je spremljeni
+    /// troškovnik u povijesti bio prepoznatljiv tek nakon što se dohvati cijeli
+    /// katalog i preslika po <see cref="ItemId"/>. Vrsta postupka je ono po čemu
+    /// odvjetnik predmet prepoznaje, pa putuje uz redak.
+    /// </summary>
+    [JsonPropertyName("kategorija")]
+    public string Kategorija { get; set; } = "";
+
     /// <summary>Propis i tarifni broj iz kojeg ovaj redak proizlazi — vidi <see cref="TarifnaStavka.PravniIzvor"/>.</summary>
     [JsonPropertyName("pravni_izvor")]
     public string PravniIzvor { get; set; } = "";

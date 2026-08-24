@@ -63,6 +63,7 @@ function formatDatum(iso: string): string {
 }
 
 const ACTIVITY_ICONS: Record<ActivityType, React.ReactNode> = {
+  troskovnik: <Calculator className="h-4 w-4 text-indigo-500" />,
   valuation: <Building2 className="h-4 w-4 text-blue-500" />,
   contract: <ShieldAlert className="h-4 w-4 text-rose-500" />,
   chronology: <Building2 className="h-4 w-4 text-violet-500" />,
@@ -71,6 +72,7 @@ const ACTIVITY_ICONS: Record<ActivityType, React.ReactNode> = {
 };
 
 const ACTIVITY_LABELS: Record<ActivityType, string> = {
+  troskovnik: "Troškovnik",
   valuation: "Procjena",
   contract: "Ugovor",
   chronology: "Kronologija",
@@ -78,10 +80,16 @@ const ACTIVITY_LABELS: Record<ActivityType, string> = {
   invoice: "e-Račun",
 };
 
+/** Where a listed record opens. Only the troškovnik has a page of its own. */
+function activityHref(item: ActivityItem): string {
+  return item.type === "troskovnik" ? `/troskovnik/${item.id}` : "/history";
+}
+
 const BADGE_COLORS: Record<string, string> = {
   green: "text-green-700 bg-green-50",
   amber: "text-amber-700 bg-amber-50",
   red: "text-red-700 bg-red-50",
+  indigo: "text-indigo-700 bg-indigo-50",
 };
 
 // ── Tour Guide Steps ──
@@ -379,7 +387,7 @@ export default function Dashboard() {
   useEffect(() => {
     (async () => {
       try {
-        const data = await getRecentActivity(10);
+        const data = await getRecentActivity(10, isAdmin);
         setActivity(data);
       } catch {
         // Silently handle — dashboard still works without history
@@ -387,7 +395,7 @@ export default function Dashboard() {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [isAdmin]);
 
   const dismissBanner = () => {
     setBannerDismissed(true);
@@ -688,7 +696,7 @@ export default function Dashboard() {
                       className="grid grid-cols-[1fr_44px] sm:grid-cols-[1fr_auto_auto_44px] gap-2 items-center px-3 sm:px-4 py-3 hover:bg-slate-50 transition group"
                     >
                       {/* Left: type icon + title + subtitle */}
-                      <Link href="/history" className="flex items-center gap-3 min-w-0">
+                      <Link href={activityHref(item)} className="flex items-center gap-3 min-w-0">
                         <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
                           {ACTIVITY_ICONS[item.type]}
                         </div>
@@ -739,7 +747,7 @@ export default function Dashboard() {
                       </div>
 
                       {/* Arrow */}
-                      <Link href="/history" className="flex justify-center">
+                      <Link href={activityHref(item)} className="flex justify-center">
                         <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-slate-500 transition" />
                       </Link>
                     </div>
@@ -829,7 +837,10 @@ export default function Dashboard() {
                   Brzi pregled
                 </h3>
                 <div className="grid grid-cols-2 gap-3">
-                  {(["valuation", "contract"] as ActivityType[]).map((t) => {
+                  {/* Derived from what is on the list, not a fixed pair. The
+                      hardcoded ["valuation","contract"] counted two locked
+                      modules and never the one module that works. */}
+                  {[...new Set(activity.map((a) => a.type))].map((t) => {
                     const count = activity.filter((a) => a.type === t).length;
                     if (count === 0) return null;
                     return (

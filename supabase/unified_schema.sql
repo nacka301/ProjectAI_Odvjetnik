@@ -277,7 +277,7 @@ CREATE TABLE IF NOT EXISTS troskovnici (
     case_id                 UUID            REFERENCES cases(id) ON DELETE SET NULL,
     opis_predmeta           TEXT,
     vrijednost_spora        NUMERIC(14,2)   DEFAULT 0,
-    ukupno_bodova           INTEGER         DEFAULT 0,
+    ukupno_bodova           NUMERIC(14,3)   DEFAULT 0,  -- decimalno: Tarifa ne zaokružuje bodove (migracija 2026_07_29)
     ukupno_eur_bez_pdv      NUMERIC(12,2)   DEFAULT 0,
     pdv                     NUMERIC(12,2)   DEFAULT 0,
     ukupno_eur_s_pdv        NUMERIC(12,2)   DEFAULT 0,

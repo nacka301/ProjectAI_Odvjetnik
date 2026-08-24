@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Backend.Controllers;
 using Backend.Models;
 using Backend.Services;
@@ -19,6 +21,12 @@ namespace Backend.Tests;
 /// tek u cjevovodu ASP.NET-a (Program.cs postavlja SnakeCaseLower), pa se ovdje
 /// provjeravaju imena svojstava na razini CLR-a — preimenovanje bilo kojeg od njih
 /// srušit će ovaj test, što je i svrha.
+///
+/// CLR imena nisu dovoljna: sve dok je odgovor bio anonimni objekt, `savedId` je na
+/// žici bio `saved_id`, sučelje je čitalo `savedId` i nikad nije prikazalo potvrdu
+/// o spremanju — a nijedan test to nije uhvatio jer su svi gledali CLR imena.
+/// Zato {@link Spremi_Odgovor_ImaKljučeveKojeSučeljeOčekuje} serijalizira odgovor
+/// istim postavkama koje Program.cs postavlja i provjerava ključeve na žici.
 /// </summary>
 public class TroskovnikControllerKarakterizacijaTests
 {
@@ -293,8 +301,36 @@ public class TroskovnikControllerKarakterizacijaTests
 
         Assert.NotNull(klijenti.SpremljeniTroskovnik);
         Assert.Equal(KorisnikId, klijenti.SpremljeniTroskovnik!.UserId);
-        Assert.Equal("spremljeni-1", Svojstvo(odgovor.Value, "savedId"));
-        Assert.IsType<TroskovnikResponse>(Svojstvo(odgovor.Value, "troskovnik"));
+        Assert.Equal("spremljeni-1", Svojstvo(odgovor.Value, "SavedId"));
+        Assert.IsType<TroskovnikResponse>(Svojstvo(odgovor.Value, "Troskovnik"));
+    }
+
+    /// <summary>
+    /// Ključevi odgovora na žici, onakvi kakve sučelje čita u `app/troskovnik/page.tsx`.
+    ///
+    /// Postavke zrcale `Program.cs`; ako se ondje promijene, ovaj test to neće
+    /// primijetiti, ali će preimenovanje ili gubitak `[JsonPropertyName]` — što je
+    /// kvar koji se već dogodio — srušiti ovdje.
+    /// </summary>
+    [Fact]
+    public async Task Spremi_Odgovor_ImaKljuceveKojeSuceljeOcekuje()
+    {
+        var kontroler = StvoriKontroler(new FakeClientCaseService());
+
+        var odgovor = Assert.IsType<OkObjectResult>(await kontroler.Spremi(ValjanZahtjev()));
+
+        var opcije = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+            Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
+        };
+        using var dokument = JsonDocument.Parse(JsonSerializer.Serialize(odgovor.Value, opcije));
+        var korijen = dokument.RootElement;
+
+        Assert.Equal("spremljeni-1", korijen.GetProperty("saved_id").GetString());
+        Assert.True(korijen.TryGetProperty("troskovnik", out _));
+        Assert.True(korijen.TryGetProperty("client_id", out _));
+        Assert.True(korijen.TryGetProperty("created_client_id", out _));
     }
 
     // ── POST /api/troskovnik/spremi — razrješavanje klijenta ──────
@@ -314,8 +350,8 @@ public class TroskovnikControllerKarakterizacijaTests
         var odgovor = Assert.IsType<OkObjectResult>(await kontroler.Spremi(zahtjev));
 
         Assert.Null(klijenti.UpsertPozvanS);
-        Assert.Equal("postojeci-klijent", Svojstvo(odgovor.Value, "clientId"));
-        Assert.Null(Svojstvo(odgovor.Value, "createdClientId"));
+        Assert.Equal("postojeci-klijent", Svojstvo(odgovor.Value, "ClientId"));
+        Assert.Null(Svojstvo(odgovor.Value, "CreatedClientId"));
         Assert.Equal("postojeci-klijent", klijenti.SpremljeniTroskovnik!.ClientId);
     }
 
@@ -330,7 +366,7 @@ public class TroskovnikControllerKarakterizacijaTests
         var odgovor = Assert.IsType<OkObjectResult>(await kontroler.Spremi(zahtjev));
 
         Assert.Null(klijenti.UpsertPozvanS);
-        Assert.Null(Svojstvo(odgovor.Value, "clientId"));
+        Assert.Null(Svojstvo(odgovor.Value, "ClientId"));
     }
 
     [Fact]
@@ -354,8 +390,8 @@ public class TroskovnikControllerKarakterizacijaTests
         Assert.Equal(
             (KorisnikId, UredId, "Ivan Horvat", "12345678901", "Ilica 1", "Split"),
             klijenti.UpsertPozvanS);
-        Assert.Equal("klijent-1", Svojstvo(odgovor.Value, "clientId"));
-        Assert.Equal("klijent-1", Svojstvo(odgovor.Value, "createdClientId"));
+        Assert.Equal("klijent-1", Svojstvo(odgovor.Value, "ClientId"));
+        Assert.Equal("klijent-1", Svojstvo(odgovor.Value, "CreatedClientId"));
     }
 
     [Fact]
@@ -377,8 +413,8 @@ public class TroskovnikControllerKarakterizacijaTests
             klijenti.UpsertPozvanS);
 
         // Zatečeno ponašanje: klijent je pronađen, ne otvoren, pa createdClientId ostaje prazan.
-        Assert.Equal("klijent-7", Svojstvo(odgovor.Value, "clientId"));
-        Assert.Null(Svojstvo(odgovor.Value, "createdClientId"));
+        Assert.Equal("klijent-7", Svojstvo(odgovor.Value, "ClientId"));
+        Assert.Null(Svojstvo(odgovor.Value, "CreatedClientId"));
     }
 
     [Fact]
@@ -392,8 +428,8 @@ public class TroskovnikControllerKarakterizacijaTests
         var odgovor = Assert.IsType<OkObjectResult>(await kontroler.Spremi(zahtjev));
 
         Assert.Null(klijenti.UpsertPozvanS);
-        Assert.Null(Svojstvo(odgovor.Value, "clientId"));
-        Assert.Null(Svojstvo(odgovor.Value, "createdClientId"));
+        Assert.Null(Svojstvo(odgovor.Value, "ClientId"));
+        Assert.Null(Svojstvo(odgovor.Value, "CreatedClientId"));
     }
 
     // ── GET /api/troskovnik/popis ─────────────────────────────────

@@ -531,6 +531,7 @@ public sealed class TroskovnikService : ITroskovnikService
                 Datum = stavka.Datum,
                 Opis = definicija.Opis,
                 TarifniBroj = definicija.TarifniBroj,
+                Kategorija = definicija.Kategorija,
                 PravniIzvor = definicija.PravniIzvor,
                 Kolicina = stavka.Kolicina,
                 BodovaPoJedinici = bodovi,

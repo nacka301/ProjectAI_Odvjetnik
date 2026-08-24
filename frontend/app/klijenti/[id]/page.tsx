@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { API_BASE } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
+import { formatBodovi } from "@/lib/format";
 
 // ── Types ──
 
@@ -667,7 +668,7 @@ export default function ClientProfilePage() {
                           {formatEur(t.ukupno_eur_s_pdv)}
                         </div>
                         <div className="text-xs text-slate-500">
-                          {t.ukupno_bodova} bod. · neto{" "}
+                          {formatBodovi(t.ukupno_bodova)} bod. · neto{" "}
                           {formatEur(t.ukupno_eur_bez_pdv)}
                         </div>
                       </div>

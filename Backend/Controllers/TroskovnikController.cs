@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Backend.Models;
 using Backend.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -138,14 +139,35 @@ public class TroskovnikController : ControllerBase
 
         var spremljeno = await _spremiste.SaveTroskovnikAsync(zapis);
 
-        return Ok(new
-        {
-            troskovnik = rezultat,
-            savedId = spremljeno?.Id,
-            clientId = klijent.Id,
-            createdClientId = klijent.Kreirani
-        });
+        // Spremište vraća null kad je baza odbila upis — ono grešku samo zabilježi u
+        // log. Bez ove provjere odgovor je bio 200 sa praznim id-em, pa je sučelje
+        // odbijeni troškovnik puštalo bez ijedne riječi. Odvjetnik je odlazio
+        // uvjeren da mu je obračun spremljen, a u bazi ga nije bilo.
+        if (spremljeno is null)
+            return StatusCode(500, new
+            {
+                error = "Troškovnik nije spremljen — baza je odbila upis. " +
+                        "Izračun je ispravan, pa ga izvezite ili ispišite prije zatvaranja stranice."
+            });
+
+        return Ok(new SpremiOdgovor(rezultat, spremljeno.Id, klijent.Id, klijent.Kreirani));
     }
+
+    /// <summary>
+    /// Odgovor na spremanje troškovnika.
+    ///
+    /// Imenovani tip s izričitim <c>[JsonPropertyName]</c>, a ne anonimni objekt:
+    /// imena polja anonimnog objekta prolazila su kroz globalnu snake_case politiku
+    /// iz <c>Program.cs</c>, pa je `savedId` na žici bio `saved_id`. Sučelje je
+    /// čitalo `savedId`, dobivalo `undefined` i nikad nije prikazalo potvrdu —
+    /// troškovnik se uredno spremao, a korisnik to nije mogao znati.
+    /// </summary>
+    private sealed record SpremiOdgovor(
+        [property: JsonPropertyName("troskovnik")] TroskovnikResponse Troskovnik,
+        [property: JsonPropertyName("saved_id")] string SavedId,
+        [property: JsonPropertyName("client_id")] string? ClientId,
+        /// <summary>Popunjen samo kad je stranka upravo otvorena — sučelje to javlja posebno.</summary>
+        [property: JsonPropertyName("created_client_id")] string? CreatedClientId);
 
     /// <summary>
     /// Smije li se troškovnik vezati uz zadani predmet.

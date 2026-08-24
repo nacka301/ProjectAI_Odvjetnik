@@ -1495,17 +1495,36 @@ function TroskovnikContent() {
         throw new Error(err.error || `Greška ${res.status}`);
       }
 
-      const data = await res.json();
+      // API je snake_case (Program.cs postavlja SnakeCaseLower). Ovo je čitalo
+      // `savedId` i uvijek dobivalo `undefined`, pa potvrda "Troškovnik
+      // spremljen!" nije nikad izlazila, a otvorena stranka se nije upisivala u
+      // izbornik — iako je backend oboje uredno vraćao.
+      const data: {
+        troskovnik: TroskovnikResponse;
+        saved_id?: string;
+        client_id?: string;
+        created_client_id?: string;
+      } = await res.json();
       setResult(data.troskovnik);
-      setSavedId(data.savedId ?? null);
+
+      // Bez id-a nema spremljenog retka, ma što status rekao. Prikazati potvrdu
+      // ovdje značilo bi poslati odvjetnika kući s obračunom kojeg u bazi nema.
+      if (!data.saved_id) {
+        throw new Error(
+          "Troškovnik nije spremljen — baza nije potvrdila upis. " +
+          "Izračun je ispravan, pa ga izvezite ili ispišite prije zatvaranja stranice.",
+        );
+      }
+
+      setSavedId(data.saved_id);
 
       // It is in the database now. Keeping a copy in the tab would only make it
       // possible to be offered a stale version of something already filed.
       clearDraft(userId);
 
       // If backend auto-created a client, update local state
-      if (data.createdClientId) {
-        setSelectedClientId(data.createdClientId);
+      if (data.created_client_id) {
+        setSelectedClientId(data.created_client_id);
         setClientAutoFilled(true);
         // Refresh client list so new client appears in combobox
         fetch(`${API_BASE}/api/client`, { headers: authHeaders })

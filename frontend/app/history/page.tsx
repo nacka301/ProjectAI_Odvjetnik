@@ -2,14 +2,17 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { HistoryListSkeleton } from "@/components/Skeletons";
 import {
   Clock,
   Building2,
+  Calculator,
   Search,
   FileDown,
   Eye,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   AlertTriangle,
   Loader2,
@@ -32,15 +35,15 @@ import { useIsAdmin } from "@/lib/useIsAdmin";
 import { isModuleLocked } from "@/lib/modules";
 
 // ── Tab definitions ──
+//
+// The tabs used to be a fixed list naming "Procjene" and "Ugovori" — two locked
+// modules — while the one module that works had no tab at all. They are now
+// derived from the records actually on screen, so a filter never offers a
+// category the user has nothing in, and never hides one they do.
 type TabKey = "all" | ActivityType;
 
-const TABS: { key: TabKey; label: string }[] = [
-  { key: "all", label: "Sve" },
-  { key: "valuation", label: "Procjene" },
-  { key: "contract", label: "Ugovori" },
-];
-
 const ACTIVITY_ICONS: Record<ActivityType, React.ReactNode> = {
+  troskovnik: <Calculator className="h-5 w-5 text-indigo-500" />,
   valuation: <Building2 className="h-5 w-5 text-blue-500" />,
   contract: <ShieldAlert className="h-5 w-5 text-rose-500" />,
   chronology: <Building2 className="h-5 w-5 text-gray-400" />,
@@ -49,11 +52,22 @@ const ACTIVITY_ICONS: Record<ActivityType, React.ReactNode> = {
 };
 
 const ACTIVITY_LABELS: Record<ActivityType, string> = {
+  troskovnik: "Troškovnik",
   valuation: "Procjena",
   contract: "Ugovor",
   chronology: "Kronologija",
   legal: "Pravna analiza",
   invoice: "e-Račun",
+};
+
+/** Plural, for the filter tabs. */
+const ACTIVITY_TABS: Record<ActivityType, string> = {
+  troskovnik: "Troškovnici",
+  valuation: "Procjene",
+  contract: "Ugovori",
+  chronology: "Kronologije",
+  legal: "Pravne analize",
+  invoice: "e-Računi",
 };
 
 /* Note: chronology, legal, invoice labels kept for backward compat with existing DB rows */
@@ -62,6 +76,7 @@ const BADGE_COLORS: Record<string, string> = {
   green: "bg-green-100 text-green-800",
   amber: "bg-yellow-100 text-yellow-800",
   red: "bg-red-100 text-red-800",
+  indigo: "bg-indigo-100 text-indigo-800",
 };
 
 function formatPrice(n: number) {
@@ -89,6 +104,7 @@ export default function HistoryPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("all");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const isAdmin = useIsAdmin();
+  const router = useRouter();
 
   // Past records stay listed — they are the user's own work, read straight from
   // Supabase, and none of them opens a locked module. Only the "start a new one"
@@ -98,9 +114,12 @@ export default function HistoryPage() {
   useEffect(() => {
     (async () => {
       try {
+        // Valuations are fetched separately for the expanded detail panel, and
+        // only when that module is open to this viewer — otherwise the panel
+        // has no way to be reached and the query is dead weight.
         const [items, evals] = await Promise.all([
-          getRecentActivity(100),
-          getEvaluations(100),
+          getRecentActivity(100, isAdmin),
+          canStartValuation ? getEvaluations(100) : Promise.resolve([]),
         ]);
         setActivity(items);
         const map = new Map<string, EvaluationRow>();
@@ -112,7 +131,16 @@ export default function HistoryPage() {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [isAdmin, canStartValuation]);
+
+  // Only the kinds actually present earn a tab, and one kind needs no filter at
+  // all — "Sve" and "Troškovnici" side by side would be the same list twice.
+  const presentTypes = [...new Set(activity.map((a) => a.type))];
+  const tabs: { key: TabKey; label: string }[] =
+    presentTypes.length > 1
+      ? [{ key: "all" as TabKey, label: "Sve" },
+         ...presentTypes.map((t) => ({ key: t as TabKey, label: ACTIVITY_TABS[t] }))]
+      : [];
 
   const filtered = activity.filter((item) => {
     // Tab filter
@@ -185,13 +213,13 @@ export default function HistoryPage() {
             <Clock className="h-6 w-6 sm:h-8 sm:w-8 text-indigo-600" /> Povijest predmeta
           </h1>
           <p className="mt-2 text-gray-500">
-            Pregled svih spremljenih analiza i procjena
+            Pregled svih spremljenih predmeta
           </p>
         </div>
 
         {/* Tabs */}
         <div className="flex gap-2 mb-4 flex-wrap">
-          {TABS.map((tab) => (
+          {tabs.map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
@@ -214,7 +242,7 @@ export default function HistoryPage() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Pretraži po lokaciji, tipu ili vrijednosti..."
+              placeholder="Pretraži po stranci, sudu, poslovnom broju ili iznosu…"
               className="w-full rounded-xl border border-gray-300 pl-10 pr-4 py-2.5 text-sm text-gray-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             />
           </div>
@@ -238,9 +266,12 @@ export default function HistoryPage() {
             <p className="text-gray-500 font-medium">
               {searchQuery || activeTab !== "all" ? "Nema rezultata za odabrane filtere." : "Još nema spremljenih predmeta."}
             </p>
-            {!searchQuery && activeTab === "all" && canStartValuation && (
-              <Link href="/wizard" className="mt-4 inline-flex items-center gap-2 text-sm text-blue-600 hover:underline">
-                Pokreni prvu procjenu →
+            {/* The offer points at the module the user can actually open. It
+                used to send everyone to /wizard, which for a September user is
+                behind the middleware. */}
+            {!searchQuery && activeTab === "all" && (
+              <Link href="/troskovnik" className="mt-4 inline-flex items-center gap-2 text-sm text-blue-600 hover:underline">
+                Izradi prvi troškovnik →
               </Link>
             )}
           </div>
@@ -255,12 +286,21 @@ export default function HistoryPage() {
               const ev = isValuation ? evaluationMap.get(item.id) : null;
               const raw = ev ? (ev.raw_json_output as unknown as ValuationResult) : null;
 
+              // A troškovnik has a page of its own, so the row opens it instead
+              // of unfolding — there is nothing worth summarising in place when
+              // the whole document is one click away.
+              const isTroskovnik = item.type === "troskovnik";
+
               return (
                 <div key={item.id} className="rounded-xl bg-white border border-gray-200 overflow-hidden transition hover:border-gray-300 hover:shadow-sm">
                   {/* Summary Row */}
                   <div
                     className="flex items-center gap-4 p-4 cursor-pointer"
-                    onClick={() => setExpandedId(isExpanded ? null : item.id)}
+                    onClick={() =>
+                      isTroskovnik
+                        ? router.push(`/troskovnik/${item.id}`)
+                        : setExpandedId(isExpanded ? null : item.id)
+                    }
                   >
                     <div className="shrink-0">
                       {ACTIVITY_ICONS[item.type]}
@@ -308,7 +348,13 @@ export default function HistoryPage() {
                           <Trash2 className="h-4 w-4" />
                         )}
                       </button>
-                      {isExpanded ? <ChevronUp className="h-5 w-5 text-gray-400" /> : <ChevronDown className="h-5 w-5 text-gray-400" />}
+                      {isTroskovnik ? (
+                        <ChevronRight className="h-5 w-5 text-gray-400" />
+                      ) : isExpanded ? (
+                        <ChevronUp className="h-5 w-5 text-gray-400" />
+                      ) : (
+                        <ChevronDown className="h-5 w-5 text-gray-400" />
+                      )}
                     </div>
                   </div>
 
@@ -384,7 +430,7 @@ export default function HistoryPage() {
                   )}
 
                   {/* Expanded Detail — for non-valuation items (simple view) */}
-                  {isExpanded && !isValuation && (
+                  {isExpanded && !isValuation && !isTroskovnik && (
                     <div className="border-t border-gray-100 bg-gray-50 p-5">
                       <p className="text-sm text-gray-600">
                         {item.subtitle}

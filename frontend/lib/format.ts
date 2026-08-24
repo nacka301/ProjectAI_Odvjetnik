@@ -7,6 +7,18 @@ export function formatNumber(n: number, digits = 2): string {
 }
 
 /**
+ * Bodovi Tarife: `500`, ne `500,000`, ali `46,875` kad su takvi.
+ *
+ * Tarifa nigdje ne propisuje zaokruživanje bodova, pa ih i baza drži decimalno
+ * (`troskovnici.ukupno_bodova` je NUMERIC(14,3)). Ispisivanje fiksnih decimala
+ * bi cijele iznose pretvorilo u `500,000`, što se u hrvatskom čita kao pola
+ * milijuna. Zrcali `TroskovnikDocumentService.FormatBodovi` ("0.###").
+ */
+export function formatBodovi(n: number): string {
+  return n.toLocaleString('hr-HR', { maximumFractionDigits: 3 });
+}
+
+/**
  * Format a VPS threshold value with exactly 2 decimal places and hr-HR locale.
  * Examples: 0 → "0,00", 332 → "332,00", 332.01 → "332,01"
  */
