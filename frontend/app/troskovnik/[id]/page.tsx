@@ -45,7 +45,7 @@ function Redak({
       }`}
     >
       <span>{oznaka}</span>
-      <span className="tabular-nums">{formatEur(iznos)} €</span>
+      <span className="tabular-nums">{formatEur(iznos)}</span>
     </div>
   );
 }
@@ -193,7 +193,7 @@ export default function SpremljeniTroskovnikPage() {
                             {formatBodovi(r.ukupnoBodova)}
                           </td>
                           <td className="px-4 py-2.5 text-right tabular-nums text-slate-800">
-                            {formatEur(r.iznos)} €
+                            {formatEur(r.iznos)}
                           </td>
                         </tr>
                       ))}
