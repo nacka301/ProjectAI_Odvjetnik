@@ -22,9 +22,14 @@ import { markOnboarded } from "@/lib/onboarding";
  * without guessing which of the forty fields on this screen are the ones that
  * matter.
  *
- * Hence four steps, on the real form, with the real data in it. The user types
- * into the actual fields as they go; nothing here is a mock-up, and whatever
- * they enter during the walkthrough is the troškovnik they end up with.
+ * Hence steps on the real form, with the real data in it. The user types into
+ * the actual fields as they go; nothing here is a mock-up, and whatever they
+ * enter during the walkthrough is the troškovnik they end up with.
+ *
+ * The walkthrough spans BOTH modules a September user can open: four steps in
+ * the troškovnik, then three in Stranke. The step list is a prop rather than a
+ * constant inside this file, so the two legs share every bit of the positioning
+ * and highlighting logic and differ only in their text.
  *
  * The card is positioned relative to whichever field it is explaining — above
  * or below, whichever side has room — instead of a fixed spot on the screen,
@@ -41,10 +46,15 @@ export interface VodicKorak {
   text: string;
 }
 
+/**
+ * Brojevi u naslovima teku kroz oba modula (1/7 … 7/7), ne od početka u svakome.
+ * Korisnik tako zna koliko je ostalo, a ne dobiva dvaput „1/…". Ako se dvije
+ * dionice ikad razdvoje, brojeve treba vratiti na 1/4 odnosno 1/3.
+ */
 export const TROSKOVNIK_KORACI: VodicKorak[] = [
   {
     target: "vodic-vps",
-    title: "1/4 · Vrijednost predmeta spora",
+    title: "1/7 · Vrijednost predmeta spora",
     text:
       "Upišite vrijednost spora u eurima. Iz nje se izvodi osnovica u bodovima — " +
       "sve nagrade u nastavku računaju se iz tog broja. U kaznenom predmetu ovo " +
@@ -52,7 +62,7 @@ export const TROSKOVNIK_KORACI: VodicKorak[] = [
   },
   {
     target: "vodic-radnje",
-    title: "2/4 · Odaberite radnje",
+    title: "2/7 · Odaberite radnje",
     text:
       "Pretražite tarifu i dodajte radnje koje ste obavili — tužba, ročište, žalba. " +
       "Ista se stavka smije dodati više puta, svaka sa svojim datumom. Bodovi se " +
@@ -60,7 +70,7 @@ export const TROSKOVNIK_KORACI: VodicKorak[] = [
   },
   {
     target: "vodic-stranke",
-    title: "3/4 · Stranke i PDV",
+    title: "3/7 · Stranke i PDV",
     text:
       "Odjeljak je neobavezan i služi samo zaglavlju ispisa. Vaši podaci — naziv " +
       "ureda, OIB, adresa, IBAN — povlače se iz Postavki → Odvjetnički ured; ondje " +
@@ -70,11 +80,45 @@ export const TROSKOVNIK_KORACI: VodicKorak[] = [
   },
   {
     target: "vodic-rezultat",
-    title: "4/4 · Rezultat",
+    title: "4/7 · Rezultat",
     text:
       "Iznos se osvježava dok unosite. Kad ste gotovi, troškovnik se sprema uz " +
       "stranku i predmet; „Ispis\" daje dokument za sud, „Excel\" tablicu za daljnji " +
-      "rad. Ovime je vodič gotov — otvorite ga opet gumbom „Vodič\" u zaglavlju.",
+      "rad. Slijede Stranke — ondje taj isti troškovnik nađete u dosjeu.",
+  },
+];
+
+/**
+ * Druga dionica — modul Stranke.
+ *
+ * Tri koraka, istim redom kojim se posao odvija: otvori stranku, pronađi je,
+ * uđi u njezin dosje. Zadnji korak zatvara krug s troškovnikom: troškovnik se
+ * sprema uz stranku, pa je dosje mjesto na kojem se sve o njoj vidi zajedno.
+ */
+export const STRANKE_KORACI: VodicKorak[] = [
+  {
+    target: "vodic-nova-stranka",
+    title: "5/7 · Nova stranka",
+    text:
+      "Ovim gumbom otvarate obrazac za novu stranku. Obavezno je samo ime " +
+      "odnosno naziv; OIB, adresa i kontakt idu u zaglavlje troškovnika i na " +
+      "dopise, pa ih je vrijedno upisati odmah. Stranku ne morate otvarati " +
+      "ručno — ako je upišete u troškovnik, otvorit će se sama pri spremanju.",
+  },
+  {
+    target: "vodic-pretraga",
+    title: "6/7 · Pretraga",
+    text:
+      "Pretražuje po imenu, OIB-u i adresi. Kad se popis stranaka nakupi, ovo " +
+      "je brži put do predmeta nego listanje.",
+  },
+  {
+    target: "vodic-dosje",
+    title: "7/7 · Dosje stranke",
+    text:
+      "Klik na stranku otvara njezin dosje — predmeti i svi troškovnici " +
+      "spremljeni uz nju, sa zbrojem. Ovime je vodič gotov; otvorite ga opet " +
+      "gumbom „Vodič\" u zaglavlju bilo kojeg od dva modula.",
   },
 ];
 
@@ -91,14 +135,30 @@ export function highlightClasses(active: boolean): string {
 
 interface Props {
   /**
-   * Controlled by the page: `?vodic=1` from the welcome screen, the header
-   * "Vodič" button, or the answer to "has this user ever been through it".
+   * Controlled by the page: `?vodic=1` from the welcome screen or from the
+   * previous leg, the header "Vodič" button, or the answer to "has this user
+   * ever been through it".
    */
   open: boolean;
+  /** The steps of this leg — {@link TROSKOVNIK_KORACI} or {@link STRANKE_KORACI}. */
+  koraci: VodicKorak[];
   /** Called when the user finishes or skips. */
   onClose: () => void;
   /** Called on every step change so the page can ring the right element. */
   onStepChange: (targetId: string | null) => void;
+  /**
+   * Where the walkthrough goes after the last step of THIS leg.
+   *
+   * When given, the last step's button hands over instead of ending: it does
+   * NOT mark the user as onboarded, because the introduction is not over — the
+   * next leg will do that when it finishes. Skipping still ends it everywhere,
+   * from any step of any leg.
+   *
+   * Omit on the final leg; the button then reads "Završi" and closes for good.
+   */
+  onNastavak?: () => void;
+  /** Label of the last step's button when {@link onNastavak} is given. */
+  nastavakOznaka?: string;
 }
 
 // ── Positioning ──
@@ -214,7 +274,14 @@ export function computeVodicPosition(
   return finish({ top: vh - MARGIN - h, left: centredLeft, width: wFull });
 }
 
-export default function TroskovnikVodic({ open, onClose, onStepChange }: Props) {
+export default function Vodic({
+  open,
+  koraci,
+  onClose,
+  onStepChange,
+  onNastavak,
+  nastavakOznaka = "Dalje",
+}: Props) {
   const [step, setStep] = useState(0);
   // Portals need a DOM to attach to — `false` during SSR, flipped after mount,
   // same guard as MethodologyModal.
@@ -230,7 +297,8 @@ export default function TroskovnikVodic({ open, onClose, onStepChange }: Props) 
     setMounted(true);
   }, []);
 
-  const korak = TROSKOVNIK_KORACI[step];
+  const korak = koraci[step];
+  const zadnji = step === koraci.length - 1;
 
   const recomputePosition = useCallback(() => {
     if (!open) return;
@@ -370,7 +438,7 @@ export default function TroskovnikVodic({ open, onClose, onStepChange }: Props) 
     return () => timers.forEach(clearTimeout);
   }, [open, step, korak, onStepChange, recomputePosition, alignTarget, targetIsAligned]);
 
-  /** Finishing and skipping are the same instruction: do not ask me again. */
+  /** Finishing the LAST leg and skipping are the same instruction: do not ask me again. */
   const close = useCallback(() => {
     setStep(0);
     onStepChange(null);
@@ -378,10 +446,29 @@ export default function TroskovnikVodic({ open, onClose, onStepChange }: Props) 
     onClose();
   }, [onStepChange, onClose]);
 
+  /**
+   * Hands over to the next leg without marking anything: the walkthrough
+   * continues on another page, and stamping "onboarded" here would end it
+   * for anyone who then reloads.
+   *
+   * Deliberately does NOT call `onClose`. The next leg lives on another
+   * route, so `onNastavak` navigates and this page unmounts on its own —
+   * and a page whose close handler also rewrites the address (both do, to
+   * drop `?vodic=1`) would otherwise fire a second navigation racing the
+   * first. Leaving the card up until the new page paints also spares the
+   * user a flash of the bare form on the way out.
+   */
+  const nastavi = useCallback(() => {
+    setStep(0);
+    onStepChange(null);
+    onNastavak?.();
+  }, [onStepChange, onNastavak]);
+
   const next = useCallback(() => {
-    if (step < TROSKOVNIK_KORACI.length - 1) setStep((s) => s + 1);
+    if (step < koraci.length - 1) setStep((s) => s + 1);
+    else if (onNastavak) nastavi();
     else close();
-  }, [step, close]);
+  }, [step, koraci.length, onNastavak, nastavi, close]);
 
   if (!open || !mounted) return null;
 
@@ -453,7 +540,7 @@ export default function TroskovnikVodic({ open, onClose, onStepChange }: Props) 
           </button>
           <div className="flex items-center gap-3">
             <div className="flex gap-1">
-              {TROSKOVNIK_KORACI.map((k, i) => (
+              {koraci.map((k, i) => (
                 <div
                   key={k.target}
                   className={`w-1.5 h-1.5 rounded-full transition ${
@@ -466,7 +553,7 @@ export default function TroskovnikVodic({ open, onClose, onStepChange }: Props) 
               onClick={next}
               className="inline-flex items-center gap-1 bg-indigo-600 text-white text-xs font-medium px-4 py-2 rounded-lg hover:bg-indigo-700 transition"
             >
-              {step < TROSKOVNIK_KORACI.length - 1 ? "Dalje" : "Završi"}
+              {!zadnji ? "Dalje" : onNastavak ? nastavakOznaka : "Završi"}
               <ArrowRight className="h-3 w-3" />
             </button>
           </div>

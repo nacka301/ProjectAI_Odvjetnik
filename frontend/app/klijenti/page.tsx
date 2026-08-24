@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ClientListSkeleton } from "@/components/Skeletons";
 import {
   ArrowLeft,
   Building2,
   ChevronRight,
+  Compass,
   Loader2,
   Mail,
   MapPin,
@@ -20,6 +22,7 @@ import {
 } from "lucide-react";
 import { API_BASE } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
+import Vodic, { STRANKE_KORACI, highlightClasses } from "@/components/Vodic";
 
 // ── Types ──
 
@@ -55,7 +58,19 @@ function timeAgo(iso: string) {
 
 // ── Component ──
 
+/**
+ * `useSearchParams` mora stajati unutar Suspensea u App Routeru, isto kao na
+ * /troskovnik — bez toga prerender cijele rute pukne.
+ */
 export default function KlijentiPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-slate-50"><Loader2 className="h-8 w-8 animate-spin text-[#1B2A4A]" /></div>}>
+      <KlijentiSadrzaj />
+    </Suspense>
+  );
+}
+
+function KlijentiSadrzaj() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -65,6 +80,27 @@ export default function KlijentiPage() {
   const [error, setError] = useState("");
   const [fetchError, setFetchError] = useState("");
   const { userId, authHeaders } = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // ── Vodič, druga dionica ──
+  // Otvara se samo iz `?vodic=1` — tako ovamo dolazi iz troškovnika i tako ga
+  // vraća gumb u zaglavlju. Nema provjere „je li korisnik nov": prva dionica
+  // je ta koja odlučuje ide li se dalje, pa bi druga provjera samo mogla
+  // otvoriti vodič nekome tko je na Stranke došao svojim poslom.
+  const [vodicOpen, setVodicOpen] = useState(searchParams.get("vodic") === "1");
+  const [vodicTarget, setVodicTarget] = useState<string | null>(null);
+  const vodicHighlight = useCallback(
+    (id: string) => highlightClasses(vodicTarget === id),
+    [vodicTarget],
+  );
+
+  // `?vodic=1` se briše iz adrese pri zatvaranju: bez toga bi osvježavanje
+  // stranice vratilo vodič koji je korisnik upravo zatvorio.
+  const zatvoriVodic = useCallback(() => {
+    setVodicOpen(false);
+    if (searchParams.get("vodic") === "1") router.replace("/klijenti");
+  }, [router, searchParams]);
 
   // Form state
   const [form, setForm] = useState({
@@ -182,6 +218,13 @@ export default function KlijentiPage() {
   return (
     <div className="min-h-screen bg-gray-50 text-slate-900">
       {/* Header */}
+      <Vodic
+        open={vodicOpen}
+        koraci={STRANKE_KORACI}
+        onClose={zatvoriVodic}
+        onStepChange={setVodicTarget}
+      />
+
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3 sm:px-6">
           <Link
@@ -198,7 +241,7 @@ export default function KlijentiPage() {
             <h1 className="font-[family-name:var(--font-playfair)] text-lg font-semibold text-[#1B2A4A]">Stranke</h1>
           </div>
           <div className="ml-auto flex items-center gap-3">
-            <div className="relative">
+            <div id="vodic-pretraga" className={`relative ${vodicHighlight("vodic-pretraga")}`}>
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
@@ -209,8 +252,17 @@ export default function KlijentiPage() {
               />
             </div>
             <button
+              onClick={() => setVodicOpen(true)}
+              className="flex items-center gap-1.5 rounded-lg px-2 py-2 text-sm text-slate-500 transition hover:text-slate-900"
+              title="Vodič kroz Stranke"
+            >
+              <Compass className="h-4 w-4" />
+              <span className="hidden sm:inline">Vodič</span>
+            </button>
+            <button
+              id="vodic-nova-stranka"
               onClick={() => setShowForm(!showForm)}
-              className="flex items-center gap-2 rounded-lg bg-[#1B2A4A] px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-[#1B2A4A]/90 active:scale-[0.98]"
+              className={`flex items-center gap-2 rounded-lg bg-[#1B2A4A] px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-[#1B2A4A]/90 active:scale-[0.98] ${vodicHighlight("vodic-nova-stranka")}`}
             >
               {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
               {showForm ? "Zatvori" : "Nova stranka"}
@@ -383,7 +435,11 @@ export default function KlijentiPage() {
           </div>
         </div>
 
-        {/* Client list */}
+        {/* Client list.
+            Omotač nosi metu vodiča jer korak 7/7 pokazuje na popis, a novi
+            korisnik nema nijednu stranku — bez omotača meta bi u praznom stanju
+            nestala i vodič bi pokazivao u prazno. */}
+        <div id="vodic-dosje" className={vodicHighlight("vodic-dosje")}>
         {loading ? (
           <ClientListSkeleton />
         ) : filtered.length === 0 ? (
@@ -488,6 +544,7 @@ export default function KlijentiPage() {
             ))}
           </div>
         )}
+        </div>
       </main>
     </div>
   );

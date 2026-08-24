@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Calculator,
@@ -31,7 +31,7 @@ import {
 } from "lucide-react";
 import { API_BASE } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
-import TroskovnikVodic, { highlightClasses } from "@/components/TroskovnikVodic";
+import Vodic, { TROSKOVNIK_KORACI, highlightClasses } from "@/components/Vodic";
 import { clearDraft, loadDraft, saveDraft, type LoadedDraft } from "@/lib/troskovnik-draft";
 import { cachedOnboardedHint, loadOnboardingState } from "@/lib/onboarding";
 import { formatThreshold } from "@/lib/format";
@@ -328,6 +328,7 @@ export default function TroskovnikPage() {
 
 function TroskovnikContent() {
   const { userId, authHeaders } = useAuth();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const preselectedClientId = searchParams.get("clientId");
 
@@ -338,7 +339,20 @@ function TroskovnikContent() {
   // current step rings.
   const [vodicOpen, setVodicOpen] = useState(searchParams.get("vodic") === "1");
   const [vodicTarget, setVodicTarget] = useState<string | null>(null);
-  const zatvoriVodic = useCallback(() => setVodicOpen(false), []);
+  // `?vodic=1` se briše iz adrese: otkad vodič vodi dalje u Stranke, „Natrag"
+  // u pregledniku vraća upravo na tu adresu, pa bi vodič krenuo ispočetka.
+  const zatvoriVodic = useCallback(() => {
+    setVodicOpen(false);
+    if (searchParams.get("vodic") === "1") router.replace("/troskovnik");
+  }, [router, searchParams]);
+
+  // Druga dionica vodiča živi u Strankama. `?vodic=1` je isti ulaz kojim je
+  // ovamo došao s ekrana dobrodošlice — nema drugog stanja koje bi trebalo
+  // prenijeti, pa prijelaz preživi i osvježavanje stranice.
+  const nastaviUStrankama = useCallback(
+    () => router.push("/klijenti?vodic=1"),
+    [router],
+  );
 
   useEffect(() => {
     // The cached hint answers "not new" without a round trip, so the overlay
@@ -1593,10 +1607,13 @@ function TroskovnikContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
-      <TroskovnikVodic
+      <Vodic
         open={vodicOpen}
+        koraci={TROSKOVNIK_KORACI}
         onClose={zatvoriVodic}
         onStepChange={setVodicTarget}
+        onNastavak={nastaviUStrankama}
+        nastavakOznaka="Dalje: Stranke"
       />
 
       {/* ── Sticky Header ── */}
