@@ -1,40 +1,28 @@
-"use client";
-
+import Link from "next/link";
 import type { ReactNode } from "react";
 
-const TARGET_ID = "lista-cekanja-email";
-
 /**
- * Every CTA on the landing scrolls to the hero waitlist form and focuses its
- * email field (README "Interactions & Behavior"). The `href` is a real
- * fragment link so it still works with JavaScript disabled or before
- * hydration — the click handler only upgrades it to a smooth scroll + focus.
+ * Shared button/link styling for every call-to-action on the landing page.
+ *
+ * Used to scroll to a waitlist email field (pre-launch). The app is live now,
+ * so this is a thin `next/link` wrapper — each call site passes the real
+ * destination (`/auth/register`, `/auth/login`, or a `mailto:` for the
+ * business-inquiry CTAs) instead of a shared waitlist target.
  */
 export default function CtaLink({
+  href,
   children,
   className = "",
   style,
 }: {
+  href: string;
   children: ReactNode;
   className?: string;
   style?: React.CSSProperties;
 }) {
   return (
-    <a
-      href={`#${TARGET_ID}`}
-      className={className}
-      style={style}
-      onClick={(e) => {
-        const el = document.getElementById(TARGET_ID);
-        if (!el) return;
-        e.preventDefault();
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
-        el.focus({ preventScroll: true });
-      }}
-    >
+    <Link href={href} className={className} style={style}>
       {children}
-    </a>
+    </Link>
   );
 }
-
-export { TARGET_ID as WAITLIST_EMAIL_ID };

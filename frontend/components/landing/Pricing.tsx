@@ -1,6 +1,10 @@
 import SectionGrid, { SectionNumber } from "./SectionGrid";
 import CtaLink from "./CtaLink";
 
+// Isti kontakt kao u pravnim tekstovima i unutar aplikacije (lib/useSubscription.ts).
+// Ne uvozi se odande: taj modul je "use client", a ova stranica je server komponenta.
+const KONTAKT_EMAIL = "vackadavid@gmail.com";
+
 const PROBA = [
   "Troškovnik bez ograničenja tijekom probe",
   "Stranke, predmeti i kronologija",
@@ -30,8 +34,8 @@ export default function Pricing() {
         Jedna pretplata po računu.
       </h2>
       <p className="mt-4 max-w-[56ch] text-[16px] opacity-80">
-        Cjenik vrijedi od izlaska u rujnu 2026.: sedam dana probe bez unosa kartice, zatim 19 €
-        mjesečno po računu. Odvjetnička društva s više korisnika ugovaraju se posebno.
+        Sedam dana probe bez unosa kartice, zatim 19 € mjesečno po računu. Odvjetnička društva s
+        više korisnika ugovaraju se posebno.
       </p>
 
       <div className="mt-11 grid grid-cols-1 min-[720px]:grid-cols-3 border-t-2 border-[var(--ptk-divider)]">
@@ -50,8 +54,12 @@ export default function Pricing() {
               </div>
             ))}
           </div>
-          <CtaLink className="ptk-btn ptk-btn-secondary ptk-btn-block mt-7" style={{ padding: "14px 18px" }}>
-            Prijavite se
+          <CtaLink
+            href="/auth/register"
+            className="ptk-btn ptk-btn-secondary ptk-btn-block mt-7"
+            style={{ padding: "14px 18px" }}
+          >
+            Registrirajte se
           </CtaLink>
         </div>
 
@@ -87,8 +95,12 @@ export default function Pricing() {
               </div>
             ))}
           </div>
-          <CtaLink className="ptk-btn ptk-btn-primary ptk-btn-block mt-7" style={{ padding: "14px 18px" }}>
-            Prijavite se →
+          <CtaLink
+            href="/auth/register"
+            className="ptk-btn ptk-btn-primary ptk-btn-block mt-7"
+            style={{ padding: "14px 18px" }}
+          >
+            Registrirajte se →
           </CtaLink>
         </div>
 
@@ -108,7 +120,11 @@ export default function Pricing() {
               </div>
             ))}
           </div>
-          <CtaLink className="ptk-btn ptk-btn-secondary ptk-btn-block mt-7" style={{ padding: "14px 18px" }}>
+          <CtaLink
+            href={`mailto:${KONTAKT_EMAIL}?subject=${encodeURIComponent("PravoTek — odvjetničko društvo")}`}
+            className="ptk-btn ptk-btn-secondary ptk-btn-block mt-7"
+            style={{ padding: "14px 18px" }}
+          >
             Javite nam se
           </CtaLink>
         </div>

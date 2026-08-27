@@ -31,7 +31,7 @@ export default function Nav() {
           Kontakt
         </a>
 
-        <CtaLink className="ptk-btn ptk-btn-primary text-[14px]" style={{ padding: "10px 18px" }}>
+        <CtaLink href="/auth/login" className="ptk-btn ptk-btn-primary text-[14px]" style={{ padding: "10px 18px" }}>
           Prijavite se
         </CtaLink>
       </div>

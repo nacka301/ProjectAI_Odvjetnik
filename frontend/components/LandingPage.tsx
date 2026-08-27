@@ -16,13 +16,12 @@ import Footer from "./landing/Footer";
 /**
  * The public front door — what an unsigned-in visitor sees at `/`.
  *
- * PravoTek has not launched yet (rujan 2026.); the only goal here is an
- * email on the waitlist, so every CTA on the page scrolls to the same hero
- * form instead of pointing at /auth/register. Deliberately a server
- * component with no data fetching — it must render for someone with no
- * session, no cookies and no JavaScript. The one client-side piece is the
- * waitlist form itself (components/landing/WaitlistForm.tsx) plus the
- * illustrative troškovnik demo's animation.
+ * PravoTek is live: every CTA on the page points at /auth/register (or
+ * /auth/login for the secondary "already have an account" links) via
+ * CtaLink (components/landing/CtaLink.tsx), a thin next/link wrapper.
+ * Deliberately a server component with no data fetching — it must render
+ * for someone with no session, no cookies and no JavaScript. The one
+ * client-side piece left is the illustrative troškovnik demo's animation.
  *
  * Design: "Modernist" system from the handoff in
  * frontend/Frontend aplikacije popravka/design_handoff_pravotek_landing/ —

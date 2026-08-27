@@ -9,13 +9,14 @@ export default function AnnouncementBar() {
       <div className="ptk-shell flex flex-wrap items-center gap-4 px-5 py-3 min-[1100px]:px-16">
         <span className="w-2 h-2 shrink-0" style={{ background: "var(--ptk-bg)" }} aria-hidden />
         <span className="text-[13px] tracking-[0.06em]">
-          Aplikacija još nije otvorena za prijave — izlazak planiran u rujnu 2026.
+          Aplikacija je otvorena — sedam dana probe, bez unosa kartice.
         </span>
         <CtaLink
+          href="/auth/register"
           className="ml-auto min-h-[44px] inline-flex items-center text-[13px] underline"
           style={{ color: "var(--ptk-bg)" }}
         >
-          Javite mi kad bude gotovo
+          Registrirajte se →
         </CtaLink>
       </div>
     </div>

@@ -1,5 +1,5 @@
 import SectionGrid from "./SectionGrid";
-import WaitlistForm from "./WaitlistForm";
+import CtaLink from "./CtaLink";
 
 const POVJERENJE = [
   { label: "TLS 1.3", opis: "Šifriran prijenos" },
@@ -40,7 +40,21 @@ export default function Hero() {
           stranaka i predmeta s kronologijom, a uz njih analiza ugovora, čitanje ZK izvatka,
           tržišna procjena i sudski tumač. Svaki dokument se sprema uz predmet i izvozi u PDF.
         </p>
-        <WaitlistForm />
+        <div className="flex flex-col gap-3 items-start min-[720px]:items-end">
+          <CtaLink
+            href="/auth/register"
+            className="ptk-btn ptk-btn-primary ptk-btn-block"
+            style={{ padding: "16px 20px", fontSize: "15px" }}
+          >
+            Registrirajte se →
+          </CtaLink>
+          <span className="text-[13px] opacity-70">
+            Već imate račun?{" "}
+            <CtaLink href="/auth/login" className="underline" style={{ color: "inherit" }}>
+              Prijavite se
+            </CtaLink>
+          </span>
+        </div>
       </div>
 
       <div className="mt-12 grid grid-cols-2 min-[720px]:grid-cols-4 border-t-2 border-[var(--ptk-divider)]">

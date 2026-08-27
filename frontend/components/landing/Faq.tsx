@@ -15,7 +15,7 @@ const PITANJA = [
   },
   {
     q: "Mogu li isprobati prije plaćanja?",
-    a: "Da, kad aplikacija izađe u rujnu 2026. — sedam dana punog pristupa, bez unosa kartice. Nakon probe pretplata je 19 € mjesečno po računu; odvjetnička društva s više korisnika ugovaraju se posebno.",
+    a: "Da — sedam dana punog pristupa odmah nakon registracije, bez unosa kartice. Nakon probe pretplata je 19 € mjesečno po računu; odvjetnička društva s više korisnika ugovaraju se posebno.",
   },
   {
     q: "Radi li na mobitelu?",
