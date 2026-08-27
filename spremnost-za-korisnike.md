@@ -57,7 +57,9 @@ Svi "poznati blokeri" navedeni u zadatku (povijest, vodič, izvoz, pravni teksto
 - **Spremanje i dalje uvijek radi `INSERT`** (nijedna putanja za `UPDATE` nije dodana) — izvorni zapis je fizički nemoguće promijeniti kroz ovaj put.
 - Backend nije mijenjan — sve je čitanje kroz već postojeću, RLS-zaštićenu `getTroskovnik()`.
 
-**Dokaz:** `npm run build` prolazi čisto (svih 33 rute, bez TS grešaka), `npx vitest run` → **2337/2337 testova prolazi**. Commit `91f86d5`, pushano u `main` (fast-forward `9a3ffb7..91f86d5`) i deployano na Vercel — David je potvrdio push. *(Živi klik-test na produkciji čeka sljedeću prijavljenu sesiju — vidi napomenu na kraju.)*
+**Dokaz:** `npm run build` prolazi čisto (svih 33 rute, bez TS grešaka), `npx vitest run` → **2337/2337 testova prolazi**. Commit `91f86d5`, pushano u `main` (fast-forward `9a3ffb7..91f86d5`).
+
+**Usputni nalaz, nevezan uz kod:** prva tri pokušaja deploya (moj push, David-ov naknadni push, i Vercelov automatski retry) pala su s `"Resource provisioning timed out"`, bez ijednog build loga — dakle prije nego što je Next.js build uopće počeo. Uzrok: Vercelova integracija s Supabaseom pokušava provizionirati "Supabase Preview Branch" kao dio pipelinea, a nalog (`vercel_icfg_...`, plan `free`) imao je nepotpunu adresu za naplatu na platnoj metodi — Vercelov marketplace ne dovršava provizioniranje (čak ni besplatno) dok taj podatak ne postoji. Nakon što je David upisao adresu u Vercel → Integrations → Supabase i pokrenuo ručni redeploy, build je prošao čisto: **`dpl_2JwqznbFSkWdYWmyB6gHVJFam2jx`, `READY`, target `production`.** Potvrđeno da produkcija radi (`/` → 200).
 
 ## 3. Preostala kozmetika (ne dira se dok David ne odluči)
 
@@ -72,8 +74,10 @@ Svi "poznati blokeri" navedeni u zadatku (povijest, vodič, izvoz, pravni teksto
 
 Cijeli put novog korisnika — registracija, prijava, prvi ulaz, kreiranje troškovnika (uključujući rubne slučajeve), spremanje, trenutna povijest, otvaranje i sad i uređivanje-kao-novi spremljenog zapisa, ispis, Excel izvoz, modul Stranke s povezivanjem, i zaključavanje nedovršenih modula — **radi ispravno na produkciji i dokazano je uživo, ne samo čitanjem koda.** Poznati "stari" kvarovi iz ovog zadatka su svi već popravljeni i deployani, a jedini stvaran nedostatak otkriven u ovoj provjeri (t.6, uređivanje spremljenog troškovnika) je popravljen istog dana, sigurnosno ispravno (kloniranje, ne prepisivanje), i deployan.
 
+**Popravak je live na produkciji** (`dpl_2JwqznbFSkWdYWmyB6gHVJFam2jx`, `READY`). Usput je otkriven i riješen i drugi, potpuno nevezan problem: Vercelova integracija sa Supabaseom nije mogla provizionirati resurse jer je nalogu nedostajala adresa za naplatu — vrijedno zapamtiti ako se idući deploy opet zaglavi na "Resource provisioning timed out" bez build logova, provjeri prvo Vercel → Integrations → Supabase → Action Required.
+
 **Preostalo prije slanja pozivnice, za potpunu sigurnost:**
-- **Živi klik-test "Uredi kao novi"** na produkciji — kod je type-checkan i pokriven testovima, ali nije osobno kliknut na produkciji nakon deploya (trebala se ponovna prijava koje u trenutku pisanja nije bilo). Preporučam: otvori stari troškovnik → "Uredi kao novi" → provjeri da se forma popuni razumno → spremi → potvrdi da je nastao NOV zapis, a stari nepromijenjen.
+- **Živi klik-test "Uredi kao novi"** na produkciji — kod je type-checkan, pokriven testovima i sad je deployan, ali nije osobno kliknut na produkciji (nemam trenutno aktivnu prijavljenu sesiju). Preporučam: otvori stari troškovnik → "Uredi kao novi" → provjeri da se forma popuni razumno → spremi → potvrdi da je nastao NOV zapis, a stari nepromijenjen.
 - Ručno odraditi Google prijavu klikom (strukturno popravljeno u kodu i CSP-u, ali live-klik nisam osobno mogao izvesti — sigurnosno pravilo).
 - Ručno unijeti krivu lozinku jednom da vidiš točnu poruku (kod pokazuje sigurnu generičku HR poruku, ali nisam sam upisivao lozinku).
 - Brzo pogledati troškovnik/klijente na stvarnom telefonu (t.13) — nisam mogao pouzdano prisiliti uski prikaz na tvom stvarnom Chrome prozoru bez remećenja tvog ekrana.
