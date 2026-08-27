@@ -9,6 +9,11 @@
  * iznos od onoga na papiru, a razlika bi se primijetila tek na ročištu.
  *
  * Novi troškovnik se radi na `/troskovnik`, i to je jedina putanja koja računa.
+ *
+ * "Uredi kao novi" ne krši to pravilo: vodi na `/troskovnik?klon=<id>`, koji
+ * praznu formu popuni podacima ovog zapisa kao polazištem, ali spremanje ondje
+ * uvijek stvara nov redak u bazi. Ovaj zapis ostaje netaknut i dalje točno
+ * odražava ono što je (možda) već predano sudu.
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -18,6 +23,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   Calculator,
+  Copy,
   Loader2,
   Printer,
   User,
@@ -144,6 +150,13 @@ export default function SpremljeniTroskovnikPage() {
                       <User className="h-3.5 w-3.5" /> Dosje stranke
                     </Link>
                   )}
+                  <Link
+                    href={`/troskovnik?klon=${zapis.id}`}
+                    title="Otvara prazan novi troškovnik, popunjen ovim podacima. Ovaj zapis se ne mijenja."
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    <Copy className="h-3.5 w-3.5" /> Uredi kao novi
+                  </Link>
                   <button
                     onClick={handlePrint}
                     className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-medium text-white hover:bg-indigo-700"

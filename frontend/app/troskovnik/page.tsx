@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { API_BASE } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
+import { getTroskovnik } from "@/lib/supabase";
 import Vodic, { TROSKOVNIK_KORACI, highlightClasses } from "@/components/Vodic";
 import { clearDraft, loadDraft, saveDraft, type LoadedDraft } from "@/lib/troskovnik-draft";
 import { cachedOnboardedHint, loadOnboardingState } from "@/lib/onboarding";
@@ -331,6 +332,10 @@ function TroskovnikContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const preselectedClientId = searchParams.get("clientId");
+  // `?klon=<id>` dolazi s /troskovnik/[id] ("Uredi kao novi") — popunjava formu
+  // podacima spremljenog troškovnika, ali NIKAD ne mijenja taj zapis: spremanje
+  // ovdje uvijek stvara nov redak. Vidi klonirajZapis niže.
+  const klonId = searchParams.get("klon");
 
   // ── Vodič kroz prvi troškovnik ──
   // Opens from three places: `?vodic=1` (the welcome screen's button), the
@@ -643,6 +648,161 @@ function TroskovnikContent() {
     setDodatnePristojbe(d.dodatnePristojbe); setPredujmovi(d.predujmovi);
     setPonudjeniNacrt(null);
   }, []);
+
+  // ═══════════════════════════════════════════════════════════
+  //  "Uredi kao novi" — popuni formu iz spremljenog troškovnika (?klon=<id>)
+  //
+  //  /troskovnik/[id] je namjerno samo za čitanje: taj zapis je možda već predan
+  //  sudu, i ponovni izračun po današnjem katalogu mogao bi tiho dati drukčiji
+  //  iznos od onoga na papiru (vidi komentar na vrhu te stranice). Zato ovo NE
+  //  otvara zapis na uređivanje — puni ovu, praznu formu njegovim podacima, kao
+  //  polazište za nov troškovnik. Spremanje ovdje uvijek stvara nov redak u
+  //  bazi; izvorni zapis ostaje netaknut.
+  //
+  //  Ne uspijeva li se nešto pouzdano pročitati natrag (npr. ručno dodane
+  //  pristojbe, ili polja koja odgovor ne vraća poput "pravni lijek"), polje
+  //  ostaje na svom praznom početnom stanju — bolje prazno nego pogrešno
+  //  popunjeno u pravnom dokumentu.
+  // ═══════════════════════════════════════════════════════════
+  const [klonInfo, setKlonInfo] = useState<{ datum: string } | null>(null);
+  const [klonGreska, setKlonGreska] = useState<string | null>(null);
+  const klonPrimijenjenRef = useRef(false);
+
+  /** HR broj-string za unos ("1234,5"), bez tisućnog razdjelnika. */
+  const formatUnosa = useCallback((n: number | null | undefined): string => {
+    if (n === null || n === undefined || n === 0) return "";
+    return Number.isInteger(n) ? String(n) : n.toFixed(2).replace(".", ",");
+  }, []);
+
+  useEffect(() => {
+    if (!klonId || !userId || klonPrimijenjenRef.current) return;
+    klonPrimijenjenRef.current = true;
+
+    (async () => {
+      const zapis = await getTroskovnik(klonId);
+      if (!zapis) {
+        setKlonGreska("Troškovnik za kloniranje nije pronađen.");
+        router.replace("/troskovnik");
+        return;
+      }
+
+      // raw_json_output je točno ono što je backend izračunao i spremio u
+      // trenutku spremanja — echo gotovo svih polja zahtjeva, pa je vjerniji
+      // izvor od uskih stupaca tablice.
+      const out = (zapis.raw_json_output ?? {}) as Record<string, unknown>;
+      const num = (v: unknown): number | undefined =>
+        typeof v === "number" ? v : undefined;
+      const str = (v: unknown): string | undefined =>
+        typeof v === "string" ? v : undefined;
+      const bool = (v: unknown): boolean | undefined =>
+        typeof v === "boolean" ? v : undefined;
+
+      const izOut = out as {
+        stavke?: {
+          item_id: string; kolicina: number; datum?: string | null;
+          tbr41_povisenje_postotak?: number; tbr41_snizenje_postotak?: number;
+        }[];
+        klijent?: { ime?: string; oib?: string; adresa?: string; grad?: string } | null;
+        odvjetnik?: { ime?: string; oib?: string; adresa?: string; grad?: string; iban?: string } | null;
+        protustranka?: { ime?: string; oib?: string; adresa?: string; grad?: string } | null;
+        naknada_troskova_stavke?: { vrsta: string; opis?: string | null; iznos: number }[];
+        dodatne_pristojbe?: { datum?: string | null; opis: string; iznos: number }[];
+        predujmovi?: { datum?: string | null; opis: string; iznos: number }[];
+      };
+
+      const noveRedci: RedakTroskovnika[] = (izOut.stavke ?? []).map((s) => {
+        const povisenje = s.tbr41_povisenje_postotak || null;
+        const snizenje = s.tbr41_snizenje_postotak || null;
+        return {
+          uid: noviUid(),
+          itemId: s.item_id,
+          kolicina: s.kolicina,
+          datum: s.datum ?? null,
+          tbr41: povisenje || snizenje ? { povisenje, snizenje } : null,
+        };
+      });
+
+      const jeZastupnikDjeteta = bool(out.is_zastupnik_djeteta) ?? false;
+      const jeSluzbena = bool(out.is_po_sluzbenoj_duznosti) ?? false;
+      const jeProracun = bool(out.is_na_teret_proracuna) ?? false;
+      const noviKazneniStatus: KazneniStatus = jeZastupnikDjeteta
+        ? "dijete"
+        : jeSluzbena
+        ? "sluzbena"
+        : jeProracun
+        ? "proracun"
+        : "puna";
+
+      const noveProtustranka = izOut.protustranka ?? null;
+      const noviPolozajProtustranke = str(out.protustranka_polozaj)
+        ?? (zapis.stranke?.protustranka?.polozaj ?? undefined);
+
+      vratiNacrt({
+        ...draftSnapshot,
+        vrijednostSpora: formatUnosa(num(out.vrijednost_spora) ?? zapis.vrijednost_spora ?? 0) || "",
+        redci: noveRedci,
+        selectedClientId: zapis.client_id ?? "",
+        napomena: str(out.napomena) || ZADANA_NAPOMENA,
+        odvjetnikIme: izOut.odvjetnik?.ime ?? zapis.odvjetnik?.naziv ?? "",
+        odvjetnikOib: izOut.odvjetnik?.oib ?? zapis.odvjetnik?.oib ?? "",
+        odvjetnikAdresa: izOut.odvjetnik?.adresa ?? zapis.odvjetnik?.adresa ?? "",
+        odvjetnikGrad: izOut.odvjetnik?.grad ?? "",
+        odvjetnikIban: izOut.odvjetnik?.iban ?? zapis.odvjetnik?.iban ?? "",
+        klijentIme: izOut.klijent?.ime ?? "",
+        klijentOib: izOut.klijent?.oib ?? "",
+        klijentAdresa: izOut.klijent?.adresa ?? "",
+        klijentGrad: izOut.klijent?.grad ?? "",
+        opisPredmeta: zapis.opis_predmeta ?? str(out.opis_predmeta) ?? "",
+        predmetSud: str(out.sud) ?? zapis.predmet?.sud ?? "",
+        predmetPoslovniBroj: str(out.broj_predmeta) ?? zapis.predmet?.poslovni_broj ?? "",
+        showParties: Boolean(
+          zapis.predmet?.sud || zapis.predmet?.poslovni_broj ||
+          noveProtustranka?.ime || zapis.stranke?.zastupana_stranka?.polozaj,
+        ),
+        isPdvUkljucen: bool(out.is_pdv_ukljucen) ?? bool(out.has_vat) ?? false,
+        naknadaTroskovaStavke: (izOut.naknada_troskova_stavke ?? []).map((s) => ({
+          vrsta: s.vrsta as VrstaTroska,
+          opis: s.opis ?? "",
+          iznos: formatUnosa(s.iznos),
+        })),
+        protustrankaIme: noveProtustranka?.ime ?? zapis.stranke?.protustranka?.naziv ?? "",
+        protustrankaOib: noveProtustranka?.oib ?? zapis.stranke?.protustranka?.oib ?? "",
+        protustrankaAdresa: noveProtustranka?.adresa ?? zapis.stranke?.protustranka?.adresa ?? "",
+        protustrankaGrad: noveProtustranka?.grad ?? "",
+        protustrankaPolozaj: noviPolozajProtustranke ?? "",
+        zastupanaPolozaj: zapis.stranke?.zastupana_stranka?.polozaj ?? "",
+        zaprijecenaKazna: str(out.zaprijecena_kazna) ?? "",
+        kazneniStatus: noviKazneniStatus,
+        isStjecaj: bool(out.is_stjecaj) ?? false,
+        isOduzimanjePrekrsaj: bool(out.is_oduzimanje_prekrsaj) ?? false,
+        vrijednostOduzimanja: formatUnosa(num(out.vrijednost_oduzimanja)),
+        isOslobodjenPristojbi: bool(out.is_oslobodjen_pristojbi) ?? false,
+        oslobodjenjeKategorija: str(out.oslobodjenje_kategorija) ?? "",
+        brojOslobodjenihOsoba: num(out.broj_oslobodjenih_osoba) ?? 0,
+        postotakUspjeha: formatUnosa(num(out.postotak_uspjeha)),
+        vrstaPostupka: (str(out.vps_vrsta_postupka) as VrstaPostupka) ?? VRSTA_POSTUPKA.Opci,
+        vpsPrimijeniNaNagradu: bool(out.vps_primijeni_na_nagradu) ?? false,
+        brojZastupanihOsoba: num(out.broj_zastupanih_osoba) ?? 1,
+        osnovicaTbr7: (str(out.osnovica_tbr7) as OsnovicaTbr7) ?? OSNOVICA_TBR7.Toc1,
+        razinaSuda: (str(out.razina_suda) as RazinaSuda | undefined) ?? null,
+        tbr45Nacin: (str(out.tbr45_nacin) as Tbr45Nacin | undefined) ?? null,
+        tbr41Povisenje: num(out.tbr41_povisenje_postotak) ?? 0,
+        tbr41Snizenje: num(out.tbr41_snizenje_postotak) ?? 0,
+        dodatnePristojbe: (izOut.dodatne_pristojbe ?? []).map((s) => ({
+          uid: noviUid(), datum: s.datum ?? null, opis: s.opis, iznos: formatUnosa(s.iznos),
+        })),
+        predujmovi: (izOut.predujmovi ?? []).map((s) => ({
+          uid: noviUid(), datum: s.datum ?? null, opis: s.opis, iznos: formatUnosa(s.iznos),
+        })),
+      });
+
+      setKlonInfo({ datum: zapis.created_at });
+      router.replace("/troskovnik");
+    })();
+    // Namjerno samo [klonId, userId]: draftSnapshot/vratiNacrt/noviUid/formatUnosa
+    // čitaju se u trenutku okidanja efekta, a ref sprječava dvostruku primjenu.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [klonId, userId]);
 
   // ── Load catalog ──
   // Waits for userId, exactly like the client fetch below. useAuth() fills
@@ -1704,6 +1864,45 @@ function TroskovnikContent() {
                   <ChevronRight className="h-3.5 w-3.5" />
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {klonInfo && (
+          <div className="mb-6 bg-indigo-50 border border-indigo-200 rounded-xl p-4 print:hidden">
+            <div className="flex flex-wrap items-start gap-3">
+              <Info className="h-5 w-5 text-indigo-600 shrink-0 mt-0.5" />
+              <p className="text-sm text-indigo-900 flex-1 min-w-[16rem]">
+                Forma je popunjena prema troškovniku spremljenom{" "}
+                <span className="font-semibold">
+                  {new Date(klonInfo.datum).toLocaleDateString("hr-HR")}
+                </span>
+                . Provjerite sve stavke prije spremanja — izvorni zapis ostaje nepromijenjen,
+                a ovo spremanje stvara nov troškovnik.
+              </p>
+              <button
+                onClick={() => setKlonInfo(null)}
+                className="text-indigo-600 hover:text-indigo-900 shrink-0"
+                aria-label="Zatvori"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {klonGreska && (
+          <div className="mb-6 bg-red-50 border border-red-200 rounded-xl p-4 print:hidden">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="h-5 w-5 text-red-600 shrink-0" />
+              <p className="text-sm text-red-900 flex-1">{klonGreska}</p>
+              <button
+                onClick={() => setKlonGreska(null)}
+                className="text-red-600 hover:text-red-900 shrink-0"
+                aria-label="Zatvori"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
           </div>
         )}
