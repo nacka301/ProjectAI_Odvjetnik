@@ -188,7 +188,7 @@ function LoginContent() {
               {idleLogout && !error && (
                 <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-700 login-step-enter">
                   <Lock className="h-4 w-4 shrink-0 mt-0.5 text-amber-500" />
-                  <span>Automatski ste odjavljeni zbog neaktivnosti (15 min). Prijavite se ponovo.</span>
+                  <span>Automatski ste odjavljeni zbog neaktivnosti. Prijavite se ponovo.</span>
                 </div>
               )}
 

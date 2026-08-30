@@ -2861,8 +2861,23 @@ function TroskovnikContent() {
               RIGHT COLUMN — Live Summary / Result
           ═══════════════════════════════════════════════════════ */}
           <div className="space-y-4 print:hidden">
-            {/* Sticky summary */}
-            <div id="vodic-rezultat" className={`lg:sticky lg:top-20 space-y-4 rounded-xl transition ${vodicHighlight("vodic-rezultat")}`}>
+            {/* Sticky summary.
+                Tijekom vodiča cijeli desni stupac (sažetak + Tbr. 7.1 tablica
+                bodova) diže se IZNAD zatamnjenja za svaki korak, ne samo 4/7 —
+                tablica bodova je referenca koja korisniku treba baš dok unosi
+                VPS u koraku 1. `z-[210]` (a NE `relative z-[210]` iz
+                `vodicHighlight`) da ostane `lg:sticky`. Prsten samo na koraku
+                4/7. Kartica vodiča (z-[220]) je i dalje iznad svega. */}
+            <div
+              id="vodic-rezultat"
+              className={`lg:sticky lg:top-20 space-y-4 rounded-xl transition ${
+                vodicOpen ? "z-[210]" : ""
+              } ${
+                vodicTarget === "vodic-rezultat"
+                  ? "ring-2 ring-indigo-500 ring-offset-2"
+                  : ""
+              }`}
+            >
               {/* ── Selected items summary ── */}
               <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 px-4 py-3 flex items-center justify-between">

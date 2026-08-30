@@ -122,9 +122,10 @@ export const STRANKE_KORACI: VodicKorak[] = [
 /**
  * Classes for the element the current step points at.
  *
- * z-[210] must stay above the overlay's own z-[200] (see below) so the ringed
- * element's opaque background shows through instead of the translucent
- * backdrop — that is how the "cut-out" over the highlighted field works.
+ * z-[210] must sit BETWEEN the two overlay layers (see below): above the
+ * backdrop's z-[200] so the ringed element's opaque background shows through
+ * instead of the dim — that is the "cut-out" — and below the card's z-[220] so
+ * the step text is never hidden behind the very field it points at.
  */
 export function highlightClasses(active: boolean): string {
   return active ? "ring-2 ring-indigo-500 ring-offset-2 relative z-[210]" : "";
@@ -232,76 +233,86 @@ export default function Vodic({
   if (!open || !mounted) return null;
 
   const overlay = (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 pointer-events-none print:hidden">
+    <>
       {/* Backdrop. Clicking it skips, same as the text button — a user who wants
           out should not have to find the small link. Inline rgba instead of the
           Tailwind opacity-modifier class, which renders as a color-mix() in
           Tailwind v4 — sidesteps a paint issue that made the dimming invisible
           in production for reasons that couldn't be pinned down from the
           source alone. `vodic-fade` fades the backdrop in on mount, so a new
-          leg (Troškovnik → Stranke) appears deliberately rather than blinking. */}
+          leg (Troškovnik → Stranke) appears deliberately rather than blinking.
+
+          z-[200]: the step's field is lifted to z-[210] and pokes through this
+          dim (the "cut-out"). */}
       <div
-        className="absolute inset-0 pointer-events-auto vodic-fade"
+        className="fixed inset-0 z-[200] pointer-events-auto vodic-fade print:hidden"
         style={{ backgroundColor: "rgba(15, 23, 42, 0.5)" }}
         onClick={close}
       />
 
       {/*
+        The card lives in its OWN layer at z-[220] — above the step's ringed
+        field (z-[210]). An earlier version nested it in the backdrop's own
+        z-[200] layer, so a field scrolled to the centre of the screen painted
+        its white card straight over the instruction text.
+
         A single centred modal: same position for every step, never clipped.
         The body scrolls if it ever has to (a very short viewport); the title
         and the buttons never do, so they can never be the part that's cut off.
         `vodic-pop` gives it a small fade-up on mount to match the backdrop.
       */}
-      <div className="relative pointer-events-auto w-[calc(100%-2rem)] max-w-[440px] max-h-[calc(100vh-2rem)] bg-white rounded-xl shadow-2xl border border-slate-200 p-4 sm:p-5 flex flex-col vodic-pop">
-        <div className="flex items-start justify-between gap-3 mb-2 shrink-0">
-          <div className="flex items-center gap-2">
-            <Compass className="h-4 w-4 text-indigo-600" />
-            <span className="text-sm font-bold text-slate-900">{korak.title}</span>
-          </div>
-          <button
-            onClick={close}
-            aria-label="Zatvori vodič"
-            className="text-slate-300 hover:text-slate-500 transition -mt-0.5"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        {/* Only this scrolls, if it ever has to — the title and the buttons
-            below never do, so they can never be the part that's clipped. */}
-        <div className="flex-1 min-h-0 overflow-y-auto mb-4">
-          <p className="text-sm text-slate-600 leading-relaxed">{korak.text}</p>
-        </div>
-
-        <div className="flex items-center justify-between shrink-0">
-          <button
-            onClick={close}
-            className="text-xs text-slate-400 hover:text-slate-600 transition"
-          >
-            Preskoči vodič
-          </button>
-          <div className="flex items-center gap-3">
-            <div className="flex gap-1">
-              {koraci.map((k, i) => (
-                <div
-                  key={k.target}
-                  className={`w-1.5 h-1.5 rounded-full transition ${
-                    i === step ? "bg-indigo-600" : "bg-slate-200"
-                  }`}
-                />
-              ))}
+      <div className="fixed inset-0 z-[220] flex items-center justify-center p-4 pointer-events-none print:hidden">
+        <div className="relative pointer-events-auto w-[calc(100%-2rem)] max-w-[440px] max-h-[calc(100vh-2rem)] bg-white rounded-xl shadow-2xl border border-slate-200 p-4 sm:p-5 flex flex-col vodic-pop">
+          <div className="flex items-start justify-between gap-3 mb-2 shrink-0">
+            <div className="flex items-center gap-2">
+              <Compass className="h-4 w-4 text-indigo-600" />
+              <span className="text-sm font-bold text-slate-900">{korak.title}</span>
             </div>
             <button
-              onClick={next}
-              className="inline-flex items-center gap-1 bg-indigo-600 text-white text-xs font-medium px-4 py-2 rounded-lg hover:bg-indigo-700 transition"
+              onClick={close}
+              aria-label="Zatvori vodič"
+              className="text-slate-300 hover:text-slate-500 transition -mt-0.5"
             >
-              {!zadnji ? "Dalje" : onNastavak ? nastavakOznaka : "Završi"}
-              <ArrowRight className="h-3 w-3" />
+              <X className="h-4 w-4" />
             </button>
+          </div>
+
+          {/* Only this scrolls, if it ever has to — the title and the buttons
+              below never do, so they can never be the part that's clipped. */}
+          <div className="flex-1 min-h-0 overflow-y-auto mb-4">
+            <p className="text-sm text-slate-600 leading-relaxed">{korak.text}</p>
+          </div>
+
+          <div className="flex items-center justify-between shrink-0">
+            <button
+              onClick={close}
+              className="text-xs text-slate-400 hover:text-slate-600 transition"
+            >
+              Preskoči vodič
+            </button>
+            <div className="flex items-center gap-3">
+              <div className="flex gap-1">
+                {koraci.map((k, i) => (
+                  <div
+                    key={k.target}
+                    className={`w-1.5 h-1.5 rounded-full transition ${
+                      i === step ? "bg-indigo-600" : "bg-slate-200"
+                    }`}
+                  />
+                ))}
+              </div>
+              <button
+                onClick={next}
+                className="inline-flex items-center gap-1 bg-indigo-600 text-white text-xs font-medium px-4 py-2 rounded-lg hover:bg-indigo-700 transition"
+              >
+                {!zadnji ? "Dalje" : onNastavak ? nastavakOznaka : "Završi"}
+                <ArrowRight className="h-3 w-3" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 
   // Portal to document.body — the same escape hatch MethodologyModal uses —

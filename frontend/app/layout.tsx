@@ -61,8 +61,9 @@ export default function RootLayout({
         {/* One idle timer. There used to be two — AutoLogoutProvider at 15 min
             and SessionGuard at 25 — sharing a localStorage key. The shorter one
             always won, so the warning modal never appeared and users were
-            dropped without notice. SessionGuard now owns the whole 15 minutes:
-            14 idle, then a 60-second countdown. */}
+            dropped without notice. SessionGuard now owns it: 60 minutes idle,
+            then a 60-second warning countdown, plus a 12-hour absolute cap.
+            All timings live in lib/session-timeout.ts. */}
         <SessionGuard>
           <CreditProvider>
             <main className="flex-1">{children}</main>
