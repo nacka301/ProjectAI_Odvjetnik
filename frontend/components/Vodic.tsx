@@ -52,6 +52,12 @@ export interface VodicKorak {
   text: string;
 }
 
+/** The card's pinned viewport edge and horizontal alignment for a step. */
+interface Spot {
+  edge: "top" | "bottom";
+  align: "center" | "start" | "end";
+}
+
 /**
  * Brojevi u naslovima teku kroz oba modula (1/7 … 7/7), ne od početka u svakome.
  * Korisnik tako zna koliko je ostalo, a ne dobiva dvaput „1/…". Ako se dvije
@@ -191,8 +197,16 @@ export default function Vodic({
   const korak = koraci[step];
   const zadnji = step === koraci.length - 1;
 
-  // Which viewport edge the card is pinned to for the current step.
-  const [side, setSide] = useState<"top" | "bottom">("bottom");
+  /**
+   * Where the card sits relative to the viewport for the current step.
+   * `edge` is the pinned edge; `align` is horizontal — `center` normally, or
+   * `start`/`end` when the field is too tall to clear vertically but sits in a
+   * side column (the `lg:sticky` summary), so the card tucks in beside it.
+   */
+  const [pozicija, setPozicija] = useState<Spot>({
+    edge: "bottom",
+    align: "center",
+  });
   const cardRef = useRef<HTMLDivElement>(null);
 
   // Tell the page which element to ring.
@@ -201,67 +215,137 @@ export default function Vodic({
   }, [open, korak.target, onStepChange]);
 
   /**
-   * Scroll the ringed field into the strip of viewport the card does NOT cover,
-   * given which edge the card sits on. If the field is taller than that strip
-   * (e.g. a whole client dossier), align its top to the strip's top so at least
-   * the top of the ring stays visible.
+   * Place the card and scroll the ringed field clear of it.
+   *
+   * The card is pinned to a viewport edge; the field is scrolled into the strip
+   * the card leaves free. Candidate spots are tried in order and the first that
+   * leaves NO overlap — accounting for how far the page can actually scroll —
+   * wins:
+   *   1. card bottom, field centred in the strip above it   (the common case)
+   *   2. card top, field centred in the strip below it      (field sits low and
+   *      the page can't scroll far enough to lift it clear of a bottom card)
+   *   3/4. card beside the field, on the roomier side        (tall side-column
+   *      field — the `lg:sticky` summary at a short/zoomed viewport)
+   *   fallback: card top, tall field pinned just below it, overflowing off-screen
+   * Runs three times per step — once smooth for the eye, then two instant
+   * corrections for the card re-measuring and the page settling after scroll —
+   * and again on resize.
    */
-  const skrolajCilj = useCallback(
-    (edge: "top" | "bottom") => {
+  const namjesti = useCallback(
+    (smooth: boolean) => {
       const el = document.getElementById(korak.target);
-      if (!el) return;
+      const cardEl = cardRef.current;
+      if (!el || !cardEl) return;
+
       const vh = window.innerHeight;
-      const cardH = Math.min(
-        cardRef.current?.offsetHeight ?? 280,
-        vh - VODIC_EDGE_GAP * 2,
-      );
+      const vw = window.innerWidth;
+      // getBoundingClientRect (not offset*) so units match `rect` under browser
+      // zoom, where the two disagree.
+      const cardBox = cardEl.getBoundingClientRect();
+      const cardH = Math.min(cardBox.height, vh - VODIC_EDGE_GAP * 2);
+      const cardW = Math.min(cardBox.width, vw - VODIC_EDGE_GAP * 2);
       const rect = el.getBoundingClientRect();
 
-      const bandTop =
-        edge === "top"
-          ? VODIC_EDGE_GAP + cardH + VODIC_CARD_GAP
-          : VODIC_HEADER_GAP;
-      const bandBottom =
-        edge === "bottom"
-          ? vh - VODIC_EDGE_GAP - cardH - VODIC_CARD_GAP
-          : vh - VODIC_EDGE_GAP;
-      const bandH = Math.max(0, bandBottom - bandTop);
+      const scrollY = window.scrollY;
+      const maxScroll = Math.max(
+        0,
+        document.documentElement.scrollHeight - vh,
+      );
+      // A `position: sticky` field (the summary column on `lg`) does not move
+      // out of its stuck band however far you scroll — so treat it as fixed
+      // where it is and let the candidate search route around it instead.
+      const sticky = getComputedStyle(el).position === "sticky";
+      // Field top we can actually reach by scrolling, given the page's limits.
+      const reachableTop = (wantTop: number) => {
+        if (sticky) return rect.top;
+        const want = rect.top - wantTop; // >0 scroll down, <0 scroll up
+        const applied = Math.max(-scrollY, Math.min(maxScroll - scrollY, want));
+        return rect.top - applied;
+      };
 
-      const desiredTop =
-        rect.height >= bandH ? bandTop : bandTop + (bandH - rect.height) / 2;
+      const cardRectFor = (s: Spot) => {
+        const top =
+          s.edge === "top"
+            ? VODIC_EDGE_GAP
+            : vh - VODIC_EDGE_GAP - cardH;
+        let left = (vw - cardW) / 2;
+        if (s.align === "start") left = VODIC_EDGE_GAP;
+        if (s.align === "end") left = vw - VODIC_EDGE_GAP - cardW;
+        return { top, bottom: top + cardH, left, right: left + cardW };
+      };
 
-      const delta = rect.top - desiredTop;
-      if (Math.abs(delta) > 2) window.scrollBy({ top: delta, behavior: "smooth" });
+      const wantedTop = (s: Spot) => {
+        if (s.align !== "center") return VODIC_HEADER_GAP;
+        const stripTop =
+          s.edge === "top"
+            ? VODIC_EDGE_GAP + cardH + VODIC_CARD_GAP
+            : VODIC_HEADER_GAP;
+        const stripBottom =
+          s.edge === "bottom"
+            ? vh - VODIC_EDGE_GAP - cardH - VODIC_CARD_GAP
+            : vh - VODIC_EDGE_GAP;
+        const stripH = Math.max(0, stripBottom - stripTop);
+        return rect.height >= stripH
+          ? stripTop
+          : stripTop + (stripH - rect.height) / 2;
+      };
+
+      const clears = (s: Spot) => {
+        const c = cardRectFor(s);
+        const t0 = reachableTop(wantedTop(s));
+        const t = { top: t0, bottom: t0 + rect.height, left: rect.left, right: rect.right };
+        return (
+          t.bottom <= c.top ||
+          t.top >= c.bottom ||
+          t.right <= c.left ||
+          t.left >= c.right
+        );
+      };
+
+      const candidates: Spot[] = [
+        { edge: "bottom", align: "center" },
+        { edge: "top", align: "center" },
+      ];
+      if (vw - rect.right >= cardW + VODIC_CARD_GAP)
+        candidates.push({ edge: "bottom", align: "end" });
+      if (rect.left >= cardW + VODIC_CARD_GAP)
+        candidates.push({ edge: "bottom", align: "start" });
+
+      // Nothing clears only on a viewport too small for card + field together;
+      // fall back to card at the top with the field pinned just below it,
+      // overflowing off the bottom — its top and ring corner still show.
+      const pos = candidates.find(clears) ?? { edge: "top", align: "center" };
+
+      setPozicija(pos);
+
+      const delta = rect.top - reachableTop(wantedTop(pos));
+      if (Math.abs(delta) > 2) {
+        window.scrollBy({ top: delta, behavior: smooth ? "smooth" : "auto" });
+      }
     },
     [korak.target],
   );
 
-  // On each step: pick the edge with more room from the field's current
-  // position, then scroll the field clear of the card. The small delay lets the
-  // ring and the card paint (so the card measures correctly) before we move.
   useEffect(() => {
     if (!open) return;
-    const el = document.getElementById(korak.target);
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const edge: "top" | "bottom" =
-      rect.top + rect.height / 2 < window.innerHeight / 2 ? "bottom" : "top";
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSide(edge);
-    const timer = setTimeout(() => skrolajCilj(edge), 80);
-    return () => clearTimeout(timer);
-  }, [open, korak.target, skrolajCilj]);
+    const t1 = setTimeout(() => namjesti(true), 90);
+    const t2 = setTimeout(() => namjesti(false), 480);
+    const t3 = setTimeout(() => namjesti(false), 900);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
+  }, [open, korak.target, namjesti]);
 
-  // Keep the field clear of the card when the viewport changes size (rotation,
-  // zoom, devtools). The card itself is CSS-pinned, so only the scroll needs
-  // recomputing; throttled to one pass per frame. The edge is not re-chosen —
-  // that would let it oscillate on a very short viewport.
+  // Re-place the card and field when the viewport changes size (rotation, zoom,
+  // devtools), throttled to one pass per frame.
   useEffect(() => {
     if (!open) return;
     let raf = 0;
     const onResize = () => {
       cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => skrolajCilj(side));
+      raf = requestAnimationFrame(() => namjesti(false));
     };
     window.addEventListener("resize", onResize);
     window.addEventListener("orientationchange", onResize);
@@ -270,7 +354,7 @@ export default function Vodic({
       window.removeEventListener("resize", onResize);
       window.removeEventListener("orientationchange", onResize);
     };
-  }, [open, side, skrolajCilj]);
+  }, [open, namjesti]);
 
   /** Finishing the LAST leg and skipping are the same instruction: do not ask me again. */
   const close = useCallback(() => {
@@ -330,16 +414,23 @@ export default function Vodic({
         z-[200] layer, so a field scrolled to the centre of the screen painted
         its white card straight over the instruction text.
 
-        Pinned to the top OR bottom edge (whichever `side` the effect chose for
-        this step), full width up to 440px, centred horizontally. `max-h` plus
-        the edge padding keep it inside the viewport; only the text body scrolls,
-        so the title and the buttons can never be the part that's cut off. The
-        `key` restarts `vodic-pop` on every step so the move to a new edge reads
-        as a deliberate fade rather than a jump.
+        Pinned to the top OR bottom edge (whichever `pozicija.edge` the effect
+        chose), full width up to 440px. Normally centred; `pozicija.align`
+        shifts it to a side when it has to tuck in next to a tall side-column
+        field. `max-h` plus the edge padding keep it inside the viewport; only
+        the text body scrolls, so the title and the buttons can never be the
+        part that's cut off. The `key` restarts `vodic-pop` on every step so a
+        move to a new spot reads as a deliberate fade rather than a jump.
       */}
       <div
-        className={`fixed inset-x-0 z-[220] flex justify-center px-4 pointer-events-none print:hidden ${
-          side === "top" ? "top-0 pt-4" : "bottom-0 pb-4"
+        className={`fixed inset-x-0 z-[220] flex px-4 pointer-events-none print:hidden ${
+          pozicija.edge === "top" ? "top-0 pt-4" : "bottom-0 pb-4"
+        } ${
+          pozicija.align === "start"
+            ? "justify-start"
+            : pozicija.align === "end"
+              ? "justify-end"
+              : "justify-center"
         }`}
       >
         <div
