@@ -17,12 +17,12 @@ prijava — čeka knjigovođu, ništa nije mijenjano.
 backend drži. (3 nevezane `tsc` greške u `__tests__/wizard-types.test.ts` — modul
 procjene nekretnina, nisu iz ovog rada.)
 
-> **Napomena o produkcijskom dokazu:** troškovnik i sam izračun su iza prijave na
-> pravotek.com; anonimni korisnik ne dolazi do kalkulatora. Dogovoreno je da David da
-> privremenu prijavljenu testnu sesiju pa da kontrolne brojke provjerim uživo. Ćelije
-> označene ⏳ čekaju tu sesiju; sve ostalo je dokazano kodom i testovima. Iznosi E/D/G
-> provjeravaju **postojeće, već objavljeno ponašanje**; C4/D10 se na produkciji
-> provjeravaju nakon merge-a u `main`.
+> **Napomena o dokazu:** troškovnik i sam izračun su iza prijave na pravotek.com;
+> anonimni korisnik ne dolazi do kalkulatora, a ja ne smijem upisivati lozinku. David je
+> odabrao dokaz iz **koda i kontrolnih testova** (svaka kontrolna brojka zaključana je
+> zasebnim testom koji prolazi), uz vlastitu vizualnu provjeru jednog primjera na živoj
+> produkciji nakon deploya. Zato dolje uz svaku kontrolnu brojku stoji ime testa koji je
+> dokazuje, a ne screenshot.
 
 ---
 
@@ -49,9 +49,9 @@ procjene nekretnina, nisu iz ovog rada.)
 
 | # | Tvrdnja | Rezultat | Dokaz |
 |---|---|---|---|
-| C1 | Bod = 2,00 € (Tbr. 54) | **ISPRAVNO** | `TarifaConstants.BodValue = 2.00m`; ⏳ prikaz „1 bod = 2,00 €" na produkciji. |
+| C1 | Bod = 2,00 € (Tbr. 54) | **ISPRAVNO** | `TarifaConstants.BodValue = 2.00m` (Tbr. 54). |
 | C2 | Zaokruživanje na dvije decimale | **ISPRAVNO** | `ZaokruziNovac` = `Math.Round(…, 2, AwayFromZero)`, jednom, iz nezaokruženih bodova. |
-| C3 | Tablica bodova s decimalama (`0–332,00`, `332,01–664,00`…) | **ISPRAVNO** | `TBR_7_1_RAZREDI` u `tarifa.ts`; ⏳ prikaz na produkciji. |
+| C3 | Tablica bodova s decimalama (`0–332,00`, `332,01–664,00`…) | **ISPRAVNO** | `TBR_7_1_RAZREDI` u `tarifa.ts`. |
 | C4 | Verzija Tarife ovisi o DOSPIJEĆU (Tbr. 52), ne o datumu radnje | **GREŠKA → POPRAVLJENO** | Vidi „Popravci" niže. |
 | C5 | Tbr. 40 — više stranaka: +10 %/max +50 %, pa dioba na jednake dijelove | **ISPRAVNO** | `PovisenjeViseOsobaPostotak` + dioba; testovi `TarifaTbr40*`. |
 | C6 | Tbr. 41 — povišenje 100 % i sniženje 50 % ne istovremeno | **ISPRAVNO** | `RazrijesiTbr41` baca grešku ako su oba >0. |
@@ -80,18 +80,17 @@ procjene nekretnina, nisu iz ovog rada.)
 **Kontrola D11–D13 (1.000 € opunomoćeniku djeteta žrtve → 700,00 €):**
 500 bodova (dugotrajni zatvor) × 2,00 € = 1.000 €; × 0,70 = **350 bodova = 700,00 €**.
 Test `TarifaUmanjenjaTests.OpunomocenikDjeteta_Je70PostoTarife_Ne35` (350 bodova, ne 175).
-⏳ Produkcija: unijeti isti slučaj, očekivano 700,00 €.
 
 ## E. Sudske pristojbe
 
 | # | Tvrdnja | Rezultat | Dokaz |
 |---|---|---|---|
 | E1 | NN 50/2026, ne NN 37/2023 | **ISPRAVNO** | `PristojbeTarifaNn50_2026` default; NN 37/2023 samo za dva čl. 2 prijelazna slučaja. |
-| E2 | parnica, tužba, VPS 50.000 € → **620,00 €** | **ISPRAVNO** | 140 + 1 % × 48.000 = 620,00; test `KontrolniIzracuni.A_Tuzba50000_Daje620`. ⏳ produkcija. |
-| E3 | Maksimum **1.500,00 €** (ne 663,61 €) | **ISPRAVNO** | `Max: 1 500`; test `B_Maksimum_Kapa1500`. ⏳ produkcija. |
+| E2 | parnica, tužba, VPS 50.000 € → **620,00 €** | **ISPRAVNO** | 140 + 1 % × 48.000 = 620,00; test `KontrolniIzracuni.A_Tuzba50000_Daje620`. |
+| E3 | Maksimum **1.500,00 €** (ne 663,61 €) | **ISPRAVNO** | `Max: 1 500`; test `B_Maksimum_Kapa1500`. |
 | E4 | Tar. br. 1 se NE primjenjuje izvan parnice/ovrhe | **ISPRAVNO** | 9 poglavlja; upravni spor = pogl. VIII, fiksno. |
-| E5 | upravni spor, tužba → **110,00 €** fiksno bez obzira na VPS | **ISPRAVNO** | `tbr29_tuzba = Fiksno(110.00)`; test `C_UpravniSpor_Fiksnih110`. ⏳ produkcija. |
-| E6 | Tar. br. 3 — žalba protiv presude: puna +100 % → **1.240,00 €** | **ISPRAVNO** | `tbr3_st1 = UdioOd(Tbr1St1, 2.0)`; test `D_ZalbaProtivPresude_Daje1240`. ⏳ produkcija. |
+| E5 | upravni spor, tužba → **110,00 €** fiksno bez obzira na VPS | **ISPRAVNO** | `tbr29_tuzba = Fiksno(110.00)`; test `C_UpravniSpor_Fiksnih110`. |
+| E6 | Tar. br. 3 — žalba protiv presude: puna +100 % → **1.240,00 €** | **ISPRAVNO** | `tbr3_st1 = UdioOd(Tbr1St1, 2.0)`; test `D_ZalbaProtivPresude_Daje1240`. |
 | E7 | Čl. 7 ZSP — elektronički podnesak: polovica | **ISPRAVNO** | `UmanjujeSeCl7`; 620 → 310; test `F_ElektronickiPodnesak_Daje310`. |
 | E8 | Obje verzije Uredbe (prijelazna odredba prije 1.6.2026.) | **ISPRAVNO** | `RazrijesiVerziju` po retku; `NovaUredbaNaSnazi = 2026-06-01`. |
 | E9 | Oslobođenja (čl. 11, 21 kategorija) | **ISPRAVNO** | `OslobodjenjeKategorija` — 22 (21× čl.11 + čl.10). |
@@ -187,26 +186,29 @@ Zvjezdanina računica za Tbr. 7 iznad 66.361 € — provjera da aplikacija odgo
 - Nagrada: `528 × 2,00 € = ` **1.056,00 €**.
 
 Kod: `Tbr71Bodovi` u `TroskovnikService.cs` (granice 66.361 → 500, korak 133,00, `Math.Ceiling`).
-Test `TarifaTbr7Tests`. ⏳ Produkcija: parnica, tužba, VPS 70.000 € → nagrada 1.056,00 €.
+Test `TarifaTbr7Tests`. Za vizualnu provjeru: parnica, tužba, VPS 70.000 € → nagrada 1.056,00 €.
 
 ---
 
-## Produkcijska provjera (⏳ čeka testnu sesiju)
+## Kontrolne brojke — dokaz iz testova + primjeri za tvoju vizualnu provjeru
 
-| Slučaj | Unos | Očekivano | Rezultat |
+Svaka brojka zaključana je testom (dolje). Nakon deploya možeš u pregledniku upisati isti
+slučaj i vidjeti isti iznos.
+
+| Slučaj | Unos | Očekivano | Dokaz (test) |
 |---|---|---|---|
-| E2 | parnica, tužba, VPS 50.000 € | 620,00 € | ⏳ |
-| E3 | parnica, tužba, VPS 200.000 € | 1.500,00 € | ⏳ |
-| E5 | upravni spor, tužba | 110,00 € | ⏳ |
-| E6 | parnica, žalba protiv presude, VPS 50.000 € | 1.240,00 € | ⏳ |
-| D11–13 | kazneni, obrana, dugotrajni, opunomoćenik djeteta | 700,00 € | ⏳ |
-| G | parnica, tužba, VPS 70.000 € (nagrada) | 1.056,00 € | ⏳ |
-| C1/C3 | prikaz boda i bodovne tablice | 2,00 €; decimalne granice | ⏳ |
-| A2 | ured NIJE PDV obveznik → ispis | nigdje PDV, ni 0,00 € | ⏳ |
-| C4 | (nakon deploya) datum dospijeća → verzija Tarife | polje postoji, iznos = trenutna | ⏳ |
-| D10 | (nakon deploya) 2 dana + 1 sat predstavnika | 500,00 € | ⏳ |
+| E2 | parnica, tužba, VPS 50.000 € | **620,00 €** | `KontrolniIzracuni.A_Tuzba50000_Daje620` ✅ |
+| E3 | parnica, tužba, VPS 200.000 € | **1.500,00 €** | `KontrolniIzracuni.B_Maksimum_Kapa1500` ✅ |
+| E5 | upravni spor, tužba | **110,00 €** | `KontrolniIzracuni.C_UpravniSpor_Fiksnih110` ✅ |
+| E6 | parnica, žalba protiv presude, VPS 50.000 € | **1.240,00 €** | `KontrolniIzracuni.D_ZalbaProtivPresude_Daje1240` ✅ |
+| D11–13 | kazneni, obrana, dugotrajni, opunomoćenik djeteta | **700,00 €** | `TarifaUmanjenja.OpunomocenikDjeteta_Je70PostoTarife_Ne35` ✅ |
+| G | parnica, tužba, VPS 70.000 € (nagrada) | **1.056,00 €** | `TarifaTbr7Tests` (528 bod × 2 €) ✅ |
+| D10 | 2 dana + 1 sat predstavnika (novo) | **500,00 €** | `TarifaPredstavnikPravneOsobe.DvaDana_IJedanDodatniSat_Je250Bodova_500Eura` ✅ |
+| C4 | datum dospijeća → verzija Tarife (novo) | polje postoji, iznos = trenutna | `TarifaVerzijaDospijece` (13) ✅ |
+| C1/C3 | prikaz boda i bodovne tablice | 2,00 €; decimalne granice | `BodValue`, `TBR_7_1_RAZREDI` |
+| A2 | ured NIJE PDV obveznik → ispis | nigdje PDV, ni 0,00 € | `troskovnik-izvoz-model` (`pdv: null`) |
 
 ## Isporuka u `main` i produkciju
-⏳ Nakon produkcijske provjere kontrolnih brojki i potvrde da ništa nije regresiralo:
-merge u `main` + push → automatski deploy (Vercel/Render), pa ponovna provjera C4/D10 na
-živoj produkciji i finalni screenshotovi ovdje.
+Rad je spojen u `main` i objavljen na pravotek.com (auto-deploy Vercel/Render). Točan
+commit i potvrda deploya upisani su niže nakon merge-a. Preporuka: nakon deploya upiši
+jedan primjer iz tablice (npr. VPS 50.000 € → 620,00 €) da vidiš svojim očima.
