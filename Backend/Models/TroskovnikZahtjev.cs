@@ -10,6 +10,13 @@ public sealed class TroskovnikRequest
     [JsonPropertyName("vrijednost_spora")]
     public decimal VrijednostSpora { get; set; }
 
+    /// <summary>
+    /// Datum dospijeća potraživanja (Tbr. 52). Određuje koja je verzija Tarife i vrijednost
+    /// boda mjerodavna — po dospijeću, ne po datumu radnje. Null → trenutno važeća Tarifa.
+    /// </summary>
+    [JsonPropertyName("datum_dospijeca")]
+    public DateOnly? DatumDospijeca { get; set; }
+
     /// <summary>Odabrane stavke s količinama.</summary>
     [JsonPropertyName("stavke")]
     public List<TroskovnikItemRequest> Stavke { get; set; } = [];

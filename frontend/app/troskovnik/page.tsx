@@ -46,6 +46,7 @@ import {
   PDV_RATE,
   TBR_7_1_RAZREDI,
   ZAPRIJECENA_KAZNA_TIERS,
+  razrijesiTarifu,
   formatirajBodove,
   izracunajBodove,
   jeSamoKazneni,
@@ -445,6 +446,10 @@ function TroskovnikContent() {
   // ── Sudske pristojbe state ──
   const [isOslobodjenPristojbi, setIsOslobodjenPristojbi] = useState(false);
 
+  // Tbr. 52 — datum dospijeća potraživanja; određuje mjerodavnu verziju Tarife (po
+  // dospijeću, ne po datumu radnje). Prazno → trenutno važeća Tarifa.
+  const [datumDospijeca, setDatumDospijeca] = useState("");
+
   // Čl. 2 Uredbe NN 50/2026 — dva prijelazna slučaja u kojima vrijedi stara Uredba.
   // Dva zasebna datuma, jer jedan predmet može imati star odgovor na tužbu i novu žalbu.
   const [datumOdgovoraNaTuzbu, setDatumOdgovoraNaTuzbu] = useState("");
@@ -548,7 +553,7 @@ function TroskovnikContent() {
       protustrankaPolozaj, zastupanaPolozaj,
       zaprijecenaKazna, kazneniStatus, isStjecaj, isOduzimanjePrekrsaj,
       vrijednostOduzimanja,
-      isOslobodjenPristojbi, datumOdgovoraNaTuzbu, datumPokretanjaUpravnogSpora,
+      isOslobodjenPristojbi, datumDospijeca, datumOdgovoraNaTuzbu, datumPokretanjaUpravnogSpora,
       pristojbeDodane, pristojbeIskljucene,
       podnesciElektronicki, zkUpisElektronicki, odlukeElektronicki,
       oslobodjenjeKategorija, brojOslobodjenihOsoba, udioUVps, postotakUspjeha,
@@ -568,7 +573,7 @@ function TroskovnikContent() {
       protustrankaPolozaj, zastupanaPolozaj,
       zaprijecenaKazna, kazneniStatus, isStjecaj, isOduzimanjePrekrsaj,
       vrijednostOduzimanja,
-      isOslobodjenPristojbi, datumOdgovoraNaTuzbu, datumPokretanjaUpravnogSpora,
+      isOslobodjenPristojbi, datumDospijeca, datumOdgovoraNaTuzbu, datumPokretanjaUpravnogSpora,
       pristojbeDodane, pristojbeIskljucene,
       podnesciElektronicki, zkUpisElektronicki, odlukeElektronicki,
       oslobodjenjeKategorija, brojOslobodjenihOsoba, udioUVps, postotakUspjeha,
@@ -627,6 +632,7 @@ function TroskovnikContent() {
     setIsStjecaj(d.isStjecaj); setIsOduzimanjePrekrsaj(d.isOduzimanjePrekrsaj);
     setVrijednostOduzimanja(d.vrijednostOduzimanja);
     setIsOslobodjenPristojbi(d.isOslobodjenPristojbi);
+    setDatumDospijeca(d.datumDospijeca);
     setDatumOdgovoraNaTuzbu(d.datumOdgovoraNaTuzbu);
     setDatumPokretanjaUpravnogSpora(d.datumPokretanjaUpravnogSpora);
     setPristojbeDodane(d.pristojbeDodane); setPristojbeIskljucene(d.pristojbeIskljucene);
@@ -1193,6 +1199,10 @@ function TroskovnikContent() {
     }[] = [];
     const catalogMap = new Map(katalog.map((s) => [s.id, s]));
 
+    // Tbr. 52 — vrijednost boda mjerodavne verzije Tarife (po dospijeću). Danas postoji
+    // jedna verzija, pa je jednaka BOD_VALUE; backend (mjerodavan) razrješava istu logiku.
+    const bodValue = razrijesiTarifu(datumDospijeca || null).bodValue;
+
     for (const redak of redci) {
       const def = catalogMap.get(redak.itemId);
       if (!def || redak.kolicina <= 0) continue;
@@ -1237,7 +1247,7 @@ function TroskovnikContent() {
         datum: redak.datum,
         bodova_po_jedinici: bodovi,
         ukupno_bodova: ukupnoStavke,
-        iznos_eur: zaokruziNovac((ukupnoStavke + tbr41BodoviStavke) * BOD_VALUE),
+        iznos_eur: zaokruziNovac((ukupnoStavke + tbr41BodoviStavke) * bodValue),
         jedinica: def.jedinica,
         is_jednokratna: def.jednokratna_nagrada === true,
         pravni_izvor: def.pravni_izvor ?? def.tarifni_broj,
@@ -1263,7 +1273,7 @@ function TroskovnikContent() {
     const ukupnoBodova = osnovicaBodova + povisenjeBodovi + tbr41Bodovi;
 
     // Bodovi su do ovdje ostali decimalni; tek se gotov iznos zaokružuje, jednom.
-    const ukupnoEur = zaokruziNovac(ukupnoBodova * BOD_VALUE);
+    const ukupnoEur = zaokruziNovac(ukupnoBodova * bodValue);
 
     // Naknada troškova (Tbr. 48.-51.) — vlastiti trošak odvjetnika, ULAZI u osnovicu.
     const naknadaTroskovaUkupno = zaokruziNovac(
@@ -1305,7 +1315,7 @@ function TroskovnikContent() {
       pristojbaVpsUdio: pristojbe.vpsUdio,
       pristojbaNaTeretProtustranke: pristojbe.naTeretProtustranke,
     };
-  }, [redci, katalog, osnovica, isPdvUkljucen, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, isOduzimanjePrekrsaj, parsedVrijednostOduzimanja, pristojbe, brojZastupanihOsoba, zaprijecenaKazna, tbr41Povisenje, tbr41Snizenje, dodatnePristojbe, predujmovi, naknadaTroskovaStavke]);
+  }, [redci, katalog, osnovica, isPdvUkljucen, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, isOduzimanjePrekrsaj, parsedVrijednostOduzimanja, pristojbe, brojZastupanihOsoba, zaprijecenaKazna, tbr41Povisenje, tbr41Snizenje, dodatnePristojbe, predujmovi, naknadaTroskovaStavke, datumDospijeca]);
 
   // Katalog po id, i izračunati redak po uid — za uređivanje u desnom stupcu, koje
   // iterira `redci` (izvor istine, uključuje i retke koji još ne daju iznos), a
@@ -1508,6 +1518,7 @@ function TroskovnikContent() {
         vrijednost_oduzimanja: parsedVrijednostOduzimanja,
         is_oslobodjen_pristojbi: isOslobodjenPristojbi,
         // Čl. 2 Uredbe NN 50/2026 — prazan datum znači "nije prijelazni slučaj".
+        datum_dospijeca: datumDospijeca || null,
         datum_podnosenja_odgovora_na_tuzbu: datumOdgovoraNaTuzbu || null,
         datum_pokretanja_upravnog_spora: datumPokretanjaUpravnogSpora || null,
         pristojbe_dodane: pristojbeDodane,
@@ -1616,6 +1627,7 @@ function TroskovnikContent() {
         vrijednost_oduzimanja: parsedVrijednostOduzimanja,
         is_oslobodjen_pristojbi: isOslobodjenPristojbi,
         // Čl. 2 Uredbe NN 50/2026 — prazan datum znači "nije prijelazni slučaj".
+        datum_dospijeca: datumDospijeca || null,
         datum_podnosenja_odgovora_na_tuzbu: datumOdgovoraNaTuzbu || null,
         datum_pokretanja_upravnog_spora: datumPokretanjaUpravnogSpora || null,
         pristojbe_dodane: pristojbeDodane,
@@ -1926,6 +1938,23 @@ function TroskovnikContent() {
               LEFT COLUMN — Catalog & Selection
           ═══════════════════════════════════════════════════════ */}
           <div className="lg:col-span-2 space-y-4 print:hidden">
+            {/* ── Datum dospijeća (Tbr. 52) — bira verziju Tarife; vrijedi i za kazneni ── */}
+            <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
+                Datum dospijeća (Tbr. 52)
+              </label>
+              <input
+                type="date"
+                value={datumDospijeca}
+                onChange={(e) => setDatumDospijeca(e.target.value)}
+                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
+              />
+              <p className="mt-1.5 text-[11px] text-slate-500">
+                Mjerodavna Tarifa i vrijednost boda određuju se prema dospijeću potraživanja,
+                ne prema datumu radnje. Prazno = trenutno važeća Tarifa (HOK, 14.10.2023., {fmtEur(BOD_VALUE)}/bod).
+              </p>
+            </div>
+
             {/* ── Case value input (hidden when only kazneni items) ── */}
             {!isOnlyKazneni && (
             <div id="vodic-vps" className={`bg-white rounded-xl border border-slate-200 p-4 shadow-sm transition ${vodicHighlight("vodic-vps")}`}>

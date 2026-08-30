@@ -462,9 +462,13 @@ public sealed class TroskovnikService : ITroskovnikService
             ? new OsnovicaRezultat(Tbr71Bodovi(0m), "", false)
             : IzracunajOsnovicu(request);
 
+        // Tbr. 52 — verzija Tarife i vrijednost boda biraju se po DOSPIJEĆU, ne po datumu
+        // radnje. Danas postoji jedna verzija, pa svaki datum razrješava na nju.
+        var tarifa = TarifaVerzije.Razrijesi(request.DatumDospijeca);
+
         return new KontekstIzracuna(
             osnovica, vrijednostSpora, vps, jeSamoKazneni,
-            RazrijesiKazneniRazred(request, odabraneDefinicije));
+            RazrijesiKazneniRazred(request, odabraneDefinicije), tarifa);
     }
 
     /// <summary>
@@ -538,7 +542,7 @@ public sealed class TroskovnikService : ITroskovnikService
                 UkupnoBodova = ukupnoStavke,
                 // Redak se prikazuje u eurima, pa se ovdje zaokružuje. Zbrojevi niže
                 // računaju se iz nezaokruženih bodova, da se greška ne akumulira.
-                IznosEur = ZaokruziNovac(ukupnoStavke * TarifaConstants.BodValue),
+                IznosEur = ZaokruziNovac(ukupnoStavke * kontekst.Tarifa.BodValue),
                 IsJednokratna = definicija.JednokratnaNagrada,
                 Tbr41PovisenjePostotak = tbr41Povisenje,
                 Tbr41SnizenjePostotak = tbr41Snizenje,
@@ -616,7 +620,7 @@ public sealed class TroskovnikService : ITroskovnikService
         // ── Novac ──
         // Bodovi su do ovdje ostali decimalni, bez ijednog zaokruživanja. Tek se
         // gotov iznos zaokružuje, jednom, na dvije decimale.
-        var ukupnoEur = ZaokruziNovac(ukupnoBodova * TarifaConstants.BodValue);
+        var ukupnoEur = ZaokruziNovac(ukupnoBodova * kontekst.Tarifa.BodValue);
 
         // ── Tbr. 40. toč. 1, drugi odlomak ──
         // "Iznos povišene nagrade dijeli se na jednake dijelove prema broju branjenika,
@@ -770,6 +774,8 @@ public sealed class TroskovnikService : ITroskovnikService
             BodoviPoOsobi = zbrojevi.BodoviPoOsobi,
             NagradaPoOsobi = zbrojevi.NagradaPoOsobi,
             VrijednostSpora = kontekst.VrijednostSpora,
+            // Tbr. 52 — vrijednost boda mjerodavne verzije Tarife (po dospijeću).
+            VrijednostBoda = kontekst.Tarifa.BodValue,
             IsSamoKazneni = kontekst.JeSamoKazneni,
             // Osnovica (bez PDV) = nagrada + naknada troškova (Tbr. 48.-51.) — obje su
             // vlastiti trošak odvjetnika i ulaze u PDV osnovicu; sudska pristojba i
@@ -866,7 +872,8 @@ public sealed class TroskovnikService : ITroskovnikService
         decimal VrijednostSpora,
         VpsRezultat Vps,
         bool JeSamoKazneni,
-        int KazneniRazredBodovi);
+        int KazneniRazredBodovi,
+        TarifaVerzija Tarifa);
 
     /// <summary>Izvedene ukupne vrijednosti troškovnika, izračunate iz gotovih redaka.</summary>
     private sealed record Zbrojevi(
@@ -1040,7 +1047,9 @@ public sealed class TroskovnikService : ITroskovnikService
         //   čl. 2 — opunomoćenik djeteta žrtve kaznenog djela  → 70%
         // Uloge se isključuju (obrana okrivljenika vs. zastupanje djeteta žrtve), pa se
         // primjenjuje najviše jedna stopa i kad zahtjev ipak stigne s obje zastavice.
-        // Novu proturječnu kombinaciju odbija TroskovnikRequestValidator.
+        // Zastavice su na API-u tri odvojena boola, pa proturječan zahtjev može doći od
+        // starog klijenta ili pohranjenog retka; tada `else if` svjesno primijeni najviše
+        // jednu stopu (dijete žrtve ima prednost), nikad umnožak — zato nikad 35%.
         if (req.IsZastupnikDjeteta)
             bodovi *= TarifaConstants.ZastupnikDjetetaRate;
         else if (req.IsPoSluzbenojDuznosti || req.IsNaTeretProracuna)

@@ -290,8 +290,49 @@ export interface OsnovicaRezultat {
   fiksnoPoRadnji: boolean;
 }
 
-const NAZIV_TARIFE =
+export const NAZIV_TARIFE =
   "Tarifa o nagradama i naknadi troškova za rad odvjetnika (Hrvatska odvjetnička komora, 14. listopada 2023.)";
+
+/** Jedna vremenska verzija Tarife o nagradama (Tbr. 52). */
+export interface TarifaVerzija {
+  naziv: string;
+  bodValue: number;
+  /** ISO datum (YYYY-MM-DD) od kojeg je verzija na snazi. */
+  vrijediOd: string;
+}
+
+/**
+ * Registar verzija Tarife i odabir mjerodavne po DOSPIJEĆU (Tbr. 52), a ne po datumu
+ * radnje. Zrcalo backenda (`Backend/Models/TarifaKonstante.cs`, `TarifaVerzije`). Danas
+ * postoji jedna verzija (HOK, 14.10.2023.), pa svaki datum razrješava na nju.
+ */
+export const TARIFA_VERZIJE: readonly TarifaVerzija[] = [
+  { naziv: NAZIV_TARIFE, bodValue: BOD_VALUE, vrijediOd: "2023-10-14" },
+];
+
+/** Trenutno važeća (najnovija) verzija. */
+export const TARIFA_TRENUTNA: TarifaVerzija = TARIFA_VERZIJE[TARIFA_VERZIJE.length - 1];
+
+/**
+ * Bira verziju Tarife na snazi na dan dospijeća (Tbr. 52). Prazno/undefined → trenutna.
+ * Dospijeće prije najstarije poznate verzije vraća najstariju (starije nisu u registru).
+ */
+export function razrijesiTarifu(datumDospijeca?: string | null): TarifaVerzija {
+  return razrijesiTarifuIz(TARIFA_VERZIJE, datumDospijeca);
+}
+
+/** Čista selekcija nad proizvoljnim popisom — izdvojena da se odabir testira i s više verzija. */
+export function razrijesiTarifuIz(
+  verzije: readonly TarifaVerzija[],
+  datumDospijeca?: string | null,
+): TarifaVerzija {
+  if (verzije.length === 0) throw new Error("Registar verzija Tarife je prazan.");
+  const poredane = [...verzije].sort((a, b) => a.vrijediOd.localeCompare(b.vrijediOd));
+  if (!datumDospijeca) return poredane[poredane.length - 1];
+  let odabrana: TarifaVerzija | null = null;
+  for (const v of poredane) if (v.vrijediOd <= datumDospijeca) odabrana = v;
+  return odabrana ?? poredane[0];
+}
 
 /**
  * Tbr. 7. toč. 4 al. 2: "za utvrđivanje rente, zakupa, najma i u drugim sličnim

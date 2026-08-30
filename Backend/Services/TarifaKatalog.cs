@@ -121,8 +121,10 @@ public static class TarifaKatalog
         new() { Id = "kaz_obrana_pravna_osoba", Kategorija = "Kazneni postupak", Opis = "Obrana pravne osobe u kazn./prekrš. postupku – po kazni za odg. osobu (Tbr. 4.1 al. 9)", TarifniBroj = "Tbr. 4.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 4. toč. 1 al. 9 — prema visini kazne za odgovornu osobu", KazneniBase = true, SortOrder = 138, Jedinica = "sat" },
 
         // ── Tbr. 4.1, al. 10 — Predstavnik pravne osobe (postavi sud) ──
-        // Kad odvjetnika u kaznenom postupku za predstavnika pravne osobe postavi sud = 100 bodova.
-        new() { Id = "kaz_predstavnik_sud", Kategorija = "Kazneni postupak", Opis = "Predstavnik pravne osobe – postavi sud, 100 bodova (Tbr. 4.1 al. 10)", TarifniBroj = "Tbr. 4.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 4. toč. 1 al. 10 — 100 bodova kad predstavnika postavi sud", FiksniBody = 100, SortOrder = 139, Jedinica = "sat" },
+        // Kad odvjetnika u kaznenom postupku za predstavnika pravne osobe postavi sud:
+        // 100 bodova za PRVI SAT SVAKOG DANA rasprave (jedinica je dan rasprave, količina =
+        // broj dana), a svaki sljedeći započeti sat naplaćuje se preko `kaz_dodatni_sat` (50).
+        new() { Id = "kaz_predstavnik_sud", Kategorija = "Kazneni postupak", Opis = "Predstavnik pravne osobe (postavi sud) – 100 bodova za prvi sat svakog dana rasprave (Tbr. 4.1 al. 10)", TarifniBroj = "Tbr. 4.1", PravniIzvor = $"{TarifaConstants.NazivTarife}, Tbr. 4. toč. 1 al. 10 — 100 bodova za prvi sat svakog dana rasprave; svaki sljedeći započeti sat 50 bodova", FiksniBody = 100, SortOrder = 139, Jedinica = "dan rasprave" },
 
         // ── Tbr. 4.1, al. 10 — Predstavnik pravne osobe (postavi pravna osoba) ──
         // Kad ga postavi pravna osoba, nagrada prema al. 9 (= tier za odgovornu osobu).

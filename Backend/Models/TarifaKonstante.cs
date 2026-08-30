@@ -94,3 +94,62 @@ public static class ZaprijecenaKaznaTiers
         ["dugotrajni"]  = 500    // dugotrajni zatvor
     };
 }
+
+/// <summary>
+/// Jedna vremenska verzija Tarife o nagradama: naziv propisa, vrijednost boda i datum
+/// od kojeg je na snazi.
+/// </summary>
+public sealed record TarifaVerzija(string Naziv, decimal BodValue, DateOnly VrijediOd);
+
+/// <summary>
+/// Registar verzija Tarife o nagradama i odabir mjerodavne verzije po <b>dospijeću</b>
+/// (Tbr. 52), a ne po datumu radnje.
+///
+/// Tbr. 52: „Za obračun nagrade i naknade troškova mjerodavna je Tarifa i vrijednost boda
+/// koja je na snazi u trenutku dospijeća potraživanja."
+///
+/// Danas postoji jedna verzija (HOK, 14.10.2023.), pa svaki datum razrješava na nju.
+/// Registar je popis, a ne konstanta, da bi buduća verzija bila dodavanje jednog retka —
+/// ne izmjena logike izračuna. Stvarne brojke (vrijednost boda, razredi) neke ranije
+/// verzije NISU ovdje jer nisu poznate; kad zatrebaju, dodaju se kao novi <see cref="TarifaVerzija"/>.
+/// </summary>
+public static class TarifaVerzije
+{
+    /// <summary>Sve poznate verzije, poredane rastuće po datumu stupanja na snagu.</summary>
+    public static readonly IReadOnlyList<TarifaVerzija> Sve =
+    [
+        new TarifaVerzija(TarifaConstants.NazivTarife, TarifaConstants.BodValue, new DateOnly(2023, 10, 14)),
+    ];
+
+    /// <summary>Trenutno važeća (najnovija) verzija.</summary>
+    public static TarifaVerzija Trenutna => Sve[^1];
+
+    /// <summary>
+    /// Bira verziju Tarife koja je na snazi na dan dospijeća. Null dospijeće → trenutna.
+    /// Dospijeće prije najstarije poznate verzije vraća najstariju (starije nisu u registru).
+    /// </summary>
+    public static TarifaVerzija Razrijesi(DateOnly? datumDospijeca)
+        => RazrijesiIz(Sve, datumDospijeca);
+
+    /// <summary>
+    /// Čista selekcija nad proizvoljnim popisom verzija — izdvojena da se odabir po
+    /// dospijeću može testirati i s više od jedne verzije.
+    /// </summary>
+    public static TarifaVerzija RazrijesiIz(IReadOnlyList<TarifaVerzija> verzije, DateOnly? datumDospijeca)
+    {
+        if (verzije.Count == 0)
+            throw new InvalidOperationException("Registar verzija Tarife je prazan.");
+
+        var poredane = verzije.OrderBy(v => v.VrijediOd).ToList();
+
+        if (datumDospijeca is null)
+            return poredane[^1];
+
+        TarifaVerzija? odabrana = null;
+        foreach (var v in poredane)
+            if (v.VrijediOd <= datumDospijeca.Value)
+                odabrana = v;
+
+        return odabrana ?? poredane[0];
+    }
+}
