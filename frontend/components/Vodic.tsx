@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowRight, Compass, X } from "lucide-react";
 import { markOnboarded } from "@/lib/onboarding";
@@ -24,17 +24,26 @@ import { markOnboarded } from "@/lib/onboarding";
  * constant inside this file, so the two legs share every bit of the highlighting
  * logic and differ only in their text.
  *
- * The card is a single centred modal — the same spot on the screen for every
- * step of both legs — over a dimmed backdrop. An earlier version positioned the
- * card against whichever field it explained; on a long form that left it landing
- * at a different height each step, occasionally clipped or on top of the very
- * field it described, and made the Troškovnik → Stranke handover jump. A fixed
- * centre removes all of that: nothing to measure, nothing to recompute, nothing
- * that can be cut off. The step's field is still ringed on the page underneath,
- * scrolled into view, so the spatial cue survives. Portaled to `document.body`
- * (same pattern as `MethodologyModal`) so it always paints above the rest of the
- * page regardless of stacking contexts on this form.
+ * The card is pinned to an EDGE of the viewport — top or bottom — never over
+ * the field it explains. Two earlier versions each failed one way: one glued
+ * the card to the field, and on a long form it landed at a different height
+ * each step and sometimes clipped; the next centred the card, which then sat
+ * squarely on top of the very field it pointed at (both card and field were
+ * scrolled to the middle). This version measures the ringed field, picks the
+ * edge with more room (field in the top half of the viewport → card at the
+ * bottom, and vice versa), scrolls the field into the band the card does NOT
+ * cover, and anchors the card to that edge. The card keeps a fixed max-height
+ * so nothing clips; only its text body scrolls. Portaled to `document.body`
+ * (same pattern as `MethodologyModal`) so it always paints above the rest of
+ * the page regardless of stacking contexts on this form.
  */
+
+/** Top band kept clear so the ringed field never lands under a sticky header. */
+const VODIC_HEADER_GAP = 72;
+/** Breathing room between the card and the viewport edge it is pinned to. */
+const VODIC_EDGE_GAP = 16;
+/** Gap between the card's band and the ringed field's band. */
+const VODIC_CARD_GAP = 12;
 
 export interface VodicKorak {
   /** DOM id of the element to ring. */
@@ -182,21 +191,86 @@ export default function Vodic({
   const korak = koraci[step];
   const zadnji = step === koraci.length - 1;
 
-  // Tell the page which element to ring, and scroll it into view so the field
-  // the step is about is visible on the page under the centred modal.
-  useEffect(() => {
-    const target = open ? korak.target : null;
-    onStepChange(target);
+  // Which viewport edge the card is pinned to for the current step.
+  const [side, setSide] = useState<"top" | "bottom">("bottom");
+  const cardRef = useRef<HTMLDivElement>(null);
 
-    if (!target) return;
-    // Small delay so the ring has painted before we scroll to the element.
-    const timer = setTimeout(() => {
-      document
-        .getElementById(korak.target)
-        ?.scrollIntoView({ behavior: "smooth", block: "center" });
-    }, 80);
+  // Tell the page which element to ring.
+  useEffect(() => {
+    onStepChange(open ? korak.target : null);
+  }, [open, korak.target, onStepChange]);
+
+  /**
+   * Scroll the ringed field into the strip of viewport the card does NOT cover,
+   * given which edge the card sits on. If the field is taller than that strip
+   * (e.g. a whole client dossier), align its top to the strip's top so at least
+   * the top of the ring stays visible.
+   */
+  const skrolajCilj = useCallback(
+    (edge: "top" | "bottom") => {
+      const el = document.getElementById(korak.target);
+      if (!el) return;
+      const vh = window.innerHeight;
+      const cardH = Math.min(
+        cardRef.current?.offsetHeight ?? 280,
+        vh - VODIC_EDGE_GAP * 2,
+      );
+      const rect = el.getBoundingClientRect();
+
+      const bandTop =
+        edge === "top"
+          ? VODIC_EDGE_GAP + cardH + VODIC_CARD_GAP
+          : VODIC_HEADER_GAP;
+      const bandBottom =
+        edge === "bottom"
+          ? vh - VODIC_EDGE_GAP - cardH - VODIC_CARD_GAP
+          : vh - VODIC_EDGE_GAP;
+      const bandH = Math.max(0, bandBottom - bandTop);
+
+      const desiredTop =
+        rect.height >= bandH ? bandTop : bandTop + (bandH - rect.height) / 2;
+
+      const delta = rect.top - desiredTop;
+      if (Math.abs(delta) > 2) window.scrollBy({ top: delta, behavior: "smooth" });
+    },
+    [korak.target],
+  );
+
+  // On each step: pick the edge with more room from the field's current
+  // position, then scroll the field clear of the card. The small delay lets the
+  // ring and the card paint (so the card measures correctly) before we move.
+  useEffect(() => {
+    if (!open) return;
+    const el = document.getElementById(korak.target);
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const edge: "top" | "bottom" =
+      rect.top + rect.height / 2 < window.innerHeight / 2 ? "bottom" : "top";
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSide(edge);
+    const timer = setTimeout(() => skrolajCilj(edge), 80);
     return () => clearTimeout(timer);
-  }, [open, korak, onStepChange]);
+  }, [open, korak.target, skrolajCilj]);
+
+  // Keep the field clear of the card when the viewport changes size (rotation,
+  // zoom, devtools). The card itself is CSS-pinned, so only the scroll needs
+  // recomputing; throttled to one pass per frame. The edge is not re-chosen —
+  // that would let it oscillate on a very short viewport.
+  useEffect(() => {
+    if (!open) return;
+    let raf = 0;
+    const onResize = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => skrolajCilj(side));
+    };
+    window.addEventListener("resize", onResize);
+    window.addEventListener("orientationchange", onResize);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize);
+    };
+  }, [open, side, skrolajCilj]);
 
   /** Finishing the LAST leg and skipping are the same instruction: do not ask me again. */
   const close = useCallback(() => {
@@ -256,13 +330,23 @@ export default function Vodic({
         z-[200] layer, so a field scrolled to the centre of the screen painted
         its white card straight over the instruction text.
 
-        A single centred modal: same position for every step, never clipped.
-        The body scrolls if it ever has to (a very short viewport); the title
-        and the buttons never do, so they can never be the part that's cut off.
-        `vodic-pop` gives it a small fade-up on mount to match the backdrop.
+        Pinned to the top OR bottom edge (whichever `side` the effect chose for
+        this step), full width up to 440px, centred horizontally. `max-h` plus
+        the edge padding keep it inside the viewport; only the text body scrolls,
+        so the title and the buttons can never be the part that's cut off. The
+        `key` restarts `vodic-pop` on every step so the move to a new edge reads
+        as a deliberate fade rather than a jump.
       */}
-      <div className="fixed inset-0 z-[220] flex items-center justify-center p-4 pointer-events-none print:hidden">
-        <div className="relative pointer-events-auto w-[calc(100%-2rem)] max-w-[440px] max-h-[calc(100vh-2rem)] bg-white rounded-xl shadow-2xl border border-slate-200 p-4 sm:p-5 flex flex-col vodic-pop">
+      <div
+        className={`fixed inset-x-0 z-[220] flex justify-center px-4 pointer-events-none print:hidden ${
+          side === "top" ? "top-0 pt-4" : "bottom-0 pb-4"
+        }`}
+      >
+        <div
+          key={korak.target}
+          ref={cardRef}
+          className="relative pointer-events-auto w-full max-w-[440px] max-h-[calc(100vh-2rem)] bg-white rounded-xl shadow-2xl border border-slate-200 p-4 sm:p-5 flex flex-col vodic-pop"
+        >
           <div className="flex items-start justify-between gap-3 mb-2 shrink-0">
             <div className="flex items-center gap-2">
               <Compass className="h-4 w-4 text-indigo-600" />
