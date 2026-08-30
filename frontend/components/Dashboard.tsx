@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 
 import {
   Search as SearchIcon,
@@ -322,12 +321,10 @@ const FEATURE_CARDS: FeatureCard[] = [
 // ═══════════════════════════════════════════════════════════
 
 export default function Dashboard() {
-  const router = useRouter();
   const subscription = useSubscription();
   const isAdmin = useIsAdmin();
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [bannerDismissed, setBannerDismissed] = useState(false);
   const [showTour, setShowTour] = useState(false);
   const [tourStep, setTourStep] = useState(0);
   const [blockedModule, setBlockedModule] = useState<string | null>(null);
@@ -376,14 +373,6 @@ export default function Dashboard() {
     return () => { cancelled = true; };
   }, []);
 
-  // Check if banner was dismissed
-  useEffect(() => {
-    try {
-      const dismissed = localStorage.getItem("pravotek_banner_dismissed");
-      if (dismissed) setBannerDismissed(true);
-    } catch { /* localStorage unavailable */ }
-  }, []);
-
   useEffect(() => {
     (async () => {
       try {
@@ -396,11 +385,6 @@ export default function Dashboard() {
       }
     })();
   }, [isAdmin]);
-
-  const dismissBanner = () => {
-    setBannerDismissed(true);
-    try { localStorage.setItem("pravotek_banner_dismissed", "1"); } catch { /* storage unavailable */ }
-  };
 
   const endTour = useCallback(() => {
     setShowTour(false);
@@ -488,67 +472,27 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* ═══════════ 1. ONBOARDING WELCOME BANNER ═══════════ */}
-        {!bannerDismissed && (
-          <section className="relative overflow-hidden rounded-xl bg-gradient-to-br from-slate-900 via-slate-800 to-blue-900 text-white p-6 sm:p-8 shadow-lg">
-            {/* Decorative elements */}
-            <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/10 rounded-full -mr-20 -mt-20 blur-3xl" />
-            <div className="absolute bottom-0 left-0 w-48 h-48 bg-indigo-500/10 rounded-full -ml-16 -mb-16 blur-2xl" />
-
-            <button
-              onClick={dismissBanner}
-              className="absolute top-4 right-4 w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition"
-              aria-label="Zatvori"
-            >
-              <X className="h-4 w-4 text-white/70" />
-            </button>
-
-            <div className="relative flex items-start gap-5">
-              <div className="hidden sm:flex w-14 h-14 rounded-2xl bg-blue-600/20 border border-blue-500/30 items-center justify-center shrink-0">
-                <Sparkles className="h-7 w-7 text-blue-400" />
-              </div>
-              <div>
-                {/* No longer a welcome. A returning user saw "Dobrodošli" on
-                    every visit until they dismissed it, and a genuinely new one
-                    now gets a real greeting on /dobrodosli. What is left is the
-                    one thing about this screen that is not self-evident. */}
-                <h2 className="text-xl sm:text-2xl font-bold tracking-tight mb-2">
-                  Povucite dokument bilo gdje na ovaj ekran
-                </h2>
-                <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-2xl">
-                  Ne morate prvo birati modul. Ugovor, ZK izvadak ili oglas —
-                  sustav prepozna vrstu dokumenta i otvori pravi modul sam.
-                  Ili odaberite modul ispod.
-                </p>
-                <div className="flex items-center gap-3 mt-4">
-                  <Link
-                    href={startHere.href}
-                    className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-5 py-2.5 rounded-lg transition shadow-sm"
-                  >
-                    <startHere.icon className="h-4 w-4" />
-                    {startHere.label}
-                  </Link>
-                  <button
-                    onClick={dismissBanner}
-                    className="text-xs text-slate-400 hover:text-white transition px-3 py-2"
-                  >
-                    Ne prikazuj opet
-                  </button>
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* ═══════════ 2. FEATURE GRID — Enterprise Module Cards ═══════════ */}
+        {/* ═══════════ 1. FEATURE GRID — Enterprise Module Cards ═══════════ */}
         <section>
-          <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center justify-between gap-4 mb-5">
             <div>
               <h2 className="font-[family-name:var(--font-playfair)] text-lg font-semibold text-slate-900 tracking-tight">
                 Moduli
               </h2>
               <p className="text-xs text-slate-400 mt-0.5">Odaberite modul za početak rada</p>
             </div>
+            {/* Brz ulaz u modul koji korisnik može odmah koristiti. Prije je ovo
+                bio jedini koristan dio plavog bannera („Otvori Troškovnik"); banner
+                je maknut jer je obećavao povlačenje dokumenta i prepoznavanje
+                vrste — funkcije koje ne postoje i koje bi na zaključanim modulima
+                zavarale korisnika. Gumb ostaje, na suvislom mjestu. */}
+            <Link
+              href={startHere.href}
+              className="inline-flex shrink-0 items-center gap-2 bg-[#1B2A4A] hover:bg-[#243759] text-white text-sm font-medium px-4 py-2.5 rounded-lg transition shadow-sm whitespace-nowrap"
+            >
+              <startHere.icon className="h-4 w-4" />
+              {startHere.label}
+            </Link>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
