@@ -209,6 +209,10 @@ slučaj i vidjeti isti iznos.
 | A2 | ured NIJE PDV obveznik → ispis | nigdje PDV, ni 0,00 € | `troskovnik-izvoz-model` (`pdv: null`) |
 
 ## Isporuka u `main` i produkciju
-Rad je spojen u `main` i objavljen na pravotek.com (auto-deploy Vercel/Render). Točan
-commit i potvrda deploya upisani su niže nakon merge-a. Preporuka: nakon deploya upiši
-jedan primjer iz tablice (npr. VPS 50.000 € → 620,00 €) da vidiš svojim očima.
+Spojeno u `main` (fast-forward `7f9fc1d..6a9d1c7`) i pushano na
+`github.com/nacka301/ProjectAI_Odvjetnik` → automatski deploy (Vercel frontend, Render
+backend). Grana: `claude/troskovnik-zvjezdanin-popis-ea565a`.
+
+**Tvoja provjera nakon deploya (2–3 min):** otvori pravotek.com → Troškovnik i upiši
+jedan primjer iz tablice gore, npr. parnica → tužba → VPS 50.000 € → pristojba mora biti
+**620,00 €**. Za nagradu (Tbr. 7) VPS 70.000 € → **1.056,00 €**. Ako se poklopi, sve živi.
