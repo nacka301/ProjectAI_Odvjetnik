@@ -345,6 +345,12 @@ function TroskovnikContent() {
   // current step rings.
   const [vodicOpen, setVodicOpen] = useState(searchParams.get("vodic") === "1");
   const [vodicTarget, setVodicTarget] = useState<string | null>(null);
+  // Is this guide a leg of the new-user walkthrough, or did the header button
+  // open it on its own? Only the walkthrough hands over to Stranke at the end;
+  // a manual "Vodič" press stays inside the troškovnik and finishes with
+  // "Završi". Arriving with `?vodic=1` (from the welcome screen or the module
+  // tour's hand-off) means the chain; the header button sets it back to false.
+  const [vodicChained, setVodicChained] = useState(searchParams.get("vodic") === "1");
   // `?vodic=1` se briše iz adrese: otkad vodič vodi dalje u Stranke, „Natrag"
   // u pregledniku vraća upravo na tu adresu, pa bi vodič krenuo ispočetka.
   const zatvoriVodic = useCallback(() => {
@@ -369,10 +375,14 @@ function TroskovnikContent() {
     let cancelled = false;
     (async () => {
       const { isNew } = await loadOnboardingState();
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- the answer
-      // arrives from the database, which is exactly the "external system" case
-      // the rule carves out; there is nowhere earlier to know it.
-      if (!cancelled && isNew === true) setVodicOpen(true);
+      // The answer arrives from the database — the "external system" case the
+      // set-state-in-effect rule carves out; there is nowhere earlier to know
+      // it. A new user who lands straight on the troškovnik (not via the module
+      // tour's hand-off) still gets the connected chain onward to Stranke.
+      if (!cancelled && isNew === true) {
+        setVodicChained(true);
+        setVodicOpen(true);
+      }
     })();
     return () => { cancelled = true; };
   }, []);
@@ -1785,7 +1795,9 @@ function TroskovnikContent() {
         koraci={TROSKOVNIK_KORACI}
         onClose={zatvoriVodic}
         onStepChange={setVodicTarget}
-        onNastavak={nastaviUStrankama}
+        // Hand over to Stranke only inside the new-user chain. Opened by the
+        // header button on its own, the last step reads "Završi" and stops here.
+        onNastavak={vodicChained ? nastaviUStrankama : undefined}
         nastavakOznaka="Dalje: Stranke"
       />
 
@@ -1812,9 +1824,11 @@ function TroskovnikContent() {
           {/* Action buttons */}
           <div className="ml-auto flex items-center gap-2">
             {/* Way back into the walkthrough. Skipping it is remembered for
-                good, so without this there would be no way to see it again. */}
+                good, so without this there would be no way to see it again.
+                Pressed here it is the troškovnik guide ALONE — not chained on to
+                Stranke — so the last step reads "Završi". */}
             <button
-              onClick={() => setVodicOpen(true)}
+              onClick={() => { setVodicChained(false); setVodicOpen(true); }}
               className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 transition px-2.5 py-1.5 rounded-lg hover:bg-slate-100"
               title="Pokreni vodič kroz troškovnik"
             >

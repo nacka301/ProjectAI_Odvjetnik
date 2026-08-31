@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import {
   Search as SearchIcon,
@@ -186,6 +187,7 @@ function TourOverlay({
   text,
   onNext,
   onSkip,
+  lastLabel = "Završi",
 }: {
   step: number;
   total: number;
@@ -193,6 +195,12 @@ function TourOverlay({
   text: string;
   onNext: () => void;
   onSkip: () => void;
+  /**
+   * Text of the button on the LAST step. "Završi" when the module tour stands
+   * alone (the header button opened it); "Dalje: Troškovnik" when it is the
+   * first leg of the new-user walkthrough and hands over instead of ending.
+   */
+  lastLabel?: string;
 }) {
   return (
     <div className="fixed inset-0 z-[100] pointer-events-none">
@@ -229,7 +237,7 @@ function TourOverlay({
                 onClick={onNext}
                 className="inline-flex items-center gap-1 bg-blue-600 text-white text-xs font-medium px-4 py-2 rounded-lg hover:bg-blue-700 transition"
               >
-                {step < total - 1 ? "Dalje" : "Završi"}
+                {step < total - 1 ? "Dalje" : lastLabel}
                 <ArrowRight className="h-3 w-3" />
               </button>
             </div>
@@ -321,12 +329,18 @@ const FEATURE_CARDS: FeatureCard[] = [
 // ═══════════════════════════════════════════════════════════
 
 export default function Dashboard() {
+  const router = useRouter();
   const subscription = useSubscription();
   const isAdmin = useIsAdmin();
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showTour, setShowTour] = useState(false);
   const [tourStep, setTourStep] = useState(0);
+  // True when the module tour is the FIRST leg of the new-user walkthrough
+  // (auto-opened for a new user), so its last step hands over to the Troškovnik
+  // → Stranke chain instead of ending. False when the header "Vodič" button
+  // opened it on its own — then it is just the six-card overview and stops.
+  const [tourChained, setTourChained] = useState(false);
   const [blockedModule, setBlockedModule] = useState<string | null>(null);
 
   // Which cards are open to this viewer, and under what DOM id the tour finds them.
@@ -365,7 +379,13 @@ export default function Dashboard() {
     let cancelled = false;
     (async () => {
       const { isNew } = await loadOnboardingState();
-      if (!cancelled && isNew === true) setShowTour(true);
+      // A new user gets the CONNECTED walkthrough: this tour first, then a
+      // hand-off into Troškovnik → Stranke. Chaining is on precisely because
+      // the tour opened itself, not because a button asked for the overview.
+      if (!cancelled && isNew === true) {
+        setTourChained(true);
+        setShowTour(true);
+      }
     })();
     return () => { cancelled = true; };
   }, []);
@@ -390,13 +410,25 @@ export default function Dashboard() {
     void markOnboarded();
   }, []);
 
+  // Hand over from the module overview to the hands-on chain. Deliberately does
+  // NOT mark onboarded: the walkthrough is not over, and stamping it here would
+  // end it for anyone who reloads mid-Troškovnik. The final Stranke leg records
+  // it. `?vodic=1` is the same entry the welcome screen and each leg use.
+  const nastaviUTroskovnik = useCallback(() => {
+    setShowTour(false);
+    setTourStep(0);
+    router.push("/troskovnik?vodic=1");
+  }, [router]);
+
   const nextTourStep = useCallback(() => {
     if (tourStep < tourSteps.length - 1) {
       setTourStep((s) => s + 1);
+    } else if (tourChained) {
+      nastaviUTroskovnik();
     } else {
       endTour();
     }
-  }, [tourStep, tourSteps.length, endTour]);
+  }, [tourStep, tourSteps.length, tourChained, nastaviUTroskovnik, endTour]);
 
   // Highlight active tour card
   const tourTargetId = showTour
@@ -428,6 +460,7 @@ export default function Dashboard() {
           text={tourSteps[tourStep].text}
           onNext={nextTourStep}
           onSkip={endTour}
+          lastLabel={tourChained ? "Dalje: Troškovnik" : "Završi"}
         />
       )}
 
@@ -435,7 +468,7 @@ export default function Dashboard() {
       <AppHeader
         extraStart={
           <button
-            onClick={() => { setShowTour(true); setTourStep(0); }}
+            onClick={() => { setTourChained(false); setTourStep(0); setShowTour(true); }}
             className="text-xs text-slate-500 hover:text-white transition flex items-center gap-1 p-1.5 sm:p-0"
             title="Pokreni vodič"
           >
