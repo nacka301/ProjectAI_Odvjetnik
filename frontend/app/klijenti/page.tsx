@@ -94,6 +94,14 @@ function KlijentiSadrzaj() {
     (id: string) => highlightClasses(vodicTarget === id),
     [vodicTarget],
   );
+  // Koraci 5/7 i 6/7 ciljaju elemente u zaglavlju. Zaglavlje je `sticky` +
+  // `backdrop-blur` — oboje stvara vlastiti stacking context, pa `z-[210]` s
+  // istaknutog elementa ne može prijeći preko zatamnjenja vodiča (`z-[200]`):
+  // ostaje zarobljen na zaglavljevom `z-30` i cilj se ne „probije" kao svjetliji.
+  // Dok korak cilja element u zaglavlju, dižemo cijelo zaglavlje iznad zatamnjenja
+  // da istaknuti gumb/pretraga izađu na svjetlo (tijelo stranice ostaje zatamnjeno).
+  const vodicCiljaZaglavlje =
+    vodicTarget === "vodic-pretraga" || vodicTarget === "vodic-nova-stranka";
 
   // `?vodic=1` se briše iz adrese pri zatvaranju: bez toga bi osvježavanje
   // stranice vratilo vodič koji je korisnik upravo zatvorio.
@@ -225,7 +233,11 @@ function KlijentiSadrzaj() {
         onStepChange={setVodicTarget}
       />
 
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/80 backdrop-blur-xl">
+      <header
+        className={`sticky top-0 border-b border-slate-200 bg-white/80 backdrop-blur-xl ${
+          vodicCiljaZaglavlje ? "z-[210]" : "z-30"
+        }`}
+      >
         <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3 sm:px-6">
           <Link
             href="/"
