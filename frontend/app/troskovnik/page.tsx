@@ -34,7 +34,7 @@ import { useAuth } from "@/lib/useAuth";
 import { getTroskovnik } from "@/lib/supabase";
 import Vodic, { TROSKOVNIK_KORACI, highlightClasses } from "@/components/Vodic";
 import { clearDraft, loadDraft, saveDraft, type LoadedDraft } from "@/lib/troskovnik-draft";
-import { cachedOnboardedHint, loadOnboardingState } from "@/lib/onboarding";
+import { loadOnboardingState } from "@/lib/onboarding";
 import { formatThreshold } from "@/lib/format";
 import TroskovnikIspis from "@/components/troskovnik/TroskovnikIspis";
 import StrankaPicker from "@/components/troskovnik/StrankaPicker";
@@ -361,10 +361,11 @@ function TroskovnikContent() {
   );
 
   useEffect(() => {
-    // The cached hint answers "not new" without a round trip, so the overlay
-    // cannot flash on a returning lawyer's screen while the query is in flight.
-    if (cachedOnboardedHint()) return;
-
+    // Is this user new? Asked from user_profiles.onboarded_at for THIS user on
+    // every mount — never from a browser-global cache, which used to hand a new
+    // user the previous user's "already onboarded" and swallow the tour. The
+    // overlay starts closed and opens only on `isNew === true`, so there is no
+    // flash on a returning lawyer's screen while the query is in flight.
     let cancelled = false;
     (async () => {
       const { isNew } = await loadOnboardingState();

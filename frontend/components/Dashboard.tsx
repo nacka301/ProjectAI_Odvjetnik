@@ -27,7 +27,7 @@ import {
   Scale,
 } from "lucide-react";
 import { getRecentActivity, type ActivityItem, type ActivityType } from "@/lib/supabase";
-import { cachedOnboardedHint, loadOnboardingState, markOnboarded } from "@/lib/onboarding";
+import { loadOnboardingState, markOnboarded } from "@/lib/onboarding";
 import AppHeader from "@/components/AppHeader";
 import { SecurityFooter } from "@/components/TrustComponents";
 import { useSubscription } from "@/lib/useSubscription";
@@ -354,17 +354,14 @@ export default function Dashboard() {
     if (id && moduleTitle(id)) setBlockedModule(id);
   }, []);
 
-  // Is this user new? The answer comes from user_profiles.onboarded_at, not
-  // from this browser. `pravotek_tour_seen` made "new" a property of a browser
-  // profile: the same lawyer was new again on their phone, new again after
-  // clearing history, and nobody could tell whether anyone had ever finished.
-  //
-  // The cached hint suppresses the tour immediately for anyone known to have
-  // done it, so the overlay does not flash while the query is in flight. It is
-  // only ever used to say "not new" — never the other way round.
+  // Is this user new? The answer comes from user_profiles.onboarded_at for THIS
+  // user, asked on every mount. An earlier version short-circuited on a browser-
+  // global localStorage hint, so a second person signing in on the same browser
+  // inherited the first person's "already onboarded" and never saw the tour — and
+  // the same held for a profile that was deleted and recreated. There is no local
+  // shortcut now: the tour starts closed and opens only when the database says
+  // `isNew === true`, so nothing flashes while the query is in flight.
   useEffect(() => {
-    if (cachedOnboardedHint()) return;
-
     let cancelled = false;
     (async () => {
       const { isNew } = await loadOnboardingState();

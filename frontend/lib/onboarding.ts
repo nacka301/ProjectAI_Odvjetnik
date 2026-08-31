@@ -11,12 +11,15 @@ import { createSupabaseBrowser } from "@/lib/supabase/client";
  * history was "new" again; and there was no way to tell whether anyone had ever
  * finished the introduction.
  *
- * `user_profiles.onboarded_at` (migration 022) is the single truth. localStorage
- * survives only as a cache, so the welcome screen does not flash on every load
- * while the query is in flight — it is never trusted to say someone IS new.
+ * `user_profiles.onboarded_at` (migration 022) is the single truth, and the ONLY
+ * one. An earlier version kept a `localStorage` hint to skip the query for people
+ * known to have finished — but that hint was global to the browser, not tied to a
+ * `user.id`, so a second person signing in on the same browser inherited the
+ * first person's "already onboarded" and never got the tour. The cache is gone:
+ * every entry point asks the database for the current user, every time. The tour
+ * starts closed and opens only on `isNew === true`, so nothing flashes while the
+ * query is in flight — there is no need for a local shortcut.
  */
-
-const CACHE_KEY = "pravotek_onboarded";
 
 export interface OnboardingState {
   /** Null while unknown (not signed in, or the query failed). */
@@ -44,23 +47,6 @@ export const UNKNOWN_ONBOARDING: OnboardingState = {
   firmName: "",
   firmNameIsPlaceholder: false,
 };
-
-/** Fast, non-authoritative hint used to avoid a flash of the wrong screen. */
-export function cachedOnboardedHint(): boolean {
-  try {
-    return localStorage.getItem(CACHE_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function rememberOnboarded() {
-  try {
-    localStorage.setItem(CACHE_KEY, "1");
-  } catch {
-    // Private mode or storage disabled — the database still has the answer.
-  }
-}
 
 export async function loadOnboardingState(): Promise<OnboardingState> {
   const supabase = createSupabaseBrowser();
@@ -96,8 +82,6 @@ export async function loadOnboardingState(): Promise<OnboardingState> {
   const email = profile.email ?? user.email ?? "";
   const firmName = firm?.name ?? "";
 
-  if (profile.onboarded_at) rememberOnboarded();
-
   return {
     isNew: profile.onboarded_at === null,
     fullName: profile.full_name?.trim() || "",
@@ -117,8 +101,6 @@ export async function loadOnboardingState(): Promise<OnboardingState> {
  * nobody asked for.
  */
 export async function markOnboarded(): Promise<void> {
-  rememberOnboarded();
-
   try {
     const supabase = createSupabaseBrowser();
     const {
@@ -131,8 +113,9 @@ export async function markOnboarded(): Promise<void> {
       .update({ onboarded_at: new Date().toISOString() })
       .eq("user_id", user.id);
   } catch {
-    // The cache above already suppresses it on this device. Failing here must
-    // never block the user from getting on with their work.
+    // The caller has already closed the tour in this session, so a failed write
+    // only means the tour may reappear on the next visit — never a blocker to
+    // getting on with the work.
   }
 }
 
