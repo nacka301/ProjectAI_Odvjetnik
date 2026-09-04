@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Scale, Clock, ShieldCheck, Shield, LogOut } from "lucide-react";
+import { Scale, Clock, ShieldCheck, Shield, LogOut, Compass } from "lucide-react";
 import { signOutCompletely } from "@/lib/sign-out";
 import { useSubscription } from "@/lib/useSubscription";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import { isPathLocked } from "@/lib/modules";
+import { VODIC_NAZIVI, useVodic, type VodicId } from "@/contexts/VodicContext";
 import React from "react";
 
 // ── Subscription badge styling ──
@@ -29,6 +30,82 @@ const navItems: NavItem[] = [
   { href: "/history", label: "Povijest", icon: Clock },
   { href: "/postavke", label: "Postavke", icon: Shield },
 ];
+
+/**
+ * Stavka „Vodič" — uvijek dostupna, iz svakog ekrana.
+ *
+ * Vodiča ima tri, pa jedan klik ne može značiti jednu stvar: gumb otvara mali
+ * popis. Prije je „Vodič" bio gumb na troškovniku i na strankama zasebno, pa
+ * odvjetnik koji se vratio za mjesec dana nije imao odakle ga pokrenuti ako se
+ * zatekao na Povijesti ili u Postavkama.
+ */
+function VodicIzbornik() {
+  const { pokreni } = useVodic();
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const vani = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", vani);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", vani);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+
+  const odaberi = (id: VodicId) => {
+    setOpen(false);
+    pokreni(id);
+  };
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className={`text-xs transition flex items-center gap-1 p-1.5 sm:p-0 rounded ${
+          open ? "text-white font-semibold" : "text-slate-400 hover:text-white"
+        }`}
+        title="Pokreni vodič"
+      >
+        <Compass className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
+        <span className="hidden sm:inline">Vodič</span>
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-xl"
+        >
+          <p className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+            Pokreni vodič
+          </p>
+          {(Object.keys(VODIC_NAZIVI) as VodicId[]).map((id) => (
+            <button
+              key={id}
+              role="menuitem"
+              onClick={() => odaberi(id)}
+              className="block w-full px-3 py-2 text-left text-xs text-slate-700 transition hover:bg-slate-50"
+            >
+              {VODIC_NAZIVI[id]}
+              {id === "dobrodoslica" && (
+                <span className="block text-[10px] text-slate-400">
+                  na podacima za primjer, ništa se ne sprema
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface AppHeaderProps {
   /** Extra elements rendered before the nav links (e.g. tour button) */
@@ -69,6 +146,8 @@ function AppHeaderInner({ extraStart }: AppHeaderProps) {
         {/* ── Right side: optional extras + nav links + logout ── */}
         <div className="flex items-center gap-2 sm:gap-4">
           {extraStart}
+
+          <VodicIzbornik />
 
           {visibleNavItems.map(({ href, label, icon: Icon }) => {
             const isActive = pathname === href;

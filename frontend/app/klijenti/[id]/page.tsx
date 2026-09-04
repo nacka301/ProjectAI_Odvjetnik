@@ -23,61 +23,46 @@ import {
 import { API_BASE } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
 import { formatBodovi } from "@/lib/format";
+import { DEMO_ZASTO_NEAKTIVNO, useDemo } from "@/contexts/DemoContext";
+import { demoProfil } from "@/lib/demo/izracun";
+import type { ClientProfile } from "@/lib/stranke-tipovi";
+import type { TarifnaStavka } from "@/lib/tarifa";
 
 // ── Types ──
 
-interface Client {
-  id: string;
-  created_at: string;
-  updated_at: string;
-  user_id: string;
-  ime_naziv: string;
-  oib: string | null;
-  adresa: string | null;
-  grad: string | null;
-  postanski_broj: string | null;
-  email: string | null;
-  telefon: string | null;
-  tip: string;
-  napomena: string | null;
-}
-
-interface Case {
-  id: string;
-  created_at: string;
-  client_id: string | null;
-  broj_predmeta: string;
-  naziv: string;
-  opis: string | null;
-  vrsta: string;
-  status: string;
-  vrijednost_spora: number | null;
-  sud: string | null;
-  sudac: string | null;
-  datum_pokretanja: string | null;
-  datum_zatvaranja: string | null;
-}
-
-interface Troskovnik {
-  id: string;
-  created_at: string;
-  opis_predmeta: string | null;
-  vrijednost_spora: number;
-  ukupno_bodova: number;
-  ukupno_eur_bez_pdv: number;
-  pdv: number;
-  ukupno_eur_s_pdv: number;
-  klijent_ime: string | null;
-  odvjetnik_ime: string | null;
-}
-
-interface ClientProfile {
-  client: Client;
-  cases: Case[];
-  troskovnici: Troskovnik[];
-}
-
 // ── Helpers ──
+
+/**
+ * Veza na predmet — obična poveznica, a u prikazu primjera samo okvir.
+ *
+ * Demo pokriva popis stranaka i dosje, ne i detalj predmeta. Poveznica koja bi
+ * odvjetnika iz primjera odvela na 404 gora je od poveznice koje nema: izgleda
+ * kao da je aplikacija pokvarena, a ne kao da primjer ondje prestaje.
+ */
+function VezaPredmeta({
+  demo,
+  href,
+  className,
+  children,
+}: {
+  demo: boolean;
+  href: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  if (demo) {
+    return (
+      <div className={className} title="Detalj predmeta nije dio prikaza primjera.">
+        {children}
+      </div>
+    );
+  }
+  return (
+    <Link href={href} className={className}>
+      {children}
+    </Link>
+  );
+}
 
 const STATUS_COLORS: Record<string, string> = {
   aktivan: "text-emerald-700 bg-emerald-50 border-emerald-200",
@@ -121,6 +106,24 @@ export default function ClientProfilePage() {
   const { userId, authHeaders } = useAuth();
   const [deletingCase, setDeletingCase] = useState<string | null>(null);
 
+  // ── Prikaz primjera ──
+  // Dosje je mjesto na kojem se vidi cijeli lanac stranka → predmet →
+  // troškovnik, pa demo mora doseći i ovamo — inače popis od deset imena vodi
+  // u prazno. Iznosi spremljenog demo troškovnika računaju se iz kataloga
+  // Tarife, ne prepisuju: vidi lib/demo/izracun.ts.
+  const { demo } = useDemo();
+  const [katalog, setKatalog] = useState<TarifnaStavka[]>([]);
+
+  useEffect(() => {
+    if (!demo || !userId) return;
+    fetch(`${API_BASE}/api/troskovnik/katalog`, { headers: authHeaders })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: TarifnaStavka[]) => setKatalog(data))
+      .catch(() => {});
+    // authHeaders je nov objekt pri svakom osvježavanju tokena; userId nije.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [demo, userId]);
+
   // Case form
   const [showCaseForm, setShowCaseForm] = useState(false);
   const [savingCase, setSavingCase] = useState(false);
@@ -138,6 +141,12 @@ export default function ClientProfilePage() {
 
   const fetchProfile = useCallback(async () => {
     if (!userId) return;
+    if (demo) {
+      setProfile(demoProfil(clientId, katalog));
+      setFetchError("");
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setFetchError("");
     try {
@@ -157,7 +166,7 @@ export default function ClientProfilePage() {
     } finally {
       setLoading(false);
     }
-  }, [clientId, userId]);
+  }, [clientId, userId, demo, katalog]);
 
   useEffect(() => {
     if (userId) fetchProfile();
@@ -166,6 +175,10 @@ export default function ClientProfilePage() {
   // Create case
   const handleCreateCase = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (demo) {
+      setFetchError(DEMO_ZASTO_NEAKTIVNO);
+      return;
+    }
     if (!userId || !caseForm.naziv.trim()) return;
     setSavingCase(true);
 
@@ -220,6 +233,10 @@ export default function ClientProfilePage() {
 
   // Delete case
   const handleDeleteCase = async (caseId: string) => {
+    if (demo) {
+      setFetchError(DEMO_ZASTO_NEAKTIVNO);
+      return;
+    }
     if (!userId || deletingCase) return;
     if (!confirm("Obrisati predmet?")) return;
     setDeletingCase(caseId);
@@ -421,7 +438,9 @@ export default function ClientProfilePage() {
             <div className="mb-4 flex justify-end">
               <button
                 onClick={() => setShowCaseForm(!showCaseForm)}
-                className="flex items-center gap-2 rounded-lg bg-[#1B2A4A] px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-[#1B2A4A]/90 active:scale-[0.98]"
+                disabled={demo}
+                title={demo ? DEMO_ZASTO_NEAKTIVNO : undefined}
+                className="flex items-center gap-2 rounded-lg bg-[#1B2A4A] px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-[#1B2A4A]/90 active:scale-[0.98] disabled:bg-slate-300 disabled:cursor-not-allowed"
               >
                 {showCaseForm ? (
                   <X className="h-4 w-4" />
@@ -579,13 +598,14 @@ export default function ClientProfilePage() {
                     key={c.id}
                     className="group flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-[#1B2A4A]/40 hover:shadow-md"
                   >
-                    <Link
+                    <VezaPredmeta
+                      demo={demo}
                       href={`/predmeti/${c.id}`}
                       className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#1B2A4A]/10 transition hover:bg-[#1B2A4A]/20"
                     >
                       <Scale className="h-5 w-5 text-[#1B2A4A]" />
-                    </Link>
-                    <Link href={`/predmeti/${c.id}`} className="min-w-0 flex-1">
+                    </VezaPredmeta>
+                    <VezaPredmeta demo={demo} href={`/predmeti/${c.id}`} className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <h4 className="truncate text-sm font-semibold text-slate-900">
                           {c.naziv}
@@ -613,13 +633,15 @@ export default function ClientProfilePage() {
                           <span>{formatDate(c.datum_pokretanja)}</span>
                         )}
                       </div>
-                    </Link>
-                    <button
-                      onClick={() => handleDeleteCase(c.id)}
-                      className="rounded-lg p-2 text-slate-300 opacity-0 transition hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    </VezaPredmeta>
+                    {!demo && (
+                      <button
+                        onClick={() => handleDeleteCase(c.id)}
+                        className="rounded-lg p-2 text-slate-300 opacity-0 transition hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>

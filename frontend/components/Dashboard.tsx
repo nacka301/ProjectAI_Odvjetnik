@@ -16,7 +16,7 @@ import {
 
   Sparkles,
   CircleHelp,
-  Eye,
+  Compass,
   Send,
   Landmark,
   Construction,
@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { getRecentActivity, type ActivityItem, type ActivityType } from "@/lib/supabase";
 import { loadOnboardingState, markOnboarded } from "@/lib/onboarding";
+import { useVodic } from "@/contexts/VodicContext";
 import AppHeader from "@/components/AppHeader";
 import { SecurityFooter } from "@/components/TrustComponents";
 import { useSubscription } from "@/lib/useSubscription";
@@ -91,46 +92,6 @@ const BADGE_COLORS: Record<string, string> = {
   indigo: "text-indigo-700 bg-indigo-50",
 };
 
-// ── Tour Guide Steps ──
-//
-// Steps for modules still in development are dropped before rendering, so the
-// tour never walks a user to a card they cannot open. That is also why the
-// step counter is generated rather than written into the title: it used to read
-// "1/6 … 6/6" by hand, which goes wrong the moment the list is filtered.
-
-const TOUR_STEPS = [
-  {
-    moduleId: "procjena",
-    title: "Tržišna Procjena",
-    text: "Ovdje izračunavate realnu vrijednost nekretnine. Unesite podatke ili zalijepite link oglasa.",
-  },
-  {
-    moduleId: "ugovor",
-    title: "Analiza Ugovora",
-    text: "Učitajte nacrt ugovora — sustav pronalazi pravne zamke i predlaže sigurnije klauzule.",
-  },
-  {
-    moduleId: "zk",
-    title: "ZK Izvadak",
-    text: "Učitajte ZK izvadak — sustav identificira terete, hipoteke, plombe i pravne rizike.",
-  },
-  {
-    moduleId: "troskovnik",
-    title: "Odvjetnički Troškovnik",
-    text: "Izračunajte nagradu i troškove prema službenoj tarifi — odaberite radnje, a bodovi se računaju automatski.",
-  },
-  {
-    moduleId: "stranke",
-    title: "Stranke",
-    text: "Upravljajte strankama, predmetima i troškovnicima — pregledajte kompletan dosje na jednom mjestu.",
-  },
-  {
-    moduleId: "prijevod",
-    title: "Sudski Tumač",
-    text: "Zalijepite pravni tekst na ćirilici ili stranom jeziku — modul za pravnu lingvistiku prevodi uz strogu terminologiju.",
-  },
-];
-
 // ── HoverCard Component ──
 
 function HoverInfoCard({ text }: { text: string }) {
@@ -173,69 +134,6 @@ function HoverInfoCard({ text }: { text: string }) {
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-// ── Tour Overlay ──
-
-function TourOverlay({
-  step,
-  total,
-  title,
-  text,
-  onNext,
-  onSkip,
-}: {
-  step: number;
-  total: number;
-  title: string;
-  text: string;
-  onNext: () => void;
-  onSkip: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-[100] pointer-events-none">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-slate-900/60 pointer-events-auto" onClick={onSkip} />
-      {/* Tooltip (centered at bottom) */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 pointer-events-auto w-[calc(100%-2rem)] max-w-[380px]">
-        <div className="bg-white rounded-xl shadow-2xl border border-slate-200 p-4 sm:p-5">
-          <div className="flex items-center gap-2 mb-2">
-            <Eye className="h-4 w-4 text-blue-600" />
-            <span className="text-sm font-bold text-slate-900">{title}</span>
-          </div>
-          <p className="text-sm text-slate-600 leading-relaxed mb-4">{text}</p>
-          <div className="flex items-center justify-between">
-            <button
-              onClick={onSkip}
-              className="text-xs text-slate-400 hover:text-slate-600 transition"
-            >
-              Preskoči vodič
-            </button>
-            <div className="flex items-center gap-3">
-              {/* Step dots */}
-              <div className="flex gap-1">
-                {Array.from({ length: total }).map((_, i) => (
-                  <div
-                    key={i}
-                    className={`w-1.5 h-1.5 rounded-full transition ${
-                      i === step ? "bg-blue-600" : "bg-slate-200"
-                    }`}
-                  />
-                ))}
-              </div>
-              <button
-                onClick={onNext}
-                className="inline-flex items-center gap-1 bg-blue-600 text-white text-xs font-medium px-4 py-2 rounded-lg hover:bg-blue-700 transition"
-              >
-                {step < total - 1 ? "Dalje" : "Završi"}
-                <ArrowRight className="h-3 w-3" />
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
@@ -325,20 +223,16 @@ export default function Dashboard() {
   const isAdmin = useIsAdmin();
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showTour, setShowTour] = useState(false);
-  const [tourStep, setTourStep] = useState(0);
   const [blockedModule, setBlockedModule] = useState<string | null>(null);
+  /** Je li ovo prvi dolazak — tada se nudi uvod. */
+  const [nudiUvod, setNudiUvod] = useState(false);
+  const { pokreni } = useVodic();
 
-  // Which cards are open to this viewer, and under what DOM id the tour finds them.
   const cards = FEATURE_CARDS.map((card) => ({
     ...card,
     domId: `card-${card.moduleId}`,
     locked: isModuleLocked(card.moduleId, isAdmin),
   }));
-
-  const tourSteps = TOUR_STEPS.filter(
-    (step) => !isModuleLocked(step.moduleId, isAdmin),
-  );
 
   // "Start something" buttons must land somewhere the viewer can actually work.
   // Pointing an ordinary user at /wizard would bounce them straight back here.
@@ -359,13 +253,13 @@ export default function Dashboard() {
   // global localStorage hint, so a second person signing in on the same browser
   // inherited the first person's "already onboarded" and never saw the tour — and
   // the same held for a profile that was deleted and recreated. There is no local
-  // shortcut now: the tour starts closed and opens only when the database says
-  // `isNew === true`, so nothing flashes while the query is in flight.
+  // shortcut now: nothing is offered until the database says `isNew === true`,
+  // so nothing flashes while the query is in flight.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const { isNew } = await loadOnboardingState();
-      if (!cancelled && isNew === true) setShowTour(true);
+      if (!cancelled && isNew === true) setNudiUvod(true);
     })();
     return () => { cancelled = true; };
   }, []);
@@ -383,69 +277,66 @@ export default function Dashboard() {
     })();
   }, [isAdmin]);
 
-  const endTour = useCallback(() => {
-    setShowTour(false);
-    setTourStep(0);
-    // Finishing and skipping record the same thing: do not offer this again.
+  // ── Poziv na uvod ──
+  //
+  // Uvod ne otima ekran sam od sebe. Novi korisnik prvo vidi gdje je došao, pa
+  // tek onda odlucuje: „Kreni" ga vodi u prikaz primjera, „Ne sada" zatvara
+  // pitanje zauvijek. Prije je ovdje stajala sestostepena tura po karticama
+  // modula. Pokretala se sama i ucila izbornik („kartica Troskovnik otvara
+  // troskovnik"), a ne posao — uvod na primjeru radi njezin posao bolje, pa je
+  // uklonjena da dva vodica ne bi otimala istog korisnika.
+  const kreniUvod = useCallback(() => {
+    setNudiUvod(false);
+    pokreni("dobrodoslica");
+  }, [pokreni]);
+
+  const odbijUvod = useCallback(() => {
+    setNudiUvod(false);
+    // Odbijanje je isto sto i zavrsetak: ne pitaj me vise.
     void markOnboarded();
   }, []);
-
-  const nextTourStep = useCallback(() => {
-    if (tourStep < tourSteps.length - 1) {
-      setTourStep((s) => s + 1);
-    } else {
-      endTour();
-    }
-  }, [tourStep, tourSteps.length, endTour]);
-
-  // Highlight active tour card
-  const tourTargetId = showTour
-    ? tourSteps[tourStep] && `card-${tourSteps[tourStep].moduleId}`
-    : null;
-
-  // Auto-scroll to the active tour target element
-  useEffect(() => {
-    if (!tourTargetId) return;
-    // Small delay so the DOM has painted the highlight ring before we measure
-    const timer = setTimeout(() => {
-      const el = document.getElementById(tourTargetId);
-      if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-    }, 80);
-    return () => clearTimeout(timer);
-  }, [tourTargetId]);
 
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
-      {/* ═══════════ Tour Overlay ═══════════ */}
-      {showTour && tourSteps[tourStep] && (
-        <TourOverlay
-          step={tourStep}
-          total={tourSteps.length}
-          title={`${tourStep + 1}/${tourSteps.length} · ${tourSteps[tourStep].title}`}
-          text={tourSteps[tourStep].text}
-          onNext={nextTourStep}
-          onSkip={endTour}
-        />
-      )}
-
       {/* ═══════════ Top Navigation ═══════════ */}
-      <AppHeader
-        extraStart={
-          <button
-            onClick={() => { setShowTour(true); setTourStep(0); }}
-            className="text-xs text-slate-500 hover:text-white transition flex items-center gap-1 p-1.5 sm:p-0"
-            title="Pokreni vodič"
-          >
-            <CircleHelp className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
-            <span className="hidden sm:inline">Vodič</span>
-          </button>
-        }
-      />
+      {/* Gumb „Vodič" vise ne stoji ovdje nego u samom zaglavlju, kao stavka
+          izbornika — dostupan je s Povijesti i iz Postavki jednako kao odavde. */}
+      <AppHeader />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+
+        {/* ═══════════ POZIV NA UVOD (samo prvi put) ═══════════ */}
+        {nudiUvod && (
+          <div className="flex flex-col gap-3 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <Compass className="mt-0.5 h-5 w-5 shrink-0 text-indigo-600" />
+              <div>
+                <p className="text-sm font-semibold text-slate-900">
+                  Pokažimo vam kako ovo radi
+                </p>
+                <p className="text-sm text-slate-600">
+                  Dvije minute, na gotovom troškovniku i popunjenom popisu stranaka.
+                  Podaci su primjer i ništa se ne sprema u vaš račun.
+                </p>
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                onClick={odbijUvod}
+                className="rounded-lg px-3 py-2 text-xs text-slate-500 transition hover:text-slate-800"
+              >
+                Ne sada
+              </button>
+              <button
+                onClick={kreniUvod}
+                className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-medium text-white transition hover:bg-indigo-700"
+              >
+                Kreni <ArrowRight className="h-3 w-3" />
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* ═══════════ 0. "MODULE STILL IN DEVELOPMENT" NOTICE ═══════════ */}
         {/* Shown after the middleware redirected a typed-in route back here.  */}
@@ -502,10 +393,6 @@ export default function Dashboard() {
                     card.locked
                       ? "cursor-not-allowed"
                       : "hover:border-[#1B2A4A]/40 hover:shadow-md hover:-translate-y-0.5"
-                  } ${
-                    tourTargetId === card.domId
-                      ? "z-[110] ring-2 ring-[#1B2A4A] ring-offset-2 shadow-lg"
-                      : ""
                   }`}
                 >
                   {/* "In development" badge */}

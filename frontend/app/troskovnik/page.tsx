@@ -7,7 +7,6 @@ import {
   ArrowLeft,
   Calculator,
   ChevronDown,
-  Compass,
   ChevronRight,
   ChevronUp,
   ClipboardList,
@@ -32,9 +31,11 @@ import {
 import { API_BASE } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
 import { getTroskovnik } from "@/lib/supabase";
-import Vodic, { TROSKOVNIK_KORACI, highlightClasses } from "@/components/Vodic";
+import { highlightClasses } from "@/components/Vodic";
+import { useVodic } from "@/contexts/VodicContext";
+import { DEMO_ZASTO_NEAKTIVNO, useDemo } from "@/contexts/DemoContext";
+import { DEMO_STRANKE, DEMO_TROSKOVNIK, DEMO_URED } from "@/lib/demo/podaci";
 import { clearDraft, loadDraft, saveDraft, type LoadedDraft } from "@/lib/troskovnik-draft";
-import { loadOnboardingState } from "@/lib/onboarding";
 import { formatThreshold } from "@/lib/format";
 import TroskovnikIspis from "@/components/troskovnik/TroskovnikIspis";
 import StrankaPicker from "@/components/troskovnik/StrankaPicker";
@@ -338,48 +339,23 @@ function TroskovnikContent() {
   // ovdje uvijek stvara nov redak. Vidi klonirajZapis niže.
   const klonId = searchParams.get("klon");
 
-  // ── Vodič kroz prvi troškovnik ──
-  // Opens from three places: `?vodic=1` (the welcome screen's button), the
-  // header button, or — for someone who has never been through it — the answer
-  // from user_profiles.onboarded_at. `vodicTarget` is the id of the element the
-  // current step rings.
-  const [vodicOpen, setVodicOpen] = useState(searchParams.get("vodic") === "1");
-  const [vodicTarget, setVodicTarget] = useState<string | null>(null);
-  // `?vodic=1` se briše iz adrese: otkad vodič vodi dalje u Stranke, „Natrag"
-  // u pregledniku vraća upravo na tu adresu, pa bi vodič krenuo ispočetka.
-  const zatvoriVodic = useCallback(() => {
-    setVodicOpen(false);
-    if (searchParams.get("vodic") === "1") router.replace("/troskovnik");
-  }, [router, searchParams]);
-
-  // Druga dionica vodiča živi u Strankama. `?vodic=1` je isti ulaz kojim je
-  // ovamo došao s ekrana dobrodošlice — nema drugog stanja koje bi trebalo
-  // prenijeti, pa prijelaz preživi i osvježavanje stranice.
-  const nastaviUStrankama = useCallback(
-    () => router.push("/klijenti?vodic=1"),
-    [router],
-  );
-
-  useEffect(() => {
-    // Is this user new? Asked from user_profiles.onboarded_at for THIS user on
-    // every mount — never from a browser-global cache, which used to hand a new
-    // user the previous user's "already onboarded" and swallow the tour. The
-    // overlay starts closed and opens only on `isNew === true`, so there is no
-    // flash on a returning lawyer's screen while the query is in flight.
-    let cancelled = false;
-    (async () => {
-      const { isNew } = await loadOnboardingState();
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- the answer
-      // arrives from the database, which is exactly the "external system" case
-      // the rule carves out; there is nowhere earlier to know it.
-      if (!cancelled && isNew === true) setVodicOpen(true);
-    })();
-    return () => { cancelled = true; };
-  }, []);
+  // ── Vodič ──
+  //
+  // Vodič više ne živi u ovoj stranici. Stoji iznad ruta (`VodicProvider`), jer
+  // uvodni vodič ima korak i na /klijenti, a stranica koja bi ga držala pri toj
+  // navigaciji prestaje postojati. Odavde se čita samo koje polje treba
+  // prstenovati.
+  const { target: vodicTarget, aktivan: vodicAktivan } = useVodic();
+  const vodicOpen = vodicAktivan !== null;
   const vodicHighlight = useCallback(
     (id: string) => highlightClasses(vodicTarget === id),
     [vodicTarget],
   );
+
+  // ── Prikaz primjera ──
+  // Dok traje, forma je popunjena demo troškovnikom, spremanje/ispis/izvoz su
+  // zaključani, a podaci ureda i stranaka dolaze iz `lib/demo/podaci.ts`.
+  const { demo } = useDemo();
 
   // ── Catalog state ──
   const [katalog, setKatalog] = useState<TarifnaStavka[]>([]);
@@ -598,7 +574,9 @@ function TroskovnikContent() {
   // automatic restore: this page can also be opened with ?clientId=… prefilled,
   // and silently overwriting that with an older draft would be its own bug.
   useEffect(() => {
-    if (!userId) return;
+    // U prikazu primjera nema što nuditi: forma je ionako popunjena demo
+    // podacima, a ponuda bi ih pregazila usred vodiča.
+    if (!userId || demo) return;
     const found = loadDraft<Nacrt>(userId);
     if (found) setPonudjeniNacrt(found);
     // Runs once per user — re-offering after the user dismissed it would make
@@ -608,10 +586,13 @@ function TroskovnikContent() {
 
   // Debounced, so typing does not serialise sixty fields on every keystroke.
   useEffect(() => {
-    if (!userId || !nacrtVrijedanSpremanja) return;
+    // Demo podaci ne odlaze ni u sessionStorage. „Ništa od ovoga nije spremljeno
+    // u vaš račun" mora vrijediti doslovno, inače bi se izmišljena stranka
+    // vratila kao ponuđeni nacrt nakon što vodič odavno završi.
+    if (!userId || demo || !nacrtVrijedanSpremanja) return;
     const timer = setTimeout(() => saveDraft(userId, draftSnapshot), 1500);
     return () => clearTimeout(timer);
-  }, [userId, draftSnapshot, nacrtVrijedanSpremanja]);
+  }, [userId, demo, draftSnapshot, nacrtVrijedanSpremanja]);
 
   /** Puts a recovered draft back into the form, field by field. */
   const vratiNacrt = useCallback((d: Nacrt) => {
@@ -866,7 +847,7 @@ function TroskovnikContent() {
   // (npr. jer je fetch stigao nakon što je već odgovorio), dohvat ga ne mijenja.
   // Neuspjeh fetcha tiho ostavlja sve kako jest — ovo nije kritična putanja.
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || demo) return; // U demo načinu zaglavlje puni DEMO_URED.
     fetch(`${API_BASE}/api/settings/firm`, { headers: authHeaders })
       .then((r) => (r.ok ? r.json() : null))
       .then((data: FirmSettings | null) => {
@@ -883,6 +864,16 @@ function TroskovnikContent() {
   // ── Load user's clients for picker ──
   useEffect(() => {
     if (!userId) return;
+    // Prikaz primjera ne dira bazu: stranke dolaze iz lokalne datoteke, a
+    // korisnikov stvarni popis ostaje netaknut i neprikazan.
+    if (demo) {
+      setClients(DEMO_STRANKE.map(({ id, ime_naziv, oib, adresa, grad, tip }) => ({
+        id, ime_naziv, tip,
+        oib: oib ?? undefined, adresa: adresa ?? undefined, grad: grad ?? undefined,
+      })));
+      setLoadingClients(false);
+      return;
+    }
     setLoadingClients(true);
     fetch(`${API_BASE}/api/client`, { headers: authHeaders })
       .then((r) => (r.ok ? r.json() : []))
@@ -899,7 +890,7 @@ function TroskovnikContent() {
       })
       .catch(() => {})
       .finally(() => setLoadingClients(false));
-  }, [userId, preselectedClientId]);
+  }, [userId, preselectedClientId, demo]);
 
   // ── Close client dropdown on outside click ──
   useEffect(() => {
@@ -1405,6 +1396,88 @@ function TroskovnikContent() {
     setCalcError(null);
   }, []);
 
+  // ═══════════════════════════════════════════════════════════
+  //  Prikaz primjera — gotov troškovnik umjesto prazne forme
+  //
+  //  Vodič dobrodošlice ne objašnjava prazna polja nego GOTOV troškovnik, pa
+  //  forma mora doći popunjena. Puni se istim putem kojim se vraća prekinuti
+  //  rad i kojim radi „Uredi kao novi" — `vratiNacrt` — tako da nema drugog
+  //  koda koji zna kako se ova forma popunjava.
+  //
+  //  Ulazi dolaze iz `lib/demo/podaci.ts` i to su SAMO ulazi: bodove, iznose,
+  //  pristojbe i PDV izračuna `liveCalc`, isti motor koji radi za stvarne
+  //  troškovnike. Zato demo troškovnik ujedno pokazuje je li Tarifa ispravna.
+  // ═══════════════════════════════════════════════════════════
+  const demoPrimijenjenRef = useRef(false);
+
+  /** Polja koja demo dira — u jednom objektu, da se ista lista može i vratiti. */
+  const demoPolja = useCallback(() => {
+    const stranka = DEMO_STRANKE.find((c) => c.id === DEMO_TROSKOVNIK.klijentId);
+    return {
+      vrijednostSpora: DEMO_TROSKOVNIK.vrijednostSporaUnos,
+      redci: DEMO_TROSKOVNIK.radnje.map((r) => ({
+        uid: noviUid(), itemId: r.itemId, kolicina: 1, datum: r.datum, tbr41: null,
+      })),
+      selectedClientId: DEMO_TROSKOVNIK.klijentId,
+      opisPredmeta: DEMO_TROSKOVNIK.opisPredmeta,
+      predmetSud: DEMO_TROSKOVNIK.sud,
+      predmetPoslovniBroj: DEMO_TROSKOVNIK.poslovniBroj,
+      showParties: true,
+      isPdvUkljucen: true,
+      odvjetnikIme: DEMO_URED.ime,
+      odvjetnikOib: DEMO_URED.oib,
+      odvjetnikAdresa: DEMO_URED.adresa,
+      odvjetnikIban: DEMO_URED.iban,
+      klijentIme: stranka?.ime_naziv ?? "",
+      klijentOib: stranka?.oib ?? "",
+      klijentAdresa: stranka?.adresa ?? "",
+      klijentGrad: stranka?.grad ?? "",
+      zastupanaPolozaj: "tužitelj",
+      protustrankaIme: DEMO_TROSKOVNIK.protustranka,
+      protustrankaPolozaj: "tuženik",
+      podnesciElektronicki: DEMO_TROSKOVNIK.podnesciElektronicki,
+      pristojbeDodane: DEMO_TROSKOVNIK.pristojbeDodane.map((r) => ({ ...r })),
+      predujmovi: DEMO_TROSKOVNIK.predujmovi.map((r) => ({
+        uid: noviUid(), datum: r.datum, opis: r.opis, iznos: r.iznos,
+      })),
+    };
+  }, [noviUid]);
+
+  /** Ista polja, vraćena na prazno — izlazak iz demo načina. */
+  const praznaPolja = useCallback(
+    () => ({
+      vrijednostSpora: "", redci: [], selectedClientId: "",
+      opisPredmeta: "", predmetSud: "", predmetPoslovniBroj: "",
+      showParties: false, isPdvUkljucen: false,
+      odvjetnikIme: "", odvjetnikOib: "", odvjetnikAdresa: "", odvjetnikIban: "",
+      klijentIme: "", klijentOib: "", klijentAdresa: "", klijentGrad: "",
+      zastupanaPolozaj: "", protustrankaIme: "", protustrankaPolozaj: "",
+      podnesciElektronicki: false, pristojbeDodane: [], predujmovi: [],
+    }),
+    [],
+  );
+
+  useEffect(() => {
+    if (demo && !demoPrimijenjenRef.current) {
+      demoPrimijenjenRef.current = true;
+      vratiNacrt({ ...draftSnapshot, ...demoPolja() });
+      setResult(null);
+      setSavedId(null);
+      return;
+    }
+    if (!demo && demoPrimijenjenRef.current) {
+      // „Zatvaram primjere i otvaram vam prazan troškovnik." Podaci ureda vrati
+      // će efekt koji čita Postavke, čim demo prestane blokirati taj dohvat.
+      demoPrimijenjenRef.current = false;
+      vratiNacrt({ ...draftSnapshot, ...praznaPolja() });
+      setResult(null);
+      setSavedId(null);
+    }
+    // draftSnapshot se namjerno ne prati: čita se u trenutku okidanja, a ref
+    // sprječava ponavljanje. S njim u ovisnostima efekt bi se vrtio u krug.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [demo, demoPolja, praznaPolja, vratiNacrt]);
+
   // ── Ručno dodane pristojbe i predujmovi ──
   // Isti oblik popisa za oba odjeljka, pa handleri primaju setter funkciju kao argument
   // umjesto da se dupliciraju za svaki popis.
@@ -1580,6 +1653,12 @@ function TroskovnikContent() {
 
   // ── Save to database ──
   const handleSave = async () => {
+    // Ograda, ne samo onemogućen gumb: gumb se može pozvati i tipkovnicom, a
+    // demo redak u tuđoj bazi nije nešto što se poslije popravlja.
+    if (demo) {
+      setCalcError(DEMO_ZASTO_NEAKTIVNO);
+      return;
+    }
     if (redci.length === 0) {
       setCalcError("Morate odabrati barem jednu stavku.");
       return;
@@ -1728,8 +1807,11 @@ function TroskovnikContent() {
 
   // ── Print ──
   const handlePrint = useCallback(() => {
+    // Odvjetnik ne smije moći otisnuti troškovnik s izmišljenom strankom i
+    // poslati ga sudu.
+    if (demo) return;
     window.print();
-  }, []);
+  }, [demo]);
 
   // ── Model za izvoz i ispis ──
   // Jedan izvor za obje putanje: `.xlsx` i ispis. Dok su bile odvojene, svaka je
@@ -1764,6 +1846,9 @@ function TroskovnikContent() {
 
   // ── Izvoz u Excel ──
   const handleExportXlsx = useCallback(async () => {
+    // Isti razlog kao kod ispisa: tablica s izmišljenom strankom ne smije izaći
+    // iz aplikacije kao datoteka.
+    if (demo) return;
     if (izvozModel.radnje.length === 0) return;
     // Dinamički, da biblioteka ne uđe u početni bundle stranice.
     const { default: writeXlsxFile } = await import("write-excel-file/browser");
@@ -1772,7 +1857,7 @@ function TroskovnikContent() {
       sheet: "Troškovnik",
       columns: STUPCI,
     }).toFile(nazivDatoteke(new Date()));
-  }, [izvozModel]);
+  }, [izvozModel, demo]);
 
   // ═══════════════════════════════════════════════════════════════
   //  RENDER
@@ -1780,15 +1865,6 @@ function TroskovnikContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
-      <Vodic
-        open={vodicOpen}
-        koraci={TROSKOVNIK_KORACI}
-        onClose={zatvoriVodic}
-        onStepChange={setVodicTarget}
-        onNastavak={nastaviUStrankama}
-        nastavakOznaka="Dalje: Stranke"
-      />
-
       {/* ── Sticky Header ── */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-40 print:hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-4">
@@ -1811,28 +1887,25 @@ function TroskovnikContent() {
           </div>
           {/* Action buttons */}
           <div className="ml-auto flex items-center gap-2">
-            {/* Way back into the walkthrough. Skipping it is remembered for
-                good, so without this there would be no way to see it again. */}
-            <button
-              onClick={() => setVodicOpen(true)}
-              className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 transition px-2.5 py-1.5 rounded-lg hover:bg-slate-100"
-              title="Pokreni vodič kroz troškovnik"
-            >
-              <Compass className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Vodič</span>
-            </button>
+            {/* Gumb „Vodič" je preselio u zaglavlje aplikacije (`AppHeader`),
+                kao stavka izbornika: vodiča je sad troje, pa jedan klik ovdje
+                više ne bi značio jednu stvar. */}
             {liveCalc.lines.length > 0 && (
               <>
                 <button
                   onClick={handleExportXlsx}
-                  className="hidden sm:flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 transition px-2.5 py-1.5 rounded-lg hover:bg-slate-100"
+                  disabled={demo}
+                  title={demo ? DEMO_ZASTO_NEAKTIVNO : undefined}
+                  className="hidden sm:flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 disabled:text-slate-300 disabled:hover:bg-transparent disabled:cursor-not-allowed transition px-2.5 py-1.5 rounded-lg hover:bg-slate-100"
                 >
                   <Download className="h-3.5 w-3.5" />
                   Excel
                 </button>
                 <button
                   onClick={handlePrint}
-                  className="hidden sm:flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 transition px-2.5 py-1.5 rounded-lg hover:bg-slate-100"
+                  disabled={demo}
+                  title={demo ? DEMO_ZASTO_NEAKTIVNO : undefined}
+                  className="hidden sm:flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 disabled:text-slate-300 disabled:hover:bg-transparent disabled:cursor-not-allowed transition px-2.5 py-1.5 rounded-lg hover:bg-slate-100"
                 >
                   <Printer className="h-3.5 w-3.5" />
                   Ispis
@@ -1958,7 +2031,7 @@ function TroskovnikContent() {
 
             {/* ── Case value input (hidden when only kazneni items) ── */}
             {!isOnlyKazneni && (
-            <div id="vodic-vps" className={`bg-white rounded-xl border border-slate-200 p-4 shadow-sm transition ${vodicHighlight("vodic-vps")}`}>
+            <div data-vodic="vodic-vps" className={`bg-white rounded-xl border border-slate-200 p-4 shadow-sm transition ${vodicHighlight("vodic-vps")}`}>
               <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
                 <Euro className="h-3.5 w-3.5 inline mr-1 -mt-0.5" />
                 Vrijednost predmeta spora (EUR)
@@ -2461,7 +2534,7 @@ function TroskovnikContent() {
             )}
 
             {/* ── Search ── */}
-            <div id="vodic-radnje" className={`relative rounded-xl transition ${vodicHighlight("vodic-radnje")}`}>
+            <div data-vodic="vodic-radnje" className={`relative rounded-xl transition ${vodicHighlight("vodic-radnje")}`}>
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <input
                 type="text"
@@ -2609,7 +2682,7 @@ function TroskovnikContent() {
             })}
 
             {/* ── Party info (Collapsible) ── */}
-            <div id="vodic-stranke" className={`bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden transition ${vodicHighlight("vodic-stranke")}`}>
+            <div data-vodic="vodic-stranke" className={`bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden transition ${vodicHighlight("vodic-stranke")}`}>
               <button
                 onClick={() => setShowParties(!showParties)}
                 className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition"
@@ -2870,7 +2943,7 @@ function TroskovnikContent() {
                 `vodicHighlight`) da ostane `lg:sticky`. Prsten samo na koraku
                 4/7. Kartica vodiča (z-[220]) je i dalje iznad svega. */}
             <div
-              id="vodic-rezultat"
+              data-vodic="vodic-rezultat"
               className={`lg:sticky lg:top-20 space-y-4 rounded-xl transition ${
                 vodicOpen ? "z-[210]" : ""
               } ${
@@ -2904,7 +2977,10 @@ function TroskovnikContent() {
                       <p className="text-xs mt-1">Kliknite &quot;Dodaj&quot; pokraj željene stavke</p>
                     </div>
                   ) : (
-                    <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+                    <div
+                      data-vodic="vodic-popis-radnji"
+                      className={`space-y-2 max-h-[50vh] overflow-y-auto rounded-lg transition ${vodicHighlight("vodic-popis-radnji")}`}
+                    >
                       {redci.map((redak, i) => {
                         const def = katalogById.get(redak.itemId);
                         const line = lineByUid.get(redak.uid);
@@ -3047,7 +3123,10 @@ function TroskovnikContent() {
                           <span>{fmtNum(liveCalc.tbr41Bodovi)} bod.</span>
                         </div>
                       )}
-                      <div className="flex justify-between text-xs text-slate-500">
+                      <div
+                        data-vodic="vodic-bodovi"
+                        className={`flex justify-between text-xs text-slate-500 rounded transition ${vodicHighlight("vodic-bodovi")}`}
+                      >
                         <span>Ukupno bodova</span>
                         <span className="font-semibold">{fmtNum(liveCalc.ukupnoBodova)}</span>
                       </div>
@@ -3143,7 +3222,10 @@ function TroskovnikContent() {
                       </div>
 
                       {/* ── Sudske pristojbe ── */}
-                      <div className="pt-2 mt-1 border-t border-dashed border-slate-200 space-y-1.5">
+                      <div
+                        data-vodic="vodic-pristojbe"
+                        className={`pt-2 mt-1 border-t border-dashed border-slate-200 space-y-1.5 rounded-lg transition ${vodicHighlight("vodic-pristojbe")}`}
+                      >
                         {pristojbe.stavke.length === 0 ? (
                           <div className="flex items-start gap-1.5 text-[10px] text-slate-500 leading-snug">
                             <Info className="h-3 w-3 shrink-0 mt-0.5 text-slate-400" />
@@ -3498,7 +3580,10 @@ function TroskovnikContent() {
 
 
                       {/* ── Grand Total ── */}
-                      <div className="flex justify-between text-sm font-bold text-indigo-800 pt-2 mt-1 border-t border-slate-300">
+                      <div
+                        data-vodic="vodic-ukupno"
+                        className={`flex justify-between text-sm font-bold text-indigo-800 pt-2 mt-1 border-t border-slate-300 rounded transition ${vodicHighlight("vodic-ukupno")}`}
+                      >
                         <span>SVEUKUPNI TROŠAK</span>
                         <span>{fmtEur(liveCalc.sveukupniTrosak)}</span>
                       </div>
@@ -3601,18 +3686,21 @@ function TroskovnikContent() {
                       {calculating ? "Izračunavam..." : "Generiraj troškovnik"}
                     </button>
                     {userId && (
-                      <button
-                        onClick={handleSave}
-                        disabled={saving || sviNedostaci.length > 0}
-                        className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white text-sm font-semibold py-2.5 rounded-lg transition"
-                      >
-                        {saving ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Save className="h-4 w-4" />
-                        )}
-                        {saving ? "Spremam..." : "Spremi troškovnik"}
-                      </button>
+                      <div data-vodic="vodic-spremi" className={`rounded-lg transition ${vodicHighlight("vodic-spremi")}`}>
+                        <button
+                          onClick={handleSave}
+                          disabled={saving || demo || sviNedostaci.length > 0}
+                          title={demo ? DEMO_ZASTO_NEAKTIVNO : undefined}
+                          className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 disabled:cursor-not-allowed text-white text-sm font-semibold py-2.5 rounded-lg transition"
+                        >
+                          {saving ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Save className="h-4 w-4" />
+                          )}
+                          {saving ? "Spremam..." : "Spremi troškovnik"}
+                        </button>
+                      </div>
                     )}
                     {savedId && (
                       <div className="flex items-center gap-1.5 text-xs text-emerald-600 justify-center">
@@ -3628,19 +3716,31 @@ function TroskovnikContent() {
                     <div className="flex gap-2">
                       <button
                         onClick={handleExportXlsx}
-                        className="flex-1 flex items-center justify-center gap-1.5 text-xs text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 py-2 rounded-lg transition"
+                        disabled={demo}
+                        title={demo ? DEMO_ZASTO_NEAKTIVNO : undefined}
+                        className="flex-1 flex items-center justify-center gap-1.5 text-xs text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 disabled:text-slate-400 disabled:bg-slate-50 disabled:cursor-not-allowed py-2 rounded-lg transition"
                       >
                         <Download className="h-3.5 w-3.5" />
                         Excel
                       </button>
                       <button
                         onClick={handlePrint}
-                        className="flex-1 flex items-center justify-center gap-1.5 text-xs text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 py-2 rounded-lg transition"
+                        disabled={demo}
+                        title={demo ? DEMO_ZASTO_NEAKTIVNO : undefined}
+                        className="flex-1 flex items-center justify-center gap-1.5 text-xs text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 disabled:text-slate-400 disabled:bg-slate-50 disabled:cursor-not-allowed py-2 rounded-lg transition"
                       >
                         <Printer className="h-3.5 w-3.5" />
                         Ispis
                       </button>
                     </div>
+                    {/* Vidljivo objašnjenje, ne samo sivi gumb: neaktivan gumb
+                        bez razloga izgleda kao kvar. */}
+                    {demo && (
+                      <p className="text-[11px] text-amber-700 text-center leading-snug">
+                        U prikazu primjera spremanje, ispis i izvoz nisu dostupni —
+                        podaci nisu vaši.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>

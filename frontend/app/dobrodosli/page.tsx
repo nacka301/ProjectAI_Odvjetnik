@@ -65,21 +65,28 @@ export default function WelcomePage() {
   }, []);
 
   /**
-   * Saves whatever the user filled in, marks the introduction done, and leaves.
+   * Sprema naziv ureda i pušta korisnika dalje, na naslovnicu.
    *
-   * `markOnboarded` runs on BOTH buttons. Skipping is an answer, and asking
-   * again tomorrow would be ignoring it.
+   * `markOnboarded` se OVDJE više ne upisuje na oba gumba, nego samo kad
+   * korisnik odbije uvod. Razlog: uvod se sad nudi na naslovnici („Pokažimo vam
+   * kako ovo radi"), a taj se poziv prikazuje samo dok je `onboarded_at` prazan.
+   * Dok je ovaj ekran pečatio oba puta, poziv se nikome tko je prošao
+   * registraciju nije ni imao prilike pokazati.
+   *
+   * Ovaj ekran zato radi samo posao koji nitko drugi ne može: pita za naziv
+   * ureda, koji Google prijava ne može prenijeti.
    */
   const finish = useCallback(
-    async (destination: string) => {
+    async (oznaciZavrsenim: boolean) => {
       setSaving(true);
 
       if (state.firmId && state.firmNameIsPlaceholder && firmInput.trim()) {
         await saveFirmName(state.firmId, firmInput);
       }
-      await markOnboarded();
+      // Odbijanje je odgovor; pitati opet sutra značilo bi ne čuti ga.
+      if (oznaciZavrsenim) await markOnboarded();
 
-      router.push(destination);
+      router.push("/");
       router.refresh();
     },
     [state.firmId, state.firmNameIsPlaceholder, firmInput, router],
@@ -197,9 +204,10 @@ export default function WelcomePage() {
               </div>
             )}
 
-            {/* The one thing to do next. */}
+            {/* Uvod se nudi na naslovnici, na podacima za primjer — ovaj gumb
+                samo sprema naziv ureda i pušta korisnika onamo. */}
             <button
-              onClick={() => finish("/troskovnik?vodic=1")}
+              onClick={() => finish(false)}
               disabled={saving}
               className="w-full flex items-center justify-center gap-2 text-white text-sm font-semibold py-3 rounded-xl transition shadow-lg disabled:opacity-60"
               style={{
@@ -212,17 +220,17 @@ export default function WelcomePage() {
               ) : (
                 <Calculator className="h-4 w-4" />
               )}
-              Izradite prvi troškovnik
+              Uđite u aplikaciju
               {!saving && <ArrowRight className="h-4 w-4" />}
             </button>
 
             <div className="flex items-center justify-between">
               <button
-                onClick={() => finish("/")}
+                onClick={() => finish(true)}
                 disabled={saving}
                 className="text-xs text-slate-400 hover:text-slate-600 transition disabled:opacity-60"
               >
-                Preskoči — idem sam razgledati
+                Preskoči uvod — idem sam razgledati
               </button>
               <span className="text-[11px] text-slate-400">Traje oko 2 minute</span>
             </div>

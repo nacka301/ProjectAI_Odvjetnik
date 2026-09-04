@@ -4,6 +4,9 @@ import "./globals.css";
 import SessionGuard from "@/components/SessionGuard";
 import { ConditionalSecurityFooter } from "@/components/ConditionalFooter";
 import { CreditProvider } from "@/contexts/CreditContext";
+import { DemoProvider } from "@/contexts/DemoContext";
+import { VodicProvider } from "@/contexts/VodicContext";
+import DemoTraka from "@/components/DemoTraka";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -66,8 +69,18 @@ export default function RootLayout({
             All timings live in lib/session-timeout.ts. */}
         <SessionGuard>
           <CreditProvider>
-            <main className="flex-1">{children}</main>
-            <ConditionalSecurityFooter />
+            {/* Vodič stoji IZNAD ruta, ne u pojedinoj stranici: samo tako
+                jedan njegov korak može živjeti na drugom ekranu (korak 8/8
+                uvoda je na /klijenti, a prethodnih sedam na /troskovniku).
+                DemoProvider je iznad njega jer uvod vozi na podacima za
+                primjer i gasi ih kad završi. */}
+            <DemoProvider>
+              <VodicProvider>
+                <DemoTraka />
+                <main className="flex-1">{children}</main>
+                <ConditionalSecurityFooter />
+              </VodicProvider>
+            </DemoProvider>
           </CreditProvider>
         </SessionGuard>
       </body>
