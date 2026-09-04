@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import {
   Search as SearchIcon,
@@ -219,6 +220,7 @@ const FEATURE_CARDS: FeatureCard[] = [
 // ═══════════════════════════════════════════════════════════
 
 export default function Dashboard() {
+  const router = useRouter();
   const subscription = useSubscription();
   const isAdmin = useIsAdmin();
   const [activity, setActivity] = useState<ActivityItem[]>([]);
