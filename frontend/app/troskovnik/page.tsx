@@ -31,7 +31,6 @@ import {
 import { API_BASE } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
 import { getTroskovnik } from "@/lib/supabase";
-import { highlightClasses } from "@/components/Vodic";
 import { useVodic } from "@/contexts/VodicContext";
 import { DEMO_ZASTO_NEAKTIVNO, useDemo } from "@/contexts/DemoContext";
 import { DEMO_STRANKE, DEMO_TROSKOVNIK, DEMO_URED } from "@/lib/demo/podaci";
@@ -319,13 +318,14 @@ function getCatColor(cat: string) {
 
 /**
  * Sidra koja žive UNUTAR sažetka na desnoj strani (`lg:sticky` stupac), ne u
- * glavnoj formi. Desni stupac se diže iznad zatamnjenja i gubi `lg:sticky`
- * SAMO dok korak cilja jedno od ovih — inače korisnik na koraku koji ništa
- * ne dira u stupcu vidi dva osvijetljena mjesta odjednom (ciljano polje i
- * cijeli stupac), a korak koji cilja duboko u stupcu (pristojbe, ukupno,
- * spremi) ne može ga se dovoljno skrolati da izađe iz zatamnjenja — `sticky`
- * element se, jednom prilijepljen na `top-20`, više ne pomiče, pa dio ispod
- * ruba ekrana ostaje trajno nedohvatljiv.
+ * glavnoj formi. Desni stupac gubi `lg:sticky` SAMO dok korak cilja jedno od
+ * ovih: `sticky` element se, jednom prilijepljen na `top-20`, više ne pomiče
+ * daljnjim skrolom, pa bi dio stupca ispod ruba ekrana (pristojbe, ukupno,
+ * spremi) ostao trajno nedohvatljiv za vodičev algoritam pozicioniranja. Bez
+ * `sticky` stupac je običan blok koji se skrola kao svaki drugi cilj.
+ *
+ * Nema veze s ISTICANJEM cilja — ono ide preko izmjerenih koordinata u
+ * `Vodic.tsx`, potpuno neovisno o tome je li ovaj element trenutno sticky.
  */
 const SIDRA_U_STUPCU = new Set([
   "vodic-rezultat",
@@ -366,10 +366,6 @@ function TroskovnikContent() {
   // prstenovati.
   const { target: vodicTarget, aktivan: vodicAktivan } = useVodic();
   const vodicOpen = vodicAktivan !== null;
-  const vodicHighlight = useCallback(
-    (id: string) => highlightClasses(vodicTarget === id),
-    [vodicTarget],
-  );
   /** Trenutni korak cilja nešto UNUTAR desnog stupca — vidi SIDRA_U_STUPCU. */
   const vodicCiljaStupac = vodicOpen && vodicTarget !== null && SIDRA_U_STUPCU.has(vodicTarget);
 
@@ -2052,7 +2048,7 @@ function TroskovnikContent() {
 
             {/* ── Case value input (hidden when only kazneni items) ── */}
             {!isOnlyKazneni && (
-            <div data-vodic="vodic-vps" className={`bg-white rounded-xl border border-slate-200 p-4 shadow-sm transition ${vodicHighlight("vodic-vps")}`}>
+            <div data-vodic="vodic-vps" className={`bg-white rounded-xl border border-slate-200 p-4 shadow-sm transition`}>
               <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
                 <Euro className="h-3.5 w-3.5 inline mr-1 -mt-0.5" />
                 Vrijednost predmeta spora (EUR)
@@ -2555,7 +2551,7 @@ function TroskovnikContent() {
             )}
 
             {/* ── Search ── */}
-            <div data-vodic="vodic-radnje" className={`relative rounded-xl transition ${vodicHighlight("vodic-radnje")}`}>
+            <div data-vodic="vodic-radnje" className={`relative rounded-xl transition`}>
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <input
                 type="text"
@@ -2703,7 +2699,7 @@ function TroskovnikContent() {
             })}
 
             {/* ── Party info (Collapsible) ── */}
-            <div data-vodic="vodic-stranke" className={`bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden transition ${vodicHighlight("vodic-stranke")}`}>
+            <div data-vodic="vodic-stranke" className={`bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden transition`}>
               <button
                 onClick={() => setShowParties(!showParties)}
                 className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition"
@@ -2962,25 +2958,18 @@ function TroskovnikContent() {
                 prilijepljen na `top-20`, sticky element se dalje ne pomiče, pa
                 se nižih sidara (pristojbe, ukupno, spremi) ne bi dalo doskrolati
                 do vidljivog dijela ekrana. Bez `sticky` stupac je običan blok i
-                stranica ga skrola kao svaki drugi cilj. Elevacija ide uz isti
-                uvjet — inače bi cijeli stupac ostao osvijetljen i na koracima
-                koji ga uopće ne diraju (npr. „Vrijednost predmeta" u lijevom
-                stupcu), pa bi korisnik vidio dva mjesta odjednom umjesto
-                jednog. `relative` mora ići UZ `z-[210]`, ne samo z-index sam:
-                CSS z-index nema učinka na `position: static` element (default
-                kad `sticky` nije primijenjen), pa bi bez toga stupac ostao
-                zatamnjen dok se probija samo pojedino unutarnje sidro (ono ima
-                svoj `relative z-[210]` preko `vodicHighlight`, neovisno o
-                roditelju) — to je i bio kvar. Kartica vodiča (z-[220]) je i
-                dalje iznad svega. */}
+                stranica ga skrola kao svaki drugi cilj.
+
+                Isticanje cilja (rupa u zatamnjenju) više NE ovisi o klasama na
+                ovom elementu — vidi doc-komentar na vrhu `Vodic.tsx`. Rupa se
+                crta iz izmjerenih koordinata cilja (`getBoundingClientRect()`),
+                pa joj nije bitno je li ovaj stupac trenutno `sticky` ili obični
+                blok; ovdje se sticky gasi ISKLJUČIVO da bi se cilj uopće mogao
+                doskrolati u vidljivi dio ekrana. */}
             <div
               data-vodic="vodic-rezultat"
               className={`space-y-4 rounded-xl transition ${
-                vodicCiljaStupac ? "relative z-[210]" : "lg:sticky lg:top-20"
-              } ${
-                vodicTarget === "vodic-rezultat"
-                  ? "ring-2 ring-indigo-500 ring-offset-2"
-                  : ""
+                vodicCiljaStupac ? "" : "lg:sticky lg:top-20"
               }`}
             >
               {/* ── Selected items summary ── */}
@@ -3010,7 +2999,7 @@ function TroskovnikContent() {
                   ) : (
                     <div
                       data-vodic="vodic-popis-radnji"
-                      className={`space-y-2 max-h-[50vh] overflow-y-auto rounded-lg transition ${vodicHighlight("vodic-popis-radnji")}`}
+                      className={`space-y-2 max-h-[50vh] overflow-y-auto rounded-lg transition`}
                     >
                       {redci.map((redak, i) => {
                         const def = katalogById.get(redak.itemId);
@@ -3156,7 +3145,7 @@ function TroskovnikContent() {
                       )}
                       <div
                         data-vodic="vodic-bodovi"
-                        className={`flex justify-between text-xs text-slate-500 rounded transition ${vodicHighlight("vodic-bodovi")}`}
+                        className={`flex justify-between text-xs text-slate-500 rounded transition`}
                       >
                         <span>Ukupno bodova</span>
                         <span className="font-semibold">{fmtNum(liveCalc.ukupnoBodova)}</span>
@@ -3255,7 +3244,7 @@ function TroskovnikContent() {
                       {/* ── Sudske pristojbe ── */}
                       <div
                         data-vodic="vodic-pristojbe"
-                        className={`pt-2 mt-1 border-t border-dashed border-slate-200 space-y-1.5 rounded-lg transition ${vodicHighlight("vodic-pristojbe")}`}
+                        className={`pt-2 mt-1 border-t border-dashed border-slate-200 space-y-1.5 rounded-lg transition`}
                       >
                         {pristojbe.stavke.length === 0 ? (
                           <div className="flex items-start gap-1.5 text-[10px] text-slate-500 leading-snug">
@@ -3613,7 +3602,7 @@ function TroskovnikContent() {
                       {/* ── Grand Total ── */}
                       <div
                         data-vodic="vodic-ukupno"
-                        className={`flex justify-between text-sm font-bold text-indigo-800 pt-2 mt-1 border-t border-slate-300 rounded transition ${vodicHighlight("vodic-ukupno")}`}
+                        className={`flex justify-between text-sm font-bold text-indigo-800 pt-2 mt-1 border-t border-slate-300 rounded transition`}
                       >
                         <span>SVEUKUPNI TROŠAK</span>
                         <span>{fmtEur(liveCalc.sveukupniTrosak)}</span>
@@ -3717,7 +3706,7 @@ function TroskovnikContent() {
                       {calculating ? "Izračunavam..." : "Generiraj troškovnik"}
                     </button>
                     {userId && (
-                      <div data-vodic="vodic-spremi" className={`rounded-lg transition ${vodicHighlight("vodic-spremi")}`}>
+                      <div data-vodic="vodic-spremi" className={`rounded-lg transition`}>
                         <button
                           onClick={handleSave}
                           disabled={saving || demo || sviNedostaci.length > 0}

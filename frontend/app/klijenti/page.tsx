@@ -20,8 +20,6 @@ import {
 } from "lucide-react";
 import { API_BASE } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
-import { highlightClasses } from "@/components/Vodic";
-import { useVodic } from "@/contexts/VodicContext";
 import { DEMO_ZASTO_NEAKTIVNO, useDemo } from "@/contexts/DemoContext";
 import { DEMO_STRANKE } from "@/lib/demo/podaci";
 import type { Client } from "@/lib/stranke-tipovi";
@@ -68,22 +66,10 @@ function KlijentiSadrzaj() {
   const { userId, authHeaders } = useAuth();
 
   // ── Vodič ──
-  // Vodič živi iznad ruta (`VodicProvider`) jer uvodni vodič ovamo dolazi kao
-  // svoj osmi korak, a ne kao zasebna dionica koja se dogovara preko `?vodic=1`.
-  // Odavde se čita samo koje polje treba prstenovati.
-  const { target: vodicTarget } = useVodic();
-  const vodicHighlight = useCallback(
-    (id: string) => highlightClasses(vodicTarget === id),
-    [vodicTarget],
-  );
-  // Koraci 1/3 i 2/3 vodiča za Stranke ciljaju elemente u zaglavlju. Zaglavlje je `sticky` +
-  // `backdrop-blur` — oboje stvara vlastiti stacking context, pa `z-[210]` s
-  // istaknutog elementa ne može prijeći preko zatamnjenja vodiča (`z-[200]`):
-  // ostaje zarobljen na zaglavljevom `z-30` i cilj se ne „probije" kao svjetliji.
-  // Dok korak cilja element u zaglavlju, dižemo cijelo zaglavlje iznad zatamnjenja
-  // da istaknuti gumb/pretraga izađu na svjetlo (tijelo stranice ostaje zatamnjeno).
-  const vodicCiljaZaglavlje =
-    vodicTarget === "vodic-pretraga" || vodicTarget === "vodic-nova-stranka";
+  // Vodič živi iznad ruta (`VodicProvider`, montiran u layout.tsx) — ova
+  // stranica ne treba ništa od njega. Isticanje sidara (`data-vodic="..."`
+  // dolje) ide preko izmjerenih koordinata u `Vodic.tsx`, neovisno o tome
+  // gdje ovaj element živi u DOM-u ili je li zaglavlje `sticky`.
 
   // ── Prikaz primjera ──
   const { demo } = useDemo();
@@ -220,11 +206,7 @@ function KlijentiSadrzaj() {
   return (
     <div className="min-h-screen bg-gray-50 text-slate-900">
       {/* Header */}
-      <header
-        className={`sticky top-0 border-b border-slate-200 bg-white/80 backdrop-blur-xl ${
-          vodicCiljaZaglavlje ? "z-[210]" : "z-30"
-        }`}
-      >
+      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3 sm:px-6">
           <Link
             href="/"
@@ -240,7 +222,7 @@ function KlijentiSadrzaj() {
             <h1 className="font-[family-name:var(--font-playfair)] text-lg font-semibold text-[#1B2A4A]">Stranke</h1>
           </div>
           <div className="ml-auto flex items-center gap-3">
-            <div data-vodic="vodic-pretraga" className={`relative ${vodicHighlight("vodic-pretraga")}`}>
+            <div data-vodic="vodic-pretraga" className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
@@ -255,7 +237,7 @@ function KlijentiSadrzaj() {
               onClick={() => setShowForm(!showForm)}
               disabled={demo}
               title={demo ? DEMO_ZASTO_NEAKTIVNO : undefined}
-              className={`flex items-center gap-2 rounded-lg bg-[#1B2A4A] px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-[#1B2A4A]/90 active:scale-[0.98] disabled:bg-slate-300 disabled:cursor-not-allowed ${vodicHighlight("vodic-nova-stranka")}`}
+              className="flex items-center gap-2 rounded-lg bg-[#1B2A4A] px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-[#1B2A4A]/90 active:scale-[0.98] disabled:bg-slate-300 disabled:cursor-not-allowed"
             >
               {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
               {showForm ? "Zatvori" : "Nova stranka"}
@@ -432,7 +414,7 @@ function KlijentiSadrzaj() {
             Omotač nosi metu vodiča jer korak 7/7 pokazuje na popis, a novi
             korisnik nema nijednu stranku — bez omotača meta bi u praznom stanju
             nestala i vodič bi pokazivao u prazno. */}
-        <div data-vodic="vodic-dosje" className={vodicHighlight("vodic-dosje")}>
+        <div data-vodic="vodic-dosje">
         {loading ? (
           <ClientListSkeleton />
         ) : filtered.length === 0 ? (

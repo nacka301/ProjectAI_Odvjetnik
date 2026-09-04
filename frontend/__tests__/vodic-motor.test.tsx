@@ -119,3 +119,65 @@ describe("korak na drugoj ruti", () => {
     await waitFor(() => expect(push).toHaveBeenCalledWith("/klijenti"));
   });
 });
+
+describe("rupa u zatamnjenju (spotlight)", () => {
+  /**
+   * Ovo je jedini razlog zašto se cijeli mehanizam isticanja i mijenjao: cilj
+   * se nikad ne dira (ni klasa ni z-index), pa mu roditelj (sticky, blur,
+   * transform — bilo koji stacking context) ne može ništa. Rupa se crta IZ
+   * IZMJERENOG PRAVOKUTNIKA cilja, potpuno neovisno o tome gdje on živi u
+   * DOM-u. Test to i provjerava: cilj ugniježđen unutar `position: sticky`
+   * roditelja (koji je do sada svaki put zarobio z-index pristup) i dalje
+   * dobiva ispravno pozicioniranu rupu.
+   */
+  it("cilj UNUTAR sticky roditelja svejedno dobiva rupu na svojim koordinatama", async () => {
+    const sticky = document.createElement("div");
+    sticky.style.position = "sticky";
+    document.body.appendChild(sticky);
+    dodana.push(sticky);
+
+    const el = document.createElement("div");
+    el.setAttribute("data-vodic", "prvi");
+    el.getBoundingClientRect = () =>
+      ({ top: 100, left: 50, right: 250, bottom: 180, width: 200, height: 80 }) as DOMRect;
+    sticky.appendChild(el);
+
+    render(<Vodic open koraci={KORACI} onClose={() => {}} onStepChange={() => {}} />);
+
+    const rupa = await screen.findByTestId("vodic-rupa");
+    expect(rupa.style.top).toBe("94px"); // 100 − SPOT_PADDING(6)
+    expect(rupa.style.left).toBe("44px"); // 50 − 6
+    expect(rupa.style.width).toBe("212px"); // (250−50) + 2×6
+    expect(rupa.style.height).toBe("92px"); // (180−100) + 2×6
+
+    // Puno zatamnjenje se NE koristi kad postoji cilj — samo rupa + četiri
+    // hvatača klika oko nje.
+    expect(screen.queryByTestId("vodic-zatamnjenje-puno")).toBeNull();
+    expect(screen.getAllByTestId("vodic-hvatac")).toHaveLength(4);
+  });
+
+  it("korak bez cilja crta puno zatamnjenje, ne rupu", () => {
+    const bezSidra: VodicKorak[] = [{ title: "Uvod", text: "Bez cilja." }];
+    render(<Vodic open koraci={bezSidra} onClose={() => {}} onStepChange={() => {}} />);
+
+    expect(screen.getByTestId("vodic-zatamnjenje-puno")).toBeTruthy();
+    expect(screen.queryByTestId("vodic-rupa")).toBeNull();
+    expect(screen.queryAllByTestId("vodic-hvatac")).toHaveLength(0);
+  });
+
+  it("klik na hvatač zatvara vodič kao preskakanje", async () => {
+    const el = document.createElement("div");
+    el.setAttribute("data-vodic", "prvi");
+    el.getBoundingClientRect = () =>
+      ({ top: 100, left: 50, right: 250, bottom: 180, width: 200, height: 80 }) as DOMRect;
+    document.body.appendChild(el);
+    dodana.push(el);
+
+    const onClose = vi.fn();
+    render(<Vodic open koraci={KORACI} onClose={onClose} onStepChange={() => {}} />);
+
+    const [hvatac] = await screen.findAllByTestId("vodic-hvatac");
+    await userEvent.click(hvatac);
+    expect(onClose).toHaveBeenCalledWith(false);
+  });
+});
