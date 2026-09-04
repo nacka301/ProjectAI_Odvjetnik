@@ -317,6 +317,25 @@ function getCatColor(cat: string) {
   return CATEGORY_COLORS[cat] ?? { bg: "bg-slate-50", text: "text-slate-700", border: "border-slate-200" };
 }
 
+/**
+ * Sidra koja žive UNUTAR sažetka na desnoj strani (`lg:sticky` stupac), ne u
+ * glavnoj formi. Desni stupac se diže iznad zatamnjenja i gubi `lg:sticky`
+ * SAMO dok korak cilja jedno od ovih — inače korisnik na koraku koji ništa
+ * ne dira u stupcu vidi dva osvijetljena mjesta odjednom (ciljano polje i
+ * cijeli stupac), a korak koji cilja duboko u stupcu (pristojbe, ukupno,
+ * spremi) ne može ga se dovoljno skrolati da izađe iz zatamnjenja — `sticky`
+ * element se, jednom prilijepljen na `top-20`, više ne pomiče, pa dio ispod
+ * ruba ekrana ostaje trajno nedohvatljiv.
+ */
+const SIDRA_U_STUPCU = new Set([
+  "vodic-rezultat",
+  "vodic-popis-radnji",
+  "vodic-bodovi",
+  "vodic-pristojbe",
+  "vodic-ukupno",
+  "vodic-spremi",
+]);
+
 // ═══════════════════════════════════════════════════════════════
 //  MAIN PAGE COMPONENT
 // ═══════════════════════════════════════════════════════════════
@@ -351,6 +370,8 @@ function TroskovnikContent() {
     (id: string) => highlightClasses(vodicTarget === id),
     [vodicTarget],
   );
+  /** Trenutni korak cilja nešto UNUTAR desnog stupca — vidi SIDRA_U_STUPCU. */
+  const vodicCiljaStupac = vodicOpen && vodicTarget !== null && SIDRA_U_STUPCU.has(vodicTarget);
 
   // ── Prikaz primjera ──
   // Dok traje, forma je popunjena demo troškovnikom, spremanje/ispis/izvoz su
@@ -2936,16 +2957,21 @@ function TroskovnikContent() {
           ═══════════════════════════════════════════════════════ */}
           <div className="space-y-4 print:hidden">
             {/* Sticky summary.
-                Tijekom vodiča cijeli desni stupac (sažetak + Tbr. 7.1 tablica
-                bodova) diže se IZNAD zatamnjenja za svaki korak, ne samo 4/7 —
-                tablica bodova je referenca koja korisniku treba baš dok unosi
-                VPS u koraku 1. `z-[210]` (a NE `relative z-[210]` iz
-                `vodicHighlight`) da ostane `lg:sticky`. Prsten samo na koraku
-                4/7. Kartica vodiča (z-[220]) je i dalje iznad svega. */}
+                `lg:sticky` je korisno dok se popunjava forma, ali kad korak
+                cilja nešto UNUTAR ovog stupca (SIDRA_U_STUPCU), gasi se: jednom
+                prilijepljen na `top-20`, sticky element se dalje ne pomiče, pa
+                se nižih sidara (pristojbe, ukupno, spremi) ne bi dalo doskrolati
+                do vidljivog dijela ekrana. Bez `sticky` stupac je običan blok i
+                stranica ga skrola kao svaki drugi cilj. Elevacija (`z-[210]`,
+                a NE `relative z-[210]` iz `vodicHighlight`) ide uz isti uvjet —
+                inače bi cijeli stupac ostao osvijetljen i na koracima koji ga
+                uopće ne diraju (npr. „Vrijednost predmeta" u lijevom stupcu),
+                pa bi korisnik vidio dva mjesta odjednom umjesto jednog. Kartica
+                vodiča (z-[220]) je i dalje iznad svega. */}
             <div
               data-vodic="vodic-rezultat"
-              className={`lg:sticky lg:top-20 space-y-4 rounded-xl transition ${
-                vodicOpen ? "z-[210]" : ""
+              className={`space-y-4 rounded-xl transition ${
+                vodicCiljaStupac ? "z-[210]" : "lg:sticky lg:top-20"
               } ${
                 vodicTarget === "vodic-rezultat"
                   ? "ring-2 ring-indigo-500 ring-offset-2"

@@ -10,6 +10,7 @@ import {
   Building2,
   Calculator,
   Euro,
+  Info,
   Loader2,
   Mail,
   MapPin,
@@ -405,6 +406,21 @@ export default function ClientProfilePage() {
             </div>
           </div>
         </div>
+
+        {/* U prikazu primjera se ovamo ulazi iz znatiželje, izvan samog vodiča —
+            koraci vodiča ne dolaze do ove stranice. Korak 7/8 obećava da se
+            troškovnik sprema i kasnije dopunjuje; taj se lanac ovdje stvarno
+            vidi (stranka → predmet → troškovnik), pa se ista poruka ponavlja
+            na mjestu gdje odvjetnik zapravo gleda rezultat, ne samo u vodiču. */}
+        {demo && (
+          <div className="mb-4 flex items-start gap-2 rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs text-indigo-900">
+            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-indigo-500" />
+            <p>
+              Primjer dosjea: stranku i predmet upisujete jednom, a troškovnik
+              kasnije otvorite, dopunite idućom radnjom i ponovno spremite.
+            </p>
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="mb-4 flex gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
