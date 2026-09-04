@@ -2962,16 +2962,21 @@ function TroskovnikContent() {
                 prilijepljen na `top-20`, sticky element se dalje ne pomiče, pa
                 se nižih sidara (pristojbe, ukupno, spremi) ne bi dalo doskrolati
                 do vidljivog dijela ekrana. Bez `sticky` stupac je običan blok i
-                stranica ga skrola kao svaki drugi cilj. Elevacija (`z-[210]`,
-                a NE `relative z-[210]` iz `vodicHighlight`) ide uz isti uvjet —
-                inače bi cijeli stupac ostao osvijetljen i na koracima koji ga
-                uopće ne diraju (npr. „Vrijednost predmeta" u lijevom stupcu),
-                pa bi korisnik vidio dva mjesta odjednom umjesto jednog. Kartica
-                vodiča (z-[220]) je i dalje iznad svega. */}
+                stranica ga skrola kao svaki drugi cilj. Elevacija ide uz isti
+                uvjet — inače bi cijeli stupac ostao osvijetljen i na koracima
+                koji ga uopće ne diraju (npr. „Vrijednost predmeta" u lijevom
+                stupcu), pa bi korisnik vidio dva mjesta odjednom umjesto
+                jednog. `relative` mora ići UZ `z-[210]`, ne samo z-index sam:
+                CSS z-index nema učinka na `position: static` element (default
+                kad `sticky` nije primijenjen), pa bi bez toga stupac ostao
+                zatamnjen dok se probija samo pojedino unutarnje sidro (ono ima
+                svoj `relative z-[210]` preko `vodicHighlight`, neovisno o
+                roditelju) — to je i bio kvar. Kartica vodiča (z-[220]) je i
+                dalje iznad svega. */}
             <div
               data-vodic="vodic-rezultat"
               className={`space-y-4 rounded-xl transition ${
-                vodicCiljaStupac ? "z-[210]" : "lg:sticky lg:top-20"
+                vodicCiljaStupac ? "relative z-[210]" : "lg:sticky lg:top-20"
               } ${
                 vodicTarget === "vodic-rezultat"
                   ? "ring-2 ring-indigo-500 ring-offset-2"

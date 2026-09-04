@@ -6,7 +6,6 @@ import { ConditionalSecurityFooter } from "@/components/ConditionalFooter";
 import { CreditProvider } from "@/contexts/CreditContext";
 import { DemoProvider } from "@/contexts/DemoContext";
 import { VodicProvider } from "@/contexts/VodicContext";
-import DemoTraka from "@/components/DemoTraka";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -73,10 +72,15 @@ export default function RootLayout({
                 jedan njegov korak može živjeti na drugom ekranu (korak 8/8
                 uvoda je na /klijenti, a prethodnih sedam na /troskovniku).
                 DemoProvider je iznad njega jer uvod vozi na podacima za
-                primjer i gasi ih kad završi. */}
+                primjer i gasi ih kad završi.
+
+                Bez trajne trake na vrhu — uvodni korak 1/8 već kaže da su
+                podaci primjer i da se ništa ne sprema, a zatvaranje vodiča
+                (Preskoči/Esc/Završi) u svakom trenutku samo po sebi gasi
+                prikaz primjera, pa traka nije jedini izlaz koji bi trebalo
+                čuvati. */}
             <DemoProvider>
               <VodicProvider>
-                <DemoTraka />
                 <main className="flex-1">{children}</main>
                 <ConditionalSecurityFooter />
               </VodicProvider>
