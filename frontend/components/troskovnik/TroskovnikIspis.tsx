@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * Troškovnik onako kako se prilaže sudu.
  *
@@ -13,6 +15,18 @@
  *
  * Na dokumentu nema imena aplikacije, ograda ni pravnih izvora. Ovo je papir
  * koji ide sudu.
+ *
+ * ── Zašto CSS živi OVDJE, a ne u stranici koja komponentu poziva ──
+ *
+ * Prije je ovaj `<style jsx global>` stajao u `/troskovnik/page.tsx`, uz poziv
+ * komponente. Kad je `/troskovnik/[id]/page.tsx` počeo pozivati istu
+ * komponentu, taj stil se nije ponio s njom — rezultat je bio da se ova
+ * komponenta na TOJ stranici prikazivala i na zaslonu, kao sirov,
+ * nestilizirani blok teksta uz lijevi rub ekrana, ispod stvarnog sadržaja.
+ * Doc-komentar iznad je tvrdio da je komponenta "vidljiva samo pod
+ * @media print" — to je bilo točno samo dok se sjetiš kopirati stil na svaku
+ * novu stranicu koja je poziva. Sad je stil DIO komponente, pa ta tvrdnja
+ * vrijedi sama po sebi, na svakoj stranici koja ikad pozove `<TroskovnikIspis>`.
  */
 import { formatDatumIspis, formatEur } from "@/lib/format";
 import type { TroskovnikIzvozModel, IzvozTrosak } from "@/lib/troskovnik-izvoz-model";
@@ -203,6 +217,101 @@ export default function TroskovnikIspis({ model }: { model: TroskovnikIzvozModel
 
       {/* ── Napomena — slobodan tekst; bez nje nema odjeljka ── */}
       {model.napomena && <div className="napomena">{model.napomena}</div>}
+
+      {/* ── Skrivanje na zaslonu + prijelom za ispis ──
+          Dio ove komponente, ne stranice koja je poziva — vidi doc-komentar
+          na vrhu datoteke. Obični <style> element ne mijenja izgled ostatka
+          diva (aria-hidden ga i onako izuzima iz stabla pristupačnosti), pa
+          ne treba Fragment ni dodatna razina uvlake. */}
+      <style jsx global>{`
+        #troskovnik-ispis { display: none; }
+
+        /* Margina je nula, a razmak do ruba papira daje padding dokumenta.
+           Razlog nije estetika: u marginu stranice preglednik crta vlastito
+           zaglavlje i podnožje — naslov kartice i adresu stranice — pa bi
+           ime aplikacije završilo na dokumentu koji ide sudu. Bez margine
+           nema gdje, i izostavlja ih.
+           Cijena: padding se ne ponavlja po stranicama, pa kod troškovnika
+           duljeg od jedne stranice druga i daljnje počinju uz sam gornji rub.
+           Bočni razmak ostaje na svima. Ako to zasmeta, alternativa je vratiti
+           margin na @page — ali onda se URL vraća s njom, i gasi se jedino
+           rukom, kvačicom „Zaglavlja i podnožja" u dijalogu za ispis. */
+        @page { size: A4 portrait; margin: 0; }
+
+        @media print {
+          body { background: #fff; }
+          .print\\:hidden { display: none !important; }
+
+          #troskovnik-ispis {
+            display: block;
+            padding: 20mm 18mm;
+            font: 11pt/1.35 Arial, Helvetica, sans-serif;
+            color: #000;
+          }
+
+          /* Zaglavlje odvjetnika — gore lijevo, bez okvira i logotipa. */
+          #troskovnik-ispis .zaglavlje { margin-bottom: 10mm; }
+          #troskovnik-ispis .zaglavlje .ime { text-transform: uppercase; }
+
+          #troskovnik-ispis h1 {
+            font-size: 16pt;
+            font-weight: normal;
+            letter-spacing: 0.5pt;
+            margin: 0 0 8mm 22mm;
+          }
+
+          /* Predmet — oznake desno, vrijednosti lijevo, oko sredine stranice. */
+          #troskovnik-ispis .predmet { margin: 0 0 6mm 0; }
+          #troskovnik-ispis .predmet-redak { display: flex; gap: 6mm; margin-bottom: 1mm; }
+          #troskovnik-ispis .predmet-oznaka { flex: 0 0 42%; text-align: right; }
+          #troskovnik-ispis .predmet-vrijednost { flex: 1; }
+
+          #troskovnik-ispis table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 10pt;
+          }
+          #troskovnik-ispis th,
+          #troskovnik-ispis td {
+            border: 1px solid #000;
+            padding: 3pt 4pt;
+            vertical-align: top;
+          }
+          #troskovnik-ispis th { font-weight: normal; text-align: center; }
+
+          /* Zaglavlje se ponavlja na svakoj stranici, redak se ne prelama. */
+          #troskovnik-ispis thead { display: table-header-group; }
+          #troskovnik-ispis tr { break-inside: avoid; page-break-inside: avoid; }
+
+          #troskovnik-ispis .st-radnja { width: 42%; }
+          #troskovnik-ispis .st-tarifa { width: 13%; }
+          #troskovnik-ispis .st-datum { width: 14%; }
+          #troskovnik-ispis .st-iznos { width: 15%; }
+          #troskovnik-ispis .st-napomena { width: 16%; }
+
+          #troskovnik-ispis .datum { text-align: center; }
+          #troskovnik-ispis .oznaka { text-align: right; }
+          #troskovnik-ispis .tarifa { text-align: center; }
+          #troskovnik-ispis .iznos { text-align: right; white-space: nowrap; }
+          #troskovnik-ispis .bold { font-weight: bold; }
+          #troskovnik-ispis .razmak td { height: 5mm; }
+
+          #troskovnik-ispis .potpis {
+            margin-top: 10mm;
+            text-align: center;
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+          #troskovnik-ispis .potpis .ime { font-weight: bold; text-transform: uppercase; }
+
+          #troskovnik-ispis .napomena {
+            margin-top: 12mm;
+            white-space: pre-line;
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+        }
+      `}</style>
     </div>
   );
 }

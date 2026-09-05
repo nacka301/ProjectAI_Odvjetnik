@@ -4214,99 +4214,12 @@ function TroskovnikContent() {
 
       {/* ── Dokument za sud ──
           Susjed <main>-a, koji je pod ispisom skriven u cijelosti. Vidljiv je
-          samo pod @media print, pa window.print() ostaje neizmijenjen. */}
+          samo pod @media print — CSS koji to osigurava sad je DIO same
+          komponente (TroskovnikIspis.tsx), ne ove stranice, pa ga ovdje više
+          nema: prije je bio ovdje i /troskovnik/[id] koji poziva istu
+          komponentu ga nije naslijedio, pa se ispis ondje vidio i na zaslonu,
+          kao sirov tekst uz lijevi rub. */}
       {result && <TroskovnikIspis model={izvozModel} />}
-
-      {/* ── Ispis ── */}
-      <style jsx global>{`
-        #troskovnik-ispis { display: none; }
-
-        /* Margina je nula, a razmak do ruba papira daje padding dokumenta.
-           Razlog nije estetika: u marginu stranice preglednik crta vlastito
-           zaglavlje i podnožje — naslov kartice („PravoTek — …") i URL
-           (pravotek.hr/troskovnik) — pa bi ime aplikacije završilo na
-           dokumentu koji ide sudu. Bez margine nema gdje, i izostavlja ih.
-           Cijena: padding se ne ponavlja po stranicama, pa kod troškovnika
-           duljeg od jedne stranice druga i daljnje počinju uz sam gornji rub.
-           Bočni razmak ostaje na svima. Ako to zasmeta, alternativa je vratiti
-           margin na @page — ali onda se URL vraća s njom, i gasi se jedino
-           rukom, kvačicom „Zaglavlja i podnožja" u dijalogu za ispis. */
-        @page { size: A4 portrait; margin: 0; }
-
-        @media print {
-          body { background: #fff; }
-          .print\\:hidden { display: none !important; }
-
-          #troskovnik-ispis {
-            display: block;
-            padding: 20mm 18mm;
-            font: 11pt/1.35 Arial, Helvetica, sans-serif;
-            color: #000;
-          }
-
-          /* Zaglavlje odvjetnika — gore lijevo, bez okvira i logotipa. */
-          #troskovnik-ispis .zaglavlje { margin-bottom: 10mm; }
-          #troskovnik-ispis .zaglavlje .ime { text-transform: uppercase; }
-
-          #troskovnik-ispis h1 {
-            font-size: 16pt;
-            font-weight: normal;
-            letter-spacing: 0.5pt;
-            margin: 0 0 8mm 22mm;
-          }
-
-          /* Predmet — oznake desno, vrijednosti lijevo, oko sredine stranice. */
-          #troskovnik-ispis .predmet { margin: 0 0 6mm 0; }
-          #troskovnik-ispis .predmet-redak { display: flex; gap: 6mm; margin-bottom: 1mm; }
-          #troskovnik-ispis .predmet-oznaka { flex: 0 0 42%; text-align: right; }
-          #troskovnik-ispis .predmet-vrijednost { flex: 1; }
-
-          #troskovnik-ispis table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 10pt;
-          }
-          #troskovnik-ispis th,
-          #troskovnik-ispis td {
-            border: 1px solid #000;
-            padding: 3pt 4pt;
-            vertical-align: top;
-          }
-          #troskovnik-ispis th { font-weight: normal; text-align: center; }
-
-          /* Zaglavlje se ponavlja na svakoj stranici, redak se ne prelama. */
-          #troskovnik-ispis thead { display: table-header-group; }
-          #troskovnik-ispis tr { break-inside: avoid; page-break-inside: avoid; }
-
-          #troskovnik-ispis .st-radnja { width: 42%; }
-          #troskovnik-ispis .st-tarifa { width: 13%; }
-          #troskovnik-ispis .st-datum { width: 14%; }
-          #troskovnik-ispis .st-iznos { width: 15%; }
-          #troskovnik-ispis .st-napomena { width: 16%; }
-
-          #troskovnik-ispis .datum { text-align: center; }
-          #troskovnik-ispis .oznaka { text-align: right; }
-          #troskovnik-ispis .tarifa { text-align: center; }
-          #troskovnik-ispis .iznos { text-align: right; white-space: nowrap; }
-          #troskovnik-ispis .bold { font-weight: bold; }
-          #troskovnik-ispis .razmak td { height: 5mm; }
-
-          #troskovnik-ispis .potpis {
-            margin-top: 10mm;
-            text-align: center;
-            break-inside: avoid;
-            page-break-inside: avoid;
-          }
-          #troskovnik-ispis .potpis .ime { font-weight: bold; text-transform: uppercase; }
-
-          #troskovnik-ispis .napomena {
-            margin-top: 12mm;
-            white-space: pre-line;
-            break-inside: avoid;
-            page-break-inside: avoid;
-          }
-        }
-      `}</style>
     </div>
   );
 }
