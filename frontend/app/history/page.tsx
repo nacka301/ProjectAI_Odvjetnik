@@ -182,6 +182,9 @@ export default function HistoryPage() {
     if (!confirmed) return;
 
     setDeletingId(item.id);
+    // Očisti prošlu grešku prije novog pokušaja — inače bi neuspjeh jednog
+    // brisanja ostao prikazan i nakon što sljedeće uspije.
+    setError(null);
     try {
       const ok = await deleteActivityItem(item.type, item.id);
       if (ok) {
@@ -193,10 +196,10 @@ export default function HistoryPage() {
         });
         if (expandedId === item.id) setExpandedId(null);
       } else {
-        alert("Greška pri brisanju zapisa. Pokušajte ponovo.");
+        setError("Greška pri brisanju zapisa. Pokušajte ponovo.");
       }
     } catch {
-      alert("Greška pri brisanju zapisa.");
+      setError("Greška pri brisanju zapisa.");
     } finally {
       setDeletingId(null);
     }
