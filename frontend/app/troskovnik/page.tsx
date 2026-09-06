@@ -620,7 +620,10 @@ function TroskovnikContent() {
     setKlijentAdresa(d.klijentAdresa); setKlijentGrad(d.klijentGrad);
     setOpisPredmeta(d.opisPredmeta); setPredmetSud(d.predmetSud);
     setPredmetPoslovniBroj(d.predmetPoslovniBroj);
-    setShowParties(d.showParties); setIsPdvUkljucen(d.isPdvUkljucen);
+    setShowParties(d.showParties);
+    // Vraćanje nacrta je izričita korisnikova radnja — PDV iz nacrta ima prednost
+    // pred kasnijim async dohvatom postavki ureda (isto kao ručni klik na checkbox).
+    setIsPdvUkljucen(d.isPdvUkljucen); pdvManuallySet.current = true;
     setNaknadaTroskovaStavke(d.naknadaTroskovaStavke);
     setProtustrankaIme(d.protustrankaIme); setProtustrankaOib(d.protustrankaOib);
     setProtustrankaAdresa(d.protustrankaAdresa); setProtustrankaGrad(d.protustrankaGrad);
@@ -966,6 +969,14 @@ function TroskovnikContent() {
   );
 
   // ── Derived values ──
+
+  // Zelena oznaka „povezano sa strankom" i poruka „popunjeni iz baze" smiju stajati
+  // samo kad odabrana stranka doista postoji u učitanom popisu — ne za tek upisano
+  // ime ni za vezu na stranku koje nema (npr. iz zastarjelog nacrta).
+  const strankaPovezanaSBazom = useMemo(
+    () => clientAutoFilled && !!selectedClientId && clients.some((c) => c.id === selectedClientId),
+    [clientAutoFilled, selectedClientId, clients],
+  );
 
   // Odabrane definicije iz kataloga — osnova za određivanje vrste postupka.
   // Ista stavka smije se pojaviti više puta u `redci`; ovdje se svejedno svaka
@@ -1428,6 +1439,14 @@ function TroskovnikContent() {
     setRedci([]);
     setNaknadaTroskovaStavke([]);
     setPredujmovi([]);
+    // Sve vezano uz radnje mora pasti s njima — inače ostanu ručno dodane/isključene
+    // pristojbe i kvačice čl. 7 za radnje kojih više nema.
+    setPristojbeDodane([]);
+    setPristojbeIskljucene([]);
+    setDodatnePristojbe([]);
+    setPodnesciElektronicki([]);
+    setOdlukeElektronicki([]);
+    setZkUpisElektronicki(false);
     setResult(null);
     setCalcError(null);
   }, []);
@@ -2772,7 +2791,7 @@ function TroskovnikContent() {
                       </label>
 
                       {/* Selected state — green badge */}
-                      {selectedClientId && clientAutoFilled ? (
+                      {strankaPovezanaSBazom ? (
                         <div className="flex items-center gap-2 px-3 py-2 border border-emerald-300 bg-emerald-50 rounded-lg text-sm">
                           <div className="flex-1 min-w-0">
                             <span className="font-medium text-emerald-800 truncate">
@@ -2866,7 +2885,7 @@ function TroskovnikContent() {
                       )}
 
                       {/* Status hints */}
-                      {clientAutoFilled && selectedClientId && (
+                      {strankaPovezanaSBazom && (
                         <p className="mt-1 text-[10px] text-emerald-600 flex items-center gap-1">
                           <CheckCircle className="h-3 w-3" />
                           Podaci stranke automatski popunjeni iz baze
