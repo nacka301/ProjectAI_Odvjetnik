@@ -54,10 +54,27 @@ const obracun = (
 
 describe("Čl. 7 st. 1 — podnesci", () => {
   it("tužba uz VPS 50.000: 620,00 → 310,00", () => {
-    const r = obracun("par_tuzba", { podnesciElektronicki: true });
+    const r = obracun("par_tuzba", { podnesciElektronicki: ["tbr1_st1"] });
 
     expect(r.ukupno).toBe(310.0);
     expect(r.stavke[0].umanjeno_elektronicki).toBe(true);
+  });
+
+  /** Po retku, ne po troškovniku: tužba na papiru, žalba elektronički → samo žalba upola. */
+  it("jedan podnesak elektronički, drugi na papiru", () => {
+    const r = obracunajPristojbe({
+      vrijednostSpora: 45_300,
+      odabraneStavke: [stavka("par_tuzba"), stavka("par_zalba_presuda")],
+      oslobodjen: false,
+      podnesciElektronicki: ["tbr3_st1"],
+    });
+
+    const redak = (id: string) => r.stavke.find((s) => s.odredba_id === id)!;
+    expect(redak("tbr1_st1").iznos).toBe(573.0);
+    expect(redak("tbr1_st1").umanjeno_elektronicki).toBe(false);
+    expect(redak("tbr3_st1").iznos).toBe(573.0);
+    expect(redak("tbr3_st1").umanjeno_elektronicki).toBe(true);
+    expect(r.ukupno).toBe(1_146.0);
   });
 
   it("bez oznake ostaje puni iznos — to je i st. 4 kad rok nije ispunjen", () => {
@@ -69,17 +86,17 @@ describe("Čl. 7 st. 1 — podnesci", () => {
 
   /** Polovica ide na PROPISANI iznos, dakle nakon uvećanja iz Tar. br. 3 st. 1. */
   it("žalba protiv presude: 1.240,00 → 620,00", () => {
-    expect(obracun("par_zalba_presuda", { podnesciElektronicki: true }).ukupno).toBe(620.0);
+    expect(obracun("par_zalba_presuda", { podnesciElektronicki: ["tbr3_st1"] }).ukupno).toBe(620.0);
   });
 
   it("upravni spor je fiksnih 110,00, ali je podnesak — 55,00", () => {
-    expect(obracun("usp_tuzba_proc", { podnesciElektronicki: true }).ukupno).toBe(55.0);
+    expect(obracun("usp_tuzba_proc", { podnesciElektronicki: ["tbr29_tuzba"] }).ukupno).toBe(55.0);
   });
 });
 
 describe("Čl. 7 st. 2 — odluke", () => {
-  it("prekidač za podneske ne dira odluku", () => {
-    const r = obracun("par_rociste_presuda", { podnesciElektronicki: true });
+  it("oznaka za podneske ne dira odluku", () => {
+    const r = obracun("par_rociste_presuda", { podnesciElektronicki: ["tbr2_st1"] });
 
     expect(r.ukupno).toBe(620.0);
     expect(r.stavke[0].umanjeno_elektronicki).toBe(false);
@@ -110,8 +127,8 @@ describe("Čl. 7 st. 2 — odluke", () => {
 });
 
 describe("Čl. 7 st. 3 — zemljišnoknjižni", () => {
-  it("prekidač za podneske ne dira zk", () => {
-    expect(obracun("zk_redoviti", { podnesciElektronicki: true }).ukupno).toBe(10.0);
+  it("oznaka za podneske ne dira zk", () => {
+    expect(obracun("zk_redoviti", { podnesciElektronicki: ["tbr14_upis"] }).ukupno).toBe(10.0);
   });
 
   it("zk upis elektronički: 10,00 → 5,00", () => {
@@ -139,7 +156,7 @@ describe("Čl. 7 — doseg", () => {
       odabraneStavke: [],
       oslobodjen: false,
       dodane: [{ odredba_id: "tbr17_18" }],
-      podnesciElektronicki: true,
+      podnesciElektronicki: ["tbr17_18"],
       zkUpisElektronicki: true,
     });
 
@@ -153,14 +170,14 @@ describe("Čl. 7 — doseg", () => {
       odabraneStavke: [],
       oslobodjen: false,
       dodane: [{ odredba_id: "tbr26_fizicki" }],
-      podnesciElektronicki: true,
+      podnesciElektronicki: ["tbr26_fizicki"],
     });
 
     expect(r.ukupno).toBe(30.0);
   });
 
   it("umanjeni redak nosi pravni izvor umanjenja", () => {
-    const izvor = obracun("par_tuzba", { podnesciElektronicki: true }).stavke[0].pravni_izvor;
+    const izvor = obracun("par_tuzba", { podnesciElektronicki: ["tbr1_st1"] }).stavke[0].pravni_izvor;
 
     expect(izvor).toContain("čl. 7");
     expect(izvor).toContain("st. 1");
@@ -184,7 +201,7 @@ describe("Čl. 7 — sudar s umanjenjima koja Uredba sama daje", () => {
       odabraneStavke: [],
       oslobodjen: false,
       dodane: [{ odredba_id: id }],
-      podnesciElektronicki: true,
+      podnesciElektronicki: [id],
       zkUpisElektronicki: true,
       odlukeElektronicki: [id],
     });
@@ -199,7 +216,7 @@ describe("Čl. 7 — sudar s umanjenjima koja Uredba sama daje", () => {
    */
   it("polovica zbog vrste podneska se s čl. 7 slaže", () => {
     expect(obracun("par_odgovor_tuzba").ukupno).toBe(310.0);
-    expect(obracun("par_odgovor_tuzba", { podnesciElektronicki: true }).ukupno).toBe(155.0);
+    expect(obracun("par_odgovor_tuzba", { podnesciElektronicki: ["tbr1_st2"] }).ukupno).toBe(155.0);
   });
 });
 

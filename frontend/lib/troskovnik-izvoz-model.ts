@@ -163,6 +163,28 @@ function uDatum(iso: string | null | undefined): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+/**
+ * Sortni ključ za kronološki poredak radnji. Redak bez datuma ide iza svih
+ * datiranih; stabilan sort tada zadržava redoslijed unosa (i time učinak
+ * strelica „Pomakni gore/dolje", koje su jedini način da se poredaju radnje
+ * istog datuma ili radnje bez datuma).
+ */
+export function datumSortKey(d: string | Date | null | undefined): number {
+  if (!d) return Number.POSITIVE_INFINITY;
+  const t = d instanceof Date ? d.getTime() : new Date(d).getTime();
+  return Number.isNaN(t) ? Number.POSITIVE_INFINITY : t;
+}
+
+/** Usporedba za `Array.prototype.sort` — čuva `0` za jednake da sort ostane stabilan. */
+export function usporediPoDatumu(
+  a: string | Date | null | undefined,
+  b: string | Date | null | undefined,
+): number {
+  const ka = datumSortKey(a);
+  const kb = datumSortKey(b);
+  return ka === kb ? 0 : ka < kb ? -1 : 1;
+}
+
 function neprazno(s: string | null | undefined): string | undefined {
   const t = (s ?? "").trim();
   return t === "" ? undefined : t;
@@ -186,17 +208,22 @@ export function buildIzvozModel(ulaz: IzvozUlaz): TroskovnikIzvozModel {
   // je na ekranu — isto ponašanje kao i dosad.
   const izvorLinija: LinijaLike[] = result?.stavke ?? liveCalc.lines;
 
-  const radnje: IzvozRadnja[] = izvorLinija.map((l) => ({
-    opis: l.opis,
-    tarifniBroj: l.tarifni_broj,
-    datum: uDatum(l.datum),
-    kolicina: l.kolicina,
-    bodovaPoJedinici: l.bodova_po_jedinici,
-    // Tbr. 41 se na ekranu pribraja retku, pa mora i ovdje — inače zbroj
-    // pojedinačnih bodova ne bi odgovarao ukupnom.
-    ukupnoBodova: l.ukupno_bodova + (l.tbr41_bodovi ?? 0),
-    iznos: l.iznos_eur,
-  }));
+  const radnje: IzvozRadnja[] = izvorLinija
+    .map((l) => ({
+      opis: l.opis,
+      tarifniBroj: l.tarifni_broj,
+      datum: uDatum(l.datum),
+      kolicina: l.kolicina,
+      bodovaPoJedinici: l.bodova_po_jedinici,
+      // Tbr. 41 se na ekranu pribraja retku, pa mora i ovdje — inače zbroj
+      // pojedinačnih bodova ne bi odgovarao ukupnom.
+      ukupnoBodova: l.ukupno_bodova + (l.tbr41_bodovi ?? 0),
+      iznos: l.iznos_eur,
+    }))
+    // Kronološki — troškovnik ide sudu i predložak niže radnje po datumu, ne po
+    // redoslijedu unosa. Spremljeni stariji zapisi mogu doći nesortirani, pa se
+    // sortira i ovdje, ne samo u živoj formi. Zbroj se ne mijenja.
+    .sort((a, b) => usporediPoDatumu(a.datum, b.datum));
 
   const jePdv = result
     ? (result.is_pdv_ukljucen ?? result.has_vat ?? ulaz.isPdvUkljucen)

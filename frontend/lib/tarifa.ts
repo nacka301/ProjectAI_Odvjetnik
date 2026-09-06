@@ -1536,8 +1536,8 @@ export interface PristojbeUlaz {
    * samo grubi prekidač `oslobodjen`.
    */
   oslobodjenje?: OslobodjenjeUlaz;
-  /** Čl. 7 st. 1 — podnesci predani elektronički i plaćeno pri podnošenju. */
-  podnesciElektronicki?: boolean;
+  /** Čl. 7 st. 1 — ključevi podnesaka predanih elektronički i plaćenih pri podnošenju (po retku, kao odluke). */
+  podnesciElektronicki?: string[];
   /** Čl. 7 st. 3 — zk upis predložen elektronički i plaćeno pri podnošenju. */
   zkUpisElektronicki?: boolean;
   /** Čl. 7 st. 2 — ključevi odluka dostavljenih elektronički i plaćenih u roku od 3 dana. */
@@ -1622,7 +1622,7 @@ function umanjujeSeCl7(odredba: PristojbenaOdredba, ulaz: PristojbeUlaz): boolea
 
   switch (cl7Rezim(odredba.id, odredba.poglavlje)) {
     case "st_1":
-      return ulaz.podnesciElektronicki === true;
+      return (ulaz.podnesciElektronicki ?? []).includes(odredba.id);
     case "st_3":
       return ulaz.zkUpisElektronicki === true;
     case "st_2":
@@ -2242,9 +2242,10 @@ export function zbrojiRucneTroskove(stavke: TrosakStavka[]): number {
 
 // ── Premještanje redaka ──────────────────────────────────────────
 //
-// Korisnik bira redoslijed radnji sam (nema forsiranog kronološkog poretka).
-// Redni broj se renumerira nakon premještanja ili brisanja — izveden je iz
-// pozicije u polju (index + 1), nikad spremljen zasebno.
+// Radnje se prikazuju i ispisuju kronološki (datum je glavni). Ovaj swap služi
+// strelicama „Pomakni gore/dolje", kojima korisnik razrješava poredak radnji
+// istog datuma i radnji bez datuma. Redni broj se renumerira nakon premještanja
+// ili brisanja — izveden je iz pozicije u polju (index + 1), nikad spremljen zasebno.
 
 /**
  * Zamjena elementa na `index` sa susjedom u smjeru `smjer` (-1 gore, +1 dolje).

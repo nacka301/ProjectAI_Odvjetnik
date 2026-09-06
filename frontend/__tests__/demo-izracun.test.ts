@@ -14,7 +14,12 @@
 import { describe, expect, it } from "vitest";
 import { demoZbrojevi } from "@/lib/demo/izracun";
 import { DEMO_TROSKOVNIK } from "@/lib/demo/podaci";
-import { BOD_VALUE, tbr71Bodovi, type TarifnaStavka } from "@/lib/tarifa";
+import {
+  BOD_VALUE,
+  obracunajPristojbe,
+  tbr71Bodovi,
+  type TarifnaStavka,
+} from "@/lib/tarifa";
 
 const prazna = {
   kategorija: "Parnični postupak",
@@ -63,14 +68,25 @@ describe("iznosi demo troškovnika", () => {
   });
 
   it("elektronički podnesak spušta pristojbu na tužbu", () => {
-    // Čl. 7 Zakona o sudskim pristojbama — vodič to tvrdi u koraku 5/8, pa mora
-    // biti vidljivo i u brojci.
-    const sElektronickim = demoZbrojevi(KATALOG)!.pristojbe;
+    // Čl. 7 st. 1 Zakona o sudskim pristojbama — vodič to tvrdi u koraku 5/8, pa
+    // mora biti vidljivo i u brojci. Demo troškovnik nosi tužbu predanu
+    // elektronički kao popis ključeva odredaba (kao `odlukeElektronicki`).
+    expect(DEMO_TROSKOVNIK.podnesciElektronicki).toContain("tbr1_st1");
 
-    const bezElektronickog = { ...DEMO_TROSKOVNIK, podnesciElektronicki: false };
-    // Isti izračun, samo bez čl. 7 — mora ispasti skuplje.
-    expect(bezElektronickog.podnesciElektronicki).toBe(false);
+    const sElektronickim = demoZbrojevi(KATALOG)!.pristojbe;
     expect(sElektronickim).toBeGreaterThan(0);
+
+    // Isti ulaz za pristojbe, jednom s čl. 7 st. 1 i jednom bez — bez mora biti skuplje.
+    const tuzba = KATALOG.find((s) => s.id === "par_tuzba")!;
+    const ulaz = {
+      vrijednostSpora: DEMO_TROSKOVNIK.vrijednostSpora,
+      odabraneStavke: [tuzba],
+      oslobodjen: false,
+      dodane: [...DEMO_TROSKOVNIK.pristojbeDodane],
+    };
+    const sCl7 = obracunajPristojbe({ ...ulaz, podnesciElektronicki: ["tbr1_st1"] }).ukupno;
+    const bezCl7 = obracunajPristojbe({ ...ulaz, podnesciElektronicki: [] }).ukupno;
+    expect(sCl7).toBeLessThan(bezCl7);
   });
 
   it("bez kataloga ne izmišlja brojku", () => {

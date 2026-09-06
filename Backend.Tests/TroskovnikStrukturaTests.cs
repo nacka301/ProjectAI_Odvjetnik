@@ -42,6 +42,45 @@ public class TroskovnikStrukturaTests
     }
 
     [Fact]
+    public void Radnje_SlazeSePoDatumu_NeovisnoORedoslijeduUZahtjevu()
+    {
+        var rezultat = Izracunaj(new TroskovnikRequest
+        {
+            VrijednostSpora = 45_300m,
+            Stavke =
+            [
+                new TroskovnikItemRequest { ItemId = "par_zalba_presuda", Kolicina = 1, Datum = new DateOnly(2025, 11, 14) },
+                new TroskovnikItemRequest { ItemId = "par_tuzba", Kolicina = 1, Datum = new DateOnly(2025, 2, 12) },
+                new TroskovnikItemRequest { ItemId = "par_rociste_glavno", Kolicina = 1, Datum = new DateOnly(2025, 6, 3) },
+            ]
+        });
+
+        Assert.Equal(
+            [new DateOnly(2025, 2, 12), new DateOnly(2025, 6, 3), new DateOnly(2025, 11, 14)],
+            rezultat.Stavke.Select(s => s.Datum));
+        Assert.Equal([1, 2, 3], rezultat.Stavke.Select(s => s.Rbr));
+    }
+
+    [Fact]
+    public void Radnje_BezDatuma_IduNaKraj_OstaleZadrzeRedoslijedUnosa()
+    {
+        var rezultat = Izracunaj(new TroskovnikRequest
+        {
+            VrijednostSpora = 45_300m,
+            Stavke =
+            [
+                new TroskovnikItemRequest { ItemId = "par_rociste_glavno", Kolicina = 1, Datum = null },
+                new TroskovnikItemRequest { ItemId = "par_tuzba", Kolicina = 1, Datum = new DateOnly(2025, 3, 1) },
+                new TroskovnikItemRequest { ItemId = "par_rociste_presuda", Kolicina = 1, Datum = null },
+            ]
+        });
+
+        Assert.Equal(
+            ["par_tuzba", "par_rociste_glavno", "par_rociste_presuda"],
+            rezultat.Stavke.Select(s => s.ItemId));
+    }
+
+    [Fact]
     public void DatumRadnje_JeOpcionalan_NeBlokiraIzracun()
     {
         var rezultat = Izracunaj(new TroskovnikRequest

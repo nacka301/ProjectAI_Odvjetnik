@@ -271,7 +271,8 @@ public static class SudskePristojbeCalculator
         // i čl. 7, pa bi drugo umanjenje spustilo iznos na 25 % propisanog.
         => !odredba.VecImaElektronickoUmanjenje && odredba.Cl7Rezim switch
         {
-            Cl7Rezim.St1Podnesak => opcije.PodnesciElektronicki,
+            Cl7Rezim.St1Podnesak =>
+                opcije.PodnesciElektronicki?.Contains(odredba.Id) == true,
             Cl7Rezim.St3Zemljisnoknjizni => opcije.ZkUpisElektronicki,
             Cl7Rezim.St2Odluka =>
                 opcije.OdlukeElektronicki?.Contains(odredba.Id) == true,

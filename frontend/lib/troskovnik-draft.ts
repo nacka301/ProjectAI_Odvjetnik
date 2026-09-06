@@ -26,7 +26,10 @@
  * cannot be shown each other's work even within one tab.
  */
 
-const VERSION = 1;
+// v2: `podnesciElektronicki` je s `boolean` prešao na `string[]` (čl. 7 st. 1 po
+// pojedinoj radnji, kao odluke). Stari nacrt s boolean vrijednošću bi srušio
+// `vratiNacrt`, pa se odbacuje — nacrti su ionako kratkotrajni (sessionStorage).
+const VERSION = 2;
 
 /** Drafts older than this are ignored — a stale form is worse than none. */
 const MAX_AGE_MS = 12 * 60 * 60 * 1000;

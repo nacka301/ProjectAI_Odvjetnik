@@ -38,7 +38,7 @@ import { clearDraft, loadDraft, saveDraft, type LoadedDraft } from "@/lib/trosko
 import { formatThreshold } from "@/lib/format";
 import TroskovnikIspis from "@/components/troskovnik/TroskovnikIspis";
 import StrankaPicker from "@/components/troskovnik/StrankaPicker";
-import { buildIzvozModel } from "@/lib/troskovnik-izvoz-model";
+import { buildIzvozModel, usporediPoDatumu } from "@/lib/troskovnik-izvoz-model";
 import { STUPCI, buildTroskovnikSheet, nazivDatoteke } from "@/lib/troskovnik-xlsx";
 import {
   BOD_VALUE,
@@ -78,7 +78,6 @@ import {
   efektivniVps,
   izracunajOsnovicu,
   podijeliPoOsobama,
-  pomakniRedak,
   povisenjeViseOsobaPostotak,
   provjeriZahtjev,
   provjeriTbr41Stavku,
@@ -456,12 +455,11 @@ function TroskovnikContent() {
   const [pristojbeIskljucene, setPristojbeIskljucene] = useState<string[]>([]);
 
   // ── Čl. 7 Zakona o sudskim pristojbama — elektronički oblik ──
-  // Tri stavka, tri uvjeta, pa dvije oznake na razini troškovnika i jedna po retku:
-  //   st. 1 — stranka podnijela elektronički i platila pri podnošenju
-  //   st. 3 — stranka predložila ZK UPIS elektronički i platila pri podnošenju
-  //   st. 2 — SUD dostavio odluku elektronički i plaćeno u roku od 3 dana (po odluci,
-  //           jer se rok može ispuniti za jednu, a za drugu ne)
-  const [podnesciElektronicki, setPodnesciElektronicki] = useState(false);
+  // Tri stavka, tri uvjeta. St. 1 (podnesci) i st. 2 (odluke) idu PO RETKU — u istom
+  // predmetu žalba može biti predana elektronički, a tužba na papiru, i rok od 3 dana
+  // može se ispuniti za jednu odluku, a ne za drugu. St. 3 (zk upis) je jedan uvjet
+  // za cijeli zk postupak, pa ostaje prekidač.
+  const [podnesciElektronicki, setPodnesciElektronicki] = useState<string[]>([]);
   const [zkUpisElektronicki, setZkUpisElektronicki] = useState(false);
   const [odlukeElektronicki, setOdlukeElektronicki] = useState<string[]>([]);
   // ── Oslobođenja — Zakon o sudskim pristojbama, čl. 11–13 ──
@@ -979,6 +977,16 @@ function TroskovnikContent() {
       .filter((d): d is TarifnaStavka => d !== undefined);
   }, [redci, katalog]);
 
+  // Kronološki poredak radnji — datum je glavni, a redoslijed u polju (kojim
+  // upravljaju strelice „Pomakni gore/dolje") razrješava jednakost, tj. radnje
+  // istog datuma i radnje bez datuma. Ovaj se poredani pogled koristi za prikaz
+  // u panelu, za živi izračun i za slanje na backend; sve izmjene retka i dalje
+  // idu preko `redci` i njegovih `setRedci` rukovatelja.
+  const redciPoredani = useMemo(
+    () => [...redci].sort((a, b) => usporediPoDatumu(a.datum, b.datum)),
+    [redci],
+  );
+
   // Bilo koja kaznena stavka → prikaži panel s parametrima kaznenog postupka.
   const isKazneniMode = odabraneDefinicije.some((d) => d.kategorija === KATEGORIJA_KAZNENI);
 
@@ -1212,7 +1220,7 @@ function TroskovnikContent() {
     // jedna verzija, pa je jednaka BOD_VALUE; backend (mjerodavan) razrješava istu logiku.
     const bodValue = razrijesiTarifu(datumDospijeca || null).bodValue;
 
-    for (const redak of redci) {
+    for (const redak of redciPoredani) {
       const def = catalogMap.get(redak.itemId);
       if (!def || redak.kolicina <= 0) continue;
 
@@ -1324,7 +1332,7 @@ function TroskovnikContent() {
       pristojbaVpsUdio: pristojbe.vpsUdio,
       pristojbaNaTeretProtustranke: pristojbe.naTeretProtustranke,
     };
-  }, [redci, katalog, osnovica, isPdvUkljucen, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, isOduzimanjePrekrsaj, parsedVrijednostOduzimanja, pristojbe, brojZastupanihOsoba, zaprijecenaKazna, tbr41Povisenje, tbr41Snizenje, dodatnePristojbe, predujmovi, naknadaTroskovaStavke, datumDospijeca]);
+  }, [redciPoredani, katalog, osnovica, isPdvUkljucen, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, isOduzimanjePrekrsaj, parsedVrijednostOduzimanja, pristojbe, brojZastupanihOsoba, zaprijecenaKazna, tbr41Povisenje, tbr41Snizenje, dodatnePristojbe, predujmovi, naknadaTroskovaStavke, datumDospijeca]);
 
   // Katalog po id, i izračunati redak po uid — za uređivanje u desnom stupcu, koje
   // iterira `redci` (izvor istine, uključuje i retke koji još ne daju iznos), a
@@ -1369,12 +1377,23 @@ function TroskovnikContent() {
     setRedci((prev) => prev.map((r) => (r.uid === uid ? { ...r, datum: iso || null } : r)));
   }, []);
 
-  /** ▲/▼ — zamjena sa susjedom; na rubovima nema efekta. */
+  /**
+   * ▲/▼ — zamjena sa susjedom U PRIKAZU (kronološkom poretku), na rubovima bez
+   * efekta. Datum je glavni: za dvije radnje istog datuma (ili obje bez datuma)
+   * ovo je prava zamjena; preko granice datuma stabilni sort ionako vrati
+   * poredak, pa strelica tada nema vidljiv učinak.
+   */
   const pomakni = useCallback((uid: string, smjer: -1 | 1) => {
     setRedci((prev) => {
-      const i = prev.findIndex((r) => r.uid === uid);
-      if (i < 0) return prev;
-      return pomakniRedak(prev, i, smjer);
+      const poredani = [...prev].sort((a, b) => usporediPoDatumu(a.datum, b.datum));
+      const pi = poredani.findIndex((r) => r.uid === uid);
+      const ci = pi + smjer;
+      if (pi < 0 || ci < 0 || ci >= poredani.length) return prev;
+      const ai = prev.findIndex((r) => r.uid === poredani[pi].uid);
+      const bi = prev.findIndex((r) => r.uid === poredani[ci].uid);
+      const rez = [...prev];
+      [rez[ai], rez[bi]] = [rez[bi], rez[ai]];
+      return rez;
     });
   }, []);
 
@@ -1452,7 +1471,7 @@ function TroskovnikContent() {
       zastupanaPolozaj: "tužitelj",
       protustrankaIme: DEMO_TROSKOVNIK.protustranka,
       protustrankaPolozaj: "tuženik",
-      podnesciElektronicki: DEMO_TROSKOVNIK.podnesciElektronicki,
+      podnesciElektronicki: [...DEMO_TROSKOVNIK.podnesciElektronicki],
       pristojbeDodane: DEMO_TROSKOVNIK.pristojbeDodane.map((r) => ({ ...r })),
       predujmovi: DEMO_TROSKOVNIK.predujmovi.map((r) => ({
         uid: noviUid(), datum: r.datum, opis: r.opis, iznos: r.iznos,
@@ -1469,7 +1488,7 @@ function TroskovnikContent() {
       odvjetnikIme: "", odvjetnikOib: "", odvjetnikAdresa: "", odvjetnikIban: "",
       klijentIme: "", klijentOib: "", klijentAdresa: "", klijentGrad: "",
       zastupanaPolozaj: "", protustrankaIme: "", protustrankaPolozaj: "",
-      podnesciElektronicki: false, pristojbeDodane: [], predujmovi: [],
+      podnesciElektronicki: [], pristojbeDodane: [], predujmovi: [],
     }),
     [],
   );
@@ -1518,12 +1537,12 @@ function TroskovnikContent() {
   }, []);
 
   /**
-   * Redci troškovnika u obliku zahtjeva. Redoslijed slijedi `redci` (korisnički
-   * odabran) — server renumerira `rbr` po redoslijedu ovog polja.
+   * Redci troškovnika u obliku zahtjeva. Redoslijed je kronološki (`redciPoredani`)
+   * — server renumerira `rbr` po redoslijedu ovog polja i sam sortira obrambeno.
    */
   const stavkeZaSlanje = useCallback(
     () =>
-      redci.map((r) => ({
+      redciPoredani.map((r) => ({
         item_id: r.itemId,
         kolicina: r.kolicina,
         datum: r.datum ?? null,
@@ -1531,7 +1550,7 @@ function TroskovnikContent() {
         tbr41_povisenje_postotak: r.tbr41?.povisenje ?? null,
         tbr41_snizenje_postotak: r.tbr41?.snizenje ?? null,
       })),
-    [redci],
+    [redciPoredani],
   );
 
   /**
@@ -3001,7 +3020,7 @@ function TroskovnikContent() {
                       data-vodic="vodic-popis-radnji"
                       className={`space-y-2 max-h-[50vh] overflow-y-auto rounded-lg transition`}
                     >
-                      {redci.map((redak, i) => {
+                      {redciPoredani.map((redak, i) => {
                         const def = katalogById.get(redak.itemId);
                         const line = lineByUid.get(redak.uid);
 
@@ -3021,7 +3040,7 @@ function TroskovnikContent() {
                               <button
                                 type="button"
                                 onClick={() => pomakni(redak.uid, 1)}
-                                disabled={i === redci.length - 1}
+                                disabled={i === redciPoredani.length - 1}
                                 className="w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 disabled:opacity-20 disabled:hover:bg-transparent transition"
                                 title="Pomakni dolje"
                               >
@@ -3286,9 +3305,31 @@ function TroskovnikContent() {
                                     {fmtEur(s.iznos)}
                                   </span>
                                 </div>
-                                {/* Čl. 7 st. 2 — uvjet je vezan uz POJEDINU odluku (dostava
-                                    suda + uplata u 3 dana), pa oznaka stoji uz redak.
-                                    Podnesci i zk idu na prekidače iznad. */}
+                                {/* Čl. 7 st. 1 i st. 2 — uvjet je vezan uz POJEDINU radnju
+                                    (podnesak predan elektronički i plaćen pri podnošenju;
+                                    odluku sud dostavio elektronički i plaćeno u 3 dana), pa
+                                    oznaka stoji uz redak. Zk upis (st. 3) je jedan uvjet za
+                                    cijeli postupak, pa ostaje prekidač ispod. */}
+                                {s.cl7_rezim === "st_1" && (
+                                  <label className="flex items-start gap-1.5 text-[10px] text-slate-500 leading-snug pl-4">
+                                    <input
+                                      type="checkbox"
+                                      checked={podnesciElektronicki.includes(s.odredba_id)}
+                                      onChange={(e) =>
+                                        setPodnesciElektronicki((prev) =>
+                                          e.target.checked
+                                            ? [...prev, s.odredba_id]
+                                            : prev.filter((id) => id !== s.odredba_id),
+                                        )
+                                      }
+                                      className="mt-0.5 h-3 w-3"
+                                    />
+                                    <span>
+                                      Podnesak predan elektronički i pristojba plaćena pri
+                                      podnošenju <span className="text-slate-400">(čl. 7 st. 1 — polovica)</span>
+                                    </span>
+                                  </label>
+                                )}
                                 {s.cl7_rezim === "st_2" && (
                                   <label className="flex items-start gap-1.5 text-[10px] text-slate-500 leading-snug pl-4">
                                     <input
@@ -3334,27 +3375,12 @@ function TroskovnikContent() {
                               </div>
                             )}
 
-                            {/* Čl. 7 Zakona o sudskim pristojbama — elektronički oblik.
-                                Dvije oznake, ne jedna: st. 1 se veže uz oblik podneska,
-                                st. 3 uz oblik prijedloga za zk upis. Uvjet svake uključuje
-                                i plaćanje u roku — st. 4 propušten rok vraća puni iznos. */}
-                            <div className="pt-1.5 mt-1 border-t border-slate-100 space-y-1.5">
-                              <label className="flex items-start gap-1.5 text-[10px] text-slate-600 leading-snug">
-                                <input
-                                  type="checkbox"
-                                  checked={podnesciElektronicki}
-                                  onChange={(e) => setPodnesciElektronicki(e.target.checked)}
-                                  className="mt-0.5 h-3 w-3"
-                                />
-                                <span>
-                                  Podnesci predani elektronički i pristojba plaćena pri podnošenju
-                                  <span className="block text-slate-400">
-                                    Čl. 7 st. 1 — polovica propisanog iznosa. Ne odnosi se na odluke.
-                                  </span>
-                                </span>
-                              </label>
-
-                              {pristojbe.stavke.some((s) => s.cl7_rezim === "st_3") && (
+                            {/* Čl. 7 st. 3 — zemljišnoknjižni: jedan uvjet (oblik prijedloga
+                                za upis) za cijeli zk postupak, pa jedan prekidač. St. 1 i
+                                st. 2 idu po retku, uz svaku pristojbu iznad. Uvjet svake
+                                uključuje i plaćanje u roku — st. 4 propušten rok vraća puni iznos. */}
+                            {pristojbe.stavke.some((s) => s.cl7_rezim === "st_3") && (
+                              <div className="pt-1.5 mt-1 border-t border-slate-100 space-y-1.5">
                                 <label className="flex items-start gap-1.5 text-[10px] text-slate-600 leading-snug">
                                   <input
                                     type="checkbox"
@@ -3369,8 +3395,8 @@ function TroskovnikContent() {
                                     </span>
                                   </span>
                                 </label>
-                              )}
-                            </div>
+                              </div>
+                            )}
 
                             {/* Čl. 2 — datumi se traže samo kad je odabrana radnja na koju se odnose. */}
                             {(imaOdgovorNaTuzbu || imaUpravniSpor) && (

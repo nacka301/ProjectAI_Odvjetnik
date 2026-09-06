@@ -188,10 +188,11 @@ export const DEMO_TROSKOVNIK = {
   ],
 
   /**
-   * Čl. 7 Zakona o sudskim pristojbama — podnesci predani elektronički, pa je
-   * pristojba na tužbu upola manja. Alat to primjenjuje sam.
+   * Čl. 7 st. 1 Zakona o sudskim pristojbama — tužba predana elektronički, pa je
+   * pristojba na nju (Tar. br. 1 st. 1) upola manja. Alat to primjenjuje sam.
+   * Popis ključeva odredaba na koje se odnosi (kao `odlukeElektronicki`).
    */
-  podnesciElektronicki: true,
+  podnesciElektronicki: ["tbr1_st1"],
 
   /**
    * Pristojba na presudu (Tar. br. 2 st. 1 Uredbe). Dodaje se imenovanjem

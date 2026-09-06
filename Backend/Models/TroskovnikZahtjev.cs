@@ -160,11 +160,12 @@ public sealed class TroskovnikRequest
     // Tri stavka, tri različita uvjeta, pa tri različita ulaza. Vidi PristojbeOpcije.
 
     /// <summary>
-    /// Čl. 7 st. 1 — podnesci predani elektronički i pristojba plaćena u trenutku
-    /// podnošenja. Vrijedi za cijeli troškovnik.
+    /// Čl. 7 st. 1 — ključevi odredbi (podnesaka) predanih elektronički i za koje je
+    /// pristojba plaćena u trenutku podnošenja. Po retku, jednako kao odluke: jedna
+    /// žalba može biti predana elektronički, a tužba u istom predmetu na papiru.
     /// </summary>
     [JsonPropertyName("podnesci_elektronicki")]
-    public bool PodnesciElektronicki { get; set; }
+    public List<string> PodnesciElektronicki { get; set; } = [];
 
     /// <summary>
     /// Čl. 7 st. 3 — zemljišnoknjižni upis predložen elektronički i plaćeno pri

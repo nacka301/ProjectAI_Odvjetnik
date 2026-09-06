@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { API_BASE } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
 
@@ -100,6 +100,12 @@ export function useSubscription(): SubscriptionStatus {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // `loading` means "we have never had an answer", not "a request is in flight".
+  // A token refresh or a tab-focus revalidation must not blank a page the user
+  // is working on — `PretplataGate` swaps the whole subtree for a spinner while
+  // this is true, and that is what was unmounting the Troškovnik form mid-edit.
+  const ikadOdgovoreno = useRef(false);
+
   useEffect(() => {
     if (!userId || !authHeaders.Authorization) {
       setLoading(false);
@@ -108,7 +114,7 @@ export function useSubscription(): SubscriptionStatus {
 
     let cancelled = false;
     (async () => {
-      setLoading(true);
+      if (!ikadOdgovoreno.current) setLoading(true);
       setError(null);
       try {
         const res = await fetch(`${API_BASE}/api/settings/subscription`, {
@@ -127,7 +133,12 @@ export function useSubscription(): SubscriptionStatus {
           setError("Mrežna greška");
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          // From now on this is a revalidation, never a first load — so it may
+          // never again put the page behind a spinner, whatever the outcome.
+          ikadOdgovoreno.current = true;
+        }
       }
     })();
 

@@ -118,6 +118,42 @@ describe("buildIzvozModel", () => {
     expect(m.radnje[1].datum).toBeNull();
   });
 
+  it("radnje slaže kronološki, neovisno o redoslijedu unosa", () => {
+    const m = buildIzvozModel(
+      sLinijom({
+        liveCalc: {
+          ...PRAZAN_LIVECALC,
+          lines: [
+            linija({ opis: "Žalba", datum: "2025-11-14" }),
+            linija({ opis: "Tužba", datum: "2025-02-12" }),
+            linija({ opis: "Ročište", datum: "2025-06-03" }),
+          ],
+        },
+      }),
+    );
+    expect(m.radnje.map((r) => r.opis)).toEqual(["Tužba", "Ročište", "Žalba"]);
+  });
+
+  it("radnja bez datuma ide na kraj, ostale zadrže redoslijed unosa", () => {
+    const m = buildIzvozModel(
+      sLinijom({
+        liveCalc: {
+          ...PRAZAN_LIVECALC,
+          lines: [
+            linija({ opis: "Bez datuma A", datum: null }),
+            linija({ opis: "S datumom", datum: "2025-03-01" }),
+            linija({ opis: "Bez datuma B", datum: null }),
+          ],
+        },
+      }),
+    );
+    expect(m.radnje.map((r) => r.opis)).toEqual([
+      "S datumom",
+      "Bez datuma A",
+      "Bez datuma B",
+    ]);
+  });
+
   it("uzima uloge stranaka iz lokalnih polja, prije spremanja", () => {
     const m = buildIzvozModel(
       sLinijom({

@@ -357,9 +357,11 @@ public sealed record RucnaPristojba(string OdredbaId, decimal? Osnovica = null, 
 /// staroj Uredbi, i to cijeli, ne samo tužba.
 /// </param>
 /// <param name="PodnesciElektronicki">
-/// Čl. 7 st. 1 — podnesci su predani elektronički I pristojba je plaćena u trenutku
-/// podnošenja. Oba uvjeta zajedno; st. 4 propušten rok vraća na puni iznos, pa
-/// isključena oznaka znači i „nije plaćeno na vrijeme".
+/// Čl. 7 st. 1 — ključevi odredbi (podnesaka) predanih elektronički i za koje je
+/// pristojba plaćena u trenutku podnošenja. PO RETKU, jednako kao <paramref name="OdlukeElektronicki"/>:
+/// jedan podnesak (npr. žalba) može ispuniti uvjet, a drugi (npr. tužba) ne. Oba
+/// uvjeta zajedno; st. 4 propušten rok vraća na puni iznos, pa izostanak ključa
+/// znači i „nije plaćeno na vrijeme".
 /// </param>
 /// <param name="ZkUpisElektronicki">
 /// Čl. 7 st. 3 — zemljišnoknjižni upis je predložen elektronički I plaćeno je pri
@@ -378,7 +380,7 @@ public sealed record PristojbeOpcije(
     DateOnly? DatumPokretanjaUpravnogSpora = null,
     IReadOnlyList<RucnaPristojba>? Dodane = null,
     IReadOnlySet<string>? Iskljucene = null,
-    bool PodnesciElektronicki = false,
+    IReadOnlySet<string>? PodnesciElektronicki = null,
     bool ZkUpisElektronicki = false,
     IReadOnlySet<string>? OdlukeElektronicki = null)
 {
