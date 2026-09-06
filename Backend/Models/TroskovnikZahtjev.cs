@@ -114,6 +114,13 @@ public sealed class TroskovnikRequest
     [JsonPropertyName("client_grad")]
     public string? ClientGrad { get; set; }
 
+    /// <summary>
+    /// Tip stranke ("fizicka" / "pravna") za automatsko otvaranje. Ako izostane,
+    /// tip se pogađa iz naziva (v. ClientCaseService.NaslutiTip).
+    /// </summary>
+    [JsonPropertyName("client_tip")]
+    public string? ClientTip { get; set; }
+
     /// <summary>Oslobođenje od plaćanja sudskih pristojbi (čl. 11. Zakona).</summary>
     [JsonPropertyName("is_oslobodjen_pristojbi")]
     public bool IsOslobodjenPristojbi { get; set; }

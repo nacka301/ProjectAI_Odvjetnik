@@ -208,7 +208,8 @@ public class TroskovnikController : ControllerBase
             naziv,
             zahtjev.Stranke?.ZastupanaStranka?.Oib ?? zahtjev.Klijent?.Oib,
             zahtjev.Stranke?.ZastupanaStranka?.Adresa ?? zahtjev.Klijent?.Adresa,
-            zahtjev.ClientGrad ?? zahtjev.Klijent?.Grad
+            zahtjev.ClientGrad ?? zahtjev.Klijent?.Grad,
+            zahtjev.ClientTip
         );
 
         if (razrijeseniId is null)

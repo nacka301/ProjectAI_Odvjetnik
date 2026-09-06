@@ -34,7 +34,8 @@ public interface ITroskovnikSpremiste
         string? naziv,
         string? oib,
         string? adresa,
-        string? grad);
+        string? grad,
+        string? tip = null);
 
     /// <summary>Trajno sprema izračunati troškovnik.</summary>
     Task<TroskovnikReadRecord?> SaveTroskovnikAsync(TroskovnikRecord record);

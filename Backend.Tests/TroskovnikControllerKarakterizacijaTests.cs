@@ -395,6 +395,24 @@ public class TroskovnikControllerKarakterizacijaTests
     }
 
     [Fact]
+    public async Task Spremi_AutomatskoOtvaranje_ProslijediTipStrankeUpsertu()
+    {
+        var klijenti = new FakeClientCaseService();
+        var kontroler = StvoriKontroler(klijenti);
+        var zahtjev = ValjanZahtjev();
+        zahtjev.AutoCreateClient = true;
+        zahtjev.ClientTip = "pravna";
+        zahtjev.Stranke = new StrankeRequest
+        {
+            ZastupanaStranka = new StrankaRequest { Naziv = "Zagreb Trade d.o.o." }
+        };
+
+        Assert.IsType<OkObjectResult>(await kontroler.Spremi(zahtjev));
+
+        Assert.Equal("pravna", klijenti.UpsertTip);
+    }
+
+    [Fact]
     public async Task Spremi_AutomatskoOtvaranjeBezZastupaneStranke_PovlaciSeNaStariKlijent()
     {
         var klijenti = new FakeClientCaseService { IshodUpserta = ("klijent-7", false) };
@@ -486,12 +504,17 @@ public class TroskovnikControllerKarakterizacijaTests
         public (string Korisnik, string? Ured, string? Naziv, string? Oib, string? Adresa, string? Grad)? UpsertPozvanS
         { get; private set; }
 
+        /// <summary>Tip poslan zadnjem pozivu upserta ("fizicka"/"pravna"/null).</summary>
+        public string? UpsertTip { get; private set; }
+
         public Task<CaseReadRecord?> GetCaseByIdAsync(string id) => Task.FromResult(Predmet);
 
         public Task<(string? ClientId, bool WasCreated)> UpsertClientForTroskovnikAsync(
-            string userId, string? uredId, string? naziv, string? oib, string? adresa, string? grad)
+            string userId, string? uredId, string? naziv, string? oib, string? adresa, string? grad,
+            string? tip = null)
         {
             UpsertPozvanS = (userId, uredId, naziv, oib, adresa, grad);
+            UpsertTip = tip;
             return Task.FromResult(IshodUpserta);
         }
 

@@ -36,6 +36,7 @@ import { DEMO_ZASTO_NEAKTIVNO, useDemo } from "@/contexts/DemoContext";
 import { DEMO_STRANKE, DEMO_TROSKOVNIK, DEMO_URED } from "@/lib/demo/podaci";
 import { clearDraft, loadDraft, saveDraft, type LoadedDraft } from "@/lib/troskovnik-draft";
 import { formatThreshold } from "@/lib/format";
+import { naslutiTipStranke, type TipStranke } from "@/lib/stranke-tipovi";
 import TroskovnikIspis from "@/components/troskovnik/TroskovnikIspis";
 import StrankaPicker from "@/components/troskovnik/StrankaPicker";
 import { buildIzvozModel, usporediPoDatumu } from "@/lib/troskovnik-izvoz-model";
@@ -395,6 +396,12 @@ function TroskovnikContent() {
   const [klijentOib, setKlijentOib] = useState("");
   const [klijentAdresa, setKlijentAdresa] = useState("");
   const [klijentGrad, setKlijentGrad] = useState("");
+  // Fizička/pravna osoba — bitno samo pri automatskom otvaranju nove stranke iz
+  // troškovnika (backend inače sve stvara kao „fizička"). Za stranku odabranu iz
+  // baze koristi se njezin postojeći tip. `klijentTipRucno` pamti je li korisnik
+  // sam pipnuo izbornik, da mu prijedlog iz naziva to više ne pregazi.
+  const [klijentTip, setKlijentTip] = useState<TipStranke>("fizicka");
+  const klijentTipRucno = useRef(false);
   const [opisPredmeta, setOpisPredmeta] = useState("");
   const [predmetSud, setPredmetSud] = useState("");
   const [predmetPoslovniBroj, setPredmetPoslovniBroj] = useState("");
@@ -538,7 +545,7 @@ function TroskovnikContent() {
     () => ({
       vrijednostSpora, redci, selectedClientId, napomena,
       odvjetnikIme, odvjetnikOib, odvjetnikAdresa, odvjetnikGrad, odvjetnikIban,
-      klijentIme, klijentOib, klijentAdresa, klijentGrad,
+      klijentIme, klijentOib, klijentAdresa, klijentGrad, klijentTip,
       opisPredmeta, predmetSud, predmetPoslovniBroj, showParties, isPdvUkljucen,
       naknadaTroskovaStavke,
       protustrankaIme, protustrankaOib, protustrankaAdresa, protustrankaGrad,
@@ -558,7 +565,7 @@ function TroskovnikContent() {
     [
       vrijednostSpora, redci, selectedClientId, napomena,
       odvjetnikIme, odvjetnikOib, odvjetnikAdresa, odvjetnikGrad, odvjetnikIban,
-      klijentIme, klijentOib, klijentAdresa, klijentGrad,
+      klijentIme, klijentOib, klijentAdresa, klijentGrad, klijentTip,
       opisPredmeta, predmetSud, predmetPoslovniBroj, showParties, isPdvUkljucen,
       naknadaTroskovaStavke,
       protustrankaIme, protustrankaOib, protustrankaAdresa, protustrankaGrad,
@@ -618,6 +625,11 @@ function TroskovnikContent() {
     setOdvjetnikIban(d.odvjetnikIban);
     setKlijentIme(d.klijentIme); setKlijentOib(d.klijentOib);
     setKlijentAdresa(d.klijentAdresa); setKlijentGrad(d.klijentGrad);
+    // Stariji nacrt (v2) nema tip — složi ga iz naziva. Vraćanje je izričita
+    // radnja, pa se prijedlog iz naziva dalje ne miješa.
+    setKlijentTip((d as { klijentTip?: TipStranke }).klijentTip ?? naslutiTipStranke(d.klijentIme));
+    // Prazan naziv (npr. izlazak iz primjera) — pusti da prijedlog opet radi.
+    klijentTipRucno.current = d.klijentIme.trim() !== "";
     setOpisPredmeta(d.opisPredmeta); setPredmetSud(d.predmetSud);
     setPredmetPoslovniBroj(d.predmetPoslovniBroj);
     setShowParties(d.showParties);
@@ -941,6 +953,9 @@ function TroskovnikContent() {
     setKlijentOib(client.oib ?? "");
     setKlijentAdresa(client.adresa ?? "");
     setKlijentGrad(client.grad ?? "");
+    // Postojeća stranka nosi svoj tip iz baze; prijedlog iz naziva se ne miješa.
+    setKlijentTip(client.tip === "pravna" ? "pravna" : "fizicka");
+    klijentTipRucno.current = true;
     setClientAutoFilled(true);
     setClientSearchQuery("");
     setClientDropdownOpen(false);
@@ -952,6 +967,8 @@ function TroskovnikContent() {
     setKlijentOib("");
     setKlijentAdresa("");
     setKlijentGrad("");
+    setKlijentTip("fizicka");
+    klijentTipRucno.current = false;
     setClientAutoFilled(false);
     setClientSearchQuery("");
   }, []);
@@ -963,10 +980,20 @@ function TroskovnikContent() {
       if (clientAutoFilled && selectedClientId) {
         setSelectedClientId("");
         setClientAutoFilled(false);
+        // Otkačeno od baze — opet je nova stranka, pa prijedlog tipa iz naziva
+        // smije ponovno raditi dok ga korisnik sam ne pipne.
+        klijentTipRucno.current = false;
       }
     },
     [clientAutoFilled, selectedClientId]
   );
+
+  // Prijedlog „fizička/pravna" iz naziva nove stranke. Ne dira odabir iz baze
+  // (ondje tip dolazi s njom) ni ručni izbor korisnika.
+  useEffect(() => {
+    if (klijentTipRucno.current || (clientAutoFilled && selectedClientId)) return;
+    setKlijentTip(naslutiTipStranke(klijentIme));
+  }, [klijentIme, clientAutoFilled, selectedClientId]);
 
   // ── Derived values ──
 
@@ -1487,6 +1514,7 @@ function TroskovnikContent() {
       klijentOib: stranka?.oib ?? "",
       klijentAdresa: stranka?.adresa ?? "",
       klijentGrad: stranka?.grad ?? "",
+      klijentTip: (stranka?.tip === "pravna" ? "pravna" : "fizicka") as TipStranke,
       zastupanaPolozaj: "tužitelj",
       protustrankaIme: DEMO_TROSKOVNIK.protustranka,
       protustrankaPolozaj: "tuženik",
@@ -1506,6 +1534,7 @@ function TroskovnikContent() {
       showParties: false, isPdvUkljucen: false,
       odvjetnikIme: "", odvjetnikOib: "", odvjetnikAdresa: "", odvjetnikIban: "",
       klijentIme: "", klijentOib: "", klijentAdresa: "", klijentGrad: "",
+      klijentTip: "fizicka" as TipStranke,
       zastupanaPolozaj: "", protustrankaIme: "", protustrankaPolozaj: "",
       podnesciElektronicki: [], pristojbeDodane: [], predujmovi: [],
     }),
@@ -1803,6 +1832,8 @@ function TroskovnikContent() {
         // Signal backend to auto-create client from stranke data if no client_id
         auto_create_client: !selectedClientId && !!klijentIme.trim(),
         client_grad: klijentGrad || undefined,
+        // Fizička/pravna — da nova stranka ne završi uvijek kao „fizička".
+        client_tip: klijentTip,
       };
 
       const res = await fetch(`${API_BASE}/api/troskovnik/spremi`, {
@@ -2965,6 +2996,26 @@ function TroskovnikContent() {
                       )}
                       <input type="text" value={klijentAdresa} onChange={(e) => handleKlijentManualEdit(setKlijentAdresa, e.target.value)} placeholder="Adresa" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
                       <input type="text" value={klijentGrad} onChange={(e) => handleKlijentManualEdit(setKlijentGrad, e.target.value)} placeholder="Grad" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                      <label className="block text-xs font-semibold text-slate-600 mb-1 mt-2">
+                        Vrsta stranke
+                      </label>
+                      <select
+                        value={klijentTip}
+                        onChange={(e) => {
+                          setKlijentTip(e.target.value as TipStranke);
+                          klijentTipRucno.current = true;
+                        }}
+                        disabled={strankaPovezanaSBazom}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                      >
+                        <option value="fizicka">Fizička osoba</option>
+                        <option value="pravna">Pravna osoba</option>
+                      </select>
+                      {!strankaPovezanaSBazom && klijentIme.trim() && (
+                        <p className="text-[10px] text-slate-400">
+                          Predloženo iz naziva — ispravite ako treba. Vrijedi za novu stranku koja će se otvoriti pri spremanju.
+                        </p>
+                      )}
                       <label className="block text-xs font-semibold text-slate-600 mb-1 mt-2">
                         Položaj zastupane stranke
                       </label>

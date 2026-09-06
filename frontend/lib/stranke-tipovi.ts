@@ -60,3 +60,20 @@ export interface ClientProfile {
   cases: Case[];
   troskovnici: Troskovnik[];
 }
+
+/** Vrijednosti stupca `tip` u tablici `clients` — vidi popis stranaka. */
+export type TipStranke = "fizicka" | "pravna";
+
+// Oznake pravnih oblika: `d.o.o.`, `j.d.o.o.`, `d.d.`, `k.d.`, `j.t.d.` (uz razmake
+// i s/bez točaka), te riječi koje same po sebi znače pravnu osobu.
+const PRAVNI_OBLIK =
+  /(\bd\s*\.?\s*o\s*\.?\s*o\b|\bj\s*\.?\s*d\s*\.?\s*o\s*\.?\s*o\b|\bd\s*\.?\s*d\b|\bk\s*\.?\s*d\b|\bj\s*\.?\s*t\s*\.?\s*d\b|\bd\s*\.?\s*n\s*\.?\s*o\b|\bustanova\b|\bzadruga\b|\budruga\b|\bzaklada\b|\bdruštvo\b|\bkomora\b|\bsindikat\b|\bministarstvo\b|\brepublika hrvatska\b|\bkonzorcij\b)/i;
+
+/**
+ * Pogađa je li naziv stranke pravna ili fizička osoba. Namijenjeno kao PRIJEDLOG
+ * kod automatskog otvaranja stranke iz troškovnika — korisnik ga uvijek može
+ * pregaziti. Bez naziva vraća `"fizicka"` (češći slučaj).
+ */
+export function naslutiTipStranke(naziv: string | null | undefined): TipStranke {
+  return naziv && PRAVNI_OBLIK.test(naziv) ? "pravna" : "fizicka";
+}
