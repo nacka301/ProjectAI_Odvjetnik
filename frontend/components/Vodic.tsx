@@ -11,27 +11,52 @@ import type { VodicKorak } from "@/lib/vodic-koraci";
  * vodiča živi u `lib/vodic-koraci.ts`, a koji je vodič pokrenut odlučuje
  * `contexts/VodicContext.tsx`.
  *
+ * ── Kako cilj probija zatamnjenje ──
+ *
+ * Ranija verzija je to radila CSS-om na stvarnom elementu stranice: cilj bi
+ * dobio `relative z-[210]`, iznad zatamnjenja (`z-[200]`). To je krhko na
+ * stranici ovog opsega — svaki `sticky`, `backdrop-blur` ili bilo koji drugi
+ * roditelj koji stvara vlastiti stacking context ZAROBI taj z-index unutar
+ * sebe, pa cilj ostane vidljivo zatamnjen unatoč vlastitom z-210 (to se
+ * dogodilo dvaput: zaglavlju Stranaka i sažetku troškovnika). Popravak je
+ * uvijek bio točkast — jedno mjesto po jednom otkrivenom kvaru — jer sljedeći
+ * ugniježđeni roditelj koji nekome padne na pamet ponovno probija isto.
+ *
+ * Ova verzija ne dodiruje stvarnu stranicu uopće. Mjeri cilj preko
+ * `getBoundingClientRect()` (koordinate su uvijek u odnosu na viewport, bez
+ * obzira gdje element živi u DOM-u ili je li mu roditelj `sticky`) i iz tih
+ * koordinata crta „rupu" u zatamnjenju: jedan `fixed` element čiji
+ * `box-shadow` prekriva cijeli ekran OSIM pravokutnika cilja (spread sjene
+ * 9999px, bez radijusa — ekvivalent beskonačnom prekrivanju), plus prsten
+ * (drugi sloj sjene). Sam cilj se NIKAD ne dira — ne dobiva ni klasu ni
+ * z-index — pa ga nijedan roditeljski stacking context više ne može zarobiti.
+ * Klik na zatamnjeno područje (izvan rupe) i dalje zatvara vodič, preko četiri
+ * pravokutnika koji popločuju sve OSIM rupe.
+ *
+ * Rupa prati cilj i preko skrola — ne samo na tri ustaljena mjerenja koja
+ * pozicioniraju karticu, nego na svaki `scroll` događaj dok je korak otvoren,
+ * pa se pomiče glatko i tijekom automatskog i tijekom ručnog skrolanja.
+ *
  * ── Kartica se nikad ne preklapa s poljem koje objašnjava ──
  *
  * Kartica je prikovana uz RUB viewporta — gore ili dolje — nikad preko polja.
- * Dvije ranije verzije svaka je pala na svoj način: prva je kartica bila
- * zalijepljena uz polje, pa je na dugoj formi svaki korak završavala na drugoj
- * visini i ponekad se rezala; druga ju je centrirala, pa je sjela točno na polje
- * na koje pokazuje (i kartica i polje bili su skrolani na sredinu). Ova mjeri
- * prstenovano polje, bira rub s više prostora (polje u gornjoj polovici →
- * kartica dolje, i obrnuto), skrola polje u pojas koji kartica NE pokriva i
- * prikuje karticu uz taj rub. `max-height` drži karticu u ekranu; skrola samo
- * njezino tijelo, pa naslov i gumbi nikad nisu ono što se odreže. Portalana je
- * u `document.body` (isti obrazac kao `MethodologyModal`) da uvijek slika iznad
- * stranice bez obzira na stacking contexte iznad nje.
+ * Mjeri prstenovano polje, bira rub s više prostora (polje u gornjoj polovici
+ * → kartica dolje, i obrnuto), skrola polje u pojas koji kartica NE pokriva i
+ * prikuje karticu uz taj rub. Polje se skrola UZ SAM RUB tog pojasa, do
+ * kartice — ne na sredinu cijelog slobodnog prostora — jer polje koje ostane
+ * lebdjeti daleko od kartice izgleda kao da kartica objašnjava nešto drugo.
+ * `max-height` drži karticu u ekranu; skrola samo njezino tijelo, pa naslov i
+ * gumbi nikad nisu ono što se odreže. Portalana je u `document.body` (isti
+ * obrazac kao `MethodologyModal`) da uvijek slika iznad stranice.
  *
  * ── Što korak može ──
  *
- * Korak bez `target` ništa ne ističe i kartica stoji na sredini ekrana — uvodna
- * i završna kartica vodiča dobrodošlice. Korak s `ruta` živi na drugoj stranici;
- * motor ondje navigira i pričeka da se cilj pojavi. Korak čiji se cilj ni nakon
- * čekanja ne nađe PRESKAČE se uz upozorenje u konzoli: prazan okvir ili srušen
- * vodič bili bi gori od koraka manje.
+ * Korak bez `target` ništa ne ističe (nema rupe, samo ravnomjerno zatamnjenje)
+ * i kartica stoji na sredini ekrana — uvodna i završna kartica vodiča
+ * dobrodošlice. Korak s `ruta` živi na drugoj stranici; motor ondje navigira
+ * i pričeka da se cilj pojavi. Korak čiji se cilj ni nakon čekanja ne nađe
+ * PRESKAČE se uz upozorenje u konzoli: prazan okvir ili srušen vodič bili bi
+ * gori od koraka manje.
  */
 
 /** Top band kept clear so the ringed field never lands under a sticky header. */
@@ -40,6 +65,8 @@ const VODIC_HEADER_GAP = 72;
 const VODIC_EDGE_GAP = 16;
 /** Gap between the card's band and the ringed field's band. */
 const VODIC_CARD_GAP = 12;
+/** Razmak rupe od stvarnih rubova cilja — isti vizualni dojam kao stari `ring-offset-2`. */
+const SPOT_PADDING = 6;
 
 /** Koliko se čeka da se cilj pojavi u DOM-u prije nego se korak preskoči. */
 const CILJ_TIMEOUT_MS = 2500;
@@ -66,18 +93,6 @@ export function nadjiCilj(target: string | undefined): HTMLElement | null {
   return document.getElementById(target);
 }
 
-/**
- * Classes for the element the current step points at.
- *
- * z-[210] must sit BETWEEN the two overlay layers: above the backdrop's z-[200]
- * so the ringed element's opaque background shows through instead of the dim —
- * that is the "cut-out" — and below the card's z-[220] so the step text is never
- * hidden behind the very field it points at.
- */
-export function highlightClasses(active: boolean): string {
-  return active ? "ring-2 ring-indigo-500 ring-offset-2 relative z-[210]" : "";
-}
-
 interface Props {
   open: boolean;
   /** Koraci ovog vodiča — jedan od popisa iz `lib/vodic-koraci.ts`. */
@@ -99,6 +114,8 @@ export default function Vodic({ open, koraci, onClose, onStepChange }: Props) {
   const [mounted, setMounted] = useState(false);
   /** Je li cilj trenutnog koraka pronađen. Dok nije, kartica stoji na sredini. */
   const [ciljSpreman, setCiljSpreman] = useState(false);
+  /** Izmjereni pravokutnik cilja (viewport-relativan) — crta rupu u zatamnjenju. `null` = nema rupe. */
+  const [spotRect, setSpotRect] = useState<DOMRect | null>(null);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -139,6 +156,7 @@ export default function Vodic({ open, koraci, onClose, onStepChange }: Props) {
     (zavrseno: boolean) => {
       setStep(0);
       setCiljSpreman(false);
+      setSpotRect(null);
       onStepChange(null);
       onClose(zavrseno);
     },
@@ -155,6 +173,12 @@ export default function Vodic({ open, koraci, onClose, onStepChange }: Props) {
     smjer.current = -1;
     setStep((s) => Math.max(0, s - 1));
   }, []);
+
+  /** Mjeri trenutni cilj i osvježava rupu — na skrolu, resizeu i kad se cilj nađe. */
+  const osvjeziRupu = useCallback(() => {
+    const el = nadjiCilj(korak?.target);
+    setSpotRect(el ? el.getBoundingClientRect() : null);
+  }, [korak?.target]);
 
   /**
    * Place the card and scroll the ringed field clear of it.
@@ -182,6 +206,7 @@ export default function Vodic({ open, koraci, onClose, onStepChange }: Props) {
       const cardH = Math.min(cardBox.height, vh - VODIC_EDGE_GAP * 2);
       const cardW = Math.min(cardBox.width, vw - VODIC_EDGE_GAP * 2);
       const rect = el.getBoundingClientRect();
+      setSpotRect(rect);
 
       const scrollY = window.scrollY;
       const maxScroll = Math.max(0, document.documentElement.scrollHeight - vh);
@@ -226,8 +251,15 @@ export default function Vodic({ open, koraci, onClose, onStepChange }: Props) {
           s.edge === "bottom"
             ? vh - VODIC_EDGE_GAP - cardH - VODIC_CARD_GAP
             : vh - VODIC_EDGE_GAP;
-        const stripH = Math.max(0, stripBottom - stripTop);
-        return rect.height >= stripH ? stripTop : stripTop + (stripH - rect.height) / 2;
+        // Prilijepi polje uz RUB pojasa najbliži kartici — ne na sredinu
+        // cijelog slobodnog prostora. Kratko polje centrirano u visokom
+        // pojasu (npr. mali odjeljak pristojbi u visokom sažetku) zna
+        // završiti daleko od kartice prikovane uz suprotni rub, pa izgleda
+        // kao da kartica objašnjava nešto drugo. `Math.max` sam pokriva i
+        // slučaj kad je polje previsoko za pojas — tad ostaje uz `stripTop`,
+        // kao i prije.
+        if (s.edge === "bottom") return Math.max(stripTop, stripBottom - rect.height);
+        return stripTop;
       };
 
       const clears = (s: Spot) => {
@@ -279,14 +311,18 @@ export default function Vodic({ open, koraci, onClose, onStepChange }: Props) {
   useEffect(() => {
     if (!open || !korak) return;
 
-    // Korak bez cilja ništa ne traži — kartica ide na sredinu.
+    // Korak bez cilja ništa ne traži — kartica ide na sredinu, bez rupe.
     if (!korak.target) {
       setCiljSpreman(true);
+      setSpotRect(null);
       setPozicija({ edge: "center", align: "center" });
       return;
     }
 
     setCiljSpreman(false);
+    // Stara rupa se gasi dok se traži nova — inače bi kratko ostala vidljiva
+    // na položaju PROŠLOG koraka, na pogrešnom mjestu na ekranu.
+    setSpotRect(null);
 
     let odustani = false;
     const timeouts: ReturnType<typeof setTimeout>[] = [];
@@ -295,8 +331,10 @@ export default function Vodic({ open, koraci, onClose, onStepChange }: Props) {
     const trazi = () => {
       if (odustani) return;
 
-      if (nadjiCilj(korak.target)) {
+      const nadjen = nadjiCilj(korak.target);
+      if (nadjen) {
         setCiljSpreman(true);
+        setSpotRect(nadjen.getBoundingClientRect());
         // Tri prolaza: jedan gladak za oko, pa dva trenutna ispravka nakon što
         // se kartica premjeri i stranica smiri poslije skrola.
         timeouts.push(setTimeout(() => namjesti(true), 90));
@@ -351,6 +389,24 @@ export default function Vodic({ open, koraci, onClose, onStepChange }: Props) {
     };
   }, [open, ciljSpreman, namjesti]);
 
+  // Rupa prati cilj i IZMEĐU namjesti()-jevih tri mjerenja — na svaki skrol,
+  // ne samo na 90/480/900ms. Bez ovoga rupa bi tijekom glatkog automatskog
+  // skrola (ili ručnog skrola korisnika dok je korak otvoren) kaskadno
+  // „skakala" umjesto da glatko prati cilj.
+  useEffect(() => {
+    if (!open || !ciljSpreman) return;
+    let raf = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(osvjeziRupu);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("scroll", onScroll);
+    };
+  }, [open, ciljSpreman, osvjeziRupu]);
+
   // ── Tipkovnica ──
   // Vodič pokriva cijeli ekran i nema što drugo primati tipke, pa listener stoji
   // na prozoru. Esc zatvara, strelice kreću naprijed i natrag.
@@ -376,28 +432,101 @@ export default function Vodic({ open, koraci, onClose, onStepChange }: Props) {
 
   const naSredini = pozicija.edge === "center";
 
+  // ── Rupa u zatamnjenju (spotlight) ──
+  //
+  // `spotRect` je jedini ulaz — rečeno je RECT, ne element, pa nema veze gdje
+  // cilj živi u DOM-u ni je li mu ikoji roditelj sticky/transform/opacity.
+  // Rupa je JEDAN `fixed` element s dva sloja `box-shadow`: uski prsten oko
+  // ruba i golem raspon (9999px) koji prekriva sve OSTALO. Klik na zatamnjeno
+  // i dalje zatvara vodič — pokrivaju ga četiri pravokutnika koja popločuju
+  // ekran oko rupe (rupa sama ima `pointer-events: none`, pa klik/upis u
+  // stvarno polje ispod nje i dalje prolazi do njega).
+  const rupa = spotRect
+    ? {
+        top: spotRect.top - SPOT_PADDING,
+        left: spotRect.left - SPOT_PADDING,
+        right: spotRect.right + SPOT_PADDING,
+        bottom: spotRect.bottom + SPOT_PADDING,
+      }
+    : null;
+
   const overlay = (
     <>
-      {/* Backdrop. Clicking it skips, same as the text button — a user who wants
-          out should not have to find the small link. Inline rgba instead of the
-          Tailwind opacity-modifier class, which renders as a color-mix() in
-          Tailwind v4 — sidesteps a paint issue that made the dimming invisible
-          in production for reasons that couldn't be pinned down from the
-          source alone.
-
-          z-[200]: the step's field is lifted to z-[210] and pokes through this
-          dim (the "cut-out"). */}
-      <div
-        className="fixed inset-0 z-[200] pointer-events-auto vodic-fade print:hidden"
-        style={{ backgroundColor: "rgba(15, 23, 42, 0.5)" }}
-        onClick={() => close(false)}
-      />
+      {rupa ? (
+        <>
+          {/* Četiri pravokutnika oko rupe — hvataju klik izvan cilja (zatvara
+              vodič), bez ijednog piksela preko samog cilja. Sva geometrija ide
+              kroz `style`, namjerno bez ijedne Tailwind pozicijske klase
+              (`top-0` i sl.) — dvije definicije istog svojstva na istom
+              elementu, makar inline uvijek pobjeđuje, čita se kao proturječje
+              i vodi u istu vrstu tihe greške koju je ovaj redizajn trebao
+              ukloniti. */}
+          <div
+            data-testid="vodic-hvatac"
+            className="fixed z-[200] pointer-events-auto vodic-fade print:hidden"
+            style={{ top: 0, left: 0, right: 0, height: Math.max(0, rupa.top) }}
+            onClick={() => close(false)}
+          />
+          <div
+            data-testid="vodic-hvatac"
+            className="fixed z-[200] pointer-events-auto vodic-fade print:hidden"
+            style={{ top: rupa.bottom, left: 0, right: 0, bottom: 0 }}
+            onClick={() => close(false)}
+          />
+          <div
+            data-testid="vodic-hvatac"
+            className="fixed z-[200] pointer-events-auto vodic-fade print:hidden"
+            style={{
+              top: rupa.top,
+              left: 0,
+              width: Math.max(0, rupa.left),
+              height: Math.max(0, rupa.bottom - rupa.top),
+            }}
+            onClick={() => close(false)}
+          />
+          <div
+            data-testid="vodic-hvatac"
+            className="fixed z-[200] pointer-events-auto vodic-fade print:hidden"
+            style={{
+              top: rupa.top,
+              left: rupa.right,
+              right: 0,
+              height: Math.max(0, rupa.bottom - rupa.top),
+            }}
+            onClick={() => close(false)}
+          />
+          {/* Sama rupa: prsten + zatamnjenje svega izvan sebe, oboje preko
+              box-shadowa. `pointer-events: none` pušta klik/fokus do
+              stvarnog cilja ispod. */}
+          <div
+            data-testid="vodic-rupa"
+            className="fixed z-[205] pointer-events-none rounded-lg vodic-fade print:hidden"
+            style={{
+              top: rupa.top,
+              left: rupa.left,
+              width: Math.max(0, rupa.right - rupa.left),
+              height: Math.max(0, rupa.bottom - rupa.top),
+              boxShadow: "0 0 0 2px #6366f1, 0 0 0 9999px rgba(15, 23, 42, 0.5)",
+            }}
+          />
+        </>
+      ) : (
+        /* Korak bez cilja — ravnomjerno zatamnjenje, klik zatvara. Inline rgba
+           umjesto Tailwind opacity-modifier klase, koja se u Tailwind v4
+           renderira kao color-mix() — zaobilazi problem s iscrtavanjem koji je
+           zatamnjenje činio nevidljivim u produkciji iz razloga koji se nisu
+           dali utvrditi samo iz izvornog koda. */
+        <div
+          data-testid="vodic-zatamnjenje-puno"
+          className="fixed inset-0 z-[200] pointer-events-auto vodic-fade print:hidden"
+          style={{ backgroundColor: "rgba(15, 23, 42, 0.5)" }}
+          onClick={() => close(false)}
+        />
+      )}
 
       {/*
-        The card lives in its OWN layer at z-[220] — above the step's ringed
-        field (z-[210]). An earlier version nested it in the backdrop's own
-        z-[200] layer, so a field scrolled to the centre of the screen painted
-        its white card straight over the instruction text.
+        The card lives in its OWN layer at z-[220] — above the spotlight
+        (z-[205]) and the click-catching bands (z-[200]).
       */}
       <div
         className={`fixed inset-x-0 z-[220] flex px-4 pointer-events-none print:hidden ${

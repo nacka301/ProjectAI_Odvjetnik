@@ -31,15 +31,15 @@ import {
 import { API_BASE } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
 import { getTroskovnik } from "@/lib/supabase";
-import { highlightClasses } from "@/components/Vodic";
 import { useVodic } from "@/contexts/VodicContext";
 import { DEMO_ZASTO_NEAKTIVNO, useDemo } from "@/contexts/DemoContext";
 import { DEMO_STRANKE, DEMO_TROSKOVNIK, DEMO_URED } from "@/lib/demo/podaci";
 import { clearDraft, loadDraft, saveDraft, type LoadedDraft } from "@/lib/troskovnik-draft";
 import { formatThreshold } from "@/lib/format";
+import { naslutiTipStranke, type TipStranke } from "@/lib/stranke-tipovi";
 import TroskovnikIspis from "@/components/troskovnik/TroskovnikIspis";
 import StrankaPicker from "@/components/troskovnik/StrankaPicker";
-import { buildIzvozModel } from "@/lib/troskovnik-izvoz-model";
+import { buildIzvozModel, usporediPoDatumu } from "@/lib/troskovnik-izvoz-model";
 import { STUPCI, buildTroskovnikSheet, nazivDatoteke } from "@/lib/troskovnik-xlsx";
 import {
   BOD_VALUE,
@@ -79,7 +79,6 @@ import {
   efektivniVps,
   izracunajOsnovicu,
   podijeliPoOsobama,
-  pomakniRedak,
   povisenjeViseOsobaPostotak,
   provjeriZahtjev,
   provjeriTbr41Stavku,
@@ -317,6 +316,26 @@ function getCatColor(cat: string) {
   return CATEGORY_COLORS[cat] ?? { bg: "bg-slate-50", text: "text-slate-700", border: "border-slate-200" };
 }
 
+/**
+ * Sidra koja žive UNUTAR sažetka na desnoj strani (`lg:sticky` stupac), ne u
+ * glavnoj formi. Desni stupac gubi `lg:sticky` SAMO dok korak cilja jedno od
+ * ovih: `sticky` element se, jednom prilijepljen na `top-20`, više ne pomiče
+ * daljnjim skrolom, pa bi dio stupca ispod ruba ekrana (pristojbe, ukupno,
+ * spremi) ostao trajno nedohvatljiv za vodičev algoritam pozicioniranja. Bez
+ * `sticky` stupac je običan blok koji se skrola kao svaki drugi cilj.
+ *
+ * Nema veze s ISTICANJEM cilja — ono ide preko izmjerenih koordinata u
+ * `Vodic.tsx`, potpuno neovisno o tome je li ovaj element trenutno sticky.
+ */
+const SIDRA_U_STUPCU = new Set([
+  "vodic-rezultat",
+  "vodic-popis-radnji",
+  "vodic-bodovi",
+  "vodic-pristojbe",
+  "vodic-ukupno",
+  "vodic-spremi",
+]);
+
 // ═══════════════════════════════════════════════════════════════
 //  MAIN PAGE COMPONENT
 // ═══════════════════════════════════════════════════════════════
@@ -347,10 +366,8 @@ function TroskovnikContent() {
   // prstenovati.
   const { target: vodicTarget, aktivan: vodicAktivan } = useVodic();
   const vodicOpen = vodicAktivan !== null;
-  const vodicHighlight = useCallback(
-    (id: string) => highlightClasses(vodicTarget === id),
-    [vodicTarget],
-  );
+  /** Trenutni korak cilja nešto UNUTAR desnog stupca — vidi SIDRA_U_STUPCU. */
+  const vodicCiljaStupac = vodicOpen && vodicTarget !== null && SIDRA_U_STUPCU.has(vodicTarget);
 
   // ── Prikaz primjera ──
   // Dok traje, forma je popunjena demo troškovnikom, spremanje/ispis/izvoz su
@@ -379,6 +396,12 @@ function TroskovnikContent() {
   const [klijentOib, setKlijentOib] = useState("");
   const [klijentAdresa, setKlijentAdresa] = useState("");
   const [klijentGrad, setKlijentGrad] = useState("");
+  // Fizička/pravna osoba — bitno samo pri automatskom otvaranju nove stranke iz
+  // troškovnika (backend inače sve stvara kao „fizička"). Za stranku odabranu iz
+  // baze koristi se njezin postojeći tip. `klijentTipRucno` pamti je li korisnik
+  // sam pipnuo izbornik, da mu prijedlog iz naziva to više ne pregazi.
+  const [klijentTip, setKlijentTip] = useState<TipStranke>("fizicka");
+  const klijentTipRucno = useRef(false);
   const [opisPredmeta, setOpisPredmeta] = useState("");
   const [predmetSud, setPredmetSud] = useState("");
   const [predmetPoslovniBroj, setPredmetPoslovniBroj] = useState("");
@@ -439,12 +462,11 @@ function TroskovnikContent() {
   const [pristojbeIskljucene, setPristojbeIskljucene] = useState<string[]>([]);
 
   // ── Čl. 7 Zakona o sudskim pristojbama — elektronički oblik ──
-  // Tri stavka, tri uvjeta, pa dvije oznake na razini troškovnika i jedna po retku:
-  //   st. 1 — stranka podnijela elektronički i platila pri podnošenju
-  //   st. 3 — stranka predložila ZK UPIS elektronički i platila pri podnošenju
-  //   st. 2 — SUD dostavio odluku elektronički i plaćeno u roku od 3 dana (po odluci,
-  //           jer se rok može ispuniti za jednu, a za drugu ne)
-  const [podnesciElektronicki, setPodnesciElektronicki] = useState(false);
+  // Tri stavka, tri uvjeta. St. 1 (podnesci) i st. 2 (odluke) idu PO RETKU — u istom
+  // predmetu žalba može biti predana elektronički, a tužba na papiru, i rok od 3 dana
+  // može se ispuniti za jednu odluku, a ne za drugu. St. 3 (zk upis) je jedan uvjet
+  // za cijeli zk postupak, pa ostaje prekidač.
+  const [podnesciElektronicki, setPodnesciElektronicki] = useState<string[]>([]);
   const [zkUpisElektronicki, setZkUpisElektronicki] = useState(false);
   const [odlukeElektronicki, setOdlukeElektronicki] = useState<string[]>([]);
   // ── Oslobođenja — Zakon o sudskim pristojbama, čl. 11–13 ──
@@ -523,7 +545,7 @@ function TroskovnikContent() {
     () => ({
       vrijednostSpora, redci, selectedClientId, napomena,
       odvjetnikIme, odvjetnikOib, odvjetnikAdresa, odvjetnikGrad, odvjetnikIban,
-      klijentIme, klijentOib, klijentAdresa, klijentGrad,
+      klijentIme, klijentOib, klijentAdresa, klijentGrad, klijentTip,
       opisPredmeta, predmetSud, predmetPoslovniBroj, showParties, isPdvUkljucen,
       naknadaTroskovaStavke,
       protustrankaIme, protustrankaOib, protustrankaAdresa, protustrankaGrad,
@@ -543,7 +565,7 @@ function TroskovnikContent() {
     [
       vrijednostSpora, redci, selectedClientId, napomena,
       odvjetnikIme, odvjetnikOib, odvjetnikAdresa, odvjetnikGrad, odvjetnikIban,
-      klijentIme, klijentOib, klijentAdresa, klijentGrad,
+      klijentIme, klijentOib, klijentAdresa, klijentGrad, klijentTip,
       opisPredmeta, predmetSud, predmetPoslovniBroj, showParties, isPdvUkljucen,
       naknadaTroskovaStavke,
       protustrankaIme, protustrankaOib, protustrankaAdresa, protustrankaGrad,
@@ -603,9 +625,17 @@ function TroskovnikContent() {
     setOdvjetnikIban(d.odvjetnikIban);
     setKlijentIme(d.klijentIme); setKlijentOib(d.klijentOib);
     setKlijentAdresa(d.klijentAdresa); setKlijentGrad(d.klijentGrad);
+    // Stariji nacrt (v2) nema tip — složi ga iz naziva. Vraćanje je izričita
+    // radnja, pa se prijedlog iz naziva dalje ne miješa.
+    setKlijentTip((d as { klijentTip?: TipStranke }).klijentTip ?? naslutiTipStranke(d.klijentIme));
+    // Prazan naziv (npr. izlazak iz primjera) — pusti da prijedlog opet radi.
+    klijentTipRucno.current = d.klijentIme.trim() !== "";
     setOpisPredmeta(d.opisPredmeta); setPredmetSud(d.predmetSud);
     setPredmetPoslovniBroj(d.predmetPoslovniBroj);
-    setShowParties(d.showParties); setIsPdvUkljucen(d.isPdvUkljucen);
+    setShowParties(d.showParties);
+    // Vraćanje nacrta je izričita korisnikova radnja — PDV iz nacrta ima prednost
+    // pred kasnijim async dohvatom postavki ureda (isto kao ručni klik na checkbox).
+    setIsPdvUkljucen(d.isPdvUkljucen); pdvManuallySet.current = true;
     setNaknadaTroskovaStavke(d.naknadaTroskovaStavke);
     setProtustrankaIme(d.protustrankaIme); setProtustrankaOib(d.protustrankaOib);
     setProtustrankaAdresa(d.protustrankaAdresa); setProtustrankaGrad(d.protustrankaGrad);
@@ -923,6 +953,9 @@ function TroskovnikContent() {
     setKlijentOib(client.oib ?? "");
     setKlijentAdresa(client.adresa ?? "");
     setKlijentGrad(client.grad ?? "");
+    // Postojeća stranka nosi svoj tip iz baze; prijedlog iz naziva se ne miješa.
+    setKlijentTip(client.tip === "pravna" ? "pravna" : "fizicka");
+    klijentTipRucno.current = true;
     setClientAutoFilled(true);
     setClientSearchQuery("");
     setClientDropdownOpen(false);
@@ -934,6 +967,8 @@ function TroskovnikContent() {
     setKlijentOib("");
     setKlijentAdresa("");
     setKlijentGrad("");
+    setKlijentTip("fizicka");
+    klijentTipRucno.current = false;
     setClientAutoFilled(false);
     setClientSearchQuery("");
   }, []);
@@ -945,12 +980,30 @@ function TroskovnikContent() {
       if (clientAutoFilled && selectedClientId) {
         setSelectedClientId("");
         setClientAutoFilled(false);
+        // Otkačeno od baze — opet je nova stranka, pa prijedlog tipa iz naziva
+        // smije ponovno raditi dok ga korisnik sam ne pipne.
+        klijentTipRucno.current = false;
       }
     },
     [clientAutoFilled, selectedClientId]
   );
 
+  // Prijedlog „fizička/pravna" iz naziva nove stranke. Ne dira odabir iz baze
+  // (ondje tip dolazi s njom) ni ručni izbor korisnika.
+  useEffect(() => {
+    if (klijentTipRucno.current || (clientAutoFilled && selectedClientId)) return;
+    setKlijentTip(naslutiTipStranke(klijentIme));
+  }, [klijentIme, clientAutoFilled, selectedClientId]);
+
   // ── Derived values ──
+
+  // Zelena oznaka „povezano sa strankom" i poruka „popunjeni iz baze" smiju stajati
+  // samo kad odabrana stranka doista postoji u učitanom popisu — ne za tek upisano
+  // ime ni za vezu na stranku koje nema (npr. iz zastarjelog nacrta).
+  const strankaPovezanaSBazom = useMemo(
+    () => clientAutoFilled && !!selectedClientId && clients.some((c) => c.id === selectedClientId),
+    [clientAutoFilled, selectedClientId, clients],
+  );
 
   // Odabrane definicije iz kataloga — osnova za određivanje vrste postupka.
   // Ista stavka smije se pojaviti više puta u `redci`; ovdje se svejedno svaka
@@ -961,6 +1014,16 @@ function TroskovnikContent() {
       .map((r) => catalogMap.get(r.itemId))
       .filter((d): d is TarifnaStavka => d !== undefined);
   }, [redci, katalog]);
+
+  // Kronološki poredak radnji — datum je glavni, a redoslijed u polju (kojim
+  // upravljaju strelice „Pomakni gore/dolje") razrješava jednakost, tj. radnje
+  // istog datuma i radnje bez datuma. Ovaj se poredani pogled koristi za prikaz
+  // u panelu, za živi izračun i za slanje na backend; sve izmjene retka i dalje
+  // idu preko `redci` i njegovih `setRedci` rukovatelja.
+  const redciPoredani = useMemo(
+    () => [...redci].sort((a, b) => usporediPoDatumu(a.datum, b.datum)),
+    [redci],
+  );
 
   // Bilo koja kaznena stavka → prikaži panel s parametrima kaznenog postupka.
   const isKazneniMode = odabraneDefinicije.some((d) => d.kategorija === KATEGORIJA_KAZNENI);
@@ -1195,7 +1258,7 @@ function TroskovnikContent() {
     // jedna verzija, pa je jednaka BOD_VALUE; backend (mjerodavan) razrješava istu logiku.
     const bodValue = razrijesiTarifu(datumDospijeca || null).bodValue;
 
-    for (const redak of redci) {
+    for (const redak of redciPoredani) {
       const def = catalogMap.get(redak.itemId);
       if (!def || redak.kolicina <= 0) continue;
 
@@ -1307,7 +1370,7 @@ function TroskovnikContent() {
       pristojbaVpsUdio: pristojbe.vpsUdio,
       pristojbaNaTeretProtustranke: pristojbe.naTeretProtustranke,
     };
-  }, [redci, katalog, osnovica, isPdvUkljucen, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, isOduzimanjePrekrsaj, parsedVrijednostOduzimanja, pristojbe, brojZastupanihOsoba, zaprijecenaKazna, tbr41Povisenje, tbr41Snizenje, dodatnePristojbe, predujmovi, naknadaTroskovaStavke, datumDospijeca]);
+  }, [redciPoredani, katalog, osnovica, isPdvUkljucen, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, isOduzimanjePrekrsaj, parsedVrijednostOduzimanja, pristojbe, brojZastupanihOsoba, zaprijecenaKazna, tbr41Povisenje, tbr41Snizenje, dodatnePristojbe, predujmovi, naknadaTroskovaStavke, datumDospijeca]);
 
   // Katalog po id, i izračunati redak po uid — za uređivanje u desnom stupcu, koje
   // iterira `redci` (izvor istine, uključuje i retke koji još ne daju iznos), a
@@ -1352,12 +1415,23 @@ function TroskovnikContent() {
     setRedci((prev) => prev.map((r) => (r.uid === uid ? { ...r, datum: iso || null } : r)));
   }, []);
 
-  /** ▲/▼ — zamjena sa susjedom; na rubovima nema efekta. */
+  /**
+   * ▲/▼ — zamjena sa susjedom U PRIKAZU (kronološkom poretku), na rubovima bez
+   * efekta. Datum je glavni: za dvije radnje istog datuma (ili obje bez datuma)
+   * ovo je prava zamjena; preko granice datuma stabilni sort ionako vrati
+   * poredak, pa strelica tada nema vidljiv učinak.
+   */
   const pomakni = useCallback((uid: string, smjer: -1 | 1) => {
     setRedci((prev) => {
-      const i = prev.findIndex((r) => r.uid === uid);
-      if (i < 0) return prev;
-      return pomakniRedak(prev, i, smjer);
+      const poredani = [...prev].sort((a, b) => usporediPoDatumu(a.datum, b.datum));
+      const pi = poredani.findIndex((r) => r.uid === uid);
+      const ci = pi + smjer;
+      if (pi < 0 || ci < 0 || ci >= poredani.length) return prev;
+      const ai = prev.findIndex((r) => r.uid === poredani[pi].uid);
+      const bi = prev.findIndex((r) => r.uid === poredani[ci].uid);
+      const rez = [...prev];
+      [rez[ai], rez[bi]] = [rez[bi], rez[ai]];
+      return rez;
     });
   }, []);
 
@@ -1392,6 +1466,14 @@ function TroskovnikContent() {
     setRedci([]);
     setNaknadaTroskovaStavke([]);
     setPredujmovi([]);
+    // Sve vezano uz radnje mora pasti s njima — inače ostanu ručno dodane/isključene
+    // pristojbe i kvačice čl. 7 za radnje kojih više nema.
+    setPristojbeDodane([]);
+    setPristojbeIskljucene([]);
+    setDodatnePristojbe([]);
+    setPodnesciElektronicki([]);
+    setOdlukeElektronicki([]);
+    setZkUpisElektronicki(false);
     setResult(null);
     setCalcError(null);
   }, []);
@@ -1432,10 +1514,11 @@ function TroskovnikContent() {
       klijentOib: stranka?.oib ?? "",
       klijentAdresa: stranka?.adresa ?? "",
       klijentGrad: stranka?.grad ?? "",
+      klijentTip: (stranka?.tip === "pravna" ? "pravna" : "fizicka") as TipStranke,
       zastupanaPolozaj: "tužitelj",
       protustrankaIme: DEMO_TROSKOVNIK.protustranka,
       protustrankaPolozaj: "tuženik",
-      podnesciElektronicki: DEMO_TROSKOVNIK.podnesciElektronicki,
+      podnesciElektronicki: [...DEMO_TROSKOVNIK.podnesciElektronicki],
       pristojbeDodane: DEMO_TROSKOVNIK.pristojbeDodane.map((r) => ({ ...r })),
       predujmovi: DEMO_TROSKOVNIK.predujmovi.map((r) => ({
         uid: noviUid(), datum: r.datum, opis: r.opis, iznos: r.iznos,
@@ -1451,8 +1534,9 @@ function TroskovnikContent() {
       showParties: false, isPdvUkljucen: false,
       odvjetnikIme: "", odvjetnikOib: "", odvjetnikAdresa: "", odvjetnikIban: "",
       klijentIme: "", klijentOib: "", klijentAdresa: "", klijentGrad: "",
+      klijentTip: "fizicka" as TipStranke,
       zastupanaPolozaj: "", protustrankaIme: "", protustrankaPolozaj: "",
-      podnesciElektronicki: false, pristojbeDodane: [], predujmovi: [],
+      podnesciElektronicki: [], pristojbeDodane: [], predujmovi: [],
     }),
     [],
   );
@@ -1501,12 +1585,12 @@ function TroskovnikContent() {
   }, []);
 
   /**
-   * Redci troškovnika u obliku zahtjeva. Redoslijed slijedi `redci` (korisnički
-   * odabran) — server renumerira `rbr` po redoslijedu ovog polja.
+   * Redci troškovnika u obliku zahtjeva. Redoslijed je kronološki (`redciPoredani`)
+   * — server renumerira `rbr` po redoslijedu ovog polja i sam sortira obrambeno.
    */
   const stavkeZaSlanje = useCallback(
     () =>
-      redci.map((r) => ({
+      redciPoredani.map((r) => ({
         item_id: r.itemId,
         kolicina: r.kolicina,
         datum: r.datum ?? null,
@@ -1514,7 +1598,7 @@ function TroskovnikContent() {
         tbr41_povisenje_postotak: r.tbr41?.povisenje ?? null,
         tbr41_snizenje_postotak: r.tbr41?.snizenje ?? null,
       })),
-    [redci],
+    [redciPoredani],
   );
 
   /**
@@ -1748,6 +1832,8 @@ function TroskovnikContent() {
         // Signal backend to auto-create client from stranke data if no client_id
         auto_create_client: !selectedClientId && !!klijentIme.trim(),
         client_grad: klijentGrad || undefined,
+        // Fizička/pravna — da nova stranka ne završi uvijek kao „fizička".
+        client_tip: klijentTip,
       };
 
       const res = await fetch(`${API_BASE}/api/troskovnik/spremi`, {
@@ -2031,7 +2117,7 @@ function TroskovnikContent() {
 
             {/* ── Case value input (hidden when only kazneni items) ── */}
             {!isOnlyKazneni && (
-            <div data-vodic="vodic-vps" className={`bg-white rounded-xl border border-slate-200 p-4 shadow-sm transition ${vodicHighlight("vodic-vps")}`}>
+            <div data-vodic="vodic-vps" className={`bg-white rounded-xl border border-slate-200 p-4 shadow-sm transition`}>
               <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
                 <Euro className="h-3.5 w-3.5 inline mr-1 -mt-0.5" />
                 Vrijednost predmeta spora (EUR)
@@ -2534,7 +2620,7 @@ function TroskovnikContent() {
             )}
 
             {/* ── Search ── */}
-            <div data-vodic="vodic-radnje" className={`relative rounded-xl transition ${vodicHighlight("vodic-radnje")}`}>
+            <div data-vodic="vodic-radnje" className={`relative rounded-xl transition`}>
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <input
                 type="text"
@@ -2682,7 +2768,7 @@ function TroskovnikContent() {
             })}
 
             {/* ── Party info (Collapsible) ── */}
-            <div data-vodic="vodic-stranke" className={`bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden transition ${vodicHighlight("vodic-stranke")}`}>
+            <div data-vodic="vodic-stranke" className={`bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden transition`}>
               <button
                 onClick={() => setShowParties(!showParties)}
                 className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition"
@@ -2736,7 +2822,7 @@ function TroskovnikContent() {
                       </label>
 
                       {/* Selected state — green badge */}
-                      {selectedClientId && clientAutoFilled ? (
+                      {strankaPovezanaSBazom ? (
                         <div className="flex items-center gap-2 px-3 py-2 border border-emerald-300 bg-emerald-50 rounded-lg text-sm">
                           <div className="flex-1 min-w-0">
                             <span className="font-medium text-emerald-800 truncate">
@@ -2830,7 +2916,7 @@ function TroskovnikContent() {
                       )}
 
                       {/* Status hints */}
-                      {clientAutoFilled && selectedClientId && (
+                      {strankaPovezanaSBazom && (
                         <p className="mt-1 text-[10px] text-emerald-600 flex items-center gap-1">
                           <CheckCircle className="h-3 w-3" />
                           Podaci stranke automatski popunjeni iz baze
@@ -2911,6 +2997,26 @@ function TroskovnikContent() {
                       <input type="text" value={klijentAdresa} onChange={(e) => handleKlijentManualEdit(setKlijentAdresa, e.target.value)} placeholder="Adresa" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
                       <input type="text" value={klijentGrad} onChange={(e) => handleKlijentManualEdit(setKlijentGrad, e.target.value)} placeholder="Grad" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
                       <label className="block text-xs font-semibold text-slate-600 mb-1 mt-2">
+                        Vrsta stranke
+                      </label>
+                      <select
+                        value={klijentTip}
+                        onChange={(e) => {
+                          setKlijentTip(e.target.value as TipStranke);
+                          klijentTipRucno.current = true;
+                        }}
+                        disabled={strankaPovezanaSBazom}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                      >
+                        <option value="fizicka">Fizička osoba</option>
+                        <option value="pravna">Pravna osoba</option>
+                      </select>
+                      {!strankaPovezanaSBazom && klijentIme.trim() && (
+                        <p className="text-[10px] text-slate-400">
+                          Predloženo iz naziva — ispravite ako treba. Vrijedi za novu stranku koja će se otvoriti pri spremanju.
+                        </p>
+                      )}
+                      <label className="block text-xs font-semibold text-slate-600 mb-1 mt-2">
                         Položaj zastupane stranke
                       </label>
                       <select
@@ -2936,20 +3042,23 @@ function TroskovnikContent() {
           ═══════════════════════════════════════════════════════ */}
           <div className="space-y-4 print:hidden">
             {/* Sticky summary.
-                Tijekom vodiča cijeli desni stupac (sažetak + Tbr. 7.1 tablica
-                bodova) diže se IZNAD zatamnjenja za svaki korak, ne samo 4/7 —
-                tablica bodova je referenca koja korisniku treba baš dok unosi
-                VPS u koraku 1. `z-[210]` (a NE `relative z-[210]` iz
-                `vodicHighlight`) da ostane `lg:sticky`. Prsten samo na koraku
-                4/7. Kartica vodiča (z-[220]) je i dalje iznad svega. */}
+                `lg:sticky` je korisno dok se popunjava forma, ali kad korak
+                cilja nešto UNUTAR ovog stupca (SIDRA_U_STUPCU), gasi se: jednom
+                prilijepljen na `top-20`, sticky element se dalje ne pomiče, pa
+                se nižih sidara (pristojbe, ukupno, spremi) ne bi dalo doskrolati
+                do vidljivog dijela ekrana. Bez `sticky` stupac je običan blok i
+                stranica ga skrola kao svaki drugi cilj.
+
+                Isticanje cilja (rupa u zatamnjenju) više NE ovisi o klasama na
+                ovom elementu — vidi doc-komentar na vrhu `Vodic.tsx`. Rupa se
+                crta iz izmjerenih koordinata cilja (`getBoundingClientRect()`),
+                pa joj nije bitno je li ovaj stupac trenutno `sticky` ili obični
+                blok; ovdje se sticky gasi ISKLJUČIVO da bi se cilj uopće mogao
+                doskrolati u vidljivi dio ekrana. */}
             <div
               data-vodic="vodic-rezultat"
-              className={`lg:sticky lg:top-20 space-y-4 rounded-xl transition ${
-                vodicOpen ? "z-[210]" : ""
-              } ${
-                vodicTarget === "vodic-rezultat"
-                  ? "ring-2 ring-indigo-500 ring-offset-2"
-                  : ""
+              className={`space-y-4 rounded-xl transition ${
+                vodicCiljaStupac ? "" : "lg:sticky lg:top-20"
               }`}
             >
               {/* ── Selected items summary ── */}
@@ -2979,9 +3088,9 @@ function TroskovnikContent() {
                   ) : (
                     <div
                       data-vodic="vodic-popis-radnji"
-                      className={`space-y-2 max-h-[50vh] overflow-y-auto rounded-lg transition ${vodicHighlight("vodic-popis-radnji")}`}
+                      className={`space-y-2 max-h-[50vh] overflow-y-auto rounded-lg transition`}
                     >
-                      {redci.map((redak, i) => {
+                      {redciPoredani.map((redak, i) => {
                         const def = katalogById.get(redak.itemId);
                         const line = lineByUid.get(redak.uid);
 
@@ -3001,7 +3110,7 @@ function TroskovnikContent() {
                               <button
                                 type="button"
                                 onClick={() => pomakni(redak.uid, 1)}
-                                disabled={i === redci.length - 1}
+                                disabled={i === redciPoredani.length - 1}
                                 className="w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 disabled:opacity-20 disabled:hover:bg-transparent transition"
                                 title="Pomakni dolje"
                               >
@@ -3125,7 +3234,7 @@ function TroskovnikContent() {
                       )}
                       <div
                         data-vodic="vodic-bodovi"
-                        className={`flex justify-between text-xs text-slate-500 rounded transition ${vodicHighlight("vodic-bodovi")}`}
+                        className={`flex justify-between text-xs text-slate-500 rounded transition`}
                       >
                         <span>Ukupno bodova</span>
                         <span className="font-semibold">{fmtNum(liveCalc.ukupnoBodova)}</span>
@@ -3224,7 +3333,7 @@ function TroskovnikContent() {
                       {/* ── Sudske pristojbe ── */}
                       <div
                         data-vodic="vodic-pristojbe"
-                        className={`pt-2 mt-1 border-t border-dashed border-slate-200 space-y-1.5 rounded-lg transition ${vodicHighlight("vodic-pristojbe")}`}
+                        className={`pt-2 mt-1 border-t border-dashed border-slate-200 space-y-1.5 rounded-lg transition`}
                       >
                         {pristojbe.stavke.length === 0 ? (
                           <div className="flex items-start gap-1.5 text-[10px] text-slate-500 leading-snug">
@@ -3266,9 +3375,31 @@ function TroskovnikContent() {
                                     {fmtEur(s.iznos)}
                                   </span>
                                 </div>
-                                {/* Čl. 7 st. 2 — uvjet je vezan uz POJEDINU odluku (dostava
-                                    suda + uplata u 3 dana), pa oznaka stoji uz redak.
-                                    Podnesci i zk idu na prekidače iznad. */}
+                                {/* Čl. 7 st. 1 i st. 2 — uvjet je vezan uz POJEDINU radnju
+                                    (podnesak predan elektronički i plaćen pri podnošenju;
+                                    odluku sud dostavio elektronički i plaćeno u 3 dana), pa
+                                    oznaka stoji uz redak. Zk upis (st. 3) je jedan uvjet za
+                                    cijeli postupak, pa ostaje prekidač ispod. */}
+                                {s.cl7_rezim === "st_1" && (
+                                  <label className="flex items-start gap-1.5 text-[10px] text-slate-500 leading-snug pl-4">
+                                    <input
+                                      type="checkbox"
+                                      checked={podnesciElektronicki.includes(s.odredba_id)}
+                                      onChange={(e) =>
+                                        setPodnesciElektronicki((prev) =>
+                                          e.target.checked
+                                            ? [...prev, s.odredba_id]
+                                            : prev.filter((id) => id !== s.odredba_id),
+                                        )
+                                      }
+                                      className="mt-0.5 h-3 w-3"
+                                    />
+                                    <span>
+                                      Podnesak predan elektronički i pristojba plaćena pri
+                                      podnošenju <span className="text-slate-400">(čl. 7 st. 1 — polovica)</span>
+                                    </span>
+                                  </label>
+                                )}
                                 {s.cl7_rezim === "st_2" && (
                                   <label className="flex items-start gap-1.5 text-[10px] text-slate-500 leading-snug pl-4">
                                     <input
@@ -3314,27 +3445,12 @@ function TroskovnikContent() {
                               </div>
                             )}
 
-                            {/* Čl. 7 Zakona o sudskim pristojbama — elektronički oblik.
-                                Dvije oznake, ne jedna: st. 1 se veže uz oblik podneska,
-                                st. 3 uz oblik prijedloga za zk upis. Uvjet svake uključuje
-                                i plaćanje u roku — st. 4 propušten rok vraća puni iznos. */}
-                            <div className="pt-1.5 mt-1 border-t border-slate-100 space-y-1.5">
-                              <label className="flex items-start gap-1.5 text-[10px] text-slate-600 leading-snug">
-                                <input
-                                  type="checkbox"
-                                  checked={podnesciElektronicki}
-                                  onChange={(e) => setPodnesciElektronicki(e.target.checked)}
-                                  className="mt-0.5 h-3 w-3"
-                                />
-                                <span>
-                                  Podnesci predani elektronički i pristojba plaćena pri podnošenju
-                                  <span className="block text-slate-400">
-                                    Čl. 7 st. 1 — polovica propisanog iznosa. Ne odnosi se na odluke.
-                                  </span>
-                                </span>
-                              </label>
-
-                              {pristojbe.stavke.some((s) => s.cl7_rezim === "st_3") && (
+                            {/* Čl. 7 st. 3 — zemljišnoknjižni: jedan uvjet (oblik prijedloga
+                                za upis) za cijeli zk postupak, pa jedan prekidač. St. 1 i
+                                st. 2 idu po retku, uz svaku pristojbu iznad. Uvjet svake
+                                uključuje i plaćanje u roku — st. 4 propušten rok vraća puni iznos. */}
+                            {pristojbe.stavke.some((s) => s.cl7_rezim === "st_3") && (
+                              <div className="pt-1.5 mt-1 border-t border-slate-100 space-y-1.5">
                                 <label className="flex items-start gap-1.5 text-[10px] text-slate-600 leading-snug">
                                   <input
                                     type="checkbox"
@@ -3349,8 +3465,8 @@ function TroskovnikContent() {
                                     </span>
                                   </span>
                                 </label>
-                              )}
-                            </div>
+                              </div>
+                            )}
 
                             {/* Čl. 2 — datumi se traže samo kad je odabrana radnja na koju se odnose. */}
                             {(imaOdgovorNaTuzbu || imaUpravniSpor) && (
@@ -3582,7 +3698,7 @@ function TroskovnikContent() {
                       {/* ── Grand Total ── */}
                       <div
                         data-vodic="vodic-ukupno"
-                        className={`flex justify-between text-sm font-bold text-indigo-800 pt-2 mt-1 border-t border-slate-300 rounded transition ${vodicHighlight("vodic-ukupno")}`}
+                        className={`flex justify-between text-sm font-bold text-indigo-800 pt-2 mt-1 border-t border-slate-300 rounded transition`}
                       >
                         <span>SVEUKUPNI TROŠAK</span>
                         <span>{fmtEur(liveCalc.sveukupniTrosak)}</span>
@@ -3686,7 +3802,7 @@ function TroskovnikContent() {
                       {calculating ? "Izračunavam..." : "Generiraj troškovnik"}
                     </button>
                     {userId && (
-                      <div data-vodic="vodic-spremi" className={`rounded-lg transition ${vodicHighlight("vodic-spremi")}`}>
+                      <div data-vodic="vodic-spremi" className={`rounded-lg transition`}>
                         <button
                           onClick={handleSave}
                           disabled={saving || demo || sviNedostaci.length > 0}
@@ -4194,99 +4310,12 @@ function TroskovnikContent() {
 
       {/* ── Dokument za sud ──
           Susjed <main>-a, koji je pod ispisom skriven u cijelosti. Vidljiv je
-          samo pod @media print, pa window.print() ostaje neizmijenjen. */}
+          samo pod @media print — CSS koji to osigurava sad je DIO same
+          komponente (TroskovnikIspis.tsx), ne ove stranice, pa ga ovdje više
+          nema: prije je bio ovdje i /troskovnik/[id] koji poziva istu
+          komponentu ga nije naslijedio, pa se ispis ondje vidio i na zaslonu,
+          kao sirov tekst uz lijevi rub. */}
       {result && <TroskovnikIspis model={izvozModel} />}
-
-      {/* ── Ispis ── */}
-      <style jsx global>{`
-        #troskovnik-ispis { display: none; }
-
-        /* Margina je nula, a razmak do ruba papira daje padding dokumenta.
-           Razlog nije estetika: u marginu stranice preglednik crta vlastito
-           zaglavlje i podnožje — naslov kartice („PravoTek — …") i URL
-           (pravotek.hr/troskovnik) — pa bi ime aplikacije završilo na
-           dokumentu koji ide sudu. Bez margine nema gdje, i izostavlja ih.
-           Cijena: padding se ne ponavlja po stranicama, pa kod troškovnika
-           duljeg od jedne stranice druga i daljnje počinju uz sam gornji rub.
-           Bočni razmak ostaje na svima. Ako to zasmeta, alternativa je vratiti
-           margin na @page — ali onda se URL vraća s njom, i gasi se jedino
-           rukom, kvačicom „Zaglavlja i podnožja" u dijalogu za ispis. */
-        @page { size: A4 portrait; margin: 0; }
-
-        @media print {
-          body { background: #fff; }
-          .print\\:hidden { display: none !important; }
-
-          #troskovnik-ispis {
-            display: block;
-            padding: 20mm 18mm;
-            font: 11pt/1.35 Arial, Helvetica, sans-serif;
-            color: #000;
-          }
-
-          /* Zaglavlje odvjetnika — gore lijevo, bez okvira i logotipa. */
-          #troskovnik-ispis .zaglavlje { margin-bottom: 10mm; }
-          #troskovnik-ispis .zaglavlje .ime { text-transform: uppercase; }
-
-          #troskovnik-ispis h1 {
-            font-size: 16pt;
-            font-weight: normal;
-            letter-spacing: 0.5pt;
-            margin: 0 0 8mm 22mm;
-          }
-
-          /* Predmet — oznake desno, vrijednosti lijevo, oko sredine stranice. */
-          #troskovnik-ispis .predmet { margin: 0 0 6mm 0; }
-          #troskovnik-ispis .predmet-redak { display: flex; gap: 6mm; margin-bottom: 1mm; }
-          #troskovnik-ispis .predmet-oznaka { flex: 0 0 42%; text-align: right; }
-          #troskovnik-ispis .predmet-vrijednost { flex: 1; }
-
-          #troskovnik-ispis table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 10pt;
-          }
-          #troskovnik-ispis th,
-          #troskovnik-ispis td {
-            border: 1px solid #000;
-            padding: 3pt 4pt;
-            vertical-align: top;
-          }
-          #troskovnik-ispis th { font-weight: normal; text-align: center; }
-
-          /* Zaglavlje se ponavlja na svakoj stranici, redak se ne prelama. */
-          #troskovnik-ispis thead { display: table-header-group; }
-          #troskovnik-ispis tr { break-inside: avoid; page-break-inside: avoid; }
-
-          #troskovnik-ispis .st-radnja { width: 42%; }
-          #troskovnik-ispis .st-tarifa { width: 13%; }
-          #troskovnik-ispis .st-datum { width: 14%; }
-          #troskovnik-ispis .st-iznos { width: 15%; }
-          #troskovnik-ispis .st-napomena { width: 16%; }
-
-          #troskovnik-ispis .datum { text-align: center; }
-          #troskovnik-ispis .oznaka { text-align: right; }
-          #troskovnik-ispis .tarifa { text-align: center; }
-          #troskovnik-ispis .iznos { text-align: right; white-space: nowrap; }
-          #troskovnik-ispis .bold { font-weight: bold; }
-          #troskovnik-ispis .razmak td { height: 5mm; }
-
-          #troskovnik-ispis .potpis {
-            margin-top: 10mm;
-            text-align: center;
-            break-inside: avoid;
-            page-break-inside: avoid;
-          }
-          #troskovnik-ispis .potpis .ime { font-weight: bold; text-transform: uppercase; }
-
-          #troskovnik-ispis .napomena {
-            margin-top: 12mm;
-            white-space: pre-line;
-            break-inside: avoid;
-            page-break-inside: avoid;
-          }
-        }
-      `}</style>
     </div>
   );
 }

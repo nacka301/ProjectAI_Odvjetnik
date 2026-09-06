@@ -42,7 +42,7 @@ public class ElektronickiPodnesakTests
     [Fact]
     public void St1_Tuzba_Polovica()
     {
-        var r = Izracunaj("par_tuzba", z => z.PodnesciElektronicki = true);
+        var r = Izracunaj("par_tuzba", z => z.PodnesciElektronicki = ["tbr1_st1"]);
 
         Assert.Equal(310.00m, r.SudskaPristojba);
         Assert.True(Redak(r, "tbr1_st1").UmanjenoElektronicki);
@@ -65,7 +65,7 @@ public class ElektronickiPodnesakTests
     [Fact]
     public void St1_ZalbaProtivPresude_PolovicaOdUvecanog()
     {
-        var r = Izracunaj("par_zalba_presuda", z => z.PodnesciElektronicki = true);
+        var r = Izracunaj("par_zalba_presuda", z => z.PodnesciElektronicki = ["tbr3_st1"]);
 
         Assert.Equal(620.00m, r.SudskaPristojba);
     }
@@ -82,7 +82,7 @@ public class ElektronickiPodnesakTests
         var r = Izracunaj("par_odgovor_tuzba", z =>
         {
             z.VrijednostSpora = 3_000m;   // st. 1 = 150,00 → st. 2 = 75,00
-            z.PodnesciElektronicki = true;
+            z.PodnesciElektronicki = ["tbr1_st2"];
         });
 
         Assert.Equal(37.50m, r.SudskaPristojba);
@@ -92,9 +92,38 @@ public class ElektronickiPodnesakTests
     [Fact]
     public void St1_UpravniSpor_TakodjerPodnesak()
     {
-        var r = Izracunaj("usp_tuzba_proc", z => z.PodnesciElektronicki = true);
+        var r = Izracunaj("usp_tuzba_proc", z => z.PodnesciElektronicki = ["tbr29_tuzba"]);
 
         Assert.Equal(55.00m, r.SudskaPristojba);
+    }
+
+    /// <summary>
+    /// Zašto po retku, a ne po troškovniku: u istom predmetu žalba može biti predana
+    /// elektronički, a tužba na papiru. VPS 45.300 → tužba (tbr1_st1) 573,00 €, žalba
+    /// (tbr3_st1) 1.146,00 €. S oznakom samo na žalbi: tužba ostaje 573,00, žalba 573,00.
+    /// </summary>
+    [Fact]
+    public void St1_JedanPodnesakElektronicki_DrugiNije()
+    {
+        var zahtjev = new TroskovnikRequest
+        {
+            VrijednostSpora = 45_300m,
+            IsPdvUkljucen = false,
+            Stavke =
+            [
+                new TroskovnikItemRequest { ItemId = "par_tuzba", Kolicina = 1 },
+                new TroskovnikItemRequest { ItemId = "par_zalba_presuda", Kolicina = 1 }
+            ],
+            PodnesciElektronicki = ["tbr3_st1"]
+        };
+
+        var r = new TroskovnikService().Izracunaj(zahtjev);
+
+        Assert.Equal(573.00m, Redak(r, "tbr1_st1").Iznos);   // tužba, bez oznake — puni iznos
+        Assert.False(Redak(r, "tbr1_st1").UmanjenoElektronicki);
+        Assert.Equal(573.00m, Redak(r, "tbr3_st1").Iznos);   // žalba, s oznakom — polovica od 1.146,00
+        Assert.True(Redak(r, "tbr3_st1").UmanjenoElektronicki);
+        Assert.Equal(1_146.00m, r.SudskaPristojba);
     }
 
     // ── St. 2 — odluke ────────────────────────────────────────────
@@ -106,7 +135,9 @@ public class ElektronickiPodnesakTests
     [Fact]
     public void St2_PrekidacZaPodneskeNeDiraOdluku()
     {
-        var r = Izracunaj("par_rociste_presuda", z => z.PodnesciElektronicki = true);
+        // Oznaka za podneske stoji i na ključu odluke — čl. 7 st. 1 vrijedi samo za
+        // podneske, pa presuda svejedno ostaje na punom iznosu.
+        var r = Izracunaj("par_rociste_presuda", z => z.PodnesciElektronicki = ["tbr2_st1"]);
 
         Assert.Equal(620.00m, r.SudskaPristojba);
         Assert.False(Redak(r, "tbr2_st1").UmanjenoElektronicki);
@@ -157,7 +188,7 @@ public class ElektronickiPodnesakTests
     [Fact]
     public void St3_PrekidacZaPodneskeNeDiraZk()
     {
-        var r = Izracunaj("zk_redoviti", z => z.PodnesciElektronicki = true);
+        var r = Izracunaj("zk_redoviti", z => z.PodnesciElektronicki = ["tbr14_upis"]);
 
         Assert.Equal(10.00m, r.SudskaPristojba);
     }
@@ -205,7 +236,7 @@ public class ElektronickiPodnesakTests
                 oslobodjen: false,
                 new PristojbeOpcije(
                     Dodane: [new RucnaPristojba("tbr17_18")],
-                    PodnesciElektronicki: true,
+                    PodnesciElektronicki: new HashSet<string> { "tbr17_18" },
                     ZkUpisElektronicki: true))
             .Ukupno;
 
@@ -225,7 +256,7 @@ public class ElektronickiPodnesakTests
                 oslobodjen: false,
                 new PristojbeOpcije(
                     Dodane: [new RucnaPristojba("tbr26_fizicki")],
-                    PodnesciElektronicki: true))
+                    PodnesciElektronicki: new HashSet<string> { "tbr26_fizicki" }))
             .Ukupno;
 
         Assert.Equal(30.00m, iznos);
@@ -242,7 +273,7 @@ public class ElektronickiPodnesakTests
         var r = Izracunaj("par_odgovor_tuzba", z =>
         {
             z.DatumPodnosenjaOdgovoraNaTuzbu = new DateOnly(2026, 3, 12);
-            z.PodnesciElektronicki = true;
+            z.PodnesciElektronicki = ["tbr1_st2"];
         });
 
         Assert.Equal(136.61m, r.SudskaPristojba);
@@ -253,7 +284,7 @@ public class ElektronickiPodnesakTests
     [Fact]
     public void UmanjeniRedak_NosiPravniIzvorUmanjenja()
     {
-        var izvor = Redak(Izracunaj("par_tuzba", z => z.PodnesciElektronicki = true), "tbr1_st1")
+        var izvor = Redak(Izracunaj("par_tuzba", z => z.PodnesciElektronicki = ["tbr1_st1"]), "tbr1_st1")
             .PravniIzvor;
 
         Assert.Contains("čl. 7", izvor);
@@ -274,7 +305,7 @@ public class ElektronickiPodnesakTests
                 0m, [], oslobodjen: false,
                 new PristojbeOpcije(
                     Dodane: [new RucnaPristojba("tbr25_enotar")],
-                    PodnesciElektronicki: true))
+                    PodnesciElektronicki: new HashSet<string> { "tbr25_enotar" }))
             .Ukupno;
 
         Assert.Equal(15.00m, iznos);
@@ -302,7 +333,7 @@ public class ElektronickiPodnesakTests
                 0m, [], oslobodjen: false,
                 new PristojbeOpcije(
                     Dodane: [new RucnaPristojba("tbr31_egradani")],
-                    PodnesciElektronicki: true,
+                    PodnesciElektronicki: new HashSet<string> { "tbr31_egradani" },
                     OdlukeElektronicki: new HashSet<string> { "tbr31_egradani" }))
             .Ukupno;
 
@@ -318,7 +349,7 @@ public class ElektronickiPodnesakTests
     public void PolovicaZbogVrstePodneska_SlazeSeSCl7()
     {
         var bez = Izracunaj("par_odgovor_tuzba", _ => { });
-        var sCl7 = Izracunaj("par_odgovor_tuzba", z => z.PodnesciElektronicki = true);
+        var sCl7 = Izracunaj("par_odgovor_tuzba", z => z.PodnesciElektronicki = ["tbr1_st2"]);
 
         Assert.Equal(310.00m, bez.SudskaPristojba);
         Assert.Equal(155.00m, sCl7.SudskaPristojba);
@@ -345,7 +376,7 @@ public class ElektronickiPodnesakTests
             var bez = Iznos(new PristojbeOpcije(Dodane: [new RucnaPristojba(odredba.Id)]));
             var sve = Iznos(new PristojbeOpcije(
                 Dodane: [new RucnaPristojba(odredba.Id)],
-                PodnesciElektronicki: true,
+                PodnesciElektronicki: new HashSet<string> { odredba.Id },
                 ZkUpisElektronicki: true,
                 OdlukeElektronicki: new HashSet<string> { odredba.Id }));
 

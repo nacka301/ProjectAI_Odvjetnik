@@ -67,6 +67,7 @@ interface InvoiceResult {
 import { API_BASE } from "@/lib/api";
 import { validateOib } from "@/lib/utils";
 import { useAuth } from "@/lib/useAuth";
+import { Obavijest } from "@/components/Obavijest";
 
 const MODULE_LABELS: Record<string, string> = {
   valuation: "Procjena nekretnine",
@@ -122,6 +123,8 @@ export default function FiskalizacijaPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<InvoiceResult | null>(null);
+  /** Poruka za e-Račun (čeka FINA integraciju) — zamjena za window.alert(). */
+  const [eRacunPoruka, setERacunPoruka] = useState<string | null>(null);
   const [showXml, setShowXml] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -360,7 +363,11 @@ export default function FiskalizacijaPage() {
                   {showXml ? "Sakrij XML" : "Pregledaj XML"}
                 </button>
                 <button
-                  onClick={() => alert("📤 e-Račun\n\nSlanje putem sustava e-Račun zahtijeva integraciju s FINA sustavom i aktivnu poslovnu karticu.")}
+                  onClick={() =>
+                    setERacunPoruka(
+                      "Slanje putem sustava e-Račun zahtijeva integraciju s FINA sustavom i aktivnu poslovnu karticu."
+                    )
+                  }
                   className="inline-flex items-center gap-2 bg-blue-600 text-white text-sm font-medium px-5 py-2.5 rounded-lg hover:bg-blue-700 transition"
                 >
                   <Send className="h-4 w-4" />
@@ -735,6 +742,13 @@ export default function FiskalizacijaPage() {
           <p>Ovaj alat ne zamjenjuje računovodstveni softver. Korisnik je odgovoran za provjeru točnosti podataka prije slanja e-računa.</p>
         </div>
       </footer>
+      {eRacunPoruka && (
+        <Obavijest
+          naslov="e-Račun"
+          poruka={eRacunPoruka}
+          onClose={() => setERacunPoruka(null)}
+        />
+      )}
     </div>
   );
 }

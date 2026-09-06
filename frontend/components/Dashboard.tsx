@@ -30,6 +30,7 @@ import { getRecentActivity, type ActivityItem, type ActivityType } from "@/lib/s
 import { loadOnboardingState } from "@/lib/onboarding";
 import { useVodic } from "@/contexts/VodicContext";
 import AppHeader from "@/components/AppHeader";
+import { Obavijest } from "@/components/Obavijest";
 import { SecurityFooter } from "@/components/TrustComponents";
 import { useSubscription } from "@/lib/useSubscription";
 import { useIsAdmin } from "@/lib/useIsAdmin";
@@ -225,6 +226,8 @@ export default function Dashboard() {
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [blockedModule, setBlockedModule] = useState<string | null>(null);
+  /** Poruka za e-Komunikaciju (čeka FINA integraciju) — zamjena za window.alert(). */
+  const [eKomunikacijaPoruka, setEKomunikacijaPoruka] = useState<string | null>(null);
   const { pokreni } = useVodic();
   /**
    * Čuva da se uvod pokrene TOČNO jednom po dolasku, ne dvaput.
@@ -524,8 +527,8 @@ export default function Dashboard() {
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            alert(
-                              `📤 e-Komunikacija\n\nPredmet "${item.title}" pripremljen za slanje na sud putem sustava e-Komunikacija.\n\nOva funkcionalnost zahtijeva integraciju s FINA e-Komunikacija sustavom i aktivnu odvjetničku pametnu karticu.`
+                            setEKomunikacijaPoruka(
+                              `Predmet „${item.title}" pripremljen je za slanje na sud putem sustava e-Komunikacija.\n\nZa slanje je potrebna integracija s FINA sustavom e-Komunikacija i aktivna odvjetnička pametna kartica.`
                             );
                           }}
                           className="inline-flex items-center gap-1 text-[10px] font-medium text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2 py-1.5 rounded-lg transition whitespace-nowrap"
@@ -653,6 +656,13 @@ export default function Dashboard() {
           landing page's own Podnožje doesn't get a second footer stacked
           under it — Dashboard renders here directly instead. */}
       <SecurityFooter />
+      {eKomunikacijaPoruka && (
+        <Obavijest
+          naslov="e-Komunikacija"
+          poruka={eKomunikacijaPoruka}
+          onClose={() => setEKomunikacijaPoruka(null)}
+        />
+      )}
     </div>
   );
 }

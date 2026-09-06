@@ -84,7 +84,7 @@ export function demoZbrojevi(katalog: TarifnaStavka[]): DemoZbrojevi | null {
     odabraneStavke,
     oslobodjen: false,
     dodane: [...DEMO_TROSKOVNIK.pristojbeDodane],
-    podnesciElektronicki: DEMO_TROSKOVNIK.podnesciElektronicki,
+    podnesciElektronicki: [...DEMO_TROSKOVNIK.podnesciElektronicki],
   });
 
   return {

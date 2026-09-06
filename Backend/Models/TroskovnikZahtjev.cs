@@ -114,6 +114,13 @@ public sealed class TroskovnikRequest
     [JsonPropertyName("client_grad")]
     public string? ClientGrad { get; set; }
 
+    /// <summary>
+    /// Tip stranke ("fizicka" / "pravna") za automatsko otvaranje. Ako izostane,
+    /// tip se pogađa iz naziva (v. ClientCaseService.NaslutiTip).
+    /// </summary>
+    [JsonPropertyName("client_tip")]
+    public string? ClientTip { get; set; }
+
     /// <summary>Oslobođenje od plaćanja sudskih pristojbi (čl. 11. Zakona).</summary>
     [JsonPropertyName("is_oslobodjen_pristojbi")]
     public bool IsOslobodjenPristojbi { get; set; }
@@ -160,11 +167,12 @@ public sealed class TroskovnikRequest
     // Tri stavka, tri različita uvjeta, pa tri različita ulaza. Vidi PristojbeOpcije.
 
     /// <summary>
-    /// Čl. 7 st. 1 — podnesci predani elektronički i pristojba plaćena u trenutku
-    /// podnošenja. Vrijedi za cijeli troškovnik.
+    /// Čl. 7 st. 1 — ključevi odredbi (podnesaka) predanih elektronički i za koje je
+    /// pristojba plaćena u trenutku podnošenja. Po retku, jednako kao odluke: jedna
+    /// žalba može biti predana elektronički, a tužba u istom predmetu na papiru.
     /// </summary>
     [JsonPropertyName("podnesci_elektronicki")]
-    public bool PodnesciElektronicki { get; set; }
+    public List<string> PodnesciElektronicki { get; set; } = [];
 
     /// <summary>
     /// Čl. 7 st. 3 — zemljišnoknjižni upis predložen elektronički i plaćeno pri

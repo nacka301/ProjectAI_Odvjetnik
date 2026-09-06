@@ -505,7 +505,14 @@ public sealed class TroskovnikService : ITroskovnikService
         var stavkeRetci = new List<TroskovnikLineItem>();
         var redniBroj = 0;
 
-        foreach (var stavka in request.Stavke)
+        // Kronološki poredak — troškovnik ide sudu, a predložak niže radnje po
+        // datumu. Sučelje već šalje sortirano; ovo je zaštita za svakog drugog
+        // pozivatelja. `OrderBy` je stabilan, pa radnje istog datuma (i radnje bez
+        // datuma, koje idu na kraj) zadržavaju redoslijed unosa. Ne dira izračun
+        // ni pristojbe — samo redoslijed redaka i `Rbr`.
+        var stavkeKronoloski = request.Stavke.OrderBy(s => s.Datum ?? DateOnly.MaxValue);
+
+        foreach (var stavka in stavkeKronoloski)
         {
             var definicija = katalogPoId[stavka.ItemId];
 
@@ -684,7 +691,7 @@ public sealed class TroskovnikService : ITroskovnikService
             .Where(p => !string.IsNullOrWhiteSpace(p.OdredbaId))
             .Select(p => new RucnaPristojba(p.OdredbaId, p.Osnovica, p.Kolicina))],
         Iskljucene: request.PristojbeIskljucene.ToHashSet(),
-        PodnesciElektronicki: request.PodnesciElektronicki,
+        PodnesciElektronicki: request.PodnesciElektronicki.ToHashSet(),
         ZkUpisElektronicki: request.ZkUpisElektronicki,
         OdlukeElektronicki: request.OdlukeElektronicki.ToHashSet());
 

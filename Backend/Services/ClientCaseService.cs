@@ -38,6 +38,26 @@ public sealed class ClientCaseService
     private static string? SanitizeOib(string? oib)
         => !string.IsNullOrWhiteSpace(oib) && OibRegex.IsMatch(oib) ? oib : null;
 
+    // Oznake pravnih oblika (d.o.o., j.d.o.o., d.d., k.d., j.t.d., d.n.o. — uz
+    // razmake i s/bez točaka) te riječi koje same znače pravnu osobu. Namjerno
+    // izostavljeni „grad/općina/županija" — previše se sudaraju s adresama i
+    // prezimenima; korisnik ih u sučelju označi ručno.
+    private static readonly Regex PravniOblikRegex = new(
+        @"(\bd\s*\.?\s*o\s*\.?\s*o\b|\bj\s*\.?\s*d\s*\.?\s*o\s*\.?\s*o\b|\bd\s*\.?\s*d\b|\bk\s*\.?\s*d\b|\bj\s*\.?\s*t\s*\.?\s*d\b|\bd\s*\.?\s*n\s*\.?\s*o\b|\bustanova\b|\bzadruga\b|\budruga\b|\bzaklada\b|\bdruštvo\b|\bkomora\b|\bsindikat\b|\bministarstvo\b|\brepublika hrvatska\b|\bkonzorcij\b)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    /// <summary>"fizicka"/"pravna" ako je vrijednost jedno od toga, inače null.</summary>
+    internal static string? NormalizirajTip(string? tip)
+        => tip is "fizicka" or "pravna" ? tip : null;
+
+    /// <summary>
+    /// Pogađa tip stranke iz naziva kad ga sučelje nije poslalo. Prijedlog, ne
+    /// tvrdnja — korisnik ga u sučelju može pregaziti. Bez pouzdane oznake vraća
+    /// "fizicka" (češći slučaj).
+    /// </summary>
+    internal static string NaslutiTip(string? naziv)
+        => !string.IsNullOrWhiteSpace(naziv) && PravniOblikRegex.IsMatch(naziv) ? "pravna" : "fizicka";
+
     public ClientCaseService(
         HttpClient httpClient,
         ISupabaseRequestContext supabase,
@@ -237,7 +257,8 @@ public sealed class ClientCaseService
         string? naziv,
         string? oib,
         string? adresa,
-        string? grad)
+        string? grad,
+        string? tip = null)
     {
         if (string.IsNullOrWhiteSpace(naziv))
             return (null, false);
@@ -272,7 +293,7 @@ public sealed class ClientCaseService
             Oib = SanitizeOib(oib),
             Adresa = adresa,
             Grad = grad,
-            Tip = "fizicka"
+            Tip = NormalizirajTip(tip) ?? NaslutiTip(naziv)
         };
 
         var created = await CreateClientAsync(record);

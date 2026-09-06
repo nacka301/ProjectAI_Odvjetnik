@@ -72,7 +72,7 @@ public class KontrolniIzracuniTests
     /// </summary>
     [Fact]
     public void F_ElektronickiPodnesak_Daje310()
-        => Assert.Equal(310.00m, Izracunaj(z => z.PodnesciElektronicki = true).SudskaPristojba);
+        => Assert.Equal(310.00m, Izracunaj(z => z.PodnesciElektronicki = ["tbr1_st1"]).SudskaPristojba);
 
     /// <summary>
     /// G — PDV, odvjetnik u sustavu. Nagrada 1.000,00 + putni 100,00 → osnovica 1.100,00;

@@ -100,7 +100,9 @@ describe("troškovnik za primjer", () => {
     expect(DEMO_TROSKOVNIK.pristojbeDodane).toEqual([{ odredba_id: "tbr2_st1" }]);
   });
 
-  it("podnesci su elektronički — čl. 7 prepolavlja pristojbu na tužbu", () => {
-    expect(DEMO_TROSKOVNIK.podnesciElektronicki).toBe(true);
+  it("podnesci su elektronički — čl. 7 st. 1 prepolavlja pristojbu na tužbu", () => {
+    // Popis ključeva odredaba predanih elektronički (kao `odlukeElektronicki`),
+    // a ne globalna zastavica — tužba (Tar. br. 1 st. 1) je na tom popisu.
+    expect(DEMO_TROSKOVNIK.podnesciElektronicki).toContain("tbr1_st1");
   });
 });
