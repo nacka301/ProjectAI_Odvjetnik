@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -17,7 +17,6 @@ import {
 
   Sparkles,
   CircleHelp,
-  Compass,
   Send,
   Landmark,
   Construction,
@@ -28,7 +27,7 @@ import {
   Scale,
 } from "lucide-react";
 import { getRecentActivity, type ActivityItem, type ActivityType } from "@/lib/supabase";
-import { loadOnboardingState, markOnboarded } from "@/lib/onboarding";
+import { loadOnboardingState } from "@/lib/onboarding";
 import { useVodic } from "@/contexts/VodicContext";
 import AppHeader from "@/components/AppHeader";
 import { SecurityFooter } from "@/components/TrustComponents";
@@ -226,9 +225,14 @@ export default function Dashboard() {
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [blockedModule, setBlockedModule] = useState<string | null>(null);
-  /** Je li ovo prvi dolazak — tada se nudi uvod. */
-  const [nudiUvod, setNudiUvod] = useState(false);
   const { pokreni } = useVodic();
+  /**
+   * Čuva da se uvod pokrene TOČNO jednom po dolasku, ne dvaput.
+   *
+   * React Strict Mode u razvoju namjerno pozove efekt dvaput; bez ove zaštite
+   * `pokreni` bi se pozvao dva puta zaredom (svejedno bezopasno, ali nepotrebno).
+   */
+  const uvodPokrenutRef = useRef(false);
 
   const cards = FEATURE_CARDS.map((card) => ({
     ...card,
@@ -255,16 +259,24 @@ export default function Dashboard() {
   // global localStorage hint, so a second person signing in on the same browser
   // inherited the first person's "already onboarded" and never saw the tour — and
   // the same held for a profile that was deleted and recreated. There is no local
-  // shortcut now: nothing is offered until the database says `isNew === true`,
-  // so nothing flashes while the query is in flight.
+  // shortcut now: the guide is offered only after the database says
+  // `isNew === true`, so nothing flashes while the query is in flight.
+  //
+  // Pokreće se sam, bez pitanja. Prije je ovdje stajala traka „Pokažimo vam
+  // kako ovo radi" s gumbom „Kreni" — jedan dodatni klik između registracije i
+  // uvoda koji ništa nije dodavao (odustajanje već postoji: „Preskoči" i Esc
+  // unutar samog vodiča, oboje odmah bilježe da je uvod gotov).
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const { isNew } = await loadOnboardingState();
-      if (!cancelled && isNew === true) setNudiUvod(true);
+      if (!cancelled && isNew === true && !uvodPokrenutRef.current) {
+        uvodPokrenutRef.current = true;
+        pokreni("dobrodoslica");
+      }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [pokreni]);
 
   useEffect(() => {
     (async () => {
@@ -279,26 +291,6 @@ export default function Dashboard() {
     })();
   }, [isAdmin]);
 
-  // ── Poziv na uvod ──
-  //
-  // Uvod ne otima ekran sam od sebe. Novi korisnik prvo vidi gdje je došao, pa
-  // tek onda odlucuje: „Kreni" ga vodi u prikaz primjera, „Ne sada" zatvara
-  // pitanje zauvijek. Prije je ovdje stajala sestostepena tura po karticama
-  // modula. Pokretala se sama i ucila izbornik („kartica Troskovnik otvara
-  // troskovnik"), a ne posao — uvod na primjeru radi njezin posao bolje, pa je
-  // uklonjena da dva vodica ne bi otimala istog korisnika.
-  const kreniUvod = useCallback(() => {
-    setNudiUvod(false);
-    pokreni("dobrodoslica");
-  }, [pokreni]);
-
-  const odbijUvod = useCallback(() => {
-    setNudiUvod(false);
-    // Odbijanje je isto sto i zavrsetak: ne pitaj me vise.
-    void markOnboarded();
-  }, []);
-
-
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
       {/* ═══════════ Top Navigation ═══════════ */}
@@ -307,38 +299,6 @@ export default function Dashboard() {
       <AppHeader />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-
-        {/* ═══════════ POZIV NA UVOD (samo prvi put) ═══════════ */}
-        {nudiUvod && (
-          <div className="flex flex-col gap-3 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-3">
-              <Compass className="mt-0.5 h-5 w-5 shrink-0 text-indigo-600" />
-              <div>
-                <p className="text-sm font-semibold text-slate-900">
-                  Pokažimo vam kako ovo radi
-                </p>
-                <p className="text-sm text-slate-600">
-                  Dvije minute, na gotovom troškovniku i popunjenom popisu stranaka.
-                  Podaci su primjer i ništa se ne sprema u vaš račun.
-                </p>
-              </div>
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <button
-                onClick={odbijUvod}
-                className="rounded-lg px-3 py-2 text-xs text-slate-500 transition hover:text-slate-800"
-              >
-                Ne sada
-              </button>
-              <button
-                onClick={kreniUvod}
-                className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-medium text-white transition hover:bg-indigo-700"
-              >
-                Kreni <ArrowRight className="h-3 w-3" />
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* ═══════════ 0. "MODULE STILL IN DEVELOPMENT" NOTICE ═══════════ */}
         {/* Shown after the middleware redirected a typed-in route back here.  */}
