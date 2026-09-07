@@ -427,6 +427,15 @@ public sealed class TroskovnikItemRequest
     /// </summary>
     [JsonPropertyName("tbr41_snizenje_postotak")]
     public decimal? Tbr41SnizenjePostotak { get; set; }
+
+    /// <summary>
+    /// Bodovi koje je sud stvarno priznao za ovu radnju (rješenje o troškovima). Null =
+    /// nije uneseno → za paralelni „priznato" prikaz redak ulazi punim tarifnim
+    /// doprinosom. Kad je zadan, taj redak u priznati zbroj ulazi točno tom brojkom
+    /// (Tbr. 41 tog retka se za priznato zanemaruje). Ne dira tarifni izračun.
+    /// </summary>
+    [JsonPropertyName("priznati_bodovi")]
+    public decimal? PriznatiBodovi { get; set; }
 }
 
 /// <summary>Ručno dodana sudska pristojba — vidi <see cref="RucnaPristojba"/>.</summary>

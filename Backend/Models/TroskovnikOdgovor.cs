@@ -295,6 +295,13 @@ public sealed class TroskovnikResponse
     /// <summary>Slobodni tekst napomene. Null kad je prazna — ispis tada izostavlja odjeljak.</summary>
     [JsonPropertyName("napomena")]
     public string? Napomena { get; set; }
+
+    /// <summary>
+    /// Paralelni „priznato po rješenju suda" zbroj. Null kad nijedna radnja nema
+    /// unesene priznate bodove — tada se u sučelju, ispisu i Excelu ne prikazuje ništa.
+    /// </summary>
+    [JsonPropertyName("priznato")]
+    public PriznatoZbroj? Priznato { get; set; }
 }
 
 /// <summary>Renumerirani redak ručno unesenog troška (dodatna pristojba ili predujam).</summary>
@@ -449,6 +456,65 @@ public sealed class TroskovnikLineItem
     /// </summary>
     [JsonPropertyName("tbr41_pravni_izvor")]
     public string Tbr41PravniIzvor { get; set; } = "";
+
+    // ── Priznato po rješenju suda o troškovima ────────────────────
+
+    /// <summary>Bodovi koje je sud priznao za ovu radnju — echo iz zahtjeva. Null kad nije unesen.</summary>
+    [JsonPropertyName("priznati_bodovi")]
+    public decimal? PriznatiBodovi { get; set; }
+
+    /// <summary>
+    /// Efektivni doprinos ovog retka „priznatom" zbroju:
+    /// <see cref="PriznatiBodovi"/> kad je zadan, inače <see cref="UkupnoBodova"/> +
+    /// <see cref="Tbr41Bodovi"/> (puni tarifni doprinos). Uvijek popunjeno.
+    /// </summary>
+    [JsonPropertyName("priznato_ukupno_bodova")]
+    public decimal PriznatoUkupnoBodova { get; set; }
+}
+
+/// <summary>
+/// Paralelni „priznato" zbroj — što je sud priznao u rješenju o troškovima, uz puni
+/// tarifni izračun. Null u odgovoru kad nijedna radnja nema unesene priznate bodove.
+/// Pristojbe, predujmovi i naknada troškova identični su tarifnoj strani (drugi
+/// propis / stvarni izdatak), pa se ovdje ne ponavljaju.
+/// </summary>
+public sealed class PriznatoZbroj
+{
+    /// <summary>Σ priznatih doprinosa po recima, prije povišenja po Tbr. 40.</summary>
+    [JsonPropertyName("osnovica_bodova")]
+    public decimal OsnovicaBodova { get; set; }
+
+    /// <summary>Povišenje po Tbr. 40. toč. 1 na priznatu osnovicu (isti postotak kao tarifno).</summary>
+    [JsonPropertyName("povisenje_bodovi")]
+    public decimal PovisenjeBodovi { get; set; }
+
+    /// <summary>Priznata osnovica + priznato povišenje po Tbr. 40.</summary>
+    [JsonPropertyName("ukupno_bodova")]
+    public decimal UkupnoBodova { get; set; }
+
+    /// <summary>Priznata odvjetnička nagrada u EUR = <see cref="UkupnoBodova"/> × vrijednost boda.</summary>
+    [JsonPropertyName("nagrada")]
+    public decimal Nagrada { get; set; }
+
+    /// <summary>Priznata nagrada + naknada troškova (osnovica za PDV).</summary>
+    [JsonPropertyName("osnovica_sa_naknadom")]
+    public decimal OsnovicaSaNaknadom { get; set; }
+
+    /// <summary>PDV na priznatu osnovicu; 0 kad PDV nije uključen.</summary>
+    [JsonPropertyName("pdv")]
+    public decimal Pdv { get; set; }
+
+    /// <summary>Priznata osnovica s naknadom + PDV.</summary>
+    [JsonPropertyName("ukupno_s_pdv")]
+    public decimal UkupnoSPdv { get; set; }
+
+    /// <summary>Grand total s priznatom nagradom: priznati odvjetnički trošak + pristojbe + predujmovi.</summary>
+    [JsonPropertyName("sveukupno")]
+    public decimal Sveukupno { get; set; }
+
+    /// <summary>Priznata nagrada po zastupanoj osobi (Tbr. 40. toč. 1, drugi odlomak).</summary>
+    [JsonPropertyName("nagrada_po_osobi")]
+    public decimal NagradaPoOsobi { get; set; }
 }
 
 /// <summary>Echo jedne stavke naknade troškova, s razriješenim pravnim izvorom.</summary>
