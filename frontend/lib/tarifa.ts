@@ -862,6 +862,85 @@ export function povisenjeViseOsobaPostotak(brojOsoba: number): number {
   return Math.min((brojOsoba - 1) * VISE_OSOBA_PO_OSOBI, VISE_OSOBA_MAX_POVISENJE);
 }
 
+// ── Priznato po rješenju suda o troškovima ───────────────────────
+//
+// Paralelni prikaz „Po Tarifi" vs „Priznato": sud ne dosuđuje uvijek pune tarifne
+// bodove po radnji. Odvjetnik uz redak upiše priznatu brojku; ovaj izračun je čista
+// agregacija povrh tarifnog — ne dira nijednu tarifnu vrijednost. Zrcali backend
+// `TroskovnikService.IzracunajPriznato`.
+
+/** Jedan redak za paralelni „priznato" izračun. */
+export interface PriznatiRedakUlaz {
+  /** Puni tarifni doprinos retka PRIJE Tbr. 41 (ukupno bodova × količina / jednokratno). */
+  ukupnoBodova: number;
+  /** Tbr. 41 doprinos tog retka; pribraja se tarifnom doprinosu kad redak nema priznati unos. */
+  tbr41Bodovi: number;
+  /** Bodovi koje je sud priznao; null/undefined → redak ulazi punim tarifnim doprinosom. */
+  priznatiBodovi?: number | null;
+}
+
+export interface PriznatoOpcije {
+  /** Tbr. 40. toč. 1 — isti postotak kao na tarifnoj strani. */
+  povisenjePostotak: number;
+  bodValue: number;
+  naknadaTroskovaUkupno: number;
+  isPdvUkljucen: boolean;
+  ukupnoPristojbe: number;
+  ukupnoPredujmovi: number;
+  brojZastupanihOsoba: number;
+}
+
+export interface PriznatoRezultat {
+  osnovicaBodova: number;
+  povisenjeBodovi: number;
+  ukupnoBodova: number;
+  nagrada: number;
+  osnovicaSaNaknadom: number;
+  pdv: number;
+  ukupnoSPdv: number;
+  sveukupno: number;
+  nagradaPoOsobi: number;
+}
+
+/**
+ * `null` kad nijedan redak nema priznati unos — tada se u sučelju, ispisu i Excelu
+ * ne prikazuje ništa. Inače: redak s unosom ulazi točno tom brojkom (Tbr. 41 tog
+ * retka se zanemaruje), redak bez unosa punim tarifnim doprinosom; pa isti Tbr. 40
+ * postotak i isti PDV režim. Pristojbe, predujmovi i naknada troškova nepromijenjeni.
+ */
+export function obracunajPriznato(
+  redci: PriznatiRedakUlaz[],
+  opcije: PriznatoOpcije,
+): PriznatoRezultat | null {
+  if (!redci.some((r) => r.priznatiBodovi != null)) return null;
+
+  const osnovicaBodova = redci.reduce(
+    (s, r) => s + (r.priznatiBodovi ?? r.ukupnoBodova + r.tbr41Bodovi),
+    0,
+  );
+  const povisenjeBodovi = osnovicaBodova * opcije.povisenjePostotak;
+  const ukupnoBodova = osnovicaBodova + povisenjeBodovi;
+
+  const nagrada = zaokruziNovac(ukupnoBodova * opcije.bodValue);
+  const osnovicaSaNaknadom = nagrada + opcije.naknadaTroskovaUkupno;
+  const pdv = opcije.isPdvUkljucen ? zaokruziNovac(osnovicaSaNaknadom * PDV_RATE) : 0;
+
+  return {
+    osnovicaBodova,
+    povisenjeBodovi,
+    ukupnoBodova,
+    nagrada,
+    osnovicaSaNaknadom,
+    pdv,
+    ukupnoSPdv: osnovicaSaNaknadom + pdv,
+    sveukupno:
+      osnovicaSaNaknadom + pdv + opcije.ukupnoPristojbe + opcije.ukupnoPredujmovi,
+    nagradaPoOsobi: zaokruziNovac(
+      podijeliPoOsobama(nagrada, opcije.brojZastupanihOsoba),
+    ),
+  };
+}
+
 // ── Ukupno bodova za jednu stavku troškovnika ────────────────────
 
 /**

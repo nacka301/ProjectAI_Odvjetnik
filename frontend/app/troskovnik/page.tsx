@@ -78,6 +78,7 @@ import {
   VRSTA_TROSKA_LABELE,
   efektivniVps,
   izracunajOsnovicu,
+  obracunajPriznato,
   podijeliPoOsobama,
   povisenjeViseOsobaPostotak,
   provjeriZahtjev,
@@ -121,6 +122,8 @@ interface RedakTroskovnika {
   /** "YYYY-MM-DD" ili null — opcionalan, prazan se ne šalje. */
   datum: string | null;
   tbr41: Tbr41Stavka | null;
+  /** Bodovi koje je sud priznao za ovu radnju (rješenje o troškovima); null = nije uneseno. */
+  priznatiBodovi: number | null;
 }
 
 /** Ručno unesen trošak (dodatna pristojba ili predujam) — oba popisa dijele isti oblik. */
@@ -159,6 +162,22 @@ interface TroskovnikLineItem {
   tbr41_snizenje_postotak?: number;
   tbr41_bodovi?: number;
   tbr41_pravni_izvor?: string;
+  /** Priznato po rješenju suda o troškovima. */
+  priznati_bodovi?: number | null;
+  priznato_ukupno_bodova?: number;
+}
+
+/** Paralelni „priznato po rješenju suda" zbroj — null kad nijedna radnja nema unos. */
+interface PriznatoZbroj {
+  osnovica_bodova: number;
+  povisenje_bodovi: number;
+  ukupno_bodova: number;
+  nagrada: number;
+  osnovica_sa_naknadom: number;
+  pdv: number;
+  ukupno_s_pdv: number;
+  sveukupno: number;
+  nagrada_po_osobi: number;
 }
 
 interface TroskovnikResponse {
@@ -248,6 +267,8 @@ interface TroskovnikResponse {
   predujmovi?: TroskovnikTrosakStavka[];
   ukupno_predujmovi?: number;
   napomena?: string | null;
+  /** Paralelni „priznato po rješenju suda" zbroj; izostaje kad nijedna radnja nema unos. */
+  priznato?: PriznatoZbroj | null;
 }
 
 // ── Uloga odvjetnika u kaznenom postupku ──
@@ -618,7 +639,9 @@ function TroskovnikContent() {
 
   /** Puts a recovered draft back into the form, field by field. */
   const vratiNacrt = useCallback((d: Nacrt) => {
-    setVrijednostSpora(d.vrijednostSpora); setRedci(d.redci);
+    setVrijednostSpora(d.vrijednostSpora);
+    // Stariji nacrt (prije priznatih bodova) nema polje — dopuni ga da tip ostane pun.
+    setRedci(d.redci.map((r) => ({ ...r, priznatiBodovi: r.priznatiBodovi ?? null })));
     setSelectedClientId(d.selectedClientId); setNapomena(d.napomena);
     setOdvjetnikIme(d.odvjetnikIme); setOdvjetnikOib(d.odvjetnikOib);
     setOdvjetnikAdresa(d.odvjetnikAdresa); setOdvjetnikGrad(d.odvjetnikGrad);
@@ -719,6 +742,7 @@ function TroskovnikContent() {
         stavke?: {
           item_id: string; kolicina: number; datum?: string | null;
           tbr41_povisenje_postotak?: number; tbr41_snizenje_postotak?: number;
+          priznati_bodovi?: number | null;
         }[];
         klijent?: { ime?: string; oib?: string; adresa?: string; grad?: string } | null;
         odvjetnik?: { ime?: string; oib?: string; adresa?: string; grad?: string; iban?: string } | null;
@@ -737,6 +761,7 @@ function TroskovnikContent() {
           kolicina: s.kolicina,
           datum: s.datum ?? null,
           tbr41: povisenje || snizenje ? { povisenje, snizenje } : null,
+          priznatiBodovi: s.priznati_bodovi ?? null,
         };
       });
 
@@ -1251,6 +1276,8 @@ function TroskovnikContent() {
       tbr41_snizenje: number;
       tbr41_bodovi: number;
       tbr41_pravni_izvor: string;
+      priznati_bodovi: number | null;
+      priznato_ukupno_bodova: number;
     }[] = [];
     const catalogMap = new Map(katalog.map((s) => [s.id, s]));
 
@@ -1311,6 +1338,9 @@ function TroskovnikContent() {
         tbr41_snizenje: snizenje,
         tbr41_bodovi: tbr41BodoviStavke,
         tbr41_pravni_izvor: tbr41Izvor(povisenje, snizenje),
+        priznati_bodovi: redak.priznatiBodovi,
+        // Uneseni broj je konačan doprinos retka; bez unosa puni tarifni (uklj. Tbr. 41).
+        priznato_ukupno_bodova: redak.priznatiBodovi ?? (ukupnoStavke + tbr41BodoviStavke),
       });
     }
 
@@ -1360,6 +1390,24 @@ function TroskovnikContent() {
     const bodoviPoOsobi = podijeliPoOsobama(ukupnoBodova, brojZastupanihOsoba);
     const nagradaPoOsobi = zaokruziNovac(podijeliPoOsobama(ukupnoEur, brojZastupanihOsoba));
 
+    // Paralelni „priznato po rješenju suda" izračun — null kad nijedan redak nema unos.
+    const priznato = obracunajPriznato(
+      lines.map((l) => ({
+        ukupnoBodova: l.ukupno_bodova,
+        tbr41Bodovi: l.tbr41_bodovi,
+        priznatiBodovi: l.priznati_bodovi,
+      })),
+      {
+        povisenjePostotak,
+        bodValue,
+        naknadaTroskovaUkupno,
+        isPdvUkljucen,
+        ukupnoPristojbe,
+        ukupnoPredujmovi,
+        brojZastupanihOsoba,
+      },
+    );
+
     return {
       lines, osnovicaBodova, povisenjePostotak, povisenjeBodovi, tbr41Postotak, tbr41Bodovi,
       ukupnoBodova, bodoviPoOsobi, nagradaPoOsobi, ukupnoEur,
@@ -1369,6 +1417,7 @@ function TroskovnikContent() {
       sudskaPristojba, ukupnoPristojbe, ukupnoPredujmovi, sveukupniTrosak,
       pristojbaVpsUdio: pristojbe.vpsUdio,
       pristojbaNaTeretProtustranke: pristojbe.naTeretProtustranke,
+      priznato,
     };
   }, [redciPoredani, katalog, osnovica, isPdvUkljucen, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, isOduzimanjePrekrsaj, parsedVrijednostOduzimanja, pristojbe, brojZastupanihOsoba, zaprijecenaKazna, tbr41Povisenje, tbr41Snizenje, dodatnePristojbe, predujmovi, naknadaTroskovaStavke, datumDospijeca]);
 
@@ -1396,7 +1445,7 @@ function TroskovnikContent() {
 
   /** Dodaje novi redak na kraj popisa — ista stavka smije se ponoviti. */
   const addItem = useCallback((itemId: string) => {
-    setRedci((prev) => [...prev, { uid: noviUid(), itemId, kolicina: 1, datum: null, tbr41: null }]);
+    setRedci((prev) => [...prev, { uid: noviUid(), itemId, kolicina: 1, datum: null, tbr41: null, priznatiBodovi: null }]);
   }, [noviUid]);
 
   /** Mijenja količinu retka; `qty <= 0` briše redak. */
@@ -1455,6 +1504,19 @@ function TroskovnikContent() {
     );
   }, []);
 
+  /**
+   * Priznati bodovi za pojedini redak (rješenje suda o troškovima). Prazan unos ili
+   * ≤ 0 znači „nije uneseno" — redak tada u priznati zbroj ulazi punim tarifnim
+   * doprinosom. Ne dira tarifni izračun.
+   */
+  const postaviPriznatiBodovi = useCallback((uid: string, vrijednost: string) => {
+    const broj = Number(vrijednost.replace(",", "."));
+    const priznatiBodovi = vrijednost.trim() === "" || !Number.isFinite(broj) || broj <= 0
+      ? null
+      : broj;
+    setRedci((prev) => prev.map((r) => (r.uid === uid ? { ...r, priznatiBodovi } : r)));
+  }, []);
+
   /** Prečac "primijeni na sve stavke" — briše sve pojedinačne postotke. */
   const primijeniTbr41NaSve = useCallback(() => {
     setRedci((prev) => prev.map((r) => ({ ...r, tbr41: null })));
@@ -1498,7 +1560,7 @@ function TroskovnikContent() {
     return {
       vrijednostSpora: DEMO_TROSKOVNIK.vrijednostSporaUnos,
       redci: DEMO_TROSKOVNIK.radnje.map((r) => ({
-        uid: noviUid(), itemId: r.itemId, kolicina: 1, datum: r.datum, tbr41: null,
+        uid: noviUid(), itemId: r.itemId, kolicina: 1, datum: r.datum, tbr41: null, priznatiBodovi: null,
       })),
       selectedClientId: DEMO_TROSKOVNIK.klijentId,
       opisPredmeta: DEMO_TROSKOVNIK.opisPredmeta,
@@ -1597,6 +1659,7 @@ function TroskovnikContent() {
         // null → stavka nasljeđuje postotak s razine troškovnika (prečac)
         tbr41_povisenje_postotak: r.tbr41?.povisenje ?? null,
         tbr41_snizenje_postotak: r.tbr41?.snizenje ?? null,
+        priznati_bodovi: r.priznatiBodovi ?? undefined,
       })),
     [redciPoredani],
   );
@@ -3193,9 +3256,38 @@ function TroskovnikContent() {
                                   </span>
                                 )}
                               </div>
+
+                              {/* Priznato po rješenju suda o troškovima — ne dira tarifni izračun */}
+                              <div className="flex items-center gap-1.5 mt-1">
+                                <span className="text-[10px] text-slate-400 shrink-0">Priznato:</span>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step="any"
+                                  inputMode="decimal"
+                                  value={redak.priznatiBodovi ?? ""}
+                                  onChange={(e) => postaviPriznatiBodovi(redak.uid, e.target.value)}
+                                  placeholder={
+                                    line ? fmtNum(line.ukupno_bodova + (line.tbr41_bodovi ?? 0)) : "bod."
+                                  }
+                                  className="w-16 text-[10px] px-1.5 py-0.5 border border-slate-200 rounded bg-white outline-none focus:ring-1 focus:ring-indigo-500"
+                                  title="Bodovi koje je sud priznao za ovu radnju (rješenje o troškovima). Prazno = puni tarifni iznos."
+                                />
+                                <span className="text-[10px] text-slate-400">bod.</span>
+                                {redak.priznatiBodovi != null && line && (
+                                  <span className="text-[10px] text-slate-400">
+                                    (tarifa {fmtNum(line.ukupno_bodova + (line.tbr41_bodovi ?? 0))})
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                            <span className="text-xs font-semibold text-slate-800 shrink-0">
+                            <span className="text-xs font-semibold text-slate-800 shrink-0 text-right">
                               {line ? fmtEur(line.iznos_eur) : "—"}
+                              {redak.priznatiBodovi != null && (
+                                <span className="block text-[10px] font-normal text-emerald-600">
+                                  priznato {fmtEur(redak.priznatiBodovi * BOD_VALUE)}
+                                </span>
+                              )}
                             </span>
                           </div>
                         );
@@ -4289,6 +4381,54 @@ function TroskovnikContent() {
                   </tfoot>
                 </table>
               </div>
+
+              {/* ── Priznato po rješenju suda o troškovima — paralelni prikaz ── */}
+              {result.priznato && (
+                <div className="mt-4 pt-3 border-t border-slate-200">
+                  <h3 className="text-sm font-bold text-slate-800 mb-1">
+                    Priznato po rješenju suda o troškovima
+                  </h3>
+                  <p className="text-[11px] text-slate-500 mb-2">
+                    Uz puni tarifni izračun. Sud ne dosuđuje uvijek pune tarifne bodove; ovdje je zbroj
+                    onoga što je priznato u rješenju o troškovima. Sudske pristojbe i predujmovi su isti.
+                  </p>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-slate-400">
+                          <th className="text-left font-medium py-1"></th>
+                          <th className="text-right font-medium py-1 px-2">Po Tarifi</th>
+                          <th className="text-right font-semibold py-1 px-2 text-emerald-700">Priznato</th>
+                        </tr>
+                      </thead>
+                      <tbody className="text-slate-600">
+                        <tr className="border-t border-slate-100">
+                          <td className="py-1">Ukupno bodova</td>
+                          <td className="py-1 px-2 text-right">{fmtNum(result.ukupno_bodova)}</td>
+                          <td className="py-1 px-2 text-right font-semibold text-emerald-700">{fmtNum(result.priznato.ukupno_bodova)}</td>
+                        </tr>
+                        <tr className="border-t border-slate-100">
+                          <td className="py-1">Nagrada{Number(result.naknada_troskova_ukupno ?? 0) > 0 ? " + naknada troškova" : ""} (bez PDV)</td>
+                          <td className="py-1 px-2 text-right">{fmtEur(result.ukupno_eur_bez_pdv)}</td>
+                          <td className="py-1 px-2 text-right font-semibold text-emerald-700">{fmtEur(result.priznato.osnovica_sa_naknadom)}</td>
+                        </tr>
+                        {result.priznato.pdv > 0 && (
+                          <tr className="border-t border-slate-100">
+                            <td className="py-1">PDV (25%)</td>
+                            <td className="py-1 px-2 text-right">{fmtEur(result.pdv)}</td>
+                            <td className="py-1 px-2 text-right font-semibold text-emerald-700">{fmtEur(result.priznato.pdv)}</td>
+                          </tr>
+                        )}
+                        <tr className="border-t-2 border-slate-200 font-bold text-slate-800">
+                          <td className="py-1.5">SVEUKUPNO</td>
+                          <td className="py-1.5 px-2 text-right">{fmtEur(result.sveukupni_trosak ?? result.ukupno_eur_s_pdv)}</td>
+                          <td className="py-1.5 px-2 text-right text-emerald-700">{fmtEur(result.priznato.sveukupno)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
 
               {/* ── Napomena — slobodni tekst, izostaje kad je prazna ── */}
               {result.napomena && (

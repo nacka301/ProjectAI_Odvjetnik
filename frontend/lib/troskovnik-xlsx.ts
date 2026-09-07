@@ -226,6 +226,39 @@ export function buildTroskovnikSheet(m: TroskovnikIzvozModel): Row[] {
   prazno();
   redci.push([...oznakaZbroja("SVEUKUPNI TROŠAK", true), iznos(m.sveukupno, true)]);
 
+  // ── Priznato po rješenju suda o troškovima — uz puni tarifni izračun ──
+  if (m.priznato) {
+    prazno();
+    redci.push(naslovOdjeljka("Priznato po rješenju suda o troškovima"));
+    redci.push([
+      null, null, null, null,
+      { value: "", type: String },
+      { value: "Po Tarifi", type: String, fontWeight: "bold", align: "right" },
+      { value: "Priznato", type: String, fontWeight: "bold", align: "right" },
+    ]);
+    const usporedba = (
+      oznaka: string,
+      tarifa: number,
+      priznato: number,
+      format: string,
+      podebljano = false,
+    ): Row => [
+      null, null, null, null,
+      { value: oznaka, type: String, align: "right", ...(podebljano ? { fontWeight: "bold" as const } : {}) },
+      { value: tarifa, type: Number, format, align: "right", ...(podebljano ? { fontWeight: "bold" as const } : {}) },
+      { value: priznato, type: Number, format, align: "right", ...(podebljano ? { fontWeight: "bold" as const } : {}) },
+    ];
+    redci.push(usporedba("Ukupno bodova", m.zbrojNagrade.bodovi, m.priznato.ukupnoBodova, BODOVI));
+    redci.push(usporedba(
+      m.naknadaTroskova > 0 ? "Nagrada + naknada troškova (bez PDV)" : "Nagrada (bez PDV)",
+      m.pdv ? m.pdv.osnovica : m.zbrojNagrade.iznos,
+      m.priznato.osnovicaSaNaknadom,
+      NOVAC,
+    ));
+    if (m.pdv) redci.push(usporedba("PDV (25%)", m.pdv.iznos, m.priznato.pdv, NOVAC));
+    redci.push(usporedba("SVEUKUPNO", m.sveukupno, m.priznato.sveukupno, NOVAC, true));
+  }
+
   if (m.napomena) {
     prazno();
     redci.push(naslovOdjeljka("Napomena"));

@@ -184,6 +184,60 @@ describe("buildIzvozModel", () => {
   it("prazna napomena ne postaje odjeljak", () => {
     expect(buildIzvozModel(sLinijom({ napomena: "   " })).napomena).toBeUndefined();
   });
+
+  it("izostavlja priznato kad nijedna radnja nema priznati unos", () => {
+    expect(buildIzvozModel(sLinijom()).priznato).toBeNull();
+  });
+
+  it("nosi priznato blok i priznatiBodovi po radnji kad postoji unos", () => {
+    const m = buildIzvozModel(
+      sLinijom({
+        liveCalc: {
+          ...PRAZAN_LIVECALC,
+          lines: [linija({ priznati_bodovi: 60 })],
+          priznato: {
+            osnovicaBodova: 60,
+            ukupnoBodova: 60,
+            nagrada: 120,
+            osnovicaSaNaknadom: 120,
+            pdv: 0,
+            ukupnoSPdv: 120,
+            sveukupno: 120,
+          },
+        },
+      }),
+    );
+    expect(m.radnje[0].priznatiBodovi).toBe(60);
+    expect(m.priznato).toMatchObject({ ukupnoBodova: 60, sveukupno: 120 });
+  });
+
+  it("priznato iz spremljenog rezultata (snake_case) ima prednost", () => {
+    const m = buildIzvozModel(
+      sLinijom({
+        result: {
+          stavke: [{ ...linija(), priznati_bodovi: 40 }],
+          ukupno_bodova: 100,
+          ukupno_eur_bez_pdv: 200,
+          pdv: 0,
+          ukupno_eur_s_pdv: 200,
+          datum_izrade: "2026-04-11",
+          klijent: null,
+          odvjetnik: null,
+          sveukupni_trosak: 200,
+          priznato: {
+            osnovica_bodova: 40,
+            ukupno_bodova: 40,
+            nagrada: 80,
+            osnovica_sa_naknadom: 80,
+            pdv: 0,
+            ukupno_s_pdv: 80,
+            sveukupno: 80,
+          },
+        },
+      }),
+    );
+    expect(m.priznato).toMatchObject({ ukupnoBodova: 40, nagrada: 80, sveukupno: 80 });
+  });
 });
 
 describe("buildTroskovnikSheet", () => {
