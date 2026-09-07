@@ -12,7 +12,6 @@ import {
   PDV_RATE,
   izracunajBodove,
   izracunajKazneneBodove,
-  obracunajPriznato,
   podijeliPoOsobama,
   povisenjeViseOsobaPostotak,
   razrijesiTarifu,
@@ -32,8 +31,6 @@ export interface RedakIzracunaUlaz {
   kolicina: number;
   datum: string | null;
   tbr41: Tbr41Stavka | null;
-  /** Bodovi koje je sud priznao (rješenje o troškovima); null = nije uneseno. */
-  priznatiBodovi: number | null;
 }
 
 /** Ručno unesen trošak (dodatna pristojba / predujam) — iznos VEĆ isparsiran u broj. */
@@ -101,8 +98,6 @@ export interface TroskovnikIzracunRedak {
   tbr41_snizenje: number;
   tbr41_bodovi: number;
   tbr41_pravni_izvor: string;
-  priznati_bodovi: number | null;
-  priznato_ukupno_bodova: number;
 }
 
 export type TroskovnikIzracunRezultat = ReturnType<typeof izracunajTroskovnik>;
@@ -178,10 +173,6 @@ export function izracunajTroskovnik(u: TroskovnikIzracunUlaz) {
       tbr41_snizenje: snizenje,
       tbr41_bodovi: tbr41BodoviStavke,
       tbr41_pravni_izvor: tbr41Izvor(povisenje, snizenje),
-      priznati_bodovi: redak.priznatiBodovi,
-      // Uneseni broj je konačan doprinos retka; bez unosa puni tarifni (uklj. Tbr. 41).
-      priznato_ukupno_bodova:
-        redak.priznatiBodovi ?? ukupnoStavke + tbr41BodoviStavke,
     });
   }
 
@@ -232,24 +223,6 @@ export function izracunajTroskovnik(u: TroskovnikIzracunUlaz) {
     podijeliPoOsobama(ukupnoEur, u.brojZastupanihOsoba),
   );
 
-  // Paralelni „priznato po rješenju suda" izračun — null kad nijedan redak nema unos.
-  const priznato = obracunajPriznato(
-    lines.map((l) => ({
-      ukupnoBodova: l.ukupno_bodova,
-      tbr41Bodovi: l.tbr41_bodovi,
-      priznatiBodovi: l.priznati_bodovi,
-    })),
-    {
-      povisenjePostotak,
-      bodValue,
-      naknadaTroskovaUkupno,
-      isPdvUkljucen: u.isPdvUkljucen,
-      ukupnoPristojbe,
-      ukupnoPredujmovi,
-      brojZastupanihOsoba: u.brojZastupanihOsoba,
-    },
-  );
-
   return {
     lines,
     osnovicaBodova,
@@ -272,6 +245,5 @@ export function izracunajTroskovnik(u: TroskovnikIzracunUlaz) {
     sveukupniTrosak,
     pristojbaVpsUdio: u.pristojbe.vpsUdio,
     pristojbaNaTeretProtustranke: u.pristojbe.naTeretProtustranke,
-    priznato,
   };
 }

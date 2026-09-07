@@ -9,29 +9,39 @@ namespace Backend.Tests;
 /// u rootu repoa (svaka presuda ima link na izvor).
 ///
 /// Što se provjerava (KORAK 3 iz zadatka):
-///  A) ARITMETIKA — nagrada = Σ priznatih bodova × 2 €; PDV = 25 % SAMO na nagradu
+///  A) ARITMETIKA — nagrada = Σ bodova po retku × 2 €; PDV = 25 % SAMO na nagradu
 ///     (+ naknada troškova) i samo kad je odvjetnik u sustavu PDV-a; predujmovi i
 ///     pristojbe BEZ PDV-a; sveukupno štima.
 ///  B) RAZRED VRIJEDNOSTI za sastav tužbe (Tbr. 7. toč. 1).
-///  C) PRISTOJBE — po Uredbi NN 50/2026, NE po presudama (presude su po staroj uredbi).
+///  C) PRISTOJBE — po Uredbi NN 50/2026, NE po presudama.
 ///
 /// Bodovi se smiju uspoređivati s presudama: Tarifa (NN 138/23, 1 bod = 2,00 €) nije se
-/// mijenjala. Sud ne dosuđuje uvijek pune tarifne bodove po radnji, a motor nema slobodan
-/// unos „bodova po radnji" u tarifnom izračunu (bodovi = katalog + VPS). Priznatu brojku
-/// suda nosi <see cref="TroskovnikItemRequest.PriznatiBodovi"/> po retku → paralelni
-/// <see cref="TroskovnikResponse.Priznato"/> zbroj. Njega ovdje provjeravamo.
+/// mijenjala. Sud ne dosuđuje uvijek pune tarifne bodove po radnji; bodovi po retku su
+/// uređivi kroz izbor kataloške stavke (Tbr. 7.1 100 % / Tbr. 9.2 50 % / Tbr. 8.4 25 %)
+/// i kroz Tbr. 41 (−25 % / −50 %) po retku — to ovdje modeliramo.
 ///
-/// Postojeći paketi već pokrivaju susjedno gradivo i ostaju izvor istine za granice:
-/// <see cref="TarifaRazrediTests"/> (sve granice Tbr. 7.1), <see cref="KontrolniIzracuniTests"/>
-/// (PDV osnovica, predujam), <see cref="ElektronickiPodnesakTests"/> (čl. 7).
+/// Susjedno gradivo pokrivaju: <see cref="TarifaRazrediTests"/> (sve granice Tbr. 7.1),
+/// <see cref="KontrolniIzracuniTests"/> (PDV osnovica, predujam), <see cref="ElektronickiPodnesakTests"/>.
 /// </summary>
 public class PresudeRealneTests
 {
     private static readonly TroskovnikService Servis = new();
 
-    /// <summary>Radnja s brojem bodova koji je sud priznao u rješenju o troškovima.</summary>
-    private static TroskovnikItemRequest Priznata(decimal bodovi, string itemId = "par_rociste_glavno")
-        => new() { ItemId = itemId, Kolicina = 1, PriznatiBodovi = bodovi };
+    /// <summary>Puna nagrada po Tbr. 7.1 (100 %).</summary>
+    private static TroskovnikItemRequest Puna(string itemId = "par_rociste_glavno")
+        => new() { ItemId = itemId, Kolicina = 1 };
+
+    /// <summary>Procesno ročište — 50 % Tbr. 7.1 (Tbr. 9.2).</summary>
+    private static TroskovnikItemRequest Pola(string itemId = "par_rociste_procesno")
+        => new() { ItemId = itemId, Kolicina = 1 };
+
+    /// <summary>Ostali podnesak — 25 % Tbr. 7.1, najviše 25 bodova (Tbr. 8.4).</summary>
+    private static TroskovnikItemRequest Cetvrt(string itemId = "par_ostali_podnesci")
+        => new() { ItemId = itemId, Kolicina = 1 };
+
+    /// <summary>Puna stavka sniženja po Tbr. 41. toč. 2 (0–50 %) na tom retku.</summary>
+    private static TroskovnikItemRequest Snizeno(decimal postotak, string itemId = "par_rociste_glavno")
+        => new() { ItemId = itemId, Kolicina = 1, Tbr41SnizenjePostotak = postotak };
 
     private static TroskovnikRequest Zahtjev(
         decimal vps,
@@ -48,14 +58,23 @@ public class PresudeRealneTests
             NaknadaTroskovaStavke = [.. (naknadaTroskova ?? []).Select(iznos => new NaknadaTroskovaStavkaRequest { Vrsta = VrstaTroska.OstaliIzdaci, Iznos = iznos })],
         };
 
-    /// <summary>Priznati zbroj koji svaka presuda mora imati (bar jedan redak s priznatim bodovima).</summary>
-    private static PriznatoZbroj Priznato(TroskovnikResponse r)
-    {
-        Assert.NotNull(r.Priznato);
-        return r.Priznato!;
-    }
-
     private static decimal Round2(decimal x) => Math.Round(x, 2, MidpointRounding.AwayFromZero);
+
+    /// <summary>Aritmetički invarijanti koji moraju vrijediti za SVAKI troškovnik (KORAK 3-A).</summary>
+    private static void ProvjeriInvarijante(TroskovnikResponse r, bool pdv, decimal[]? predujmovi = null, decimal[]? naknada = null)
+    {
+        var naknadaZbroj = Round2((naknada ?? []).Sum());
+        var predujmoviZbroj = (predujmovi ?? []).Sum();
+
+        // nagrada = ukupno bodova × 2 €
+        Assert.Equal(Round2(r.UkupnoBodova * TarifaConstants.BodValue), r.UkupnoEurBezPdv - r.NaknadaTroskovaUkupno);
+        Assert.Equal(naknadaZbroj, r.NaknadaTroskovaUkupno);
+        // PDV samo na nagradu + naknadu troškova, samo kad je odvjetnik u sustavu PDV-a
+        Assert.Equal(pdv ? Round2(r.UkupnoEurBezPdv * TarifaConstants.PdvRate) : 0m, r.Pdv);
+        // predujmovi NISU u PDV osnovici, ali JESU u sveukupnom
+        Assert.Equal(predujmoviZbroj, r.UkupnoPredujmovi);
+        Assert.Equal(r.UkupnoEurSPdv + r.UkupnoPristojbe + r.UkupnoPredujmovi, r.SveukupniTrosak);
+    }
 
     // ═══════════════════════════════════════════════════════════════
     //  A) ARITMETIKA — 10 presuda
@@ -69,51 +88,52 @@ public class PresudeRealneTests
     [Fact]
     public void Presuda01_NaknadaStete_TSZagreb()
     {
-        var bodovi = new[] { 100m, 100m, 25m, 100m, 100m, 100m, 100m };
         var r = Servis.Izracunaj(Zahtjev(
             vps: 13_000m, pdv: true,
-            stavke: bodovi.Select(b => Priznata(b)),
+            stavke:
+            [
+                Puna("par_tuzba"), Puna(), Cetvrt(),
+                Puna(), Puna(), Puna(), Puna(),
+            ],
             predujmovi: [400m]));
 
-        var p = Priznato(r);
-        Assert.Equal(625m, p.OsnovicaBodova);
-        Assert.Equal(1_250.00m, p.Nagrada);          // Σ × 2 €
-        Assert.Equal(312.50m, p.Pdv);                // 25 % × 1.250
-        Assert.Equal(1_250.00m, p.OsnovicaSaNaknadom); // predujam NE ulazi u PDV osnovicu
+        Assert.Equal(625m, r.UkupnoBodova);
+        Assert.Equal(1_250.00m, r.UkupnoEurBezPdv);   // Σ × 2 €
+        Assert.Equal(312.50m, r.Pdv);
         Assert.Equal(400.00m, r.UkupnoPredujmovi);
-        Assert.Equal(p.OsnovicaSaNaknadom + p.Pdv + r.UkupnoPristojbe + r.UkupnoPredujmovi, p.Sveukupno);
+        ProvjeriInvarijante(r, pdv: true, predujmovi: [400m]);
     }
 
     /// <summary>
     /// 2 · Parnica s vještačenjem — Općinski sud u Koprivnici, P-445/2023-24 (30.9.2025.).
-    /// Isti tip radnje s RAZLIČITIM bodovima: 50 / 100 / 25. Σ 775 → nagrada 1.550,00 € +
-    /// PDV 387,50 €. Predujam vještačenja 398,17 €.
+    /// Isti tip radnje s RAZLIČITIM bodovima: 100 ×7, 50 ×1, 25 ×1 → Σ 775 → nagrada
+    /// 1.550,00 € + PDV 387,50 €. Predujam vještačenja 398,17 €.
     /// </summary>
     [Fact]
     public void Presuda02_ParnicaVjestacenje_OSKoprivnica()
     {
-        var bodovi = new[] { 100m, 100m, 100m, 100m, 50m, 100m, 100m, 100m, 25m }; // Σ 775
         var r = Servis.Izracunaj(Zahtjev(
-            vps: 20_000m, pdv: true,
-            stavke: bodovi.Select(b => Priznata(b)),
+            vps: 10_000m, pdv: true, // razred 1.327,01–13.272 € → puna radnja = 100 bod
+            stavke:
+            [
+                Puna("par_tuzba"), Puna(), Puna(), Puna(),
+                Pola(), Puna(), Puna(), Puna(), Cetvrt(),
+            ],
             predujmovi: [398.17m]));
 
-        var p = Priznato(r);
-        Assert.Equal(775m, p.OsnovicaBodova);
-        Assert.Equal(1_550.00m, p.Nagrada);
-        Assert.Equal(387.50m, p.Pdv);
-        Assert.Equal(398.17m, r.UkupnoPredujmovi);
-        Assert.Equal(p.OsnovicaSaNaknadom + p.Pdv + r.UkupnoPristojbe + r.UkupnoPredujmovi, p.Sveukupno);
+        Assert.Equal(775m, r.UkupnoBodova);
+        Assert.Equal(1_550.00m, r.UkupnoEurBezPdv);
+        Assert.Equal(387.50m, r.Pdv);
+        ProvjeriInvarijante(r, pdv: true, predujmovi: [398.17m]);
     }
 
     /// <summary>
     /// 3 · Parnica male vrijednosti — Općinski sud u Splitu, P-4036/2024-12 (15.7.2025.),
-    /// VPS 463,53 €. Razred 332,01–664,00 € → sastav tužbe 50 bod. 3 podneska ×50 +
-    /// 6 ročišta ×50 → Σ 500 bod. Predujam vještačenja 265,45 €.
+    /// VPS 463,53 €. Razred 332,01–664,00 € → svaka „puna" radnja nosi 50 bod.
+    /// 10 radnji → Σ 500 bod. Predujam vještačenja 265,45 €.
     ///
     /// NALAZ: sažetak u izvornom dokumentu („500 bod → nagrada 500 € + PDV 125 €") je
-    /// proturječan — 500 bodova × 2 € = 1.000,00 €. Vjerojatno je u presudi bilo 250
-    /// bodova; provjeriti original. Ovdje se drži aritmetika (1 bod = 2 €).
+    /// proturječan — 500 bodova × 2 € = 1.000,00 €. Ovdje se drži aritmetika.
     /// </summary>
     [Fact]
     public void Presuda03_MalaVrijednost_OSSplit()
@@ -122,64 +142,59 @@ public class PresudeRealneTests
 
         var r = Servis.Izracunaj(Zahtjev(
             vps: 463.53m, pdv: true,
-            stavke: Enumerable.Range(0, 10).Select(_ => Priznata(50m)),
+            stavke: [Puna("par_tuzba"), .. Enumerable.Range(0, 9).Select(_ => Puna())],
             predujmovi: [265.45m]));
 
-        var p = Priznato(r);
-        Assert.Equal(500m, p.OsnovicaBodova);
-        Assert.Equal(1_000.00m, p.Nagrada);
-        Assert.Equal(250.00m, p.Pdv);
+        Assert.Equal(500m, r.UkupnoBodova);
+        Assert.Equal(1_000.00m, r.UkupnoEurBezPdv);
+        Assert.Equal(250.00m, r.Pdv);
+        ProvjeriInvarijante(r, pdv: true, predujmovi: [265.45m]);
     }
 
     /// <summary>
     /// 4 · Ovrha → parnica — Trgovački sud u Zadru, Povrv 80/2023-12 (22.3.2024.).
-    /// Parnični dio: 2 obrazložena podneska ×100, pripremno ročište 25, glavna rasprava 50
-    /// → Σ 275 bod → nagrada 550,00 €. Javnobilježnička naknada 42,05 € ULAZI u PDV
-    /// osnovicu (vlastiti trošak, čl. 33 Zakona o PDV-u).
+    /// Parnični dio: 2 podneska ×100, pripremno ročište 25, glavna rasprava 50 → Σ 275 bod →
+    /// nagrada 550,00 €. Javnobilježnička naknada 42,05 € ULAZI u PDV osnovicu (čl. 33 ZPDV).
     /// </summary>
     [Fact]
     public void Presuda04_OvrhaParnica_TSZadar()
     {
-        var bodovi = new[] { 100m, 100m, 25m, 50m }; // Σ 275
         var r = Servis.Izracunaj(Zahtjev(
             vps: 10_000m, pdv: true,
-            stavke: bodovi.Select(b => Priznata(b)),
+            stavke: [Puna("par_tuzba"), Puna(), Cetvrt(), Pola()],
             naknadaTroskova: [42.05m]));
 
-        var p = Priznato(r);
-        Assert.Equal(275m, p.OsnovicaBodova);
-        Assert.Equal(550.00m, p.Nagrada);
-        Assert.Equal(592.05m, p.OsnovicaSaNaknadom);          // 550 + 42,05
-        Assert.Equal(Round2(592.05m * 0.25m), p.Pdv);          // 148,01
+        Assert.Equal(275m, r.UkupnoBodova);
+        Assert.Equal(592.05m, r.UkupnoEurBezPdv);       // 550 + 42,05 (naknada u osnovici)
+        Assert.Equal(Round2(592.05m * 0.25m), r.Pdv);    // 148,01
+        ProvjeriInvarijante(r, pdv: true, naknada: [42.05m]);
     }
 
     /// <summary>
     /// 5 · Ovršni postupak — Općinski građanski sud u Zagrebu, Povrv-2030/2022-15 (30.9.2025.).
-    /// Prijedlog za ovrhu 100, pripremna radnja 100, podnesak 25, ročište 100 → Σ 325 bod →
-    /// nagrada 650,00 € + PDV 162,50 €. Predujmovi: javnobilježnička naknada 12,44 € +
-    /// vještačenje 200,00 €. Sud je odbio jednu (nedokazanu) stavku dostave — nije unesena.
+    /// Prijedlog 100, pripremna radnja 100, podnesak 25, ročište 100 → Σ 325 bod → nagrada
+    /// 650,00 € + PDV 162,50 €. Predujmovi: javnobilježnička naknada 12,44 € + vještačenje 200,00 €.
     /// </summary>
     [Fact]
     public void Presuda05_OvrsniPostupak_OGSZagreb()
     {
-        var bodovi = new[] { 100m, 100m, 25m, 100m }; // Σ 325
         var r = Servis.Izracunaj(Zahtjev(
             vps: 8_000m, pdv: true,
-            stavke: bodovi.Select(b => Priznata(b)),
+            stavke: [Puna("par_tuzba"), Puna(), Cetvrt(), Puna()],
             predujmovi: [12.44m, 200m]));
 
-        var p = Priznato(r);
-        Assert.Equal(325m, p.OsnovicaBodova);
-        Assert.Equal(650.00m, p.Nagrada);
-        Assert.Equal(162.50m, p.Pdv);
+        Assert.Equal(325m, r.UkupnoBodova);
+        Assert.Equal(650.00m, r.UkupnoEurBezPdv);
+        Assert.Equal(162.50m, r.Pdv);
         Assert.Equal(212.44m, r.UkupnoPredujmovi);
-        Assert.Equal(650.00m, p.OsnovicaSaNaknadom); // predujmovi izvan PDV osnovice
+        Assert.Equal(650.00m + 162.50m + 212.44m, r.SveukupniTrosak - r.UkupnoPristojbe);
+        ProvjeriInvarijante(r, pdv: true, predujmovi: [12.44m, 200m]);
     }
 
     /// <summary>
     /// 6 · Potrošački spor — Općinski sud u Sisku, P-324/2025-20 (23.4.2026.), VPS 1.327,22 €.
-    /// Granica razreda: 1.327,22 € > 1.327,00 € → 100 bodova (ne 75). Puni tarifni izračun
-    /// sastava tužbe: 100 bod = 200,00 € + PDV 50,00 €.
+    /// Granica razreda: 1.327,22 € > 1.327,00 € → 100 bodova (ne 75). Sastav tužbe:
+    /// 100 bod = 200,00 € + PDV 50,00 €.
     /// </summary>
     [Fact]
     public void Presuda06_PotrosackiSpor_OSSisak_GranicaRazreda()
@@ -188,44 +203,45 @@ public class PresudeRealneTests
 
         var r = Servis.Izracunaj(Zahtjev(
             vps: 1_327.22m, pdv: true,
-            stavke: [new TroskovnikItemRequest { ItemId = "par_tuzba", Kolicina = 1 }]));
+            stavke: [Puna("par_tuzba")]));
 
-        Assert.Null(r.Priznato); // bez priznatih bodova — čist tarifni izračun
         Assert.Equal(100m, r.Stavke.Single().UkupnoBodova);
         Assert.Equal(200.00m, r.UkupnoEurBezPdv);
         Assert.Equal(50.00m, r.Pdv);
+        ProvjeriInvarijante(r, pdv: true);
     }
 
     /// <summary>
     /// 7 · STRESS TEST — Trgovački sud u Varaždinu, P 4/2024-18 (27.6.2024.),
-    /// djelomični uspjeh 74,54 % / 25,46 %. Honorari punomoćnika 12.627,10 € + PDV
-    /// 3.156,78 € (točno 25 %). Tri vještačenja: 1.832,64 € + 515,50 € + 250,00 €.
+    /// djelomični uspjeh 74,54 % / 25,46 %. Dugačak troškovnik: tužba + 8 ročišta +
+    /// dva retka sniženih po Tbr. 41, tri vještačenja. Aritmetika mora štimati bez obzira
+    /// na sastav.
     ///
     /// NALAZ: motor NEMA opću „podjelu troška po postotku uspjeha". <c>PostotakUspjeha</c>
-    /// postoji samo uz oslobođenje od pristojbi (čl. 13 Zakona o sudskim pristojbama), ne
-    /// kao opći množitelj odvjetničke nagrade. Podjelu po uspjehu odvjetnik za sada radi
-    /// ručno (ili unosom već podijeljenih priznatih bodova).
+    /// postoji samo uz oslobođenje od pristojbi (čl. 13), ne kao opći množitelj nagrade.
     /// </summary>
     [Fact]
     public void Presuda07_StressTest_TSVarazdin()
     {
+        var stavke = new List<TroskovnikItemRequest> { Puna("par_tuzba") };
+        stavke.AddRange(Enumerable.Range(0, 8).Select(_ => Puna()));
+        stavke.Add(Snizeno(25m));
+        stavke.Add(Snizeno(50m));
+
         var r = Servis.Izracunaj(Zahtjev(
             vps: 60_000m, pdv: true,
-            stavke: [Priznata(6_313.55m)],           // 12.627,10 € / 2 €
+            stavke: stavke,
             predujmovi: [1_832.64m, 515.50m, 250m]));
 
-        var p = Priznato(r);
-        Assert.Equal(12_627.10m, p.Nagrada);
-        Assert.Equal(3_156.78m, p.Pdv);              // točno 25 %
-        Assert.Equal(12_627.10m, p.OsnovicaSaNaknadom); // predujmovi ne diraju PDV osnovicu
+        ProvjeriInvarijante(r, pdv: true, predujmovi: [1_832.64m, 515.50m, 250m]);
         Assert.Equal(2_598.14m, r.UkupnoPredujmovi);
-        Assert.Equal(p.OsnovicaSaNaknadom + p.Pdv + r.UkupnoPristojbe + r.UkupnoPredujmovi, p.Sveukupno);
+        Assert.Equal(0m, r.NaknadaTroskovaUkupno); // predujmovi ne diraju PDV osnovicu
     }
 
     /// <summary>
     /// 8 · Visoka vrijednost (u kunama) — Županijski sud u Slavonskom Brodu, Gž 186/2023-6
     /// (4.9.2023.). Stara Tarifa u kunama — aritmetika se ne uspoređuje 1:1. Provjerava se
-    /// samo LOGIKA rasta bodova u progresivnom razredu i da agregacija ne puca na velikim
+    /// LOGIKA rasta bodova u progresivnom razredu i da agregacija ne puca na velikim
     /// brojevima. 5.991.708 kn ≈ 795.247 € (÷ 7,53450).
     /// </summary>
     [Fact]
@@ -237,38 +253,35 @@ public class PresudeRealneTests
 
         var r = Servis.Izracunaj(Zahtjev(
             vps: 795_247m, pdv: true,
-            stavke: [Priznata(bodoviVeliki)]));
+            stavke: [Puna("par_tuzba")]));
 
-        var p = Priznato(r);
-        Assert.Equal(bodoviVeliki * 2m, p.Nagrada);
-        Assert.Equal(Round2(p.Nagrada * 0.25m), p.Pdv);
+        Assert.Equal(bodoviVeliki, r.UkupnoBodova);
+        Assert.Equal(Round2(bodoviVeliki * 2m), r.UkupnoEurBezPdv);
+        ProvjeriInvarijante(r, pdv: true);
     }
 
     /// <summary>
-    /// 9 · Radni spor, odbijeno ročište (u kunama) — Općinski sud u Osijeku, Pr-1107/2021-20
-    /// (15.2.2023.). Tužba 100, dva podneska 100+100, ročište SNIŽENO na 50 (sud: raspravljalo
-    /// se samo o procesnim pitanjima) → Σ 350 bod → nagrada 700,00 € + PDV 175,00 €.
-    /// Sniženje ročišta nosi priznati unos po retku.
+    /// 9 · Radni spor, sniženo ročište (u kunama) — Općinski sud u Osijeku, Pr-1107/2021-20
+    /// (15.2.2023.). Tužba 100, dva podneska 100+100, ročište SNIŽENO na 50 (procesna pitanja)
+    /// → Σ 350 bod → nagrada 700,00 € + PDV 175,00 €.
     /// </summary>
     [Fact]
     public void Presuda09_RadniSpor_OSOsijek_SnizenoRociste()
     {
-        var bodovi = new[] { 100m, 100m, 100m, 50m }; // Σ 350
         var r = Servis.Izracunaj(Zahtjev(
             vps: 5_000m, pdv: true,
-            stavke: bodovi.Select(b => Priznata(b))));
+            stavke: [Puna("par_tuzba"), Puna(), Puna(), Pola()]));
 
-        var p = Priznato(r);
-        Assert.Equal(350m, p.OsnovicaBodova);
-        Assert.Equal(700.00m, p.Nagrada);
-        Assert.Equal(175.00m, p.Pdv);
+        Assert.Equal(350m, r.UkupnoBodova);
+        Assert.Equal(700.00m, r.UkupnoEurBezPdv);
+        Assert.Equal(175.00m, r.Pdv);
+        ProvjeriInvarijante(r, pdv: true);
     }
 
     /// <summary>
     /// 10 · Baseline — Općinski građanski sud u Zagrebu, P-3260/2025-12 (26.1.2026.),
-    /// VPS 7.500 €. Sastav tužbe (Tbr. 7.1) 100 bod = 200,00 € + PDV 50,00 €. Najjednostavniji
-    /// slučaj, čist tarifni izračun (bez priznatih bodova) — poklapa se s presudom u cijelosti
-    /// osim pristojbi (v. C).
+    /// VPS 7.500 €. Sastav tužbe (Tbr. 7.1) 100 bod = 200,00 € + PDV 50,00 €. Poklapa se s
+    /// presudom u cijelosti osim pristojbi (v. C).
     /// </summary>
     [Fact]
     public void Presuda10_Baseline_OGSZagreb()
@@ -277,9 +290,8 @@ public class PresudeRealneTests
 
         var r = Servis.Izracunaj(Zahtjev(
             vps: 7_500m, pdv: true,
-            stavke: [new TroskovnikItemRequest { ItemId = "par_tuzba", Kolicina = 1 }]));
+            stavke: [Puna("par_tuzba")]));
 
-        Assert.Null(r.Priznato);
         Assert.Equal(100m, r.Stavke.Single().UkupnoBodova);
         Assert.Equal(200.00m, r.UkupnoEurBezPdv);
         Assert.Equal(50.00m, r.Pdv);
@@ -291,18 +303,17 @@ public class PresudeRealneTests
     // ═══════════════════════════════════════════════════════════════
 
     [Fact]
-    public void BezPdva_PriznatiPdvJeNula()
+    public void BezPdva_PdvJeNula()
     {
         var r = Servis.Izracunaj(Zahtjev(
             vps: 7_500m, pdv: false,
-            stavke: [Priznata(300m, "par_tuzba")],
+            stavke: [Puna("par_tuzba"), Pola()],
             predujmovi: [100m]));
 
-        var p = Priznato(r);
-        Assert.Equal(600.00m, p.Nagrada);
-        Assert.Equal(0m, p.Pdv);
+        Assert.Equal(300.00m, r.UkupnoEurBezPdv); // (100 + 50) × 2
         Assert.Equal(0m, r.Pdv);
-        Assert.Equal(p.OsnovicaSaNaknadom + r.UkupnoPristojbe + 100m, p.Sveukupno);
+        Assert.Equal(300.00m + 100m, r.SveukupniTrosak - r.UkupnoPristojbe);
+        ProvjeriInvarijante(r, pdv: false, predujmovi: [100m]);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -327,18 +338,17 @@ public class PresudeRealneTests
     /// <summary>
     /// Presuda 10 (VPS 7.500 €): pristojba na tužbu po Tar. br. 1 st. 1 NN 50/2026 je
     /// 140,00 + 1 % × (7.500 − 2.000) = 195,00 €. Presuda navodi 60,73 € (stara Uredba) —
-    /// to NIJE ono što app daje, i namjerno je tako (čl. 2 NN 50/2026: nova uredba za sve
-    /// osim odgovora na tužbu / upravnog spora pokrenutog prije 1.6.2026.).
+    /// to NIJE ono što app daje, i namjerno je tako (čl. 2 NN 50/2026).
     /// </summary>
     [Fact]
     public void C_Presuda10_PristojbaPoNn50_NePoPresudi()
     {
         var r = Servis.Izracunaj(Zahtjev(
             vps: 7_500m, pdv: true,
-            stavke: [new TroskovnikItemRequest { ItemId = "par_tuzba", Kolicina = 1 }]));
+            stavke: [Puna("par_tuzba")]));
 
         Assert.Equal(195.00m, r.SudskaPristojba);
-        Assert.NotEqual(60.73m, r.SudskaPristojba); // stara uredba iz presude
+        Assert.NotEqual(60.73m, r.SudskaPristojba);
         Assert.Equal("tbr1_st1", Assert.Single(r.PristojbeneStavke).OdredbaId);
     }
 
@@ -349,9 +359,7 @@ public class PresudeRealneTests
     [Fact]
     public void C_ElektronickiPodnesak_PristojbaUpola()
     {
-        var zahtjev = Zahtjev(
-            vps: 7_500m, pdv: true,
-            stavke: [new TroskovnikItemRequest { ItemId = "par_tuzba", Kolicina = 1 }]);
+        var zahtjev = Zahtjev(vps: 7_500m, pdv: true, stavke: [Puna("par_tuzba")]);
         zahtjev.PodnesciElektronicki = ["tbr1_st1"];
 
         var r = Servis.Izracunaj(zahtjev);

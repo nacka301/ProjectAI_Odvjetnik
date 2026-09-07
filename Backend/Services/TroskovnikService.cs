@@ -422,11 +422,6 @@ public sealed class TroskovnikService : ITroskovnikService
                 throw new TroskovnikValidationException(
                     $"Stavka \"{definicija.Opis}\" ima količinu {stavka.Kolicina}. Količina mora biti veća od 0.");
 
-            if (stavka.PriznatiBodovi is { } priznati && (priznati <= 0m || priznati > Tbr71MaxBodovi))
-                throw new TroskovnikValidationException(
-                    $"Stavka \"{definicija.Opis}\" ima priznatih {priznati} bodova. " +
-                    $"Priznati bodovi moraju biti veći od 0 i najviše {Tbr71MaxBodovi}.");
-
             odabraneDefinicije.Add(definicija);
         }
 
@@ -540,11 +535,6 @@ public sealed class TroskovnikService : ITroskovnikService
             var (tbr41Povisenje, tbr41Snizenje) = RazrijesiTbr41(stavka, request, definicija);
             var tbr41BodoviStavke = ukupnoStavke * Tbr41Udio(tbr41Povisenje, tbr41Snizenje);
 
-            // Priznato po rješenju suda: uneseni broj je konačan doprinos ovog retka
-            // (Tbr. 41 tog retka se za priznato zanemaruje); bez unosa vrijedi puni
-            // tarifni doprinos, uključujući Tbr. 41.
-            var priznatoUkupnoStavke = stavka.PriznatiBodovi ?? (ukupnoStavke + tbr41BodoviStavke);
-
             stavkeRetci.Add(new TroskovnikLineItem
             {
                 Rbr = redniBroj,
@@ -564,9 +554,7 @@ public sealed class TroskovnikService : ITroskovnikService
                 Tbr41PovisenjePostotak = tbr41Povisenje,
                 Tbr41SnizenjePostotak = tbr41Snizenje,
                 Tbr41Bodovi = tbr41BodoviStavke,
-                Tbr41PravniIzvor = Tbr41Izvor(tbr41Povisenje, tbr41Snizenje),
-                PriznatiBodovi = stavka.PriznatiBodovi,
-                PriznatoUkupnoBodova = priznatoUkupnoStavke
+                Tbr41PravniIzvor = Tbr41Izvor(tbr41Povisenje, tbr41Snizenje)
             });
         }
 
@@ -691,54 +679,6 @@ public sealed class TroskovnikService : ITroskovnikService
             bodoviPoOsobi, nagradaPoOsobi, naknadaTroskovaUkupno, osnovicaSaNaknadom, pdv,
             pristojbe, ukupnoPristojbe,
             ukupnoPredujmovi, sveukupniTrosak, brojOsoba, obracunajPdv);
-    }
-
-    /// <summary>
-    /// Paralelni „priznato po rješenju suda o troškovima" zbroj — čista agregacija povrh
-    /// gotovih redaka i <see cref="Zbrojevi"/>. Ne dira nijednu tarifnu brojku.
-    ///
-    /// Null kad nijedna radnja nema unesene priznate bodove. Inače: svaki redak ulazi s
-    /// <see cref="TroskovnikLineItem.PriznatoUkupnoBodova"/> (uneseni broj, ili puni
-    /// tarifni doprinos ako nije unesen), pa se primijeni isti postotak povišenja po
-    /// Tbr. 40 i isti PDV režim. Naknada troškova, pristojbe i predujmovi su nepromijenjeni
-    /// (drugi propis / stvarni izdatak).
-    /// </summary>
-    private static PriznatoZbroj? IzracunajPriznato(
-        TroskovnikRequest request,
-        List<TroskovnikLineItem> stavkeRetci,
-        Zbrojevi zbrojevi,
-        KontekstIzracuna kontekst)
-    {
-        if (!request.Stavke.Any(s => s.PriznatiBodovi.HasValue))
-            return null;
-
-        var osnovicaBodova = stavkeRetci.Sum(redak => redak.PriznatoUkupnoBodova);
-        var povisenjeBodovi = osnovicaBodova * zbrojevi.PovisenjePostotak;
-        var ukupnoBodova = osnovicaBodova + povisenjeBodovi;
-
-        var nagrada = ZaokruziNovac(ukupnoBodova * kontekst.Tarifa.BodValue);
-        var osnovicaSaNaknadom = nagrada + zbrojevi.NaknadaTroskovaUkupno;
-
-        var pdv = zbrojevi.ObracunajPdv
-            ? ZaokruziNovac(osnovicaSaNaknadom * TarifaConstants.PdvRate)
-            : 0m;
-
-        var brojOsoba = Math.Max(1, zbrojevi.BrojZastupanihOsoba);
-
-        return new PriznatoZbroj
-        {
-            OsnovicaBodova = osnovicaBodova,
-            PovisenjeBodovi = povisenjeBodovi,
-            UkupnoBodova = ukupnoBodova,
-            Nagrada = nagrada,
-            OsnovicaSaNaknadom = osnovicaSaNaknadom,
-            Pdv = pdv,
-            UkupnoSPdv = osnovicaSaNaknadom + pdv,
-            // Pristojbe i predujmovi identični tarifnoj strani — čl. 13 (na teret
-            // protustranke) i dalje ne ulazi, isto kao u SveukupniTrosak.
-            Sveukupno = osnovicaSaNaknadom + pdv + zbrojevi.UkupnoPristojbe + zbrojevi.UkupnoPredujmovi,
-            NagradaPoOsobi = ZaokruziNovac(nagrada / brojOsoba)
-        };
     }
 
     /// <summary>
@@ -926,8 +866,7 @@ public sealed class TroskovnikService : ITroskovnikService
             UkupnoPristojbe = zbrojevi.UkupnoPristojbe,
             Predujmovi = predujmovi,
             UkupnoPredujmovi = zbrojevi.UkupnoPredujmovi,
-            Napomena = string.IsNullOrWhiteSpace(request.Napomena) ? null : request.Napomena,
-            Priznato = IzracunajPriznato(request, stavkeRetci, zbrojevi, kontekst)
+            Napomena = string.IsNullOrWhiteSpace(request.Napomena) ? null : request.Napomena
         };
     }
 

@@ -22,24 +22,6 @@ export interface IzvozRadnja {
   bodovaPoJedinici: number;
   ukupnoBodova: number;
   iznos: number;
-  /** Bodovi koje je sud priznao za ovu radnju; `null`/izostaje kad nije uneseno. */
-  priznatiBodovi?: number | null;
-}
-
-/**
- * Paralelni „priznato po rješenju suda o troškovima" zbroj — `null`/izostaje kad
- * nijedna radnja nema unesene priznate bodove. Sudske pristojbe i predujmovi su
- * isti kao na tarifnoj strani, pa se ovdje ne ponavljaju.
- */
-export interface IzvozPriznato {
-  osnovicaBodova: number;
-  ukupnoBodova: number;
-  nagrada: number;
-  /** Nagrada + naknada troškova (osnovica za PDV). */
-  osnovicaSaNaknadom: number;
-  pdv: number;
-  ukupnoSPdv: number;
-  sveukupno: number;
 }
 
 /** Prolazna stavka — sudska pristojba ili predujam. Ne ulazi u osnovicu za PDV. */
@@ -87,8 +69,6 @@ export interface TroskovnikIzvozModel {
   sveukupno: number;
   /** Prazno kad odvjetnik nije ništa upisao — tada se odjeljak ne ispisuje. */
   napomena?: string;
-  /** Paralelni „priznato po rješenju suda" zbroj; izostaje kad nijedna radnja nema unos. */
-  priznato?: IzvozPriznato | null;
 }
 
 interface LinijaLike {
@@ -100,7 +80,6 @@ interface LinijaLike {
   ukupno_bodova: number;
   iznos_eur: number;
   tbr41_bodovi?: number;
-  priznati_bodovi?: number | null;
 }
 
 interface TrosakLike {
@@ -126,15 +105,6 @@ interface LiveCalcLike {
   ukupnoPristojbe: number;
   ukupnoPredujmovi: number;
   sveukupniTrosak: number;
-  priznato?: {
-    osnovicaBodova: number;
-    ukupnoBodova: number;
-    nagrada: number;
-    osnovicaSaNaknadom: number;
-    pdv: number;
-    ukupnoSPdv: number;
-    sveukupno: number;
-  } | null;
 }
 
 interface ResultLike {
@@ -160,15 +130,6 @@ interface ResultLike {
   ukupno_predujmovi?: number;
   sveukupni_trosak?: number;
   napomena?: string | null;
-  priznato?: {
-    osnovica_bodova: number;
-    ukupno_bodova: number;
-    nagrada: number;
-    osnovica_sa_naknadom: number;
-    pdv: number;
-    ukupno_s_pdv: number;
-    sveukupno: number;
-  } | null;
 }
 
 /** Ulaz iz `page.tsx`. Namjerno labav: opisuje samo ono što se ovdje čita. */
@@ -258,7 +219,6 @@ export function buildIzvozModel(ulaz: IzvozUlaz): TroskovnikIzvozModel {
       // pojedinačnih bodova ne bi odgovarao ukupnom.
       ukupnoBodova: l.ukupno_bodova + (l.tbr41_bodovi ?? 0),
       iznos: l.iznos_eur,
-      priznatiBodovi: l.priznati_bodovi ?? null,
     }))
     // Kronološki — troškovnik ide sudu i predložak niže radnje po datumu, ne po
     // redoslijedu unosa. Spremljeni stariji zapisi mogu doći nesortirani, pa se
@@ -272,21 +232,6 @@ export function buildIzvozModel(ulaz: IzvozUlaz): TroskovnikIzvozModel {
   const osnovica = result ? result.ukupno_eur_bez_pdv : liveCalc.osnovicaSaNaknadom;
   const iznosPdv = result ? result.pdv : liveCalc.pdv;
   const sPdv = result ? result.ukupno_eur_s_pdv : liveCalc.ukupnoSPdv;
-
-  // Priznato po rješenju suda — spremljeni rezultat je izvor istine kad postoji.
-  const priznato: IzvozPriznato | null = result
-    ? result.priznato
-      ? {
-          osnovicaBodova: result.priznato.osnovica_bodova,
-          ukupnoBodova: result.priznato.ukupno_bodova,
-          nagrada: result.priznato.nagrada,
-          osnovicaSaNaknadom: result.priznato.osnovica_sa_naknadom,
-          pdv: result.priznato.pdv,
-          ukupnoSPdv: result.priznato.ukupno_s_pdv,
-          sveukupno: result.priznato.sveukupno,
-        }
-      : null
-    : liveCalc.priznato ?? null;
 
   const pristojbeneStavke = result?.pristojbene_stavke ?? ulaz.pristojbeneStavke;
   const dodatnePristojbe = result?.dodatne_pristojbe ?? ulaz.dodatnePristojbe;
@@ -352,6 +297,5 @@ export function buildIzvozModel(ulaz: IzvozUlaz): TroskovnikIzvozModel {
 
     sveukupno: result?.sveukupni_trosak ?? liveCalc.sveukupniTrosak,
     napomena: neprazno(result?.napomena ?? ulaz.napomena),
-    priznato,
   };
 }

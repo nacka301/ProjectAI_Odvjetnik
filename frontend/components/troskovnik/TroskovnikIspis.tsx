@@ -205,43 +205,6 @@ export default function TroskovnikIspis({ model }: { model: TroskovnikIzvozModel
         </tbody>
       </table>
 
-      {/* ── Priznato po rješenju suda o troškovima — uz puni tarifni izračun ── */}
-      {model.priznato && (
-        <table className="priznato">
-          <thead>
-            <tr>
-              <th className="st-radnja">Priznato po rješenju suda o troškovima</th>
-              <th className="st-iznos">Po Tarifi</th>
-              <th className="st-iznos">Priznato</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Ukupno bodova</td>
-              <td className="iznos">{model.zbrojNagrade.bodovi.toLocaleString("hr-HR", { maximumFractionDigits: 3 })}</td>
-              <td className="iznos">{model.priznato.ukupnoBodova.toLocaleString("hr-HR", { maximumFractionDigits: 3 })}</td>
-            </tr>
-            <tr>
-              <td>Nagrada{model.naknadaTroskova > 0 ? " + naknada troškova" : ""} (bez PDV)</td>
-              <Iznos value={model.pdv ? model.pdv.osnovica : model.zbrojNagrade.iznos} />
-              <Iznos value={model.priznato.osnovicaSaNaknadom} />
-            </tr>
-            {model.pdv && (
-              <tr>
-                <td>PDV (25%)</td>
-                <Iznos value={model.pdv.iznos} />
-                <Iznos value={model.priznato.pdv} />
-              </tr>
-            )}
-            <tr>
-              <td className="bold">SVEUKUPNO</td>
-              <Iznos value={model.sveukupno} bold />
-              <Iznos value={model.priznato.sveukupno} bold />
-            </tr>
-          </tbody>
-        </table>
-      )}
-
       {/* ── Potpis ──
           Bez „Odvjetnik"/„Odvjetnica": aplikacija nema podatak o rodu, pa bi
           predložak nametnuo krivi oblik dijelu korisnika. */}
@@ -325,10 +288,6 @@ export default function TroskovnikIspis({ model }: { model: TroskovnikIzvozModel
           #troskovnik-ispis .st-datum { width: 14%; }
           #troskovnik-ispis .st-iznos { width: 15%; }
           #troskovnik-ispis .st-napomena { width: 16%; }
-
-          /* Priznato po rješenju suda — druga tablica, odvojena razmakom. */
-          #troskovnik-ispis table.priznato { margin-top: 8mm; break-inside: avoid; page-break-inside: avoid; }
-          #troskovnik-ispis table.priznato .st-iznos { width: 22%; }
 
           #troskovnik-ispis .datum { text-align: center; }
           #troskovnik-ispis .oznaka { text-align: right; }

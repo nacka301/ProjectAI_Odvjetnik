@@ -46,14 +46,6 @@ public sealed class TroskovnikRequestValidator : AbstractValidator<TroskovnikReq
         {
             stavka.RuleFor(s => s.ItemId).NotEmpty().WithMessage("stavke[].item_id je obavezan.");
             stavka.RuleFor(s => s.Kolicina).GreaterThan(0).WithMessage("stavke[].kolicina mora biti veća od 0.");
-            // Priznati bodovi (rješenje suda o troškovima) — isti raspon stvarno
-            // provjerava TroskovnikService.ProvjeriIRazrijesiDefinicije.
-            stavka.When(s => s.PriznatiBodovi.HasValue, () =>
-            {
-                stavka.RuleFor(s => s.PriznatiBodovi!.Value)
-                    .GreaterThan(0m).WithMessage("stavke[].priznati_bodovi moraju biti veći od 0.")
-                    .LessThanOrEqualTo(10_000m).WithMessage("stavke[].priznati_bodovi mogu biti najviše 10.000.");
-            });
         });
 
         // Odvjetnik: if present, require at least naziv
