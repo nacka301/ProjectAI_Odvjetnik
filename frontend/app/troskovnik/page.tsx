@@ -44,10 +44,8 @@ import { STUPCI, buildTroskovnikSheet, nazivDatoteke } from "@/lib/troskovnik-xl
 import {
   BOD_VALUE,
   KATEGORIJA_KAZNENI,
-  PDV_RATE,
   TBR_7_1_RAZREDI,
   ZAPRIJECENA_KAZNA_TIERS,
-  razrijesiTarifu,
   formatirajBodove,
   izracunajBodove,
   jeSamoKazneni,
@@ -78,19 +76,11 @@ import {
   VRSTA_TROSKA_LABELE,
   efektivniVps,
   izracunajOsnovicu,
-  obracunajPriznato,
-  podijeliPoOsobama,
-  povisenjeViseOsobaPostotak,
   provjeriZahtjev,
   provjeriTbr41Stavku,
   razrijesiTbr41,
-  tbr41Izvor,
-  tbr41Udio,
   tbr71Bodovi,
   upozorenjeMaliSpor,
-  ukupnoBodovaZaStavku,
-  zaokruziNovac,
-  zbrojiRucneTroskove,
   ZADANA_NAPOMENA,
   type OsnovicaTbr7,
   type PristojbenaStavka,
@@ -106,6 +96,7 @@ import {
   type VrstaTroska,
   type ZahtjeviNacin,
 } from "@/lib/tarifa";
+import { izracunajTroskovnik } from "@/lib/troskovnik-izracun";
 
 // ── Types (mirror backend models) ──
 
@@ -1257,169 +1248,38 @@ function TroskovnikContent() {
       .filter(([, items]) => items.length > 0);
   }, [categories, searchTerm]);
 
-  // Client-side live calculation
-  const liveCalc = useMemo(() => {
-    const lines: {
-      uid: string;
-      opis: string;
-      tarifni_broj: string;
-      kolicina: number;
-      datum: string | null;
-      bodova_po_jedinici: number;
-      ukupno_bodova: number;
-      iznos_eur: number;
-      jedinica: string;
-      is_jednokratna: boolean;
-      pravni_izvor: string;
-      item_id: string;
-      tbr41_povisenje: number;
-      tbr41_snizenje: number;
-      tbr41_bodovi: number;
-      tbr41_pravni_izvor: string;
-      priznati_bodovi: number | null;
-      priznato_ukupno_bodova: number;
-    }[] = [];
-    const catalogMap = new Map(katalog.map((s) => [s.id, s]));
-
-    // Tbr. 52 — vrijednost boda mjerodavne verzije Tarife (po dospijeću). Danas postoji
-    // jedna verzija, pa je jednaka BOD_VALUE; backend (mjerodavan) razrješava istu logiku.
-    const bodValue = razrijesiTarifu(datumDospijeca || null).bodValue;
-
-    for (const redak of redciPoredani) {
-      const def = catalogMap.get(redak.itemId);
-      if (!def || redak.kolicina <= 0) continue;
-
-      let bodovi: number;
-      if (def.prekrsaj_oduzimanje) {
-        // Prekršaj s oduzimanjem — Tbr. 7.1 po vrijednosti oduzetog predmeta
-        if (isOduzimanjePrekrsaj && parsedVrijednostOduzimanja > 0) {
-          bodovi = tbr71Bodovi(parsedVrijednostOduzimanja);
-        } else {
-          bodovi = 100; // fallback: standard prekršaj 100 bodova
-        }
-      } else if (def.kazneni_base) {
-        bodovi = izracunajKazneneBodove(def, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, zaprijecenaKazna);
-      } else if (osnovica) {
-        bodovi = izracunajBodove(def, osnovica);
-      } else {
-        // Osnovica nije razriješena (Tbr. 45 bez razine suda ili načina) —
-        // razlog stoji u `nedostaci`, iznad gumba za izračun.
-        continue;
-      }
-
-      // Redak s 0 bodova izgleda kao valjan iznos, a nije — ne prikazuje se.
-      // Razlog stoji u `nedostaci`, iznad gumba za izračun.
-      if (bodovi <= 0) continue;
-
-      const ukupnoStavke = ukupnoBodovaZaStavku(def, bodovi, redak.kolicina);
-
-      // Tbr. 41 po pojedinom retku; bez vlastitog postotka vrijedi prečac.
-      const { povisenje, snizenje } = razrijesiTbr41(
-        redak.tbr41 ?? {},
+  // Client-side live calculation. Sama agregacija (petlja po recima → Tbr. 40/41 →
+  // PDV → pristojbe → sveukupno) živi u čistoj funkciji `izracunajTroskovnik`, da
+  // se može testirati bez Reacta; ovdje se samo skupe ulazi iz stanja komponente.
+  const liveCalc = useMemo(
+    () =>
+      izracunajTroskovnik({
+        redciPoredani,
+        katalog,
+        osnovica,
+        isPdvUkljucen,
+        kazneniTierBodovi,
+        isZastupnikDjeteta,
+        isPoSluzbenojDuznosti,
+        isNaTeretProracuna,
+        zaprijecenaKazna: zaprijecenaKazna || null,
+        isOduzimanjePrekrsaj,
+        parsedVrijednostOduzimanja,
+        brojZastupanihOsoba,
         tbr41Povisenje,
         tbr41Snizenje,
-      );
-      const tbr41BodoviStavke = ukupnoStavke * tbr41Udio(povisenje, snizenje);
-
-      lines.push({
-        uid: redak.uid,
-        opis: def.opis,
-        tarifni_broj: def.tarifni_broj,
-        kolicina: redak.kolicina,
-        datum: redak.datum,
-        bodova_po_jedinici: bodovi,
-        ukupno_bodova: ukupnoStavke,
-        iznos_eur: zaokruziNovac((ukupnoStavke + tbr41BodoviStavke) * bodValue),
-        jedinica: def.jedinica,
-        is_jednokratna: def.jednokratna_nagrada === true,
-        pravni_izvor: def.pravni_izvor ?? def.tarifni_broj,
-        item_id: redak.itemId,
-        tbr41_povisenje: povisenje,
-        tbr41_snizenje: snizenje,
-        tbr41_bodovi: tbr41BodoviStavke,
-        tbr41_pravni_izvor: tbr41Izvor(povisenje, snizenje),
-        priznati_bodovi: redak.priznatiBodovi,
-        // Uneseni broj je konačan doprinos retka; bez unosa puni tarifni (uklj. Tbr. 41).
-        priznato_ukupno_bodova: redak.priznatiBodovi ?? (ukupnoStavke + tbr41BodoviStavke),
-      });
-    }
-
-    const osnovicaBodova = lines.reduce((s, l) => s + l.ukupno_bodova, 0);
-
-    // Tbr. 40. toč. 1 — povišenje za drugu i svaku sljedeću zastupanu osobu.
-    const povisenjePostotak = povisenjeViseOsobaPostotak(brojZastupanihOsoba);
-    const povisenjeBodovi = osnovicaBodova * povisenjePostotak;
-
-    // Tbr. 41 — zbroj prilagodbi po stavkama. Doprinos je aditivan na ukupan iznos,
-    // kao i Tbr. 40, iako se računa po stavci; sudska pristojba se ne dira.
-    const tbr41Bodovi = lines.reduce((sum, l) => sum + l.tbr41_bodovi, 0);
-    const tbr41Postotak = osnovicaBodova === 0 ? 0 : tbr41Bodovi / osnovicaBodova;
-
-    const ukupnoBodova = osnovicaBodova + povisenjeBodovi + tbr41Bodovi;
-
-    // Bodovi su do ovdje ostali decimalni; tek se gotov iznos zaokružuje, jednom.
-    const ukupnoEur = zaokruziNovac(ukupnoBodova * bodValue);
-
-    // Naknada troškova (Tbr. 48.-51.) — vlastiti trošak odvjetnika, ULAZI u osnovicu.
-    const naknadaTroskovaUkupno = zaokruziNovac(
-      naknadaTroskovaStavke.reduce((s, r) => s + parseHrNumber(r.iznos), 0)
-    );
-    const osnovicaSaNaknadom = ukupnoEur + naknadaTroskovaUkupno;
-
-    const pdv = isPdvUkljucen ? zaokruziNovac(osnovicaSaNaknadom * PDV_RATE) : 0;
-    const odvjetnickiTrosak = osnovicaSaNaknadom + pdv;
-
-    // Sudske pristojbe se računaju izvan ovog memoa (vidi `pristojbe`) jer ovise o
-    // drugom propisu i ne ulaze u osnovicu za PDV — pribrajaju se tek na kraju.
-    // Odjeljak "Sudske pristojbe" = automatski izvedena lista + ručno dodane.
-    const sudskaPristojba = pristojbe.ukupno;
-    const ukupnoPristojbe =
-      sudskaPristojba +
-      zbrojiRucneTroskove(dodatnePristojbe.map((t) => ({ opis: t.opis, iznos: parseEurInput(t.iznos) })));
-
-    // Predujmovi — vlastiti odjeljak, bez PDV-a, kao i pristojbe.
-    const ukupnoPredujmovi = zbrojiRucneTroskove(
-      predujmovi.map((t) => ({ opis: t.opis, iznos: parseEurInput(t.iznos) })),
-    );
-
-    // Čl. 13 ne ulazi u zbroj: tereti protivnu stranku, i to po pravomoćnosti.
-    const sveukupniTrosak = odvjetnickiTrosak + ukupnoPristojbe + ukupnoPredujmovi;
-
-    // Tbr. 40. toč. 1, drugi odlomak — dioba na jednake dijelove po zastupanoj osobi.
-    // Dijeli se NAGRADA (ukupnoEur) — naknada troškova nije odvjetnička nagrada.
-    const bodoviPoOsobi = podijeliPoOsobama(ukupnoBodova, brojZastupanihOsoba);
-    const nagradaPoOsobi = zaokruziNovac(podijeliPoOsobama(ukupnoEur, brojZastupanihOsoba));
-
-    // Paralelni „priznato po rješenju suda" izračun — null kad nijedan redak nema unos.
-    const priznato = obracunajPriznato(
-      lines.map((l) => ({
-        ukupnoBodova: l.ukupno_bodova,
-        tbr41Bodovi: l.tbr41_bodovi,
-        priznatiBodovi: l.priznati_bodovi,
-      })),
-      {
-        povisenjePostotak,
-        bodValue,
-        naknadaTroskovaUkupno,
-        isPdvUkljucen,
-        ukupnoPristojbe,
-        ukupnoPredujmovi,
-        brojZastupanihOsoba,
-      },
-    );
-
-    return {
-      lines, osnovicaBodova, povisenjePostotak, povisenjeBodovi, tbr41Postotak, tbr41Bodovi,
-      ukupnoBodova, bodoviPoOsobi, nagradaPoOsobi, ukupnoEur,
-      // Osnovica za PDV = nagrada + naknada troškova (čl. 33. Zakona o PDV-u).
-      naknadaTroskovaUkupno, osnovicaSaNaknadom,
-      pdv, ukupnoSPdv: osnovicaSaNaknadom + pdv,
-      sudskaPristojba, ukupnoPristojbe, ukupnoPredujmovi, sveukupniTrosak,
-      pristojbaVpsUdio: pristojbe.vpsUdio,
-      pristojbaNaTeretProtustranke: pristojbe.naTeretProtustranke,
-      priznato,
-    };
-  }, [redciPoredani, katalog, osnovica, isPdvUkljucen, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, isOduzimanjePrekrsaj, parsedVrijednostOduzimanja, pristojbe, brojZastupanihOsoba, zaprijecenaKazna, tbr41Povisenje, tbr41Snizenje, dodatnePristojbe, predujmovi, naknadaTroskovaStavke, datumDospijeca]);
+        pristojbe: {
+          ukupno: pristojbe.ukupno,
+          vpsUdio: pristojbe.vpsUdio,
+          naTeretProtustranke: pristojbe.naTeretProtustranke,
+        },
+        dodatnePristojbe: dodatnePristojbe.map((t) => ({ opis: t.opis, iznos: parseEurInput(t.iznos) })),
+        predujmovi: predujmovi.map((t) => ({ opis: t.opis, iznos: parseEurInput(t.iznos) })),
+        naknadaTroskovaStavke: naknadaTroskovaStavke.map((r) => ({ iznos: parseHrNumber(r.iznos) })),
+        datumDospijeca: datumDospijeca || null,
+      }),
+    [redciPoredani, katalog, osnovica, isPdvUkljucen, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, isOduzimanjePrekrsaj, parsedVrijednostOduzimanja, pristojbe, brojZastupanihOsoba, zaprijecenaKazna, tbr41Povisenje, tbr41Snizenje, dodatnePristojbe, predujmovi, naknadaTroskovaStavke, datumDospijeca],
+  );
 
   // Katalog po id, i izračunati redak po uid — za uređivanje u desnom stupcu, koje
   // iterira `redci` (izvor istine, uključuje i retke koji još ne daju iznos), a
