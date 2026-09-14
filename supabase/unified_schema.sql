@@ -198,7 +198,8 @@ CREATE TABLE IF NOT EXISTS clients (
     email           TEXT,
     telefon         TEXT,
     tip             TEXT            NOT NULL DEFAULT 'fizicka',
-    napomena        TEXT
+    napomena        TEXT,
+    is_archived     BOOLEAN         NOT NULL DEFAULT FALSE
 );
 
 DO $$ BEGIN
