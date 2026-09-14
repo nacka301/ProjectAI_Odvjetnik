@@ -1,8 +1,9 @@
 import { createBrowserClient } from "@supabase/ssr";
 import { isModuleLocked } from "@/lib/modules";
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/supabase-env";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseUrl = SUPABASE_URL;
+const supabaseAnonKey = SUPABASE_ANON_KEY;
 
 /**
  * Auth-aware Supabase browser client.
