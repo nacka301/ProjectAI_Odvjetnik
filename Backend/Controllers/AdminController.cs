@@ -74,6 +74,7 @@ public class AdminController : ControllerBase
 {
     private readonly DataSeederService _seeder;
     private readonly ISubscriptionGate _gate;
+    private readonly IAccountService _account;
     private readonly HttpClient _httpClient;
     private readonly string? _supabaseUrl;
     private readonly string? _serviceKey;
@@ -89,12 +90,14 @@ public class AdminController : ControllerBase
     public AdminController(
         DataSeederService seeder,
         ISubscriptionGate gate,
+        IAccountService account,
         IHttpClientFactory httpClientFactory,
         IConfiguration config,
         ILogger<AdminController> logger)
     {
         _seeder = seeder;
         _gate = gate;
+        _account = account;
         _httpClient = httpClientFactory.CreateClient("AdminPostgREST");
         _logger = logger;
 
@@ -322,6 +325,92 @@ public class AdminController : ControllerBase
         {
             _logger.LogError(ex, "Error fetching admin users");
             return StatusCode(500, new { error = "Interna greška." });
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  GET /api/admin/users/{userId}/deletion-preview
+    //
+    //  Što bi brisanje uklonilo — brojke i članovi ureda — da admin
+    //  potvrdu daje nad stvarnim opsegom, a ne naslijepo.
+    // ═══════════════════════════════════════════════════════════
+
+    [HttpGet("users/{userId}/deletion-preview")]
+    public async Task<IActionResult> GetDeletionPreview(string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+            return BadRequest(new { error = "Nedostaje identifikator korisnika." });
+
+        try
+        {
+            var preview = await _account.GetDeletionPreviewAsync(userId);
+            if (preview is null)
+                return NotFound(new { error = "Korisnik ili njegov profil nije pronađen." });
+
+            return Ok(preview);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error building deletion preview for {UserId}", userId);
+            return StatusCode(500, new { error = "Greška pri dohvaćanju pretpregleda." });
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  DELETE /api/admin/users/{userId}
+    //
+    //  Potpuno brisanje: član ili cijeli ured. Ruta je pod AdminGuardom
+    //  (/api/admin/* → ADMIN_EMAIL), pa je pozivatelj uvijek provjereni admin;
+    //  userId iz rute je samo META radnje, nikad izvor ovlasti.
+    // ═══════════════════════════════════════════════════════════
+
+    [HttpDelete("users/{userId}")]
+    public async Task<IActionResult> DeleteUser(string userId, [FromBody] AdminDeleteRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+            return BadRequest(new { error = "Nedostaje identifikator korisnika." });
+
+        // Admin ne smije ovim putem obrisati vlastiti račun — to bi ga izbacilo
+        // usred radnje i ostavilo sustav bez admina ako je jedini.
+        var callerId = HttpContext.Items["AuthUserId"] as string;
+        if (string.Equals(callerId, userId, StringComparison.Ordinal))
+            return BadRequest(new { error = "Ne možete ovim putem obrisati vlastiti administratorski račun." });
+
+        if (!TryParseMode(request?.Mode, out var mode))
+            return BadRequest(new { error = "Nepoznat način brisanja. Dopušteno: 'member' ili 'firm'." });
+
+        if (string.IsNullOrWhiteSpace(request?.Confirmation))
+            return BadRequest(new DeleteBlockedResponse
+            {
+                Error = "Potvrda je obavezna.",
+                Code = "CONFIRMATION_MISMATCH"
+            });
+
+        try
+        {
+            var (result, blocked) = await _account.AdminDeleteUserAsync(userId, mode, request!.Confirmation);
+
+            // 409, ne 400: zahtjev je ispravan, ali stanje ga ne dopušta (potvrda,
+            // nedostajući profil…). Sučelje po `code` bira sljedeći korak.
+            if (blocked is not null) return Conflict(blocked);
+
+            _logger.LogWarning("Admin je obrisao korisnika {UserId} (nacin: {Mode}).", userId, mode);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting user {UserId} as admin", userId);
+            return StatusCode(500, new { error = "Greška pri brisanju korisnika." });
+        }
+    }
+
+    private static bool TryParseMode(string? raw, out AdminDeleteMode mode)
+    {
+        switch (raw?.Trim().ToLowerInvariant())
+        {
+            case "member": mode = AdminDeleteMode.Member; return true;
+            case "firm":   mode = AdminDeleteMode.Firm;   return true;
+            default:       mode = AdminDeleteMode.Member; return false;
         }
     }
 

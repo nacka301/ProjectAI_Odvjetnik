@@ -38,4 +38,26 @@ public interface IAccountService
     /// </summary>
     Task<(DeleteAccountResult? Result, DeleteBlockedResponse? Blocked)>
         DeleteFirmAsync(string userId, string firmNameConfirmation);
+
+    // ── Admin-ciljano brisanje (gumb na admin dashboardu) ──
+
+    /// <summary>
+    /// Pretpregled za admin-brisanje: naziv ureda, članovi (s e-mailovima) te
+    /// broj stranaka/predmeta/računa koji bi nestali. Ne mijenja ništa.
+    /// Vraća <c>null</c> ako korisnik/profil ne postoji.
+    /// </summary>
+    Task<AdminDeletionPreview?> GetDeletionPreviewAsync(string targetUserId);
+
+    /// <summary>
+    /// Admin briše ciljanog korisnika. Za razliku od samouslužnih metoda, cilj
+    /// dolazi kao <paramref name="targetUserId"/> (identitet pozivatelja i dalje
+    /// iz provjerenog admin tokena, izvan ove metode). Uz brisanje čisti i
+    /// <c>firm_invites</c>/<c>waitlist</c> za oslobođene e-mailove te invalidira
+    /// cacheve, da se isti mail može registrirati kao potpuno nov korisnik.
+    ///
+    ///   <see cref="AdminDeleteMode.Firm"/>   → potvrda je naziv ureda
+    ///   <see cref="AdminDeleteMode.Member"/> → potvrda je e-mail korisnika
+    /// </summary>
+    Task<(DeleteAccountResult? Result, DeleteBlockedResponse? Blocked)>
+        AdminDeleteUserAsync(string targetUserId, AdminDeleteMode mode, string confirmation);
 }

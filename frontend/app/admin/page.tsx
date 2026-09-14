@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/useAuth";
 import { API_BASE } from "@/lib/api";
 import SubscriptionEditor from "@/components/admin/SubscriptionEditor";
+import DeleteUserDialog from "@/components/admin/DeleteUserDialog";
 import {
   ShieldCheck,
   Users,
@@ -23,6 +24,7 @@ import {
   Activity,
   ChevronDown,
   ChevronUp,
+  Trash2,
 } from "lucide-react";
 
 // ═══════════════════════════════════════════════════════════
@@ -237,6 +239,7 @@ export default function AdminDashboard() {
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
+  const [deletingUser, setDeletingUser] = useState<AdminUser | null>(null);
 
   // Developer tools state
   const [seeding, setSeeding] = useState(false);
@@ -644,6 +647,18 @@ export default function AdminDashboard() {
                             onSaved={loadUsers}
                           />
                         </div>
+
+                        <div className="pt-3 mt-2 border-t border-slate-200">
+                          <p className="font-semibold text-red-500 uppercase tracking-wider mb-2 text-[10px]">
+                            Opasna zona
+                          </p>
+                          <button
+                            onClick={() => setDeletingUser(user)}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" /> Obriši korisnika…
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -713,6 +728,22 @@ export default function AdminDashboard() {
                         authHeaders={authHeaders}
                         onSaved={loadUsers}
                       />
+                    </div>
+
+                    {/* Opasna zona — potpuno brisanje korisnika/ureda */}
+                    <div className="col-span-2 md:col-span-4 pt-3 border-t border-slate-200">
+                      <p className="font-semibold text-red-500 uppercase tracking-wider mb-2">
+                        Opasna zona
+                      </p>
+                      <button
+                        onClick={() => setDeletingUser(user)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" /> Obriši korisnika…
+                      </button>
+                      <p className="mt-1.5 text-[11px] text-slate-400">
+                        Potpuno brisanje (član ili cijeli ured) — oslobađa e-mail za ponovnu registraciju.
+                      </p>
                     </div>
                   </div>
                 );
@@ -816,6 +847,16 @@ export default function AdminDashboard() {
           odvjetnička tajna).
         </p>
       </div>
+
+      {deletingUser && (
+        <DeleteUserDialog
+          userId={deletingUser.user_id}
+          email={deletingUser.email}
+          authHeaders={authHeaders}
+          onClose={() => setDeletingUser(null)}
+          onDeleted={loadUsers}
+        />
+      )}
     </div>
   );
 }
