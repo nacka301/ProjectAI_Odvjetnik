@@ -1,5 +1,13 @@
 # Supabase Migrations — Upute za primjenu
 
+> **Zastarjelo ispod ove bilješke:** tablica niže opisuje samo 003–014. Numerirane
+> migracije idu do `025`; pravila primjene su u `CLAUDE.md` (prvo dev baza, provjera,
+> backup, tek onda produkcija), a puna shema za svježu dev bazu je `../dev_bootstrap.sql`.
+>
+> | # | Datoteka | Što radi |
+> |---|----------|----------|
+> | 025 | `025_pravna_zastita.sql` | Verzija propisa uz troškovnik (6 stupaca na `troskovnici`), evidencija potvrde pravnih tekstova (`potvrde_pravnih_tekstova` + RPC `potvrdi_pravne_tekstove`), prijave grešaka u izračunu (`prijave_gresaka`, samo service_role). Plan: `docs/plan-pravna-zastita.md`. |
+
 ## Pregled svih 10 novih migracija
 
 | # | Datoteka | Što radi | Prioritet |
