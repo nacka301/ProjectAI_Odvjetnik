@@ -202,7 +202,7 @@ function AppHeaderInner({ extraStart }: AppHeaderProps) {
               } ${
                 STATE_BADGE_STYLES[subscription.state]?.border ?? STATE_BADGE_STYLES.pretplata.border
               }`}
-              title="Pretplata — otvori postavke"
+              title="Pristup — otvori postavke"
             >
               {subscription.badgeLabel}
             </Link>
@@ -210,7 +210,7 @@ function AppHeaderInner({ extraStart }: AppHeaderProps) {
           {subscription.loading && (
             <span className="hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1 text-xs text-slate-500">
               <span className="h-1.5 w-1.5 rounded-full bg-slate-500 animate-pulse" />
-              Pretplata…
+              Pristup…
             </span>
           )}
 

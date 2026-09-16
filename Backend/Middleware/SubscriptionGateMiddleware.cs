@@ -37,8 +37,8 @@ public sealed class SubscriptionGateMiddleware
     private readonly ILogger<SubscriptionGateMiddleware> _logger;
 
     private const string ExpiredBody =
-        "{\"error\":\"Probno razdoblje je isteklo. Pristup Troskovniku i Strankama otvara se " +
-        "ponovno nakon uplate pretplate — javite se na vackadavid@gmail.com.\"," +
+        "{\"error\":\"Pristup je istekao. Pristup Troskovniku i Strankama produljuje se " +
+        "bez naknade — javite se na vackadavid@gmail.com.\"," +
         "\"code\":\"TRIAL_EXPIRED\"}";
 
     public SubscriptionGateMiddleware(

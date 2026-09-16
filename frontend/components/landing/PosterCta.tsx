@@ -24,10 +24,10 @@ export default function PosterCta() {
             className="ptk-btn text-[16px]"
             style={{ borderColor: "rgba(243,242,242,.5)", color: "var(--ptk-bg)", padding: "18px 26px" }}
           >
-            Pošaljite nam upit
+            Pošaljite upit
           </CtaLink>
           <span className="max-w-[40ch] text-[13px] opacity-85">
-            Sedam dana probe bez obveze. Izračun je pomoćno sredstvo i ne zamjenjuje prosudbu
+            Besplatno tijekom probnog razdoblja. Izračun je pomoćno sredstvo i ne zamjenjuje prosudbu
             odvjetnika.
           </span>
         </div>

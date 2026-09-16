@@ -7,15 +7,15 @@ const PITANJA = [
   },
   {
     q: "Što se događa kad se Tarifa ili Uredba promijene?",
-    a: "Iznosi i bodovi drže se u aplikaciji odvojeno od izračuna, pa izmjena propisa ne traži novu verziju programa. Postojeći troškovnici ostaju izračunati po propisu koji je vrijedio na dan izrade.",
+    a: "Aplikacija se ažurira: novi propis unosi se u program, a stari ostaje zapisan za razdoblje u kojem je vrijedio. Izmjena se unosi čim je objavljena, ali ne nužno istog dana — zato izračun uvijek provjerite. Troškovnik koji ste spremili ne preračunava se naknadno, nego ostaje onakav kakav je bio na dan izrade.",
   },
   {
     q: "Isplati li se ako troškovnike znam napamet?",
-    a: "Troškovnik je samo ulaz. PravoTek uz njega vodi stranke i predmete s kronologijom, čita ZK izvadak, prolazi kroz nacrt ugovora i traži rizične odredbe, daje raspon tržišne vrijednosti nekretnine i prevodi pravne tekstove — sve uz isti predmet, u istom računu i pod istom pretplatom. Ured koji troškovnik radi u sekundi ostatak vremena ipak traži podatke po mapama.",
+    a: "Troškovnik je samo ulaz. PravoTek uz njega vodi stranke i predmete s kronologijom, pa su troškovnici i događaji u predmetu na jednom mjestu. Moduli za ZK izvadak, analizu ugovora, procjenu nekretnina i prijevod su u razvoju i još nisu dostupni.",
   },
   {
-    q: "Mogu li isprobati prije plaćanja?",
-    a: "Da — sedam dana punog pristupa odmah nakon registracije, bez unosa kartice. Nakon probe pretplata je 19 € mjesečno po računu; odvjetnička društva s više korisnika ugovaraju se posebno.",
+    q: "Koliko košta?",
+    a: "Dok traje probno razdoblje, ništa. Pristup se otvara na sedam dana odmah nakon registracije, bez unosa kartice, a nakon toga se na zahtjev produljuje bez naknade. Prije uvođenja naplate svaki korisnik dobiva obavijest najmanje 30 dana unaprijed.",
   },
   {
     q: "Radi li na mobitelu?",

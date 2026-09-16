@@ -5,50 +5,50 @@ import CtaLink from "./CtaLink";
 // Ne uvozi se odande: taj modul je "use client", a ova stranica je server komponenta.
 const KONTAKT_EMAIL = "vackadavid@gmail.com";
 
-const PROBA = [
-  "Troškovnik bez ograničenja tijekom probe",
+// Nema iznosa: naplata nije uključena i ne smije se prikazivati kao da vrijedi
+// (vidi docs/plan-pravna-zastita.md i Uvjete korištenja, čl. 4).
+
+const POCETNI = [
+  "Troškovnik bez ograničenja",
   "Stranke, predmeti i kronologija",
-  "AI krediti za isprobavanje modula",
-  "Izvoz u PDF",
+  "Ispis troškovnika i izvoz u Excel",
 ];
 
-const PRETPLATA = [
-  "Neograničen broj troškovnika",
-  "Stranke, predmeti i kronologija",
+const PRODULJENJE = [
+  "Podaci ostaju sačuvani",
   "Dvofaktorska prijava i evidencija pristupa",
-  "Novi moduli čim izađu, bez doplate",
-  "Cijena zaključana za rane korisnike",
+  "Novi moduli kad budu spremni",
+  "Naplata najavljena najmanje 30 dana unaprijed",
 ];
 
 const DRUSTVA = [
   "Više korisnika na jednom uredu",
   "Prava pristupa po korisniku",
-  "Jedan račun za cijelo društvo",
   "Uvođenje uz prijenos postojećih predmeta",
 ];
 
 export default function Pricing() {
   return (
     <SectionGrid left={<SectionNumber n="05" />}>
-      <h2 id="cijene" className="text-[54px] leading-[1] tracking-[-0.03em] m-0">
-        Jedna pretplata po računu.
+      <h2 id="proba" className="text-[54px] leading-[1] tracking-[-0.03em] m-0">
+        Besplatno tijekom probnog razdoblja.
       </h2>
       <p className="mt-4 max-w-[56ch] text-[16px] opacity-80">
-        Sedam dana probe bez unosa kartice, zatim 19 € mjesečno po računu. Odvjetnička društva s
-        više korisnika ugovaraju se posebno.
+        PravoTek je u ranoj fazi. Dok traje probno razdoblje, korištenje se ne naplaćuje i ne traži
+        se kartica. Prije uvođenja naplate svaki korisnik dobiva obavijest najmanje 30 dana unaprijed.
       </p>
 
       <div className="mt-11 grid grid-cols-1 min-[720px]:grid-cols-3 border-t-2 border-[var(--ptk-divider)]">
-        {/* Proba */}
+        {/* Početni pristup */}
         <div style={{ padding: "32px 32px 32px 0" }}>
-          <div className="text-[12px] uppercase tracking-[0.14em] opacity-60">Proba</div>
+          <div className="text-[12px] uppercase tracking-[0.14em] opacity-60">Početni pristup</div>
           <div className="flex items-baseline gap-2 mt-3">
             <span className="font-[family-name:var(--font-archivo)] font-extrabold text-[64px] leading-none">7</span>
             <span className="text-[14px] opacity-60">dana, 0 €</span>
           </div>
           <p className="mt-4 text-[15px] opacity-80">Puni pristup na stvarnom predmetu, bez unosa kartice.</p>
           <div className="mt-6 border-t border-[var(--ptk-divider)]">
-            {PROBA.map((stavka) => (
+            {POCETNI.map((stavka) => (
               <div key={stavka} className="py-[10px] border-b border-[var(--ptk-divider)] text-[14px]">
                 {stavka}
               </div>
@@ -63,29 +63,26 @@ export default function Pricing() {
           </CtaLink>
         </div>
 
-        {/* Pretplata — istaknuto */}
+        {/* Produljenje — istaknuto */}
         <div
           className="border-l-2 border-[var(--ptk-divider)] p-8"
           style={{ background: "var(--ptk-text)", color: "var(--ptk-bg)" }}
         >
-          <div className="flex items-center justify-between gap-4">
-            <div className="text-[12px] uppercase tracking-[0.14em] opacity-60">Pretplata</div>
-            <span className="text-[11px] px-[10px] py-[3px]" style={{ background: "var(--ptk-accent)", color: "var(--ptk-bg)" }}>
-              RANI PRISTUP
-            </span>
-          </div>
+          <div className="text-[12px] uppercase tracking-[0.14em] opacity-60">Nakon sedam dana</div>
           <div className="flex items-baseline gap-2 mt-3">
             <span
               className="font-[family-name:var(--font-archivo)] font-extrabold text-[64px] leading-none"
               style={{ color: "var(--ptk-accent-400)" }}
             >
-              19 €
+              0 €
             </span>
-            <span className="text-[14px] opacity-60">/ mjesečno po računu</span>
+            <span className="text-[14px] opacity-60">produljenje pristupa</span>
           </div>
-          <p className="mt-4 text-[15px] opacity-85">ili 190 € godišnje — dva mjeseca manje.</p>
+          <p className="mt-4 text-[15px] opacity-85">
+            Javite se e-poštom i pristup se produljuje bez naknade, obično isti dan.
+          </p>
           <div className="mt-6 border-t" style={{ borderColor: "rgba(243,242,242,.25)" }}>
-            {PRETPLATA.map((stavka) => (
+            {PRODULJENJE.map((stavka) => (
               <div
                 key={stavka}
                 className="py-[10px] text-[14px] border-b"
@@ -109,7 +106,7 @@ export default function Pricing() {
           <div className="text-[12px] uppercase tracking-[0.14em] opacity-60">Odvjetnička društva</div>
           <div className="flex items-baseline gap-2 mt-3">
             <span className="font-[family-name:var(--font-archivo)] font-extrabold text-[44px] leading-[1.2]">
-              Po dogovoru
+              Više korisnika
             </span>
           </div>
           <p className="mt-4 text-[15px] opacity-80">Za društva s više odvjetnika i zajedničkim uredom.</p>
@@ -125,7 +122,7 @@ export default function Pricing() {
             className="ptk-btn ptk-btn-secondary ptk-btn-block mt-7"
             style={{ padding: "14px 18px" }}
           >
-            Javite nam se
+            Javite se
           </CtaLink>
         </div>
       </div>

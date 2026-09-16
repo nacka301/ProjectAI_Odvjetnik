@@ -20,7 +20,7 @@ export default function DpaPage() {
           <p className="text-sm text-slate-500 mt-2">
             Data Processing Agreement — čl. 28. GDPR-a
           </p>
-          <p className="text-sm text-slate-400 mt-1">Posljednje ažuriranje: 3. ožujka 2026.</p>
+          <p className="text-sm text-slate-400 mt-1">Posljednje ažuriranje: 16. rujna 2026.</p>
         </div>
 
         {/* Content */}
@@ -53,7 +53,7 @@ export default function DpaPage() {
             prilikom korištenja aplikacije PravoTek.
           </p>
           <p>
-            2.2. Obrada traje za vrijeme trajanja ugovornog odnosa (aktivne pretplate) između
+            2.2. Obrada traje za vrijeme trajanja ugovornog odnosa između
             Voditelja i Izvršitelja.
           </p>
 

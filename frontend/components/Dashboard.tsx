@@ -572,7 +572,7 @@ export default function Dashboard() {
                 <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3 hover:border-slate-300 hover:shadow-sm transition">
                   <div className="flex items-center justify-between">
                     <h3 className="text-[11px] text-slate-400 uppercase tracking-wider font-medium">
-                      Pretplata
+                      Pristup
                     </h3>
                     <span
                       className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
@@ -619,7 +619,7 @@ export default function Dashboard() {
               <div className="bg-white rounded-xl border border-slate-200 p-4">
                 <div className="flex items-center gap-2">
                   <span className="h-2 w-2 rounded-full bg-slate-300 animate-pulse" />
-                  <span className="text-xs text-slate-400">Učitavanje pretplate…</span>
+                  <span className="text-xs text-slate-400">Učitavanje pristupa…</span>
                 </div>
               </div>
             )}

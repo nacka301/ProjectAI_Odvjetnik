@@ -17,7 +17,7 @@ export default function PrivatnostPage() {
           <h1 className="font-[family-name:var(--font-playfair)] text-3xl sm:text-4xl font-bold text-slate-900 mt-4">
             Politika privatnosti i obrade podataka
           </h1>
-          <p className="text-sm text-slate-400 mt-2">Posljednje ažuriranje: 3. ožujka 2026.</p>
+          <p className="text-sm text-slate-400 mt-2">Posljednje ažuriranje: 16. rujna 2026.</p>
         </div>
 
         {/* Content */}
@@ -47,7 +47,7 @@ export default function PrivatnostPage() {
           <h2>2. Uloge prema GDPR-u</h2>
           <p>
             2.1. U odnosu na <strong>podatke o Korisniku</strong> (ime, prezime, e-mail, OIB ureda,
-            podaci o pretplati), PravoTek je <strong>Voditelj obrade</strong> (Data Controller)
+            podaci o pristupu), PravoTek je <strong>Voditelj obrade</strong> (Data Controller)
             jer te podatke prikuplja i obrađuje za vlastite potrebe pružanja usluge.
           </p>
           <p>
@@ -59,13 +59,13 @@ export default function PrivatnostPage() {
           </p>
 
           {/* §3 */}
-          <h2>3. Koje podatke prikupljamo</h2>
+          <h2>3. Koji se podaci prikupljaju</h2>
 
           <h3>A) Podaci o Korisniku (Odvjetničkom uredu)</h3>
           <ul>
             <li>Ime i prezime, naziv ureda, OIB, adresa sjedišta, IBAN</li>
             <li>Adresa elektroničke pošte, telefonski broj</li>
-            <li>Podaci o pretplati i korištenju (plan, krediti, datum isteka)</li>
+            <li>Podaci o pristupu i korištenju (stanje i datum isteka pristupa)</li>
             <li>Tehnički podaci: IP adresa (haširana — pohranjena u nepovratnom formatu), pregledavač, operativni sustav</li>
           </ul>
           <p>
@@ -122,7 +122,7 @@ export default function PrivatnostPage() {
             s trećim stranama u marketinške ili oglašivačke svrhe.
           </p>
           <p>
-            6.2. Podatke dijelimo isključivo s infrastrukturnim partnerima nužnima za rad aplikacije
+            6.2. Podaci se dijele isključivo s infrastrukturnim partnerima nužnima za rad aplikacije
             (hosting, baza podataka, slanje transakcijskih e-mailova), uz uvjet poštivanja GDPR standarda.
           </p>
           <p>
@@ -144,7 +144,7 @@ export default function PrivatnostPage() {
           <p>
             Zahtjeve možete uputiti na:{" "}
             <a href="mailto:vackadavid@gmail.com">vackadavid@gmail.com</a>.
-            Odgovorit ćemo u roku od <strong>30 dana</strong>.
+            Odgovor stiže u roku od <strong>30 dana</strong>.
           </p>
           <p>
             Imate pravo podnijeti pritužbu{" "}
@@ -156,8 +156,8 @@ export default function PrivatnostPage() {
           {/* §8 */}
           <h2>8. Rokovi pohrane</h2>
           <ul>
-            <li><strong>Podaci korisničkog računa:</strong> čuvaju se za vrijeme trajanja pretplate + 30 dana nakon zatvaranja računa</li>
-            <li><strong>Podaci o predmetima i strankama:</strong> čuvaju se za vrijeme trajanja pretplate + 30 dana, nakon čega se nepovratno brišu</li>
+            <li><strong>Podaci korisničkog računa:</strong> čuvaju se dok je korisnički račun otvoren i 30 dana nakon zatvaranja računa</li>
+            <li><strong>Podaci o predmetima i strankama:</strong> čuvaju se dok je korisnički račun otvoren i 30 dana nakon zatvaranja računa, nakon čega se nepovratno brišu</li>
             <li><strong>Revizijski trag (audit log):</strong> čuva se 24 mjeseca u skladu s regulatornim zahtjevima</li>
             <li><strong>Fakture i financijski podaci:</strong> čuvaju se 11 godina sukladno Općem poreznom zakonu (čl. 66.)</li>
           </ul>

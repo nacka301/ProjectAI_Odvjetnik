@@ -10,7 +10,9 @@ import { useAuth } from "@/lib/useAuth";
  * There used to be three plans here — free / starter / pro — with their own
  * label map, duplicated verbatim in two other files and a fourth time in C#.
  * None of them was ever sold. What replaced them is a single path: seven days
- * of trial, then a subscription.
+ * of access, then a manual extension. Nothing is charged while the product is in
+ * its trial phase, so no wording here may name a price or a paid subscription —
+ * the internal state is still called "pretplata", the user never sees that word.
  *
  * Nothing in this file decides anything. `state` and `daysRemaining` are
  * computed by the backend (SubscriptionGate) and read here as given, because the
@@ -59,29 +61,26 @@ export interface SubscriptionStatus {
   badgeLabel: string;
 }
 
-/** Monthly and yearly price, stated in one place so the copy cannot drift. */
-export const CIJENA_MJESECNO = "19 €";
-export const CIJENA_GODISNJE = "190 €";
-/** Where a user goes to pay. Payment is manual, by e-mail, on purpose. */
+/** Where a user asks for access to be extended. Extension is manual, by e-mail, and free. */
 export const KONTAKT_EMAIL = "vackadavid@gmail.com";
 
 /**
  * The badge wording.
  *
  * Croatian counts days as "1 dan" and "N dana", and the final day is worded
- * differently again — "Zadnji dan probe" rather than "Još 0 dana probe", which
- * would read as though the trial were already over.
+ * differently again — "Pristup ističe danas" rather than "Pristup još 0 dana",
+ * which would read as though access were already closed.
  */
 export function badgeLabelFor(
   state: SubscriptionState,
   daysRemaining: number | null,
 ): string {
-  if (state === "isteklo") return "Proba istekla";
-  if (state === "pretplata") return "Pretplata aktivna";
+  if (state === "isteklo") return "Pristup istekao";
+  if (state === "pretplata") return "Pristup otvoren";
 
-  if (daysRemaining === null || daysRemaining <= 0) return "Zadnji dan probe";
-  if (daysRemaining === 1) return "Još 1 dan probe";
-  return `Još ${daysRemaining} dana probe`;
+  if (daysRemaining === null || daysRemaining <= 0) return "Pristup ističe danas";
+  if (daysRemaining === 1) return "Pristup još 1 dan";
+  return `Pristup još ${daysRemaining} dana`;
 }
 
 /**

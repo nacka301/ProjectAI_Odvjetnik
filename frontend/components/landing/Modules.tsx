@@ -6,7 +6,7 @@ const MODULI: { kod: string; naziv: string; opis: string; status: Status }[] = [
   {
     kod: "M01",
     naziv: "Odvjetnički troškovnik",
-    opis: "Bodovanje radnji uz tarifni broj, sudske pristojbe po Uredbi, izvoz u PDF.",
+    opis: "Bodovanje radnji uz tarifni broj, sudske pristojbe po Uredbi, ispis i izvoz u Excel.",
     status: "Dostupno",
   },
   {

@@ -4,7 +4,7 @@ const LINKS = [
   { href: "#kako-radi", label: "Kako radi" },
   { href: "#moduli", label: "Moduli" },
   { href: "#sigurnost", label: "Sigurnost" },
-  { href: "#cijene", label: "Cijene" },
+  { href: "#proba", label: "Proba" },
 ];
 
 export default function Nav() {

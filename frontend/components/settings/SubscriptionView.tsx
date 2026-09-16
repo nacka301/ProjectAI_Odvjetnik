@@ -1,10 +1,8 @@
 "use client";
 
-import { Loader2, CreditCard, Lock, CheckCircle2, Calendar, Mail, Clock } from "lucide-react";
+import { Loader2, KeyRound, Lock, CheckCircle2, Calendar, Mail, Clock } from "lucide-react";
 import {
   useSubscription,
-  CIJENA_MJESECNO,
-  CIJENA_GODISNJE,
   KONTAKT_EMAIL,
   type SubscriptionState,
 } from "@/lib/useSubscription";
@@ -28,13 +26,13 @@ const STATE_LABELS: Record<
   { label: string; color: string; bg: string; border: string }
 > = {
   proba: {
-    label: "Probno razdoblje",
+    label: "Početni pristup",
     color: "text-amber-700",
     bg: "bg-amber-50",
     border: "border-amber-200",
   },
   pretplata: {
-    label: "Pretplata aktivna",
+    label: "Pristup otvoren",
     color: "text-emerald-700",
     bg: "bg-emerald-50",
     border: "border-emerald-200",
@@ -82,10 +80,10 @@ export default function SubscriptionView({ userId: _propUserId }: Props) {
           className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
           style={{ background: "#1B2A4A" }}
         >
-          <CreditCard className="h-5 w-5 text-white" />
+          <KeyRound className="h-5 w-5 text-white" />
         </div>
         <div>
-          <h2 className="font-serif text-lg font-semibold text-slate-900">Pretplata</h2>
+          <h2 className="font-serif text-lg font-semibold text-slate-900">Pristup</h2>
           <p className="text-sm text-slate-400 mt-0.5">
             Stanje vašeg pristupa Troškovniku i Strankama
           </p>
@@ -126,7 +124,7 @@ export default function SubscriptionView({ userId: _propUserId }: Props) {
         <div className="flex items-center gap-3 text-sm">
           <Calendar className="h-4 w-4 text-slate-400" />
           <span className="text-slate-500">
-            {expired ? "Pristup je zatvoren od:" : state === "proba" ? "Proba traje do:" : "Pretplata vrijedi do:"}
+            {expired ? "Pristup je zatvoren od:" : state === "proba" ? "Početni pristup traje do:" : "Pristup vrijedi do:"}
           </span>
           <span className="font-semibold text-slate-800">{formatDate(accessUntil)}</span>
         </div>
@@ -137,43 +135,43 @@ export default function SubscriptionView({ userId: _propUserId }: Props) {
         {expired ? (
           <div className="rounded-lg border border-red-200 bg-red-50 p-4 space-y-3">
             <p className="text-sm font-semibold text-red-800">
-              Troškovnik i Stranke zatvoreni su do uplate pretplate.
+              Troškovnik i Stranke zatvoreni su dok se pristup ne produlji.
             </p>
             <p className="text-sm text-red-700">
               Vaši podaci nisu izbrisani — predmeti, stranke i troškovnici stoje
-              gdje ste ih ostavili i vraćaju se čim pretplata proradi.
+              gdje ste ih ostavili i vraćaju se čim se pristup produlji.
             </p>
           </div>
         ) : (
           <p className="text-sm text-slate-600">
             {state === "proba"
-              ? "Kad proba istekne, Troškovnik i Stranke zatvaraju se do uplate pretplate. Podaci ostaju sačuvani."
+              ? "Kad početni pristup istekne, Troškovnik i Stranke zatvaraju se dok se pristup ne produlji. Produljenje je besplatno, a podaci ostaju sačuvani."
               : "Pristup Troškovniku i Strankama je otvoren."}
           </p>
         )}
 
-        {/* Price and how to pay */}
+        {/* No price: nothing is charged during the trial phase */}
         <div className="rounded-lg bg-slate-50 border border-slate-200 p-4">
           <p className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">
-            Cijena pretplate
+            Naknada
           </p>
           <p className="mt-1 text-lg font-semibold text-slate-900">
-            {CIJENA_MJESECNO} mjesečno
-            <span className="text-slate-400 font-normal"> ili </span>
-            {CIJENA_GODISNJE} godišnje
+            Besplatno tijekom probnog razdoblja
+          </p>
+          <p className="mt-1 text-[13px] text-slate-500">
+            Prije uvođenja naplate dobit ćete obavijest najmanje 30 dana unaprijed.
           </p>
         </div>
 
         <div>
           <p className="text-sm font-medium text-slate-800">
-            {expired ? "Kako otvoriti pristup" : "Kako platiti"}
+            {expired ? "Kako otvoriti pristup" : "Kako produljiti pristup"}
           </p>
           <p className="text-sm text-slate-600 mt-1">
-            Plaćanje se za sada dogovara e-poštom — javite se i pretplata se
-            otvara ručno, obično isti dan.
+            Javite se e-poštom i pristup se produljuje ručno, obično isti dan.
           </p>
           <a
-            href={`mailto:${KONTAKT_EMAIL}?subject=${encodeURIComponent("PravoTek — pretplata")}`}
+            href={`mailto:${KONTAKT_EMAIL}?subject=${encodeURIComponent("PravoTek — produljenje pristupa")}`}
             className="mt-3 inline-flex items-center gap-2 text-sm font-medium px-4 py-2.5 rounded-lg text-white transition hover:opacity-90"
             style={{ background: "#1B2A4A" }}
           >

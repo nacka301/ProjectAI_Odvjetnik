@@ -201,7 +201,7 @@ public class SettingsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error fetching subscription");
-            return StatusCode(500, new { error = "Greška pri dohvaćanju pretplate." });
+            return StatusCode(500, new { error = "Greška pri dohvaćanju stanja pristupa." });
         }
     }
 

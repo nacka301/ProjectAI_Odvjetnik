@@ -19,7 +19,7 @@ import {
   User,
   Building2,
   Users,
-  CreditCard,
+  KeyRound,
   Clock,
   Database,
 } from "lucide-react";
@@ -57,7 +57,7 @@ const SIDEBAR_ITEMS: { id: SettingsTab; label: string; icon: React.ElementType }
   { id: "sigurnost", label: "Sigurnost",           icon: Shield },
   { id: "ured",      label: "Odvjetnički ured",    icon: Building2 },
   { id: "tim",       label: "Upravljanje timom",   icon: Users },
-  { id: "pretplata", label: "Pretplata",            icon: CreditCard },
+  { id: "pretplata", label: "Pristup",              icon: KeyRound },
   { id: "dnevnik",   label: "Dnevnik aktivnosti",  icon: Clock },
   { id: "privatnost",label: "Privatnost i podaci", icon: Database },
 ];

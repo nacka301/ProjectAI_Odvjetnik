@@ -17,7 +17,7 @@ export default function UvjetiPage() {
           <h1 className="font-[family-name:var(--font-playfair)] text-3xl sm:text-4xl font-bold text-slate-900 mt-4">
             Uvjeti korištenja
           </h1>
-          <p className="text-sm text-slate-400 mt-2">Posljednje ažuriranje: 3. ožujka 2026.</p>
+          <p className="text-sm text-slate-400 mt-2">Posljednje ažuriranje: 16. rujna 2026.</p>
         </div>
 
         {/* Content */}
@@ -41,11 +41,11 @@ export default function UvjetiPage() {
             osobe koja koristi aplikaciju PravoTek (u daljnjem tekstu: „Korisnik").
           </p>
           <p>
-            1.2. PravoTek je softverska aplikacija u oblaku (SaaS — Software as a Service) namijenjena
-            odvjetničkim uredima u Republici Hrvatskoj, koja pruža alate za automatski izračun odvjetničke
-            nagrade prema Tarifi o nagradama i naknadi troškova za rad odvjetnika (NN 142/2012 i naknadne
-            izmjene), procjenu tržišne vrijednosti nekretnina, analizu pravnih dokumenata, upravljanje
-            strankama i predmetima te izdavanje e-računa.
+            1.2. PravoTek je aplikacija koja se koristi putem interneta. Namijenjena je odvjetnicima i
+            odvjetničkim uredima u Republici Hrvatskoj za obavljanje odvjetničke djelatnosti. Omogućuje
+            izračun odvjetničke nagrade prema Tarifi o nagradama i naknadi troškova za rad odvjetnika
+            (Hrvatska odvjetnička komora, 14. listopada 2023.), izračun sudskih pristojbi prema Uredbi o
+            Tarifi sudskih pristojbi (NN 50/2026) te vođenje evidencije stranaka i predmeta.
           </p>
           <p>
             1.3. Pristupanjem ili korištenjem aplikacije, Korisnik potvrđuje da je pročitao, razumio i
@@ -54,20 +54,17 @@ export default function UvjetiPage() {
 
           {/* §2 */}
           <h2>2. Usluga i opseg</h2>
-          <p>2.1. PravoTek Korisniku omogućuje korištenje sljedećih modula:</p>
+          <p>2.1. Korisnicima su trenutno dostupna dva modula:</p>
           <ul>
-            <li><strong>Odvjetnički troškovnik</strong> — automatski izračun nagrade i troškova prema službenoj Tarifi</li>
-            <li><strong>Tržišna procjena nekretnina</strong> — izračun raspona tržišne vrijednosti na temelju usporedive ponude</li>
-            <li><strong>Analiza ugovora</strong> — automatska detekcija pravnih rizika i nedostajućih klauzula</li>
-            <li><strong>ZK due diligence</strong> — analiza zemljišnoknjižnog stanja nekretnine</li>
-            <li><strong>Upravljanje strankama i predmetima</strong> — CRM i case management za odvjetničke urede</li>
-            <li><strong>e-Račun (UBL)</strong> — generiranje elektroničkih računa</li>
-            <li><strong>Kronologija spisa</strong> — kronološki pregled događaja u predmetu</li>
-            <li><strong>Pravna strategija</strong> — analiza pravne pozicije klijenta</li>
-            <li><strong>Sudski tumač</strong> — pravni prijevod i transliteracija</li>
+            <li><strong>Odvjetnički troškovnik</strong> — izračun nagrade prema Tarifi i sudskih pristojbi prema Uredbi o Tarifi sudskih pristojbi</li>
+            <li><strong>Stranke i predmeti</strong> — evidencija stranaka i predmeta s kronologijom događaja</li>
           </ul>
           <p>
-            2.2. Pružatelj usluge zadržava pravo dodavanja, izmjene ili ukidanja pojedinih modula
+            2.2. Ostali moduli koji se u aplikaciji i na naslovnoj stranici označavaju kao „u razvoju“
+            Korisnicima nisu dostupni. Kad budu pušteni u rad, na njih se primjenjuju ovi Uvjeti.
+          </p>
+          <p>
+            2.3. Pružatelj usluge zadržava pravo dodavanja, izmjene ili ukidanja pojedinih modula
             uz prethodnu obavijest Korisniku elektroničkim putem, s primjerenim prijelaznim rokom
             od najmanje <strong>30 (trideset) dana</strong>.
           </p>
@@ -93,83 +90,62 @@ export default function UvjetiPage() {
           </p>
 
           {/* §4 */}
-          <h2>4. Pretplata i plaćanje</h2>
+          <h2>4. Naknada</h2>
           <p>
-            4.1. <strong>Probno razdoblje.</strong> Otvaranjem korisničkog računa Korisnik dobiva
-            besplatno probno razdoblje u trajanju od <strong>7 (sedam) dana</strong>, računajući
-            od dana otvaranja računa. Tijekom probnog razdoblja Korisniku su dostupni svi
-            moduli koji su u tom trenutku pušteni u rad.
+            4.1. <strong>Probno razdoblje.</strong> PravoTek je u ranoj fazi razvoja i nalazi se u
+            probnom razdoblju. Dok traje probno razdoblje, usluga se koristi <strong>bez naknade</strong>.
+            Ovi Uvjeti ne sadrže cijenu jer naplata nije uključena.
           </p>
           <p>
-            4.2. <strong>Cijena.</strong> Po isteku probnog razdoblja korištenje aplikacije
-            naplaćuje se prema sljedećim cijenama:
-          </p>
-          <div className="overflow-x-auto">
-            <table>
-              <thead>
-                <tr>
-                  <th>Razdoblje</th>
-                  <th>Cijena</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td className="font-medium">Mjesečno</td>
-                  <td>19,00 €</td>
-                </tr>
-                <tr>
-                  <td className="font-medium">Godišnje</td>
-                  <td>190,00 €</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <p>
-            4.3. <strong>Način plaćanja.</strong> Plaćanje se dogovara e-poštom na adresu{" "}
-            <a href="mailto:vackadavid@gmail.com">vackadavid@gmail.com</a>, nakon čega Pružatelj
-            usluge pretplatu aktivira ručno. Aplikacija <strong>ne pohranjuje</strong> podatke o
-            karticama niti druge podatke o plaćanju i pretplata se <strong>ne obnavlja
-            automatski</strong> — svako produljenje Korisnik ugovara zasebno.
+            4.2. <strong>Pristup.</strong> Pristup aplikaciji otvara se na <strong>7 (sedam) dana</strong>{" "}
+            od registracije. Nakon toga Pružatelj usluge pristup produljuje bez naknade, na zahtjev
+            Korisnika poslan e-poštom na{" "}
+            <a href="mailto:vackadavid@gmail.com">vackadavid@gmail.com</a>. Aplikacija ne traži i ne
+            pohranjuje podatke o karticama ni druge podatke o plaćanju.
           </p>
           <p>
-            4.4. <strong>Istek pretplate.</strong> Istekom probnog razdoblja ili plaćene pretplate
-            Korisniku se zatvara pristup modulima aplikacije. Podaci Korisnika (stranke, predmeti,
-            troškovnici i ostali sadržaj) <strong>ostaju sačuvani</strong> i ponovno su dostupni
-            čim pretplata bude aktivirana. Brisanje podataka provodi se isključivo na zahtjev
-            Korisnika, sukladno članku 8. ovih Uvjeta.
+            4.3. <strong>Istek pristupa.</strong> Ako pristup nije produljen, Korisniku se zatvaraju
+            moduli aplikacije. Podaci Korisnika (stranke, predmeti, troškovnici i ostali sadržaj){" "}
+            <strong>ostaju sačuvani</strong> i ponovno su dostupni čim se pristup produlji. Brisanje
+            podataka provodi se isključivo na zahtjev Korisnika, sukladno članku 8. ovih Uvjeta.
           </p>
           <p>
-            4.5. Pružatelj usluge zadržava pravo izmjene cijena uz prethodnu pisanu obavijest
-            Korisniku najmanje <strong>30 (trideset) dana</strong> prije primjene nove cjenovne politike.
-            Za Korisnike s aktivnom pretplatom, nova cijena primjenjuje se od početka sljedećeg obračunskog razdoblja.
+            4.4. <strong>Uvođenje naplate.</strong> Prije uvođenja naplate Pružatelj usluge obavijestit
+            će Korisnika e-poštom najmanje <strong>30 (trideset) dana</strong> unaprijed. Naplata se na
+            Korisnika primjenjuje tek kad pristane na nove uvjete.
           </p>
 
           {/* §5 */}
           <h2>5. Ograničenje odgovornosti</h2>
           <p>
-            <strong>5.1. PravoTek je softverski alat, a ne pružatelj pravnih usluga.</strong>{" "}
+            <strong>5.1. PravoTek je pomoćni alat, a ne pružatelj pravnih usluga.</strong>{" "}
             Pružatelj usluge ne pruža pravne savjete, pravno zastupanje niti bilo koji oblik pravne
-            pomoći u smislu Zakona o odvjetništvu (NN 9/94 i naknadne izmjene).
+            pomoći u smislu Zakona o odvjetništvu. Aplikacija ne zamjenjuje prosudbu odvjetnika.
           </p>
           <p>
-            <strong>5.2. Isključiva odgovornost za pravnu točnost.</strong> Sve izračune, analize,
-            procjene, prijedloge klauzula i druge rezultate generirane korištenjem aplikacije
-            Korisnik je dužan <strong>samostalno provjeriti</strong> prije njihove uporabe u pravnom
-            prometu. Konačna odgovornost za točnost svih podataka, izračuna i pravnih dokumenata
-            u cijelosti leži na Korisniku (Odvjetničkom uredu).
+            <strong>5.2. Provjera izračuna.</strong> Korisnik je dužan{" "}
+            <strong>provjeriti svaki izračun</strong> i drugi rezultat aplikacije prije nego ga
+            upotrijebi u postupku ili pravnom prometu. Za sadržaj podneska odgovara odvjetnik koji ga
+            podnosi. Rezultat ovisi o podacima koje Korisnik unese.
           </p>
-          <p><strong>5.3. Isključenje odgovornosti za štetu.</strong> Pružatelj usluge ne odgovara za:</p>
-          <ul>
-            <li>(a) štetu nastalu korištenjem rezultata aplikacije bez prethodne stručne provjere od strane Korisnika,</li>
-            <li>(b) štetu nastalu uslijed prekida dostupnosti usluge, tehničkih pogrešaka ili kibernetičkih napada,</li>
-            <li>(c) neizravnu, posljedičnu ili kaznenu štetu, uključujući ali ne ograničavajući se na izgubljenu dobit, gubitak podataka ili gubitak poslovnog ugleda,</li>
-            <li>(d) štetu nastalu uslijed promjene zakonodavnog okvira ili sudske prakse nakon generiranja rezultata analize.</li>
-          </ul>
           <p>
-            <strong>5.4. Gornja granica odgovornosti.</strong> U svakom slučaju, ukupna kumulativna
-            odgovornost Pružatelja usluge prema Korisniku ograničena je na iznos koji je Korisnik
-            platio za korištenje usluge u razdoblju od <strong>12 (dvanaest) mjeseci</strong> neposredno
-            prije nastanka štetnog događaja.
+            <strong>5.3. Propisi.</strong> Pružatelj usluge nastoji izmjene propisa unijeti u aplikaciju
+            čim stupe na snagu, ali ne jamči da je aplikacija u svakom trenutku usklađena s posljednjom
+            izmjenom. Izračuni nisu neovisno stručno revidirani.
+          </p>
+          <p>
+            <strong>5.4. Obična nepažnja.</strong> Pružatelj usluge ne odgovara za štetu nastalu zbog
+            pogreške u izračunu ili prekida u radu aplikacije ako je šteta posljedica obične nepažnje.
+            Pružatelj usluge ne odgovara za pogrešku koja proizlazi iz netočno unesenih podataka.
+          </p>
+          <p>
+            <strong>5.5. Namjera i krajnja nepažnja.</strong> Odgovornost za štetu prouzročenu namjerno
+            ili krajnjom nepažnjom ne isključuje se i ne ograničava (članak 345. Zakona o obveznim
+            odnosima).
+          </p>
+          <p>
+            <strong>5.6. Prijava greške.</strong> Grešku u izračunu Korisnik može prijaviti e-poštom
+            na <a href="mailto:vackadavid@gmail.com">vackadavid@gmail.com</a>.
           </p>
 
           {/* §6 */}
@@ -205,7 +181,7 @@ export default function UvjetiPage() {
           </p>
           <p>
             7.2. Korisnik stječe neisključivu, neprenosivu i opozivu licenciju za korištenje aplikacije
-            za vrijeme trajanja pretplate, isključivo za vlastite poslovne potrebe odvjetničkog ureda.
+            dok mu je pristup otvoren, isključivo za vlastite poslovne potrebe odvjetničkog ureda.
           </p>
           <p>
             7.3. Sadržaj (podaci o strankama, predmetima, dokumentima) koji Korisnik unese u aplikaciju
@@ -229,8 +205,7 @@ export default function UvjetiPage() {
           </p>
           <ul>
             <li>kršenja ovih Uvjeta od strane Korisnika,</li>
-            <li>korištenja aplikacije u nezakonite svrhe,</li>
-            <li>neplaćanja pretplate duže od 30 (trideset) dana.</li>
+            <li>korištenja aplikacije u nezakonite svrhe.</li>
           </ul>
           <p>
             8.4. Po prestanku ugovornog odnosa, Korisnik ima pravo na izvoz svojih podataka u roku od{" "}
@@ -254,8 +229,9 @@ export default function UvjetiPage() {
             <strong>15 (petnaest) dana</strong> prije stupanja na snagu izmijenjenih Uvjeta.
           </p>
           <p>
-            10.2. Nastavak korištenja aplikacije nakon stupanja na snagu izmijenjenih Uvjeta smatra
-            se prihvaćanjem istih.
+            10.2. Izmjene kojima se Korisniku nameću nove obveze, uključujući uvođenje naplate,
+            primjenjuju se na Korisnika tek kad ih prihvati. Korisnik koji izmjene ne prihvati može
+            zatražiti zatvaranje računa prema članku 8.
           </p>
           <p>
             10.3. Ako bilo koja odredba ovih Uvjeta bude proglašena ništavom ili nevažećom, preostale

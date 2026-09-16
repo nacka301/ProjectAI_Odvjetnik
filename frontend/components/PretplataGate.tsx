@@ -2,18 +2,13 @@
 
 import Link from "next/link";
 import { Lock, Loader2, Mail } from "lucide-react";
-import {
-  useSubscription,
-  CIJENA_MJESECNO,
-  CIJENA_GODISNJE,
-  KONTAKT_EMAIL,
-} from "@/lib/useSubscription";
+import { useSubscription, KONTAKT_EMAIL } from "@/lib/useSubscription";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import AppHeader from "@/components/AppHeader";
 
 /**
- * Stands in front of Troškovnik and Stranke once the trial or subscription has
- * run out, and explains what happened.
+ * Stands in front of Troškovnik and Stranke once access has run out, and
+ * explains what happened.
  *
  * This is courtesy, not the lock — exactly as `frontend/lib/modules.ts` says of
  * the in-development modules. Everything here runs on hardware the user
@@ -65,10 +60,10 @@ export default function PretplataGate({ children }: { children: React.ReactNode 
             </div>
             <div>
               <h1 className="font-serif text-xl font-semibold text-slate-900">
-                Probno razdoblje je isteklo
+                Pristup je istekao
               </h1>
               <p className="text-sm text-slate-400 mt-0.5">
-                Troškovnik i Stranke zatvoreni su do uplate pretplate.
+                Troškovnik i Stranke zatvoreni su dok se pristup ne produlji.
               </p>
             </div>
           </div>
@@ -76,28 +71,28 @@ export default function PretplataGate({ children }: { children: React.ReactNode 
           <div className="px-6 sm:px-8 py-6 space-y-5 text-sm text-slate-600">
             <p>
               Vaši podaci nisu nigdje otišli. Predmeti, stranke i troškovnici
-              stoje gdje ste ih ostavili i vraćaju se čim pretplata proradi.
+              stoje gdje ste ih ostavili i vraćaju se čim se pristup produlji.
             </p>
 
             <div className="rounded-lg bg-slate-50 border border-slate-200 p-4">
               <p className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">
-                Pretplata
+                Naknada
               </p>
               <p className="mt-1 text-lg font-semibold text-slate-900">
-                {CIJENA_MJESECNO} mjesečno
-                <span className="text-slate-400 font-normal"> ili </span>
-                {CIJENA_GODISNJE} godišnje
+                Produljenje je besplatno
+              </p>
+              <p className="mt-1 text-[13px] text-slate-500">
+                PravoTek je u probnom razdoblju i ništa se ne naplaćuje.
               </p>
             </div>
 
             <div>
-              <p className="font-medium text-slate-800">Kako platiti</p>
+              <p className="font-medium text-slate-800">Kako produljiti pristup</p>
               <p className="mt-1">
-                Plaćanje se za sada dogovara e-poštom — javite se i pretplata se
-                otvara ručno, obično isti dan.
+                Javite se e-poštom i pristup se produljuje ručno, obično isti dan.
               </p>
               <a
-                href={`mailto:${KONTAKT_EMAIL}?subject=${encodeURIComponent("PravoTek — pretplata")}`}
+                href={`mailto:${KONTAKT_EMAIL}?subject=${encodeURIComponent("PravoTek — produljenje pristupa")}`}
                 className="mt-3 inline-flex items-center gap-2 text-sm font-medium px-4 py-2.5 rounded-lg text-white transition hover:opacity-90"
                 style={{ background: "#1B2A4A" }}
               >
@@ -109,7 +104,7 @@ export default function PretplataGate({ children }: { children: React.ReactNode 
             <div className="h-px bg-slate-100" />
 
             <p className="text-[13px] text-slate-500">
-              Stanje pretplate možete pogledati u{" "}
+              Stanje pristupa možete pogledati u{" "}
               <Link href="/postavke" className="underline hover:text-slate-800">
                 Postavkama
               </Link>
