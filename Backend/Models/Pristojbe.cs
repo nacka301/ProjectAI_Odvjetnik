@@ -34,6 +34,31 @@ public static class UredbaGranice
 }
 
 /// <summary>
+/// Puni nazivi Uredbi, onako kako se zapisuju uz spremljeni troškovnik.
+///
+/// Uz troškovnik se sprema NAZIV, a ne enum: kad jednom dođe nova Uredba, stari zapis
+/// mora i dalje nositi naziv propisa po kojem je stvarno izračunat.
+/// </summary>
+public static class UredbaNazivi
+{
+    public static string PuniNaziv(UredbaVerzija verzija) => verzija switch
+    {
+        UredbaVerzija.Nn37_2023 => TarifaConstants.NazivStareUredbeOPristojbama,
+        _ => TarifaConstants.NazivUredbeOPristojbama,
+    };
+
+    /// <summary>
+    /// Različite Uredbe primijenjene na retke, starija prije novije. Prazno kad
+    /// troškovnik nema nijednu pristojbenu stavku.
+    /// </summary>
+    public static List<string> Primijenjene(IEnumerable<UredbaVerzija> verzije) =>
+        [.. verzije
+            .Distinct()
+            .OrderBy(v => v == UredbaVerzija.Nn37_2023 ? 0 : 1)
+            .Select(PuniNaziv)];
+}
+
+/// <summary>
 /// Poglavlja Priloga Uredbe. Poglavlje određuje koji se tarifni brojevi uopće
 /// mogu primijeniti — Tar. br. 1 postoji samo u Poglavlju I.
 /// </summary>

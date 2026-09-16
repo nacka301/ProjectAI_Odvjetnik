@@ -119,6 +119,15 @@ public sealed class TroskovnikRecord : IFirmScoped
     public bool IsOduzimanjePrekrsaj { get; set; }
     public decimal VrijednostOduzimanja { get; set; }
     public object? RawJsonOutput { get; set; }
+
+    // Po čemu je izračun napravljen (migracija 025). Puni ih isključivo
+    // TroskovnikController.SastaviZapis iz rezultata izračuna, nikad iz zahtjeva.
+    public DateTime? IzracunatoAt { get; set; }
+    public string? TarifaNaziv { get; set; }
+    public DateOnly? TarifaVrijediOd { get; set; }
+    public decimal? VrijednostBoda { get; set; }
+    public List<string>? UredbePristojbe { get; set; }
+    public string? VerzijaIzracuna { get; set; }
 }
 
 public sealed class TroskovnikReadRecord
@@ -152,6 +161,15 @@ public sealed class TroskovnikReadRecord
     public bool IsOduzimanjePrekrsaj { get; set; }
     public decimal VrijednostOduzimanja { get; set; }
     public object? RawJsonOutput { get; set; }
+
+    // Migracija 025 — NULL za troškovnike spremljene prije nje. Datumi ostaju tekst,
+    // kao CreatedAt, da čitanje ne ovisi o formatu koji PostgREST vrati.
+    public string? IzracunatoAt { get; set; }
+    public string? TarifaNaziv { get; set; }
+    public string? TarifaVrijediOd { get; set; }
+    public decimal? VrijednostBoda { get; set; }
+    public List<string>? UredbePristojbe { get; set; }
+    public string? VerzijaIzracuna { get; set; }
 }
 
 // Nested DTOs for new schema

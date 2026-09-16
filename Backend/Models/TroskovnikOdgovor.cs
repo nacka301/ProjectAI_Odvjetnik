@@ -114,6 +114,17 @@ public sealed class TroskovnikResponse
     [JsonPropertyName("vrijednost_boda")]
     public decimal VrijednostBoda { get; set; } = TarifaConstants.BodValue;
 
+    /// <summary>
+    /// Naziv verzije Tarife po kojoj je izračun napravljen (Tbr. 52 — po dospijeću).
+    /// Sprema se uz troškovnik i ide u bilješku o pravnoj osnovi.
+    /// </summary>
+    [JsonPropertyName("tarifa_naziv")]
+    public string TarifaNaziv { get; set; } = TarifaVerzije.Trenutna.Naziv;
+
+    /// <summary>Datum od kojeg je ta verzija Tarife na snazi.</summary>
+    [JsonPropertyName("tarifa_vrijedi_od")]
+    public DateOnly TarifaVrijediOd { get; set; } = TarifaVerzije.Trenutna.VrijediOd;
+
     [JsonPropertyName("klijent")]
     public TroskovnikParty? Klijent { get; set; }
 
@@ -191,6 +202,13 @@ public sealed class TroskovnikResponse
     /// </summary>
     [JsonPropertyName("pristojbene_stavke")]
     public List<PristojbenaStavkaDto> PristojbeneStavke { get; set; } = [];
+
+    /// <summary>
+    /// Puni nazivi Uredbi stvarno primijenjenih na pristojbene stavke, starija prije
+    /// novije. Jedan troškovnik može imati obje (čl. 2 Uredbe NN 50/2026).
+    /// </summary>
+    [JsonPropertyName("uredbe_pristojbe")]
+    public List<string> UredbePristojbe { get; set; } = [];
 
     /// <summary>Zbroj svih pristojbenih stavaka; 0 kad je stranka oslobođena.</summary>
     [JsonPropertyName("sudska_pristojba")]

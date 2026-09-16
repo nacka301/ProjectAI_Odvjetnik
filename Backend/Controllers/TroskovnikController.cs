@@ -230,6 +230,10 @@ public class TroskovnikController : ControllerBase
     /// Iznosi se uzimaju iz rezultata, a ne iz zahtjeva: u kaznenom predmetu VPS je
     /// izbačen iz izračuna pa ne smije završiti ni u spremljenom troškovniku
     /// (vidi TroskovnikService).
+    ///
+    /// Isto vrijedi za verziju propisa: naziv Tarife, Uredbe i trenutak izračuna
+    /// dolaze iz rezultata koji je upravo izračunat na serveru. Zahtjev ta polja
+    /// uopće nema, pa ih klijent ne može podmetnuti.
     /// </summary>
     private static TroskovnikRecord SastaviZapis(
         TroskovnikRequest zahtjev, TroskovnikResponse rezultat,
@@ -265,7 +269,14 @@ public class TroskovnikController : ControllerBase
         IsStjecaj = zahtjev.IsStjecaj,
         IsOduzimanjePrekrsaj = zahtjev.IsOduzimanjePrekrsaj,
         VrijednostOduzimanja = zahtjev.VrijednostOduzimanja,
-        RawJsonOutput = rezultat
+        RawJsonOutput = rezultat,
+        // Po čemu je izračunat (migracija 025)
+        IzracunatoAt = rezultat.DatumIzrade,
+        TarifaNaziv = rezultat.TarifaNaziv,
+        TarifaVrijediOd = rezultat.TarifaVrijediOd,
+        VrijednostBoda = rezultat.VrijednostBoda,
+        UredbePristojbe = rezultat.UredbePristojbe,
+        VerzijaIzracuna = VerzijaAplikacije.Commit
     };
 
     /// <summary>Podaci odvjetnika za zaglavlje troškovnika; izostaju ako ih zahtjev nema.</summary>

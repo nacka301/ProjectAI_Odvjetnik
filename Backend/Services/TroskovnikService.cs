@@ -783,6 +783,8 @@ public sealed class TroskovnikService : ITroskovnikService
             VrijednostSpora = kontekst.VrijednostSpora,
             // Tbr. 52 — vrijednost boda mjerodavne verzije Tarife (po dospijeću).
             VrijednostBoda = kontekst.Tarifa.BodValue,
+            TarifaNaziv = kontekst.Tarifa.Naziv,
+            TarifaVrijediOd = kontekst.Tarifa.VrijediOd,
             IsSamoKazneni = kontekst.JeSamoKazneni,
             // Osnovica (bez PDV) = nagrada + naknada troškova (Tbr. 48.-51.) — obje su
             // vlastiti trošak odvjetnika i ulaze u PDV osnovicu; sudska pristojba i
@@ -843,6 +845,7 @@ public sealed class TroskovnikService : ITroskovnikService
             VrijednostOduzimanja = request.VrijednostOduzimanja,
             // Sudske pristojbe
             PristojbeneStavke = [.. zbrojevi.Pristojbe.Stavke.Select(PristojbenaStavkaUOdgovor)],
+            UredbePristojbe = UredbaNazivi.Primijenjene(zbrojevi.Pristojbe.Stavke.Select(s => s.Verzija)),
             SudskaPristojba = zbrojevi.Pristojbe.Ukupno,
             PristojbaOsnova = NaslijedenaOsnova(zbrojevi.Pristojbe),
             IsOslobodjenPristojbi = request.IsOslobodjenPristojbi,

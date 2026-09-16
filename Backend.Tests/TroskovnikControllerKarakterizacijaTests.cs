@@ -333,6 +333,107 @@ public class TroskovnikControllerKarakterizacijaTests
         Assert.True(korijen.TryGetProperty("created_client_id", out _));
     }
 
+    // ── POST /api/troskovnik/spremi — po čemu je izračunat (migracija 025) ──
+    //
+    // Uz svaki spremljeni troškovnik zapisuje se verzija Tarife, Uredbe i trenutak
+    // izračuna. Ako se propis kasnije promijeni, stari zapis mora i dalje reći po
+    // čemu je rađen — zato se sprema naziv, a ne poveznica na konstantu.
+
+    [Fact]
+    public async Task Spremi_ZapisNosiVerzijuPropisaIzRezultata()
+    {
+        var klijenti = new FakeClientCaseService();
+        var kontroler = StvoriKontroler(klijenti);
+
+        var odgovor = Assert.IsType<OkObjectResult>(await kontroler.Spremi(ValjanZahtjev()));
+        var rezultat = Assert.IsType<TroskovnikResponse>(Svojstvo(odgovor.Value, "Troskovnik"));
+        var zapis = klijenti.SpremljeniTroskovnik!;
+
+        Assert.Equal(TarifaVerzije.Trenutna.Naziv, zapis.TarifaNaziv);
+        Assert.Equal(new DateOnly(2023, 10, 14), zapis.TarifaVrijediOd);
+        Assert.Equal(2.00m, zapis.VrijednostBoda);
+        Assert.Equal([TarifaConstants.NazivUredbeOPristojbama], zapis.UredbePristojbe);
+
+        // Isti trenutak kao datum_izrade u raw_json_output — ne drugi poziv satu.
+        Assert.Equal(rezultat.DatumIzrade, zapis.IzracunatoAt);
+    }
+
+    /// <summary>
+    /// Čl. 2 Uredbe NN 50/2026: odgovor na tužbu podnesen prije 1.6.2026. ide po
+    /// staroj Uredbi, a tužba po novoj — isti troškovnik nosi obje, starija prva.
+    /// </summary>
+    [Fact]
+    public async Task Spremi_OdgovorNaTuzbuPrijeNoveUredbe_ZapisujeObjeUredbe()
+    {
+        var klijenti = new FakeClientCaseService();
+        var kontroler = StvoriKontroler(klijenti);
+        var zahtjev = ValjanZahtjev();
+        zahtjev.DatumPodnosenjaOdgovoraNaTuzbu = new DateOnly(2026, 3, 12);
+        zahtjev.Stavke =
+        [
+            new TroskovnikItemRequest { ItemId = "par_tuzba", Kolicina = 1 },
+            new TroskovnikItemRequest { ItemId = "par_odgovor_tuzba", Kolicina = 1 },
+        ];
+
+        Assert.IsType<OkObjectResult>(await kontroler.Spremi(zahtjev));
+
+        Assert.Equal(
+            [TarifaConstants.NazivStareUredbeOPristojbama, TarifaConstants.NazivUredbeOPristojbama],
+            klijenti.SpremljeniTroskovnik!.UredbePristojbe);
+    }
+
+    [Fact]
+    public async Task Spremi_OslobodjenjeIliBezPristojbenihRadnji_UredbeNisuIzmisljene()
+    {
+        var klijenti = new FakeClientCaseService();
+        var kontroler = StvoriKontroler(klijenti);
+        var zahtjev = ValjanZahtjev();
+        zahtjev.Stavke = [new TroskovnikItemRequest { ItemId = "kaz_dodatni_sat", Kolicina = 1 }];
+
+        Assert.IsType<OkObjectResult>(await kontroler.Spremi(zahtjev));
+
+        // Kazneni predmet nema pristojbenih stavaka, pa ni primijenjene Uredbe.
+        Assert.Empty(klijenti.SpremljeniTroskovnik!.UredbePristojbe!);
+        Assert.NotNull(klijenti.SpremljeniTroskovnik.TarifaNaziv);
+    }
+
+    /// <summary>
+    /// Imena stupaca na žici prema Supabaseu. ClientCaseService serijalizira zapis
+    /// sa SnakeCaseLower; ako se svojstvo preimenuje, PostgREST bi upis odbio zbog
+    /// nepostojećeg stupca i troškovnik se ne bi spremio.
+    /// </summary>
+    [Fact]
+    public async Task Spremi_Zapis_SerijaliziraSeUStupceMigracije025()
+    {
+        var klijenti = new FakeClientCaseService();
+        await StvoriKontroler(klijenti).Spremi(ValjanZahtjev());
+
+        var opcije = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        };
+        using var dokument = JsonDocument.Parse(JsonSerializer.Serialize(klijenti.SpremljeniTroskovnik, opcije));
+        var korijen = dokument.RootElement;
+
+        Assert.Equal("2023-10-14", korijen.GetProperty("tarifa_vrijedi_od").GetString());
+        Assert.Equal(TarifaVerzije.Trenutna.Naziv, korijen.GetProperty("tarifa_naziv").GetString());
+        Assert.Equal(2.00m, korijen.GetProperty("vrijednost_boda").GetDecimal());
+        Assert.Equal(JsonValueKind.Array, korijen.GetProperty("uredbe_pristojbe").ValueKind);
+        Assert.True(korijen.TryGetProperty("izracunato_at", out _));
+
+        // Bez RENDER_GIT_COMMIT (lokalno, testovi) ključ izostaje, pa stupac ostaje NULL.
+        if (VerzijaAplikacije.Commit is null)
+            Assert.False(korijen.TryGetProperty("verzija_izracuna", out _));
+    }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("   ", null)]
+    [InlineData(" 0fa5337 ", "0fa5337")]
+    public void VerzijaAplikacije_Normaliziraj(string? ulaz, string? ocekivano)
+        => Assert.Equal(ocekivano, VerzijaAplikacije.Normaliziraj(ulaz));
+
     // ── POST /api/troskovnik/spremi — razrješavanje klijenta ──────
     //
     // Ove grane prije koraka 10 nisu imale nijedan test, a upravo se one izdvajaju
