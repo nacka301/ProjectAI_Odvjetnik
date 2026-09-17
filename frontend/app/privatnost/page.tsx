@@ -66,6 +66,8 @@ export default function PrivatnostPage() {
             <li>Ime i prezime, naziv ureda, OIB, adresa sjedišta, IBAN</li>
             <li>Adresa elektroničke pošte, telefonski broj</li>
             <li>Podaci o pristupu i korištenju (stanje i datum isteka pristupa)</li>
+            <li>Potvrda Izjave o odgovornosti i Uvjeta korištenja (verzija teksta, datum i preglednik)</li>
+            <li>Prijave greške u izračunu: opis, očekivani iznos te unesene stavke i izračun — bez imena i podataka stranaka</li>
             <li>Tehnički podaci: IP adresa (haširana — pohranjena u nepovratnom formatu), pregledavač, operativni sustav</li>
           </ul>
           <p>

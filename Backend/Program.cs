@@ -127,6 +127,22 @@ builder.Services.AddRateLimiter(options =>
         opt.QueueLimit = 0;
     });
 
+    // Prijave grešaka u izračunu: 5 na sat PO KORISNIKU. Particionirano, za
+    // razliku od gornjih politika koje dijele jedan prozor za sve — inače bi
+    // pet prijava jednog ureda zatvorilo gumb svima. Ključ je user id iz
+    // SupabaseJwtMiddlewarea, koji se izvršava prije UseRateLimiter.
+    options.AddPolicy("prijave", httpContext =>
+        System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Items["AuthUserId"] as string
+                ?? httpContext.Connection.RemoteIpAddress?.ToString()
+                ?? "nepoznat",
+            factory: _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromHours(1),
+                QueueLimit = 0,
+            }));
+
     options.OnRejected = async (context, cancellationToken) =>
     {
         context.HttpContext.Response.ContentType = "application/json";

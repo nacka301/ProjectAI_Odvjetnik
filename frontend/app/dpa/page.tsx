@@ -174,6 +174,11 @@ export default function DpaPage() {
                   <td>Transakcijski e-mail (SMTP)</td>
                   <td>DPA na brevo.com/legal</td>
                 </tr>
+                <tr>
+                  <td>Resend (Plus Five Five, Inc.)</td>
+                  <td>E-mail obavijest o prijavi greške u izračunu (bez podataka stranaka)</td>
+                  <td>DPA na resend.com/legal/dpa</td>
+                </tr>
               </tbody>
             </table>
           </div>

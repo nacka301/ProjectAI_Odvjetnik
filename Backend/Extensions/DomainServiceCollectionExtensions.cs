@@ -77,6 +77,10 @@ public static class DomainServiceCollectionExtensions
         services.AddSingleton<IEmailService>(sp => sp.GetRequiredService<ResendEmailService>());
         services.AddSingleton<IResendEmailService>(sp => sp.GetRequiredService<ResendEmailService>());
 
+        // ── Prijave grešaka u izračunu (plan pravne zaštite, dio D) ──
+        services.AddHttpClient<PrijaveGresakaSpremiste>();
+        services.AddScoped<IPrijaveGresakaSpremiste>(sp => sp.GetRequiredService<PrijaveGresakaSpremiste>());
+
         // REMOVED: the AuthService registration trio.
         //
         // It backed POST /api/auth/register and /api/auth/verify — a second

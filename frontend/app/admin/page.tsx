@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/useAuth";
 import { API_BASE } from "@/lib/api";
 import SubscriptionEditor from "@/components/admin/SubscriptionEditor";
 import DeleteUserDialog from "@/components/admin/DeleteUserDialog";
+import PrijaveGresakaPanel from "@/components/admin/PrijaveGresakaPanel";
 import {
   ShieldCheck,
   Users,
@@ -751,6 +752,12 @@ export default function AdminDashboard() {
             </div>
           )}
         </section>
+
+        {/* ── Prijave grešaka u izračunu (plan pravne zaštite, dio D) ── */}
+        <PrijaveGresakaPanel
+          authHeaders={authHeaders}
+          emailPoKorisniku={Object.fromEntries(users.map((u) => [u.user_id, u.email]))}
+        />
 
         {/* ── Developer Tools — Danger Zone ── */}
         <section className="rounded-xl border-2 border-red-300 bg-red-50/30 shadow-sm overflow-hidden">

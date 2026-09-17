@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import AppHeader from "@/components/AppHeader";
 import TroskovnikIspis from "@/components/troskovnik/TroskovnikIspis";
+import PrijavaGreskeDialog from "@/components/troskovnik/PrijavaGreskeDialog";
 import { getTroskovnik, type TroskovnikRow } from "@/lib/supabase";
 import { izvozModelIzZapisa } from "@/lib/troskovnik-zapis";
 import type { TroskovnikIzvozModel } from "@/lib/troskovnik-izvoz-model";
@@ -75,6 +76,7 @@ export default function SpremljeniTroskovnikPage() {
   const [model, setModel] = useState<TroskovnikIzvozModel | null>(null);
   const [loading, setLoading] = useState(true);
   const [greska, setGreska] = useState<string | null>(null);
+  const [prijavaGreskeOtvorena, setPrijavaGreskeOtvorena] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -237,6 +239,15 @@ export default function SpremljeniTroskovnikPage() {
                 <div className="border-t border-slate-200 pt-2">
                   <Redak oznaka="Sveukupni trošak" iznos={model.sveukupno} jak />
                 </div>
+                <div className="text-right">
+                  <button
+                    type="button"
+                    onClick={() => setPrijavaGreskeOtvorena(true)}
+                    className="text-xs text-slate-500 underline underline-offset-2 hover:text-slate-800"
+                  >
+                    Iznos mi ne izgleda točno
+                  </button>
+                </div>
               </div>
 
               {model.napomena && (
@@ -257,6 +268,16 @@ export default function SpremljeniTroskovnikPage() {
 
       {/* Isti dokument koji ide sudu i s ekrana za izradu — vidljiv samo u ispisu. */}
       {model && <TroskovnikIspis model={model} />}
+
+      {zapis && (
+        <PrijavaGreskeDialog
+          open={prijavaGreskeOtvorena}
+          onClose={() => setPrijavaGreskeOtvorena(false)}
+          troskovnikId={zapis.id}
+          // Spremljeni odgovor sadrži i ulaz; backend iz njega uklanja stranke.
+          rezultat={() => zapis.raw_json_output}
+        />
+      )}
     </div>
   );
 }

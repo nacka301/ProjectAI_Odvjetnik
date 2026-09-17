@@ -38,6 +38,7 @@ import { clearDraft, loadDraft, saveDraft, type LoadedDraft } from "@/lib/trosko
 import { formatThreshold } from "@/lib/format";
 import { naslutiTipStranke, type TipStranke } from "@/lib/stranke-tipovi";
 import TroskovnikIspis from "@/components/troskovnik/TroskovnikIspis";
+import PrijavaGreskeDialog from "@/components/troskovnik/PrijavaGreskeDialog";
 import StrankaPicker from "@/components/troskovnik/StrankaPicker";
 import { buildIzvozModel, usporediPoDatumu } from "@/lib/troskovnik-izvoz-model";
 import { STUPCI, buildTroskovnikSheet, nazivDatoteke } from "@/lib/troskovnik-xlsx";
@@ -516,6 +517,7 @@ function TroskovnikContent() {
   // ── Save state ──
   const [saving, setSaving] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(null);
+  const [prijavaGreskeOtvorena, setPrijavaGreskeOtvorena] = useState(false);
 
   // ── Result state ──
   const [result, setResult] = useState<TroskovnikResponse | null>(null);
@@ -1818,6 +1820,50 @@ function TroskovnikContent() {
       predmetSud, predmetPoslovniBroj, datumDospijeca,
     ],
   );
+
+  // ── Prijava greške u izračunu (plan pravne zaštite, dio D) ──
+  // Samo ono što treba da se izračun ponovi: stavke, vrijednost, datumi i
+  // zastavice. Stranke, odvjetnik, sud, broj predmeta i napomena namjerno
+  // izostaju — backend ih iz svega što stigne ionako još jednom uklanja.
+  const ulazZaPrijavuGreske = () => ({
+    vrijednost_spora: vrijednostNum,
+    stavke: stavkeZaSlanje(),
+    dodatne_pristojbe: trosakZaSlanje(dodatnePristojbe).map(({ datum, iznos }) => ({ datum, iznos })),
+    predujmovi: trosakZaSlanje(predujmovi).map(({ datum, iznos }) => ({ datum, iznos })),
+    is_pdv_ukljucen: isPdvUkljucen,
+    zaprijecena_kazna: zaprijecenaKazna || undefined,
+    is_po_sluzbenoj_duznosti: isPoSluzbenojDuznosti,
+    is_na_teret_proracuna: isNaTeretProracuna,
+    is_zastupnik_djeteta: isZastupnikDjeteta,
+    is_stjecaj: isStjecaj,
+    is_oduzimanje_prekrsaj: isOduzimanjePrekrsaj,
+    vrijednost_oduzimanja: parsedVrijednostOduzimanja,
+    is_oslobodjen_pristojbi: isOslobodjenPristojbi,
+    datum_dospijeca: datumDospijeca || null,
+    datum_podnosenja_odgovora_na_tuzbu: datumOdgovoraNaTuzbu || null,
+    datum_pokretanja_upravnog_spora: datumPokretanjaUpravnogSpora || null,
+    pristojbe_dodane: pristojbeDodane,
+    pristojbe_iskljucene: pristojbeIskljucene,
+    podnesci_elektronicki: podnesciElektronicki,
+    zk_upis_elektronicki: zkUpisElektronicki,
+    odluke_elektronicki: odlukeElektronicki,
+    broj_zastupanih_osoba: brojZastupanihOsoba,
+    oslobodjenje_kategorija: oslobodjenjeKategorija || undefined,
+    broj_oslobodjenih_osoba: brojOslobodjenihOsoba,
+    vrsta_postupka: vrstaPostupka,
+    zahtjevi: zahtjevi.map((z) => ({ iznos: z.iznos, primarni: !!z.primarni })),
+    zahtjevi_nacin: zahtjeviNacin ?? undefined,
+    pravni_lijek: pravniLijek,
+    vps_primijeni_na_nagradu: vpsPrimijeniNaNagradu,
+    osnovica_tbr7: osnovicaTbr7,
+    razina_suda: razinaSuda ?? undefined,
+    tbr45_nacin: tbr45Nacin ?? undefined,
+    renta_iznos: rentaIznosNum || undefined,
+    renta_razdoblje: rentaRazdoblje ?? undefined,
+    tbr41_povisenje_postotak: tbr41Povisenje,
+    tbr41_snizenje_postotak: tbr41Snizenje,
+    naknada_troskova_stavke: naknadaTroskovaStavke.map((r) => ({ vrsta: r.vrsta, iznos: parseHrNumber(r.iznos) })),
+  });
 
   // ── Izvoz u Excel ──
   const handleExportXlsx = useCallback(async () => {
@@ -3593,6 +3639,20 @@ function TroskovnikContent() {
                         <span>{fmtEur(liveCalc.sveukupniTrosak)}</span>
                       </div>
 
+                      {/* Prijava greške — tiho, uz iznos na koji se odnosi. Ne u
+                          prikazu primjera: izmišljeni podaci nisu stvarna greška. */}
+                      {!demo && (
+                        <div className="text-right print:hidden">
+                          <button
+                            type="button"
+                            onClick={() => setPrijavaGreskeOtvorena(true)}
+                            className="text-[11px] text-slate-500 underline underline-offset-2 hover:text-slate-800"
+                          >
+                            Iznos mi ne izgleda točno
+                          </button>
+                        </div>
+                      )}
+
                       {/* Čl. 13 — tereti protivnu stranku po pravomoćnosti, pa stoji ISPOD
                           ukupnog iznosa i u njega ne ulazi. */}
                       {liveCalc.pristojbaNaTeretProtustranke > 0 && (
@@ -4205,6 +4265,14 @@ function TroskovnikContent() {
           komponentu ga nije naslijedio, pa se ispis ondje vidio i na zaslonu,
           kao sirov tekst uz lijevi rub. */}
       {result && <TroskovnikIspis model={izvozModel} />}
+
+      <PrijavaGreskeDialog
+        open={prijavaGreskeOtvorena}
+        onClose={() => setPrijavaGreskeOtvorena(false)}
+        troskovnikId={savedId ?? undefined}
+        ulazniPodaci={ulazZaPrijavuGreske}
+        rezultat={() => result ?? liveCalc}
+      />
     </div>
   );
 }

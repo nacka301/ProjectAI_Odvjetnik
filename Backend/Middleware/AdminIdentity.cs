@@ -26,6 +26,9 @@ public sealed class AdminIdentity
             ?? config["Admin:Email"];
     }
 
+    /// <summary>Adresa administratora — kamo idu obavijesti poput prijava grešaka. Null kad nije postavljena.</summary>
+    public string? Email => string.IsNullOrWhiteSpace(_adminEmail) ? null : _adminEmail;
+
     /// <summary>True when an admin address is configured at all.</summary>
     public bool IsConfigured => !string.IsNullOrWhiteSpace(_adminEmail);
 

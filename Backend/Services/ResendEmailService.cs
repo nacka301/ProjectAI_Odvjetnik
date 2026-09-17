@@ -28,17 +28,27 @@ public sealed class ResendEmailService : IResendEmailService,IEmailService {
     {
         _logger = logger;
 
-        _apiKey = config["Resend:ApiKey"]
-            ?? Environment.GetEnvironmentVariable("RESEND_API_KEY");
+        // Varijabla okoline ima prednost, a placeholder iz appsettings.json ne
+        // vrijedi kao ključ. Prije je redoslijed bio obrnut: "YOUR_RESEND_API_KEY"
+        // iz appsettings.json uvijek je pobjeđivao RESEND_API_KEY s Rendera, pa je
+        // servis mislio da je postavljen i tiho padao na SMTP prijavi.
+        _apiKey = PraviKljuc(Environment.GetEnvironmentVariable("RESEND_API_KEY"))
+            ?? PraviKljuc(config["Resend:ApiKey"]);
 
         _senderName = config["Resend:SenderName"] ?? "PravoTek";
 
-        _senderEmail = config["Resend:SenderEmail"]
-            ?? Environment.GetEnvironmentVariable("RESEND_SENDER_EMAIL")
+        _senderEmail = Environment.GetEnvironmentVariable("RESEND_SENDER_EMAIL")
+            ?? config["Resend:SenderEmail"]
             ?? "onboarding@resend.dev";
     }
 
     public bool IsConfigured => !string.IsNullOrWhiteSpace(_apiKey);
+
+    /// <summary>Prazno i placeholder iz predloška konfiguracije nisu ključ.</summary>
+    internal static string? PraviKljuc(string? vrijednost) =>
+        string.IsNullOrWhiteSpace(vrijednost) || vrijednost.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase)
+            ? null
+            : vrijednost.Trim();
 
     public async Task<bool> SendEmailAsync(
         string toEmail,

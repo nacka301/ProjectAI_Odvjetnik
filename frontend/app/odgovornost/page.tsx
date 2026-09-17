@@ -19,9 +19,8 @@ export const metadata: Metadata = {
  * dio B. Pisano u prvom licu jer uslugu pruža jedna fizička osoba; je li to
  * pravno bolje od trećeg lica, pitanje je za odvjetnički pregled.
  *
- * Tekst smije tvrditi samo ono što aplikacija danas stvarno radi. Potvrda pri
- * ulasku (dio C) postoji; kad dođe gumb za prijavu greške (dio D), ovdje se to
- * dopisuje.
+ * Tekst smije tvrditi samo ono što aplikacija danas stvarno radi: potvrda pri
+ * ulasku (dio C) i prijava greške uz iznos (dio D) postoje.
  */
 export default function OdgovornostPage() {
   const email = <a href={`mailto:${PRUZATELJ_EMAIL}`}>{PRUZATELJ_EMAIL}</a>;
@@ -96,9 +95,10 @@ export default function OdgovornostPage() {
 
           <h2>Kad nađete grešku</h2>
           <p>
-            Ako vam iznos ne izgleda točno, javite mi na {email}. Najkorisnije je poslati što ste
-            unijeli, koji je iznos alat dao i koji ste očekivali. Svaku prijavu pregledam, a
-            potvrđenu grešku ispravim i javim vam se.
+            Uz iznos svakog troškovnika stoji poveznica „Iznos mi ne izgleda točno“. Prijava stiže
+            izravno meni, zajedno s unesenim stavkama i izračunom — bez imena i podataka stranaka.
+            Možete pisati i na {email}. Svaku prijavu pregledam, a potvrđenu grešku ispravim i
+            javim vam se.
           </p>
 
           <h2>Tko pruža uslugu</h2>
