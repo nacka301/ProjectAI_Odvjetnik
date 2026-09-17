@@ -8,6 +8,14 @@ import {
   signMfaCookie,
   verifyMfaCookie,
 } from "@/lib/mfa-cookie";
+import {
+  POTVRDA_COOKIE,
+  potvrdaCookieOptions,
+  signPotvrdaCookie,
+  verifyPotvrdaCookie,
+} from "@/lib/potvrda-cookie";
+import { provjeriPotvrdu } from "@/lib/pravna-potvrda";
+import { POTVRDA_RUTA, PRAVNI_TEKSTOVI_VERZIJA } from "@/lib/pravno";
 
 /**
  * Next.js Middleware — runs on every matched request.
@@ -16,7 +24,8 @@ import {
  * 1. Refresh auth tokens (HttpOnly cookies) on every navigation
  * 2. Redirect unauthenticated users away from protected routes
  * 3. Enforce the second factor before any protected page renders
- * 4. Redirect authenticated users away from auth pages (login/register)
+ * 4. Require confirmation of the current liability statement and terms
+ * 5. Redirect authenticated users away from auth pages (login/register)
  */
 
 /** Auth pages an already-signed-in user is still allowed to reach. */
@@ -123,6 +132,46 @@ export async function middleware(request: NextRequest) {
         MFA_COOKIE,
         await signMfaCookie(user.id),
         mfaCookieOptions(),
+      );
+    }
+  }
+
+  // ── Potvrda Izjave o odgovornosti i Uvjeta (plan pravne zaštite, dio C) ──
+  // Nakon drugog faktora, prije bilo koje stranice aplikacije. Ovdje, a ne u
+  // komponenti na klijentu, iz istog razloga kao 2FA: klijentska provjera ne zna
+  // razlikovati „još učitava" od „odjavljen", pa bi naslovna treperila, a vodič
+  // na Dashboardu stigao se pokrenuti prije ekrana potvrde.
+  //
+  // Pravni dokumenti su javni, pa se ekran potvrde nikad ne zatvara nad tekstom
+  // koji traži da se pročita. Sama /potvrda je izuzeta da se ne vrti u krug.
+  if (user && !isPublicRoute && pathname !== POTVRDA_RUTA) {
+    const vecPotvrdeno = await verifyPotvrdaCookie(
+      request.cookies.get(POTVRDA_COOKIE)?.value,
+      user.id,
+      PRAVNI_TEKSTOVI_VERZIJA,
+    );
+
+    if (!vecPotvrdeno) {
+      const stanje = await provjeriPotvrdu(accessToken, user.id, PRAVNI_TEKSTOVI_VERZIJA);
+
+      if (stanje !== "potvrdeno") {
+        // „nije" i „nepoznato" idu na isto mjesto: stranica sama provjeri još
+        // jednom i, ako je potvrda ipak tu, vrati korisnika kamo je išao.
+        const url = request.nextUrl.clone();
+        url.pathname = POTVRDA_RUTA;
+        url.search = "";
+        url.searchParams.set("next", pathname + request.nextUrl.search);
+        // Stranica mora znati da baza nije odgovorila: tada NE smije sama vraćati
+        // korisnika natrag, inače bi se potvrđen korisnik vrtio u krug između
+        // /potvrda i odredišta dok god middleware ne može pitati bazu.
+        if (stanje === "nepoznato") url.searchParams.set("razlog", "nepoznato");
+        return NextResponse.redirect(url);
+      }
+
+      supabaseResponse.cookies.set(
+        POTVRDA_COOKIE,
+        await signPotvrdaCookie(user.id, PRAVNI_TEKSTOVI_VERZIJA),
+        potvrdaCookieOptions(),
       );
     }
   }

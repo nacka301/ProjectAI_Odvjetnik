@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { MFA_COOKIE } from "@/lib/mfa-cookie";
+import { POTVRDA_COOKIE } from "@/lib/potvrda-cookie";
 
 /**
  * Ends a session completely — Supabase tokens AND the second-factor marker.
@@ -33,6 +34,8 @@ export async function POST() {
   // missing parts in verifyMfaCookie, but leaving no cookie at all is clearer
   // and cannot be confused for a marker in any future reader.
   response.cookies.delete(MFA_COOKIE);
+  // Vezan je uz user id pa drugome ne vrijedi, ali odjava ne ostavlja tragove.
+  response.cookies.delete(POTVRDA_COOKIE);
   response.cookies.delete("is-admin");
 
   return response;

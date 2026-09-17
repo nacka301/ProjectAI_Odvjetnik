@@ -49,8 +49,8 @@ export default function UvjetiPage() {
             Tarifi sudskih pristojbi (NN 50/2026) te vođenje evidencije stranaka i predmeta.
           </p>
           <p>
-            1.3. Pristupanjem ili korištenjem aplikacije, Korisnik potvrđuje da je pročitao, razumio i
-            da prihvaća ove Uvjete u cijelosti.
+            1.3. Korisnik prihvaća ove Uvjete i <a href="/odgovornost">Izjavu o odgovornosti</a>{" "}
+            potvrdom pri prvom ulasku u aplikaciju. Potvrda se bilježi s datumom i verzijom teksta.
           </p>
 
           {/* §2 */}
@@ -210,9 +210,10 @@ export default function UvjetiPage() {
             <strong>15 (petnaest) dana</strong> prije stupanja na snagu izmijenjenih Uvjeta.
           </p>
           <p>
-            10.2. Izmjene kojima se Korisniku nameću nove obveze, uključujući uvođenje naplate,
-            primjenjuju se na Korisnika tek kad ih prihvati. Korisnik koji izmjene ne prihvati može
-            zatražiti zatvaranje računa prema članku 8.
+            10.2. Izmijenjene Uvjete Korisnik potvrđuje pri sljedećem ulasku u aplikaciju. Izmjene
+            kojima se Korisniku nameću nove obveze, uključujući uvođenje naplate, primjenjuju se na
+            Korisnika tek kad ih prihvati. Korisnik koji izmjene ne prihvati može zatražiti
+            zatvaranje računa prema članku 8.
           </p>
           <p>
             10.3. Ako bilo koja odredba ovih Uvjeta bude proglašena ništavom ili nevažećom, preostale

@@ -15,6 +15,16 @@ export const PRAVNI_TEKSTOVI_VERZIJA = "2026-09-17";
 /** Verzija onako kako stoji na stranici. */
 export const PRAVNI_TEKSTOVI_VERZIJA_TEKST = "17. rujna 2026.";
 
+/**
+ * Jedna rečenica o tome što se u novoj verziji promijenilo — prikazuje se na
+ * ekranu potvrde korisniku koji je potvrdio neku raniju verziju. `null` za prvu
+ * verziju, kad ranije potvrde nema. Mijenja se zajedno s verzijom.
+ */
+export const PRAVNI_TEKSTOVI_IZMJENA: string | null = null;
+
+/** Ekran na koji middleware šalje korisnika koji tekuću verziju nije potvrdio. */
+export const POTVRDA_RUTA = "/potvrda";
+
 /** Pružatelj usluge je fizička osoba; e-pošta je jedini kanal za kontakt. */
 export const PRUZATELJ_IME = "David Vacka";
 export const PRUZATELJ_EMAIL = "vackadavid@gmail.com";

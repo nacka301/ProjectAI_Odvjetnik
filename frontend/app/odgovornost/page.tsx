@@ -19,9 +19,9 @@ export const metadata: Metadata = {
  * dio B. Pisano u prvom licu jer uslugu pruža jedna fizička osoba; je li to
  * pravno bolje od trećeg lica, pitanje je za odvjetnički pregled.
  *
- * Tekst smije tvrditi samo ono što aplikacija danas stvarno radi. Kad dođe gumb
- * za prijavu greške (dio D) i potvrda pri prijavi (dio C), ovdje se to dopisuje
- * i mijenja verzija u lib/pravno.ts.
+ * Tekst smije tvrditi samo ono što aplikacija danas stvarno radi. Potvrda pri
+ * ulasku (dio C) postoji; kad dođe gumb za prijavu greške (dio D), ovdje se to
+ * dopisuje.
  */
 export default function OdgovornostPage() {
   const email = <a href={`mailto:${PRUZATELJ_EMAIL}`}>{PRUZATELJ_EMAIL}</a>;
@@ -108,8 +108,9 @@ export default function OdgovornostPage() {
 
           <h2>Izmjene</h2>
           <p>
-            Kad se ova izjava promijeni, na vrhu stranice mijenja se datum verzije. O izmjenama
-            koje za vas nešto mijenjaju obavještavam e-poštom prije nego stupe na snagu.
+            Kad se ova izjava ili Uvjeti korištenja promijene, na vrhu stranice mijenja se datum
+            verzije, a pri sljedećem ulasku u aplikaciju tražit ću da ih ponovno potvrdite. O
+            izmjenama koje za vas nešto mijenjaju obavještavam i e-poštom, prije nego stupe na snagu.
           </p>
         </article>
       </div>

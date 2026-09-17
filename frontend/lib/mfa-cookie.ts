@@ -49,7 +49,7 @@ function secret(): string {
   return value;
 }
 
-async function hmac(payload: string): Promise<string> {
+export async function hmac(payload: string): Promise<string> {
   const key = await crypto.subtle.importKey(
     "raw",
     new TextEncoder().encode(secret()),
@@ -68,7 +68,7 @@ async function hmac(payload: string): Promise<string> {
 }
 
 /** Compares without leaking where the first difference is. */
-function timingSafeEqual(a: string, b: string): boolean {
+export function timingSafeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let diff = 0;
   for (let i = 0; i < a.length; i++) {
