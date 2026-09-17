@@ -25,6 +25,7 @@ export default function Security() {
           <div className="flex flex-wrap gap-6 mt-7 text-[14px]">
             <Link href="/privatnost">Politika privatnosti</Link>
             <Link href="/uvjeti">Uvjeti korištenja</Link>
+            <Link href="/odgovornost">Izjava o odgovornosti</Link>
             <Link href="/dpa">Ugovor o obradi podataka</Link>
           </div>
         </div>

@@ -126,9 +126,13 @@ export function SecurityFooter() {
             Obrada osobnih podataka sukladno Uredbi (EU) 2016/679 (GDPR).
           </p>
           {/* Legal links */}
-          <div className="flex items-center justify-center gap-1 text-xs text-slate-400">
+          <div className="flex flex-wrap items-center justify-center gap-1 text-xs text-slate-400">
             <a href="/uvjeti" className="hover:text-slate-600 transition underline underline-offset-2">
               Uvjeti korištenja
+            </a>
+            <span>·</span>
+            <a href="/odgovornost" className="hover:text-slate-600 transition underline underline-offset-2">
+              Izjava o odgovornosti
             </a>
             <span>·</span>
             <a href="/privatnost" className="hover:text-slate-600 transition underline underline-offset-2">

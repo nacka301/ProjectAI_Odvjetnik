@@ -51,6 +51,7 @@ export async function middleware(request: NextRequest) {
   const isLegalPage =
     pathname === "/privatnost" ||
     pathname === "/uvjeti" ||
+    pathname === "/odgovornost" ||
     pathname === "/dpa";
 
   const isPublicRoute =

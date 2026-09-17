@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { PRAVNI_TEKSTOVI_VERZIJA_TEKST } from "@/lib/pravno";
 
 export const metadata: Metadata = {
   title: "Uvjeti korištenja — PravoTek",
@@ -11,13 +12,13 @@ export default function UvjetiPage() {
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-12 sm:py-16">
         {/* Header */}
         <div className="mb-10">
-          <a href="/" className="text-xs text-slate-400 hover:text-slate-600 transition">
+          <a href="/" className="text-xs text-slate-400 hover:text-slate-600 transition print:hidden">
             ← Natrag na PravoTek
           </a>
           <h1 className="font-[family-name:var(--font-playfair)] text-3xl sm:text-4xl font-bold text-slate-900 mt-4">
             Uvjeti korištenja
           </h1>
-          <p className="text-sm text-slate-400 mt-2">Posljednje ažuriranje: 16. rujna 2026.</p>
+          <p className="text-sm text-slate-400 mt-2">Verzija od {PRAVNI_TEKSTOVI_VERZIJA_TEKST}</p>
         </div>
 
         {/* Content */}
@@ -115,37 +116,17 @@ export default function UvjetiPage() {
             Korisnika primjenjuje tek kad pristane na nove uvjete.
           </p>
 
-          {/* §5 */}
-          <h2>5. Ograničenje odgovornosti</h2>
+          {/* §5 — tekst o odgovornosti živi samo u Izjavi, da se dva teksta ne raziđu. */}
+          <h2>5. Odgovornost</h2>
           <p>
-            <strong>5.1. PravoTek je pomoćni alat, a ne pružatelj pravnih usluga.</strong>{" "}
-            Pružatelj usluge ne pruža pravne savjete, pravno zastupanje niti bilo koji oblik pravne
-            pomoći u smislu Zakona o odvjetništvu. Aplikacija ne zamjenjuje prosudbu odvjetnika.
+            5.1. Odgovornost Pružatelja usluge, obveza Korisnika da provjeri izračun te način
+            prijave greške uređeni su <a href="/odgovornost">Izjavom o odgovornosti</a>, koja je
+            sastavni dio ovih Uvjeta.
           </p>
           <p>
-            <strong>5.2. Provjera izračuna.</strong> Korisnik je dužan{" "}
-            <strong>provjeriti svaki izračun</strong> i drugi rezultat aplikacije prije nego ga
-            upotrijebi u postupku ili pravnom prometu. Za sadržaj podneska odgovara odvjetnik koji ga
-            podnosi. Rezultat ovisi o podacima koje Korisnik unese.
-          </p>
-          <p>
-            <strong>5.3. Propisi.</strong> Pružatelj usluge nastoji izmjene propisa unijeti u aplikaciju
-            čim stupe na snagu, ali ne jamči da je aplikacija u svakom trenutku usklađena s posljednjom
-            izmjenom. Izračuni nisu neovisno stručno revidirani.
-          </p>
-          <p>
-            <strong>5.4. Obična nepažnja.</strong> Pružatelj usluge ne odgovara za štetu nastalu zbog
-            pogreške u izračunu ili prekida u radu aplikacije ako je šteta posljedica obične nepažnje.
-            Pružatelj usluge ne odgovara za pogrešku koja proizlazi iz netočno unesenih podataka.
-          </p>
-          <p>
-            <strong>5.5. Namjera i krajnja nepažnja.</strong> Odgovornost za štetu prouzročenu namjerno
-            ili krajnjom nepažnjom ne isključuje se i ne ograničava (članak 345. Zakona o obveznim
-            odnosima).
-          </p>
-          <p>
-            <strong>5.6. Prijava greške.</strong> Grešku u izračunu Korisnik može prijaviti e-poštom
-            na <a href="mailto:vackadavid@gmail.com">vackadavid@gmail.com</a>.
+            5.2. Pružatelj usluge ne pruža pravne savjete, pravno zastupanje niti bilo koji oblik
+            pravne pomoći u smislu Zakona o odvjetništvu. Aplikacija ne zamjenjuje prosudbu
+            odvjetnika.
           </p>
 
           {/* §6 */}
@@ -169,7 +150,7 @@ export default function UvjetiPage() {
           </p>
           <p>
             6.4. Rezultati generirani korištenjem ovih tehnologija su <strong>pomoćni alati</strong> i
-            ne čine konačni pravni stav. Korisnik ih je dužan samostalno provjeriti (vidjeti članak 5.2.).
+            ne čine konačni pravni stav. Korisnik ih je dužan samostalno provjeriti (vidjeti <a href="/odgovornost">Izjavu o odgovornosti</a>).
           </p>
 
           {/* §7 */}

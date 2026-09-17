@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Shield,
@@ -709,6 +710,16 @@ export default function PostavkePage() {
                 <span className="text-slate-200">·</span>
                 <span>TOTP RFC 6238</span>
               </div>
+              {/* Pravni dokumenti — da se do njih dođe i iz Postavki, ne samo iz podnožja. */}
+              <nav
+                aria-label="Pravni dokumenti"
+                className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-slate-500"
+              >
+                <Link href="/uvjeti" className="underline underline-offset-2 hover:text-slate-800">Uvjeti korištenja</Link>
+                <Link href="/odgovornost" className="underline underline-offset-2 hover:text-slate-800">Izjava o odgovornosti</Link>
+                <Link href="/privatnost" className="underline underline-offset-2 hover:text-slate-800">Politika privatnosti</Link>
+                <Link href="/dpa" className="underline underline-offset-2 hover:text-slate-800">Ugovor o obradi podataka</Link>
+              </nav>
               <p className="text-[11px] text-slate-400 text-center">
                 © {new Date().getFullYear()} PravoTek · Sva prava pridržana.
               </p>

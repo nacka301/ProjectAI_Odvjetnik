@@ -16,6 +16,9 @@ export default function Footer() {
           <Link href="/uvjeti" style={{ color: "var(--ptk-accent-400)" }}>
             Uvjeti korištenja
           </Link>
+          <Link href="/odgovornost" style={{ color: "var(--ptk-accent-400)" }}>
+            Izjava o odgovornosti
+          </Link>
           <Link href="/dpa" style={{ color: "var(--ptk-accent-400)" }}>
             Ugovor o obradi podataka
           </Link>
