@@ -11,6 +11,8 @@
  * PDV-a, popisi su prazni kad nema stavaka. Potrošači tako ne ponavljaju uvjete
  * — samo izostave ono čega nema.
  */
+import { datumBezVremena, uredbeIzStavaka, type PravnaOsnova } from "@/lib/pravna-osnova";
+import { TARIFA_TRENUTNA, type TarifaVerzija } from "@/lib/tarifa";
 
 /** Jedna odvjetnička radnja iz odjeljka I. */
 export interface IzvozRadnja {
@@ -69,6 +71,9 @@ export interface TroskovnikIzvozModel {
   sveukupno: number;
   /** Prazno kad odvjetnik nije ništa upisao — tada se odjeljak ne ispisuje. */
   napomena?: string;
+
+  /** Po čemu je izračunat — za bilješku na ispisu, u Excelu i u aplikaciji. */
+  pravnaOsnova: PravnaOsnova;
 }
 
 interface LinijaLike {
@@ -130,6 +135,11 @@ interface ResultLike {
   ukupno_predujmovi?: number;
   sveukupni_trosak?: number;
   napomena?: string | null;
+  // Po čemu je izračunat — backend ih šalje od koraka 3 plana pravne zaštite.
+  tarifa_naziv?: string;
+  tarifa_vrijedi_od?: string;
+  vrijednost_boda?: number;
+  uredbe_pristojbe?: string[];
 }
 
 /** Ulaz iz `page.tsx`. Namjerno labav: opisuje samo ono što se ovdje čita. */
@@ -154,6 +164,16 @@ export interface IzvozUlaz {
     predmetSud: string;
     predmetPoslovniBroj: string;
   };
+  /**
+   * Verzija Tarife razriješena na obrascu (Tbr. 52, po dospijeću). Koristi se samo
+   * kad izračun s backenda ne kaže sam po kojoj je računao. Zadano: važeća.
+   */
+  tarifa?: TarifaVerzija;
+  /**
+   * Gotova pravna osnova koja ima prednost pred svime — spremljeni zapis je čita
+   * iz vlastitih stupaca i ne smije je izvoditi iz današnjih konstanti.
+   */
+  pravnaOsnova?: PravnaOsnova;
 }
 
 /** ISO datum iz zahtjeva/odgovora u `Date`; `null` kad ga nema ili je neispravan. */
@@ -250,6 +270,20 @@ export function buildIzvozModel(ulaz: IzvozUlaz): TroskovnikIzvozModel {
     })),
   ];
 
+  const datumIzrade = uDatum(result?.datum_izrade) ?? new Date();
+
+  // Izračun s backenda kaže sam po čemu je računao. Bez njega (živi pregled) ili uz
+  // stariji backend, vrijedi ono po čemu je računao obrazac — danas, po dospijeću.
+  const tarifa = ulaz.tarifa ?? TARIFA_TRENUTNA;
+  const pravnaOsnova: PravnaOsnova = ulaz.pravnaOsnova ?? {
+    zabiljezena: true,
+    tarifaNaziv: result?.tarifa_naziv ?? tarifa.naziv,
+    tarifaVrijediOd: datumBezVremena(result?.tarifa_vrijedi_od ?? tarifa.vrijediOd),
+    vrijednostBoda: result?.vrijednost_boda ?? tarifa.bodValue,
+    uredbe: result?.uredbe_pristojbe ?? uredbeIzStavaka(pristojbeneStavke),
+    datum: datumIzrade,
+  };
+
   const odvjetnikIme = neprazno(result?.odvjetnik?.ime ?? polja.odvjetnikIme);
   const zastupanaIme = neprazno(result?.klijent?.ime ?? polja.klijentIme);
   const protustrankaIme = neprazno(result?.protustranka?.ime ?? polja.protustrankaIme);
@@ -276,7 +310,7 @@ export function buildIzvozModel(ulaz: IzvozUlaz): TroskovnikIzvozModel {
           ime: protustrankaIme,
         }
       : null,
-    datumIzrade: uDatum(result?.datum_izrade) ?? new Date(),
+    datumIzrade,
 
     radnje,
     zbrojNagrade: {
@@ -297,5 +331,6 @@ export function buildIzvozModel(ulaz: IzvozUlaz): TroskovnikIzvozModel {
 
     sveukupno: result?.sveukupni_trosak ?? liveCalc.sveukupniTrosak,
     napomena: neprazno(result?.napomena ?? ulaz.napomena),
+    pravnaOsnova,
   };
 }

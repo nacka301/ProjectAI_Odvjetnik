@@ -259,6 +259,13 @@ export interface TroskovnikRow {
   } | null;
   odvjetnik: { naziv?: string | null; oib?: string | null; adresa?: string | null; iban?: string | null } | null;
   raw_json_output: Record<string, unknown> | null;
+  // Po čemu je izračunat (migracija 025). NULL za zapise spremljene prije nje.
+  izracunato_at?: string | null;
+  tarifa_naziv?: string | null;
+  tarifa_vrijedi_od?: string | null;
+  vrijednost_boda?: number | string | null;
+  uredbe_pristojbe?: string[] | null;
+  verzija_izracuna?: string | null;
 }
 
 export async function getTroskovnici(limit = 50): Promise<TroskovnikRow[]> {

@@ -16,6 +16,7 @@
  * u stupac I, čas u stupac C.
  */
 import type { TroskovnikIzvozModel } from "./troskovnik-izvoz-model";
+import { punaBiljeska } from "./pravna-osnova";
 
 /** Ćelija onako kako je očekuje `write-excel-file`. */
 type Cell = {
@@ -231,6 +232,11 @@ export function buildTroskovnikSheet(m: TroskovnikIzvozModel): Row[] {
     redci.push(naslovOdjeljka("Napomena"));
     redci.push([{ value: m.napomena, type: String, wrap: true }]);
   }
+
+  // Excel nije papir koji ide sudu, nego radna datoteka ureda — zato puna bilješka,
+  // s imenom alata i s tim tko za izračun odgovara (plan pravne zaštite, dio A).
+  prazno();
+  redci.push([{ value: punaBiljeska(m.pravnaOsnova), type: String, wrap: true }]);
 
   return redci.map(poravnaj);
 }

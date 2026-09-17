@@ -9,6 +9,7 @@ import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import TroskovnikIspis from "@/components/troskovnik/TroskovnikIspis";
 import type { TroskovnikIzvozModel } from "@/lib/troskovnik-izvoz-model";
+import { NAZIV_TARIFE } from "@/lib/tarifa";
 
 function model(preinake: Partial<TroskovnikIzvozModel> = {}): TroskovnikIzvozModel {
   return {
@@ -37,6 +38,15 @@ function model(preinake: Partial<TroskovnikIzvozModel> = {}): TroskovnikIzvozMod
     predujmovi: [],
     ukupnoPredujmovi: 0,
     sveukupno: 200,
+    pravnaOsnova: {
+      zabiljezena: true,
+      // Puni naziv, s komorom u zagradi — na papiru se zagrada mora izgubiti.
+      tarifaNaziv: NAZIV_TARIFE,
+      tarifaVrijediOd: new Date(2023, 9, 14),
+      vrijednostBoda: 2,
+      uredbe: ["Uredba o Tarifi sudskih pristojbi (NN 50/2026)"],
+      datum: new Date(2026, 7, 23, 10),
+    },
     ...preinake,
   };
 }
@@ -122,6 +132,25 @@ describe("TroskovnikIspis", () => {
     expect(tekst).not.toMatch(/orijentacijski/i);
     expect(tekst).not.toMatch(/Hrvatska odvjetnička komora/i);
     expect(tekst).toContain("Traži se naknada troška.");
+  });
+
+  it("na dnu stoji neutralna bilješka o propisima i danu", () => {
+    const { container } = render(<TroskovnikIspis model={model()} />);
+    const biljeska = container.querySelector(".pravna-osnova");
+    expect(biljeska).not.toBeNull();
+    expect(biljeska!.textContent).toContain("Obračun prema propisima:");
+    expect(biljeska!.textContent).toContain("(NN 50/2026)");
+    expect(biljeska!.textContent).toContain("Stanje propisa na dan 23.08.2026.");
+    expect(biljeska!.textContent).not.toMatch(/odgovara/i);
+  });
+
+  it("kad propis nije zabilježen (stari zapis), bilješke nema", () => {
+    const { container } = render(
+      <TroskovnikIspis
+        model={model({ pravnaOsnova: { zabiljezena: false, uredbe: [], datum: new Date() } })}
+      />,
+    );
+    expect(container.querySelector(".pravna-osnova")).toBeNull();
   });
 
   it("bez napomene nema odjeljka napomene", () => {

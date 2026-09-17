@@ -16,6 +16,7 @@ import {
   type IzvozUlaz,
   type TroskovnikIzvozModel,
 } from "@/lib/troskovnik-izvoz-model";
+import { datumBezVremena, type PravnaOsnova } from "@/lib/pravna-osnova";
 import type { TroskovnikRow } from "@/lib/supabase";
 
 /** Prazan „živi izračun" — spremljeni zapis uvijek ima `result`, pa se ne čita. */
@@ -33,6 +34,26 @@ const BEZ_ZIVOG_IZRACUNA = {
 
 function tekst(s: string | null | undefined): string {
   return (s ?? "").trim();
+}
+
+/**
+ * Po čemu je zapis izračunat, iz stupaca migracije 025 — i samo odande.
+ *
+ * Troškovnik spremljen prije toga nema zabilježen propis, i to se tako i kaže.
+ * Izvesti ga iz današnjih konstanti bilo bi tvrditi nešto što nismo zapisali.
+ */
+export function pravnaOsnovaIzZapisa(zapis: TroskovnikRow): PravnaOsnova {
+  if (!zapis.tarifa_naziv) {
+    return { zabiljezena: false, uredbe: [], datum: new Date(zapis.created_at) };
+  }
+  return {
+    zabiljezena: true,
+    tarifaNaziv: zapis.tarifa_naziv,
+    tarifaVrijediOd: datumBezVremena(zapis.tarifa_vrijedi_od),
+    vrijednostBoda: zapis.vrijednost_boda == null ? undefined : Number(zapis.vrijednost_boda),
+    uredbe: zapis.uredbe_pristojbe ?? [],
+    datum: new Date(zapis.izracunato_at ?? zapis.created_at),
+  };
 }
 
 /**
@@ -56,6 +77,7 @@ export function izvozModelIzZapisa(zapis: TroskovnikRow): TroskovnikIzvozModel |
     predujmovi: [],
     isPdvUkljucen: Boolean(odgovor.is_pdv_ukljucen ?? odgovor.has_vat),
     napomena: tekst(odgovor.napomena as string | null),
+    pravnaOsnova: pravnaOsnovaIzZapisa(zapis),
     // Zaglavlje iz stupaca zapisa. `buildIzvozModel` ova polja koristi tek ako
     // ih odgovor nema, pa spremljeni odgovor i dalje ima prednost.
     polja: {

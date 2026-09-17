@@ -13,8 +13,10 @@
  * stablu i vidljiva je samo pod `@media print`, pa `window.print()` ostaje
  * kakav jest, a dijakritika i fontovi dolaze iz same stranice.
  *
- * Na dokumentu nema imena aplikacije, ograda ni pravnih izvora. Ovo je papir
- * koji ide sudu.
+ * Na dokumentu nema imena aplikacije ni ograda. Ovo je papir koji ide sudu.
+ * Jedina iznimka je kratka neutralna bilješka na dnu — po kojim je propisima
+ * obračun napravljen i kojeg dana (`neutralnaBiljeska`, plan pravne zaštite,
+ * dio A). Ona sudu govori pravnu osnovu, a ne tko je računao.
  *
  * ── Zašto CSS živi OVDJE, a ne u stranici koja komponentu poziva ──
  *
@@ -29,6 +31,7 @@
  * vrijedi sama po sebi, na svakoj stranici koja ikad pozove `<TroskovnikIspis>`.
  */
 import { formatDatumIspis, formatEur } from "@/lib/format";
+import { neutralnaBiljeska } from "@/lib/pravna-osnova";
 import type { TroskovnikIzvozModel, IzvozTrosak } from "@/lib/troskovnik-izvoz-model";
 
 /** Iznos je uvijek desno, dvije decimale, zarez kao decimalni razdjelnik. */
@@ -73,6 +76,7 @@ export default function TroskovnikIspis({ model }: { model: TroskovnikIzvozModel
   const { odvjetnik } = model;
   const adresa = [odvjetnik?.adresa, odvjetnik?.grad].filter(Boolean).join(", ");
 
+  const biljeska = neutralnaBiljeska(model.pravnaOsnova);
   const imaPristojbe = model.pristojbe.length > 0 || model.ukupnoPristojbe > 0;
   const imaPredujmove = model.predujmovi.length > 0 || model.ukupnoPredujmovi > 0;
   const imaProlazne = imaPristojbe || imaPredujmove;
@@ -218,6 +222,9 @@ export default function TroskovnikIspis({ model }: { model: TroskovnikIzvozModel
       {/* ── Napomena — slobodan tekst; bez nje nema odjeljka ── */}
       {model.napomena && <div className="napomena">{model.napomena}</div>}
 
+      {/* ── Pravna osnova — sitno, na dnu; kad propis nije zabilježen, izostaje ── */}
+      {biljeska && <div className="pravna-osnova">{biljeska}</div>}
+
       {/* ── Skrivanje na zaslonu + prijelom za ispis ──
           Dio ove komponente, ne stranice koja je poziva — vidi doc-komentar
           na vrhu datoteke. Obični <style> element ne mijenja izgled ostatka
@@ -307,6 +314,14 @@ export default function TroskovnikIspis({ model }: { model: TroskovnikIzvozModel
           #troskovnik-ispis .napomena {
             margin-top: 12mm;
             white-space: pre-line;
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+
+          #troskovnik-ispis .pravna-osnova {
+            margin-top: 10mm;
+            font-size: 8pt;
+            color: #333;
             break-inside: avoid;
             page-break-inside: avoid;
           }

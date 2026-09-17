@@ -77,6 +77,7 @@ import {
   efektivniVps,
   izracunajOsnovicu,
   provjeriZahtjev,
+  razrijesiTarifu,
   provjeriTbr41Stavku,
   razrijesiTbr41,
   tbr71Bodovi,
@@ -1804,6 +1805,8 @@ function TroskovnikContent() {
           protustrankaIme, protustrankaPolozaj,
           predmetSud, predmetPoslovniBroj,
         },
+        // Ista verzija po kojoj računa živi pregled (Tbr. 52, po dospijeću).
+        tarifa: razrijesiTarifu(datumDospijeca || null),
       }),
     // `pristojbe` je ovdje jer izvoz bez spremljenog rezultata ispisuje retke iz
     // živog pregleda; bez te ovisnosti nosio bi pristojbe od prošle promjene.
@@ -1812,7 +1815,7 @@ function TroskovnikContent() {
       isPdvUkljucen, napomena,
       odvjetnikIme, odvjetnikOib, odvjetnikAdresa, odvjetnikGrad, odvjetnikIban,
       klijentIme, zastupanaPolozaj, protustrankaIme, protustrankaPolozaj,
-      predmetSud, predmetPoslovniBroj,
+      predmetSud, predmetPoslovniBroj, datumDospijeca,
     ],
   );
 

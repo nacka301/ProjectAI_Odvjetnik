@@ -34,6 +34,7 @@ import { getTroskovnik, type TroskovnikRow } from "@/lib/supabase";
 import { izvozModelIzZapisa } from "@/lib/troskovnik-zapis";
 import type { TroskovnikIzvozModel } from "@/lib/troskovnik-izvoz-model";
 import { formatBodovi, formatDatumIspis, formatEur } from "@/lib/format";
+import { punaBiljeska } from "@/lib/pravna-osnova";
 
 function Redak({
   oznaka,
@@ -243,6 +244,12 @@ export default function SpremljeniTroskovnikPage() {
                   {model.napomena}
                 </p>
               )}
+
+              {/* Po čemu je izračunat. Samo u aplikaciji — na ispis ide neutralna
+                  inačica bez imena alata (TroskovnikIspis). */}
+              <p className="mt-4 px-1 text-xs leading-relaxed text-slate-500">
+                {punaBiljeska(model.pravnaOsnova)}
+              </p>
             </>
           )}
         </div>

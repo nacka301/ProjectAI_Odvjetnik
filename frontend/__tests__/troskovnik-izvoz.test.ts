@@ -223,6 +223,16 @@ describe("buildTroskovnikSheet", () => {
     expect(oib!.type).toBe(String);
   });
 
+  it("zadnji redak je puna bilješka: alat, propisi i tko odgovara", () => {
+    const list = buildTroskovnikSheet(buildIzvozModel(sLinijom())) as Cell[][];
+    const zadnjiTekst = sveCelije(list)
+      .filter((c) => typeof c.value === "string")
+      .at(-1)!.value as string;
+    expect(zadnjiTekst).toMatch(/^Izračunato u alatu PravoTek /);
+    expect(zadnjiTekst).toContain("Tarifa o nagradama i naknadi troškova za rad odvjetnika");
+    expect(zadnjiTekst).toContain("Izračun provjerava i za njega odgovara odvjetnik.");
+  });
+
   it("poslovni broj ostaje tekst", () => {
     const list = buildTroskovnikSheet(
       buildIzvozModel(sLinijom({ polja: { ...PRAZNA_POLJA, predmetPoslovniBroj: "P-007/24" } })),
