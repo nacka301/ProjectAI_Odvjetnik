@@ -481,16 +481,16 @@ export default function ContractAnalysisPage() {
     <div className={`min-h-screen bg-gray-50 font-sans ${viewState === "PROCESSING" ? "hidden" : ""}`}>
       {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center gap-4">
+        <div className="max-w-4xl mx-auto px-4 py-2.5 sm:py-4 flex items-center gap-2 sm:gap-4">
           <Link
             href="/"
-            className="text-gray-400 hover:text-gray-700 transition"
+            className="flex items-center justify-center max-sm:min-h-12 max-sm:min-w-12 max-sm:-ml-2 text-gray-400 hover:text-gray-700 transition"
           >
             <ArrowLeft className="h-5 w-5" />
           </Link>
-          <div className="flex items-center gap-2">
-            <Scale className="h-6 w-6 text-emerald-600" />
-            <h1 className="text-xl font-bold text-gray-900">
+          <div className="flex items-center gap-2 min-w-0">
+            <Scale className="h-5 w-5 sm:h-6 sm:w-6 shrink-0 text-emerald-600" />
+            <h1 className="text-base sm:text-xl font-bold text-gray-900 truncate">
               Analizator Ugovora
             </h1>
           </div>

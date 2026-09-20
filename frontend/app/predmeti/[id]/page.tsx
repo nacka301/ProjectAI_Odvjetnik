@@ -139,11 +139,11 @@ export default function CaseDetailPage() {
     <div className="min-h-screen bg-gray-50 text-slate-900">
       {/* Header */}
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3 sm:px-6">
+        <div className="mx-auto flex max-w-7xl items-center gap-2 sm:gap-4 px-4 py-2.5 sm:py-3 sm:px-6">
           {caseData.client_id ? (
             <Link
               href={`/klijenti/${caseData.client_id}`}
-              className="flex items-center gap-2 text-sm text-slate-500 transition hover:text-slate-900"
+              className="flex items-center justify-center gap-2 max-sm:min-h-12 max-sm:min-w-12 max-sm:-ml-2 shrink-0 text-sm text-slate-500 transition hover:text-slate-900"
             >
               <ArrowLeft className="h-4 w-4" />
               <span className="hidden sm:inline">Stranka</span>
@@ -151,27 +151,27 @@ export default function CaseDetailPage() {
           ) : (
             <Link
               href="/klijenti"
-              className="flex items-center gap-2 text-sm text-slate-500 transition hover:text-slate-900"
+              className="flex items-center justify-center gap-2 max-sm:min-h-12 max-sm:min-w-12 max-sm:-ml-2 shrink-0 text-sm text-slate-500 transition hover:text-slate-900"
             >
               <ArrowLeft className="h-4 w-4" />
               <span className="hidden sm:inline">Stranke</span>
             </Link>
           )}
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1B2A4A]/10 text-[#1B2A4A]">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#1B2A4A]/10 text-[#1B2A4A]">
               <Scale className="h-4 w-4" />
             </div>
-            <div>
-              <h1 className="font-[family-name:var(--font-playfair)] text-lg font-semibold text-[#1B2A4A]">
+            <div className="min-w-0">
+              <h1 className="font-[family-name:var(--font-playfair)] text-base sm:text-lg font-semibold text-[#1B2A4A] truncate">
                 {caseData.naziv}
               </h1>
               {caseData.broj_predmeta && (
-                <p className="text-xs text-slate-400">{caseData.broj_predmeta}</p>
+                <p className="hidden sm:block text-xs text-slate-400 truncate">{caseData.broj_predmeta}</p>
               )}
             </div>
           </div>
           <span
-            className={`ml-auto rounded-full border px-2.5 py-0.5 text-xs font-medium ${statusColor}`}
+            className={`ml-auto shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-medium ${statusColor}`}
           >
             {caseData.status.charAt(0).toUpperCase() + caseData.status.slice(1)}
           </span>

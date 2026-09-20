@@ -21,6 +21,9 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --font-serif: var(--font-playfair);
+  /* Mobilni prikaz: dodatna prijelomna točka između zadanih sm (640) i md
+     (768) da grid-cols-1/2 revizije imaju stepenicu na 480px. */
+  --breakpoint-xs: 480px;
 }
 
 body {
@@ -35,6 +38,104 @@ body {
 @media (hover: none) {
   button, a, [role="button"] {
     -webkit-tap-highlight-color: rgba(99, 102, 241, 0.1);
+  }
+}
+
+/* ═══ Mobilni prikaz ═══
+   Dvije globalne mjere koje pokrivaju cijelu aplikaciju odjednom, bez
+   diranja stolnog prikaza (obje su omeđene na < md = 768px):
+
+   1) Svako polje za unos ide na ≥16px ispod md. Ispod 16px iOS Safari
+      zumira stranicu čim korisnik dodirne polje, a stranica ostane
+      razvučena. Stolni prikaz i dalje koristi text-sm/text-[10px] itd.
+      jer ovo pravilo ne vrijedi iznad 767px.
+   2) `.tap` — dodirna meta ≥48×48px (Android donja granica) za ikone
+      koje su vizualno manje (npr. 16–20px ikona u zaglavlju): širi
+      klik-područje paddingom umjesto da poveća samu ikonu. */
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  .tap {
+    min-height: 48px;
+    min-width: 48px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+/* ═══ Troškovnik — rezultatska tablica kao popis kartica na mobitelu ═══
+   Namjerno CSS-only (bez paralelnog JSX-a za tfoot): tfoot ima ~15
+   uvjetnih redaka (PDV, pristojbe, predujmovi, čl. 12/13/16 napomene…),
+   svaki već svodi retke na "oznaka + iznos" preko colSpan-a. Prepisivanje
+   te logike u zaseban mobilni prikaz udvostručilo bi površinu za greške u
+   iznosima; ovaj pristup samo mijenja `display`, ista JSX/ista brojka
+   svugdje. Primjenjuje se na `.troskovnik-tablica-mob` omotač oko
+   <table> u app/troskovnik/page.tsx (samo rezultatska tablica radnji). */
+@media (max-width: 767px) {
+  .troskovnik-tablica-mob table {
+    display: block;
+    width: 100%;
+  }
+  .troskovnik-tablica-mob thead {
+    display: none;
+  }
+  .troskovnik-tablica-mob tbody,
+  .troskovnik-tablica-mob tfoot {
+    display: block;
+  }
+
+  /* Redak radnje → kartica: bordana, zaobljena, s razmakom prema sljedećoj. */
+  .troskovnik-tablica-mob tbody tr {
+    display: flex;
+    flex-wrap: wrap;
+    border: 1px solid var(--color-slate-200, #e2e8f0);
+    border-radius: 0.5rem;
+    padding: 0.625rem 0.75rem;
+    margin-bottom: 0.5rem;
+  }
+  .troskovnik-tablica-mob tbody td {
+    display: block;
+    padding: 0.0625rem 0 !important;
+  }
+  /* Rbr., Kol., Bod./jed., Uk. bod. — skriveno na mobitelu (ostaju u ispisu
+     i na desktopu); kartica nosi samo naziv, tarifni broj, datum i iznos. */
+  .troskovnik-tablica-mob tbody td:nth-child(1),
+  .troskovnik-tablica-mob tbody td:nth-child(5),
+  .troskovnik-tablica-mob tbody td:nth-child(6),
+  .troskovnik-tablica-mob tbody td:nth-child(7) {
+    display: none;
+  }
+  /* Redak 1: naziv radnje + tarifni broj. Redak 2: datum + iznos. */
+  .troskovnik-tablica-mob tbody td:nth-child(3) { order: 1; flex: 1 1 62%; font-weight: 500; }
+  .troskovnik-tablica-mob tbody td:nth-child(4) { order: 2; flex: 1 1 38%; text-align: right; }
+  .troskovnik-tablica-mob tbody td:nth-child(2) { order: 3; flex: 1 1 50%; font-size: 0.8125rem; }
+  .troskovnik-tablica-mob tbody td:nth-child(8) { order: 4; flex: 1 1 50%; margin-left: auto; text-align: right; }
+
+  /* Sažetak (tfoot): svaki redak ostaje "oznaka pa iznos", samo se slaže
+     okomito umjesto u stupce koji na 360px ne staju. */
+  .troskovnik-tablica-mob tfoot tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 0.75rem;
+    padding: 0.3rem 0;
+  }
+  .troskovnik-tablica-mob tfoot td {
+    display: block;
+  }
+  .troskovnik-tablica-mob tfoot td:empty {
+    display: none;
+  }
+  /* Iznos je uvijek zadnja ćelija u retku — gurni je na desni rub retka
+     (ili linije na koju se prelomi), bez oslanjanja na justify-content
+     koji jedan preostali element poravna ulijevo, ne udesno. */
+  .troskovnik-tablica-mob tfoot tr > td:last-child {
+    margin-left: auto;
   }
 }
 

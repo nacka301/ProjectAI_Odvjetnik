@@ -183,7 +183,7 @@ export function buildTroskovnikSheet(m: TroskovnikIzvozModel): Row[] {
 
   if (m.pdv) {
     redci.push([...oznakaZbroja("Osnovica (bez PDV)"), iznos(m.pdv.osnovica)]);
-    redci.push([...oznakaZbroja("PDV (25%)"), iznos(m.pdv.iznos)]);
+    redci.push([...oznakaZbroja(`PDV (${m.pdv.stopa}%)`), iznos(m.pdv.iznos)]);
     redci.push([...oznakaZbroja("Nagrada s PDV-om", true), iznos(m.pdv.ukupno, true)]);
   }
 

@@ -86,6 +86,9 @@ export function izvozModelIzZapisa(zapis: TroskovnikRow): TroskovnikIzvozModel |
       odvjetnikAdresa: tekst(zapis.odvjetnik?.adresa),
       odvjetnikGrad: "",
       odvjetnikIban: tekst(zapis.odvjetnik?.iban),
+      odvjetnikTelefon: "",
+      odvjetnikEmail: "",
+      odvjetnikOsobnoIme: "",
       klijentIme: tekst(zastupana?.naziv),
       zastupanaPolozaj: tekst(zastupana?.polozaj),
       protustrankaIme: tekst(protustranka?.naziv),
@@ -93,5 +96,8 @@ export function izvozModelIzZapisa(zapis: TroskovnikRow): TroskovnikIzvozModel |
       predmetSud: tekst(zapis.predmet?.sud),
       predmetPoslovniBroj: tekst(zapis.predmet?.poslovni_broj),
     },
+    // Odgovor motora nosi VPS podatke izravno; stupac na zapisu je fallback za
+    // starije zapise spremljene prije nego je odgovor to počeo bilježiti.
+    vrijednostSpora: zapis.vrijednost_spora ?? undefined,
   });
 }

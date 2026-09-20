@@ -109,13 +109,19 @@ function HoverInfoCard({ text }: { text: string }) {
 
   return (
     <div className="relative inline-block" onMouseEnter={show} onMouseLeave={hide}>
+      {/* Vidljivi krug ostaje 20px (ikona ne smije dominirati karticom);
+          dodirno područje gumba je ipak 48px na mobitelu — prošireno
+          negativnom marginom na prozirnom vanjskom sloju, ne bojom, pa se
+          ništa vizualno ne povećava niti pomiče layout. */}
       <button
         type="button"
-        className="w-5 h-5 rounded-full bg-slate-100 hover:bg-blue-100 flex items-center justify-center transition"
+        className="flex items-center justify-center w-12 h-12 -m-3.5 md:w-5 md:h-5 md:m-0 rounded-full transition"
         aria-label="Više informacija"
         onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen(!open); }}
       >
-        <Info className="h-3 w-3 text-slate-400 hover:text-blue-600" />
+        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-slate-100 hover:bg-blue-100 transition">
+          <Info className="h-3 w-3 text-slate-400 hover:text-blue-600" />
+        </span>
       </button>
       {open && (
         <div
@@ -327,12 +333,12 @@ export default function Dashboard() {
 
         {/* ═══════════ 1. FEATURE GRID — Enterprise Module Cards ═══════════ */}
         <section>
-          <div className="flex items-center justify-between gap-4 mb-5">
-            <div>
+          <div className="flex items-center justify-between gap-3 md:gap-4 mb-5">
+            <div className="min-w-0">
               <h2 className="font-[family-name:var(--font-playfair)] text-lg font-semibold text-slate-900 tracking-tight">
                 Moduli
               </h2>
-              <p className="text-xs text-slate-400 mt-0.5">Odaberite modul za početak rada</p>
+              <p className="hidden md:block text-xs text-slate-400 mt-0.5">Odaberite modul za početak rada</p>
             </div>
             {/* Brz ulaz u modul koji korisnik može odmah koristiti. Prije je ovo
                 bio jedini koristan dio plavog bannera („Otvori Troškovnik"); banner
@@ -341,20 +347,20 @@ export default function Dashboard() {
                 zavarale korisnika. Gumb ostaje, na suvislom mjestu. */}
             <Link
               href={startHere.href}
-              className="inline-flex shrink-0 items-center gap-2 bg-[#1B2A4A] hover:bg-[#243759] text-white text-sm font-medium px-4 py-2.5 rounded-lg transition shadow-sm whitespace-nowrap"
+              className="inline-flex shrink-0 items-center gap-2 bg-[#1B2A4A] hover:bg-[#243759] text-white text-sm font-medium px-3.5 py-2.5 md:px-4 rounded-lg transition shadow-sm whitespace-nowrap"
             >
               <startHere.icon className="h-4 w-4" />
               {startHere.label}
             </Link>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
             {cards.map((card) => {
               const inner = (
                 <div
                   id={card.domId}
                   aria-disabled={card.locked || undefined}
-                  className={`group relative bg-white rounded-lg border border-slate-200 shadow-sm p-6 transition-all duration-200 ${
+                  className={`group relative bg-white rounded-lg border border-slate-200 shadow-sm p-4 md:p-6 transition-all duration-200 ${
                     card.locked
                       ? "cursor-not-allowed"
                       : "hover:border-[#1B2A4A]/40 hover:shadow-md hover:-translate-y-0.5"
@@ -362,44 +368,57 @@ export default function Dashboard() {
                 >
                   {/* "In development" badge */}
                   {card.locked && (
-                    <div className="absolute top-3 right-3 z-10 flex items-center gap-1 bg-amber-50 text-amber-700 text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-md">
+                    <div className="absolute top-2 right-2 md:top-3 md:right-3 z-10 flex items-center gap-1 bg-amber-50 text-amber-700 text-[9px] md:text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 md:px-2.5 md:py-1 rounded-md">
                       <Construction className="h-3 w-3" />
                       U razvoju
                     </div>
                   )}
 
-                  {/* Top row: icon + info button */}
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="w-10 h-10 rounded-lg bg-slate-100 group-hover:bg-slate-200/80 flex items-center justify-center transition-colors duration-200">
-                      <span className="text-[#1B2A4A]">{card.icon}</span>
+                  {/* Top row: icon + info button. Ikona nosi oznaku, ne dominira
+                      karticom — kontejner je 32px na mobitelu (unutar 28–32px
+                      granice iz prompta), 40px na desktopu. */}
+                  <div className="flex items-start justify-between mb-2.5 md:mb-4">
+                    <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg bg-slate-100 group-hover:bg-slate-200/80 flex items-center justify-center transition-colors duration-200">
+                      <span className="text-[#1B2A4A] [&_svg]:h-4 [&_svg]:w-4 md:[&_svg]:h-5 md:[&_svg]:w-5">{card.icon}</span>
                     </div>
                     {!card.locked && <HoverInfoCard text={card.howItWorks} />}
                   </div>
 
                   {/* Title — Playfair serif. Stays sharp even when locked: the
                       point is that the feature is coming, not that it is broken. */}
-                  <h3 className="font-[family-name:var(--font-playfair)] font-semibold text-[#1B2A4A] text-base mb-2 tracking-tight">
+                  {/* Naslov je jedan redak na mobitelu (skraćen s "…" ako
+                      treba) da kartica ostane ≤120px i za dulje nazive
+                      poput "Odvjetnički Troškovnik" — na desktopu se i
+                      dalje slobodno lomi u dva retka kao prije. */}
+                  <h3
+                    className="font-[family-name:var(--font-playfair)] font-semibold text-[#1B2A4A] text-sm md:text-base mb-1 md:mb-2 tracking-tight truncate md:whitespace-normal"
+                    title={card.title}
+                  >
                     {card.title}
                   </h3>
 
-                  {/* Description — blurred while the module is in development */}
+                  {/* Description — blurred while the module is in development.
+                      Na mobitelu jedan redak (kartica ostaje ≤120px), na
+                      desktopu puni opis kao i prije. */}
                   <p
                     aria-hidden={card.locked || undefined}
-                    className={`text-sm text-slate-500 leading-relaxed mb-4 ${
+                    className={`text-xs md:text-sm text-slate-500 leading-relaxed mb-0 md:mb-4 line-clamp-1 md:line-clamp-none ${
                       card.locked ? "blur-[3px] select-none" : ""
                     }`}
                   >
                     {card.description}
                   </p>
 
-                  {/* CTA hint */}
+                  {/* CTA hint — na mobitelu nema hover pa je uklonjen (samo
+                      opis + naslov nose karticu do 120px); na desktopu se
+                      ponaša kao prije, uz hover otkrivanje. */}
                   {card.locked ? (
-                    <div className="flex items-center gap-1.5 text-xs font-medium text-amber-700">
+                    <div className="hidden md:flex items-center gap-1.5 text-xs font-medium text-amber-700">
                       <Construction className="h-3.5 w-3.5" />
                       Uskoro dostupno
                     </div>
                   ) : (
-                    <div className="flex items-center gap-1.5 text-xs font-medium text-[#1B2A4A] opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                    <div className="hidden md:flex items-center gap-1.5 text-xs font-medium text-[#1B2A4A] opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                       Otvori modul
                       <ArrowRight className="h-3.5 w-3.5" />
                     </div>

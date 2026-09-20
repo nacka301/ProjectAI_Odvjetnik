@@ -298,7 +298,8 @@ function LoginContent() {
                       type="button"
                       tabIndex={-1}
                       onClick={() => setShowPw(!showPw)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition"
+                      aria-label={showPw ? "Sakrij lozinku" : "Prikaži lozinku"}
+                      className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center justify-center w-10 h-10 text-slate-400 hover:text-slate-600 transition"
                     >
                       {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>

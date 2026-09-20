@@ -13,7 +13,7 @@ export function NumberInput({ label, value, onChange, min, max, step = 0.1 }: {
   return (
     <div>
       <label className="block text-xs font-medium text-gray-500 mb-1">{label}</label>
-      <input type="number" value={value || ""} onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
+      <input type="number" inputMode="decimal" value={value || ""} onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
         min={min} max={max} step={step}
         className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" />
     </div>

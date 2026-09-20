@@ -216,22 +216,22 @@ export default function FiskalizacijaPage() {
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
       {/* Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-40">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-4">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-2.5 sm:py-3 flex items-center gap-2 sm:gap-4">
           <Link
             href="/"
-            className="flex items-center gap-2 text-slate-400 hover:text-slate-700 transition text-sm"
+            className="relative flex items-center justify-center sm:justify-start gap-2 max-sm:min-h-12 max-sm:min-w-12 max-sm:-ml-2 text-slate-400 hover:text-slate-700 transition text-sm"
           >
             <ArrowLeft className="h-4 w-4" />
             <span className="hidden sm:inline">Početna</span>
           </Link>
-          <div className="h-5 w-px bg-slate-200" />
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center">
+          <div className="hidden sm:block h-5 w-px bg-slate-200" />
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-7 h-7 shrink-0 rounded-lg bg-emerald-100 flex items-center justify-center">
               <Receipt className="h-4 w-4 text-emerald-700" />
             </div>
-            <div>
-              <h1 className="text-sm font-bold text-slate-900">Fiskalizacija 2.0</h1>
-              <p className="text-[10px] text-slate-400">e-Račun · UBL 2.1 · B2B</p>
+            <div className="min-w-0">
+              <h1 className="text-sm font-bold text-slate-900 truncate">Fiskalizacija 2.0</h1>
+              <p className="hidden sm:block text-[10px] text-slate-400">e-Račun · UBL 2.1 · B2B</p>
             </div>
           </div>
         </div>

@@ -40,34 +40,35 @@ function Iznos({ value, bold }: { value: number; bold?: boolean }) {
 }
 
 /**
- * Redak zbroja: oznaka desno preko stupaca Tar. br. i Datum, iznos uz nju.
- *
- * Oznaka ne stane u sam stupac Datum — "Osnovica (bez PDV)" bi se prelomila u
- * dva reda. Spajanje dvaju stupaca joj daje dovoljno mjesta, a iznos ostaje u
- * svom stupcu.
+ * Jedan redak obračuna — oznaka lijevo, iznos desno, izvan tablice. `veliko`
+ * je rezerviran za SVEUKUPNO: jedino ono smije biti podebljano i vidljivo
+ * veće, da obračun ima jedan jasan konačan broj umjesto pet podebljanih.
  */
-function RedakZbroja({ oznaka, value, bold }: { oznaka: string; value: number; bold?: boolean }) {
+function RedakObracuna({
+  oznaka,
+  value,
+  veliko,
+}: {
+  oznaka: string;
+  value: number;
+  veliko?: boolean;
+}) {
   return (
-    <tr>
-      <td />
-      <td colSpan={2} className={`oznaka${bold ? " bold" : ""}`}>
-        {oznaka}
-      </td>
-      <Iznos value={value} bold={bold} />
-      <td />
-    </tr>
+    <div className={`obracun-redak${veliko ? " veliko" : ""}`}>
+      <span>{oznaka}</span>
+      <span>{formatEur(value)}</span>
+    </div>
   );
 }
 
 /** Prolazna stavka (pristojba ili predujam) kao redak glavne tablice. */
-function RedakTroska({ t }: { t: IzvozTrosak }) {
+function RedakTroska({ t, imaDatum }: { t: IzvozTrosak; imaDatum: boolean }) {
   return (
     <tr>
       <td>{t.opis}</td>
       <td />
-      <td className="datum">{t.datum ? formatDatumIspis(t.datum) : ""}</td>
+      {imaDatum && <td className="datum">{t.datum ? formatDatumIspis(t.datum) : ""}</td>}
       <Iznos value={t.iznos} />
-      <td />
     </tr>
   );
 }
@@ -80,6 +81,18 @@ export default function TroskovnikIspis({ model }: { model: TroskovnikIzvozModel
   const imaPristojbe = model.pristojbe.length > 0 || model.ukupnoPristojbe > 0;
   const imaPredujmove = model.predujmovi.length > 0 || model.ukupnoPredujmovi > 0;
   const imaProlazne = imaPristojbe || imaPredujmove;
+
+  // Čisti zbroj samih radnji, bez naknade troškova — `zbrojNagrade.iznos` je
+  // zapravo osnovica (nagrada + naknada, kad je ima), pa bi ovdje udvostručio
+  // naknadu koja ispod stoji kao zaseban redak.
+  const nagradaRadnji = model.radnje.reduce((zbroj, r) => zbroj + r.iznos, 0);
+
+  // Stupac se prikazuje samo ako barem jedan redak u njemu ima vrijednost —
+  // inače ostaju tri stupca dovoljno široka za vlastiti sadržaj.
+  const imaDatum =
+    model.radnje.some((r) => r.datum) ||
+    model.pristojbe.some((t) => t.datum) ||
+    model.predujmovi.some((t) => t.datum);
 
   const predmet: { oznaka: string; vrijednost: string }[] = [];
   if (model.sud) predmet.push({ oznaka: "Sud:", vrijednost: model.sud });
@@ -96,6 +109,12 @@ export default function TroskovnikIspis({ model }: { model: TroskovnikIzvozModel
     });
   }
   if (model.brojPredmeta) predmet.push({ oznaka: "Posl. br.:", vrijednost: model.brojPredmeta });
+  if (model.vrijednostSpora) {
+    predmet.push({ oznaka: "VPS:", vrijednost: formatEur(model.vrijednostSpora) });
+  }
+  if (model.vrstaPostupkaNaziv) {
+    predmet.push({ oznaka: "Vrsta postupka:", vrijednost: model.vrstaPostupkaNaziv });
+  }
 
   return (
     <div id="troskovnik-ispis" aria-hidden="true">
@@ -106,6 +125,8 @@ export default function TroskovnikIspis({ model }: { model: TroskovnikIzvozModel
           {adresa && <div>{adresa}</div>}
           {odvjetnik.oib && <div>OIB: {odvjetnik.oib}</div>}
           {odvjetnik.iban && <div>IBAN: {odvjetnik.iban}</div>}
+          {odvjetnik.telefon && <div>Tel: {odvjetnik.telefon}</div>}
+          {odvjetnik.email && <div>{odvjetnik.email}</div>}
         </div>
       )}
 
@@ -124,14 +145,13 @@ export default function TroskovnikIspis({ model }: { model: TroskovnikIzvozModel
       )}
 
       {/* ── Jedna tablica: radnje, zbroj, prolazni troškovi, sveukupno ── */}
-      <table>
+      <table className={imaDatum ? undefined : "bez-datuma"}>
         <thead>
           <tr>
             <th className="st-radnja">Radnja</th>
             <th className="st-tarifa">Tar. br.</th>
-            <th className="st-datum">Datum</th>
+            {imaDatum && <th className="st-datum">Datum</th>}
             <th className="st-iznos">Iznos</th>
-            <th className="st-napomena">Napomena</th>
           </tr>
         </thead>
         <tbody>
@@ -140,37 +160,14 @@ export default function TroskovnikIspis({ model }: { model: TroskovnikIzvozModel
             // gdje „sastav podneska" stoji jednom, a datumi se nižu ispod.
             const isti = i > 0 && model.radnje[i - 1].opis === r.opis;
             return (
-              <tr key={`${r.opis}-${i}`}>
+              <tr key={`${r.opis}-${i}`} className={i % 2 === 1 ? "alt" : undefined}>
                 <td>{isti ? "" : r.opis}</td>
                 <td className="tarifa">{isti ? "" : r.tarifniBroj}</td>
-                <td className="datum">{r.datum ? formatDatumIspis(r.datum) : ""}</td>
+                {imaDatum && <td className="datum">{r.datum ? formatDatumIspis(r.datum) : ""}</td>}
                 <Iznos value={r.iznos} />
-                <td />
               </tr>
             );
           })}
-
-          {/* Zbroj odvjetničkih radnji */}
-          <RedakZbroja oznaka="UKUPNO:" value={model.zbrojNagrade.iznos} bold />
-
-          {/* Naknada troškova ULAZI u osnovicu, pa stoji prije PDV-a. */}
-          {model.naknadaTroskova > 0 && (
-            <tr>
-              <td>Naknada troškova (Tbr. 48.-51.)</td>
-              <td />
-              <td />
-              <Iznos value={model.naknadaTroskova} />
-              <td />
-            </tr>
-          )}
-
-          {model.pdv && (
-            <>
-              <RedakZbroja oznaka="Osnovica (bez PDV):" value={model.pdv.osnovica} />
-              <RedakZbroja oznaka="PDV (25%):" value={model.pdv.iznos} />
-              <RedakZbroja oznaka="Nagrada s PDV-om:" value={model.pdv.ukupno} bold />
-            </>
-          )}
 
           {/* Prolazni troškovi — bez PDV-a, kao obični retci, kao u predlošku.
               Prazan razdjelni redak se izostavlja kad prolaznih troškova nema. */}
@@ -178,44 +175,74 @@ export default function TroskovnikIspis({ model }: { model: TroskovnikIzvozModel
             <tr className="razmak">
               <td />
               <td />
-              <td />
-              <td />
+              {imaDatum && <td />}
               <td />
             </tr>
           )}
 
-          {/* Zbroj po odjeljku stoji ovdje, iako ga predložak nema: kod
-              oslobođenja od pristojbi zbroj nije jednak zbroju navedenih iznosa
-              (Zakon o sudskim pristojbama, čl. 11-13), pa bi bez njega
-              troškovnik koji ide sudu bio računski neprovjerljiv. */}
-          {imaPristojbe && (
-            <>
-              {model.pristojbe.map((p, i) => (
-                <RedakTroska key={`pristojba-${i}`} t={p} />
-              ))}
-              <RedakZbroja oznaka="Ukupno pristojbe:" value={model.ukupnoPristojbe} />
-            </>
-          )}
-          {imaPredujmove && (
-            <>
-              {model.predujmovi.map((p, i) => (
-                <RedakTroska key={`predujam-${i}`} t={p} />
-              ))}
-              <RedakZbroja oznaka="Ukupno predujmovi:" value={model.ukupnoPredujmovi} />
-            </>
-          )}
-
-          <RedakZbroja oznaka="UKUPNO:" value={model.sveukupno} bold />
+          {/* Pojedinačne stavke ostaju u tablici, iako ih obračun ispod zbraja
+              u jedan redak: kod oslobođenja od pristojbi zbroj nije jednak
+              zbroju navedenih iznosa (Zakon o sudskim pristojbama, čl. 11-13),
+              pa bi bez razrade troškovnik koji ide sudu bio računski
+              neprovjerljiv. */}
+          {imaPristojbe && model.pristojbe.map((p, i) => (
+            <RedakTroska key={`pristojba-${i}`} t={p} imaDatum={imaDatum} />
+          ))}
+          {imaPredujmove && model.predujmovi.map((p, i) => (
+            <RedakTroska key={`predujam-${i}`} t={p} imaDatum={imaDatum} />
+          ))}
         </tbody>
       </table>
 
-      {/* ── Potpis ──
+      {/* ── Obračun — izvan tablice, poravnat desno. Jedan redak po stavci,
+          nula-iznosi izostavljaju se u cijelosti; jedino SVEUKUPNO je
+          podebljano i vidljivo veće. */}
+      <div className="obracun">
+        <div className="obracun-grupa">
+          <RedakObracuna oznaka="Nagrada (zbroj radnji)" value={nagradaRadnji} />
+          {model.naknadaTroskova > 0 && (
+            <RedakObracuna oznaka="Naknada troškova (Tbr. 48.-51.)" value={model.naknadaTroskova} />
+          )}
+          {model.pdv && (
+            <>
+              <RedakObracuna oznaka={`PDV (${model.pdv.stopa} %)`} value={model.pdv.iznos} />
+              <RedakObracuna oznaka="Nagrada s PDV-om" value={model.pdv.ukupno} />
+            </>
+          )}
+        </div>
+
+        {(model.ukupnoPristojbe > 0 || model.ukupnoPredujmovi > 0) && (
+          <div className="obracun-grupa">
+            {model.ukupnoPristojbe > 0 && (
+              <RedakObracuna oznaka="Sudske pristojbe" value={model.ukupnoPristojbe} />
+            )}
+            {model.ukupnoPredujmovi > 0 && (
+              <RedakObracuna oznaka="Izdaci i predujmovi" value={model.ukupnoPredujmovi} />
+            )}
+          </div>
+        )}
+
+        <div className="obracun-grupa">
+          <RedakObracuna oznaka="SVEUKUPNO" value={model.sveukupno} veliko />
+        </div>
+      </div>
+
+      {/* ── Potpis ── mjesto i datum lijevo, crta za potpis desno.
+          Mjesto se namjerno ne deklinira ("Mjesto: Zagreb", ne "U Zagrebu") —
+          deklinacija bi za velik dio gradova bila gramatički pogrešna.
           Bez „Odvjetnik"/„Odvjetnica": aplikacija nema podatak o rodu, pa bi
           predložak nametnuo krivi oblik dijelu korisnika. */}
       {odvjetnik && (
         <div className="potpis">
-          <div className="ime">{odvjetnik.ime}</div>
-          {adresa && <div>{adresa}</div>}
+          <div className="potpis-mjesto-datum">
+            {odvjetnik.grad && <div>Mjesto: {odvjetnik.grad}</div>}
+            <div>Datum: {formatDatumIspis(model.datumIzrade)}</div>
+          </div>
+          <div className="potpis-crta">
+            <div className="crta" />
+            <div className="ime">{odvjetnik.ime}</div>
+            {odvjetnik.osobnoIme && <div className="osobno-ime">{odvjetnik.osobnoIme}</div>}
+          </div>
         </div>
       )}
 
@@ -261,10 +288,11 @@ export default function TroskovnikIspis({ model }: { model: TroskovnikIzvozModel
           #troskovnik-ispis .zaglavlje .ime { text-transform: uppercase; }
 
           #troskovnik-ispis h1 {
-            font-size: 16pt;
-            font-weight: normal;
+            font-size: 18pt;
+            font-weight: 700;
             letter-spacing: 0.5pt;
-            margin: 0 0 8mm 22mm;
+            text-align: center;
+            margin: 0 0 8mm;
           }
 
           /* Predmet — oznake desno, vrijednosti lijevo, oko sredine stranice. */
@@ -290,26 +318,71 @@ export default function TroskovnikIspis({ model }: { model: TroskovnikIzvozModel
           #troskovnik-ispis thead { display: table-header-group; }
           #troskovnik-ispis tr { break-inside: avoid; page-break-inside: avoid; }
 
-          #troskovnik-ispis .st-radnja { width: 42%; }
-          #troskovnik-ispis .st-tarifa { width: 13%; }
-          #troskovnik-ispis .st-datum { width: 14%; }
-          #troskovnik-ispis .st-iznos { width: 15%; }
-          #troskovnik-ispis .st-napomena { width: 16%; }
+          #troskovnik-ispis .st-radnja { width: 52%; }
+          #troskovnik-ispis .st-tarifa { width: 16%; }
+          #troskovnik-ispis .st-datum { width: 16%; }
+          #troskovnik-ispis .st-iznos { width: 16%; }
+          /* Bez stupca Datum (nijedan redak nema datum) preostala tri stupca
+             preuzimaju njegovih 16%. */
+          #troskovnik-ispis table.bez-datuma .st-radnja { width: 60%; }
+          #troskovnik-ispis table.bez-datuma .st-tarifa { width: 20%; }
+          #troskovnik-ispis table.bez-datuma .st-iznos { width: 20%; }
 
           #troskovnik-ispis .datum { text-align: center; }
-          #troskovnik-ispis .oznaka { text-align: right; }
           #troskovnik-ispis .tarifa { text-align: center; }
           #troskovnik-ispis .iznos { text-align: right; white-space: nowrap; }
           #troskovnik-ispis .bold { font-weight: bold; }
           #troskovnik-ispis .razmak td { height: 5mm; }
 
-          #troskovnik-ispis .potpis {
-            margin-top: 10mm;
-            text-align: center;
+          /* Naizmjenično blago sivilo redaka radnji, radi čitkosti — samo na
+             stvarnim retcima radnji, ne na zbrojnim/oznaka retcima. */
+          #troskovnik-ispis tbody tr.alt { background: #f5f5f5; }
+
+          /* Obračun — izvan tablice, poravnat desno. Prazan razmak između
+             grupa dolazi od margine, ne od praznog retka. */
+          #troskovnik-ispis .obracun {
+            margin-top: 8mm;
+            margin-left: auto;
+            width: 75mm;
             break-inside: avoid;
             page-break-inside: avoid;
           }
+          #troskovnik-ispis .obracun-grupa { margin-bottom: 4mm; }
+          #troskovnik-ispis .obracun-grupa:last-child { margin-bottom: 0; }
+          #troskovnik-ispis .obracun-redak {
+            display: flex;
+            justify-content: space-between;
+            gap: 6mm;
+            padding: 0.5mm 0;
+          }
+          /* Jedino SVEUKUPNO je podebljano i vidljivo veće — sve ostalo je
+             obični tekst, da se konačan broj ne izgubi među pet podebljanih. */
+          #troskovnik-ispis .obracun-redak.veliko {
+            font-weight: bold;
+            font-size: 13pt;
+            margin-top: 2mm;
+            padding-top: 2mm;
+            border-top: 1px solid #000;
+          }
+
+          #troskovnik-ispis .potpis {
+            margin-top: 15mm;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            gap: 10mm;
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+          #troskovnik-ispis .potpis-mjesto-datum { text-align: left; }
+          #troskovnik-ispis .potpis-crta { text-align: center; }
+          #troskovnik-ispis .potpis-crta .crta {
+            width: 55mm;
+            border-top: 1px solid #000;
+            margin-bottom: 2mm;
+          }
           #troskovnik-ispis .potpis .ime { font-weight: bold; text-transform: uppercase; }
+          #troskovnik-ispis .potpis .osobno-ime { margin-top: 1mm; }
 
           #troskovnik-ispis .napomena {
             margin-top: 12mm;
@@ -320,7 +393,7 @@ export default function TroskovnikIspis({ model }: { model: TroskovnikIzvozModel
 
           #troskovnik-ispis .pravna-osnova {
             margin-top: 10mm;
-            font-size: 8pt;
+            font-size: 9pt;
             color: #333;
             break-inside: avoid;
             page-break-inside: avoid;

@@ -89,7 +89,10 @@ describe("ZADANA_NAPOMENA", () => {
   it("doslovno jednaka TarifaConstants.ZadanaNapomena na backendu", () => {
     expect(ZADANA_NAPOMENA).toBe(
       "Na traženi iznos obračunava se zakonska zatezna kamata sukladno članku 29. " +
-        "Zakona o obveznim odnosima.",
+        "Zakona o obveznim odnosima, po kamatnoj stopi koja se određuje za svako " +
+        "polugodište uvećanjem kamatne stope koju je Europska središnja banka " +
+        "primijenila na svoje posljednje glavne operacije refinanciranja prije " +
+        "prvog kalendarskog dana tekućeg polugodišta za tri postotna poena.",
     );
   });
 });

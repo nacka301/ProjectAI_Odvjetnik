@@ -207,40 +207,42 @@ function KlijentiSadrzaj() {
     <div className="min-h-screen bg-gray-50 text-slate-900">
       {/* Header */}
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3 sm:px-6">
+        <div className="mx-auto flex max-w-7xl items-center gap-2 sm:gap-4 px-4 py-2.5 sm:py-3 sm:px-6">
           <Link
             href="/"
-            className="flex items-center gap-2 text-sm text-slate-500 transition hover:text-slate-900"
+            className="flex items-center justify-center gap-2 max-sm:min-h-12 max-sm:min-w-12 max-sm:-ml-2 text-sm text-slate-500 transition hover:text-slate-900"
           >
             <ArrowLeft className="h-4 w-4" />
             <span className="hidden sm:inline">Početna</span>
           </Link>
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1B2A4A]/10">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#1B2A4A]/10">
               <Users className="h-4 w-4 text-[#1B2A4A]" />
             </div>
-            <h1 className="font-[family-name:var(--font-playfair)] text-lg font-semibold text-[#1B2A4A]">Stranke</h1>
+            <h1 className="hidden sm:block font-[family-name:var(--font-playfair)] text-lg font-semibold text-[#1B2A4A] truncate">Stranke</h1>
           </div>
-          <div className="ml-auto flex items-center gap-3">
-            <div data-vodic="vodic-pretraga" className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          {/* Na mobitelu: pretraga se sužava, a gumb "Nova stranka" postaje
+              samo ikona — inače fiksnih w-48/px-4+tekst ne staje na 360px. */}
+          <div className="ml-auto flex items-center gap-2 sm:gap-3 min-w-0">
+            <div data-vodic="vodic-pretraga" className="relative min-w-0">
+              <Search className="absolute left-2.5 sm:left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Pretraži stranke…"
+                placeholder="Pretraži…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-48 rounded-lg border border-slate-200 bg-white py-2 pl-10 pr-3 text-sm text-slate-900 placeholder-slate-400 transition focus:border-[#1B2A4A]/50 focus:outline-none focus:ring-1 focus:ring-[#1B2A4A]/30 sm:w-64"
+                className="w-28 xs:w-40 sm:w-64 rounded-lg border border-slate-200 bg-white py-2 pl-9 sm:pl-10 pr-2 sm:pr-3 text-sm text-slate-900 placeholder-slate-400 transition focus:border-[#1B2A4A]/50 focus:outline-none focus:ring-1 focus:ring-[#1B2A4A]/30"
               />
             </div>
             <button
               data-vodic="vodic-nova-stranka"
               onClick={() => setShowForm(!showForm)}
               disabled={demo}
-              title={demo ? DEMO_ZASTO_NEAKTIVNO : undefined}
-              className="flex items-center gap-2 rounded-lg bg-[#1B2A4A] px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-[#1B2A4A]/90 active:scale-[0.98] disabled:bg-slate-300 disabled:cursor-not-allowed"
+              title={demo ? DEMO_ZASTO_NEAKTIVNO : (showForm ? "Zatvori" : "Nova stranka")}
+              className="flex items-center justify-center gap-2 rounded-lg bg-[#1B2A4A] max-sm:min-h-12 max-sm:min-w-12 sm:px-4 sm:py-2 text-sm font-medium text-white shadow-sm transition hover:bg-[#1B2A4A]/90 active:scale-[0.98] disabled:bg-slate-300 disabled:cursor-not-allowed shrink-0"
             >
               {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-              {showForm ? "Zatvori" : "Nova stranka"}
+              <span className="hidden sm:inline">{showForm ? "Zatvori" : "Nova stranka"}</span>
             </button>
           </div>
         </div>

@@ -65,11 +65,17 @@ function VodicIzbornik() {
 
   return (
     <div className="relative" ref={ref}>
+      {/* max-sm:min-h-12/min-w-12 + max-sm:-m-2.5: dodirno područje je puni
+          48px, ali negativna margina ga vraća na izvornu ~28px širinu u
+          retku — ikona ostaje ista, prošireno je samo područje na koje se
+          može kliknuti (paddingom, ne ikonom), točno kako traži prompt.
+          Bez ovoga pet ikona (admin prikaz) ne bi stalo na 360px uz puni
+          logotip. */}
       <button
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="menu"
         aria-expanded={open}
-        className={`text-xs transition flex items-center gap-1 p-1.5 sm:p-0 rounded ${
+        className={`text-xs transition flex items-center justify-center gap-1 p-1.5 sm:p-0 max-sm:min-h-12 max-sm:min-w-12 max-sm:-m-2.5 rounded ${
           open ? "text-white font-semibold" : "text-slate-400 hover:text-white"
         }`}
         title="Pokreni vodič"
@@ -127,17 +133,24 @@ function AppHeaderInner({ extraStart }: AppHeaderProps) {
 
   return (
     <header className="bg-slate-900 text-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
+      {/* Jedan red, ≤56px na mobitelu: retka visinu ovdje ne diktira logo
+          (32px) nego dodirne mete desno (48px, max-sm:min-h-12) — zato je
+          py samo 4px (py-1): 48 + 4+4 = 56px točno. Podnaslov ide dolje tek
+          na sm+, gdje zaglavlje ionako naraste na py-4. */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-1 sm:py-4 flex items-center justify-between">
         {/* ── Logo ── */}
-        <Link href="/" className="flex items-center gap-3 group">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+        {/* shrink-0: logotip se nikad ne smije stisnuti/skratiti — čak i
+            kad peti (admin) gumb stigne u desni klaster, popušta on, ne
+            marka. */}
+        <Link href="/" className="flex items-center gap-2 sm:gap-3 group shrink-0">
+          <div className="w-8 h-8 shrink-0 bg-blue-600 rounded-lg flex items-center justify-center">
             <Scale className="h-5 w-5 text-white" />
           </div>
-          <div>
-            <h1 className="text-lg font-bold tracking-tight group-hover:text-blue-300 transition">
+          <div className="min-w-0">
+            <h1 className="text-base sm:text-lg font-bold tracking-tight group-hover:text-blue-300 transition truncate">
               PravoTek
             </h1>
-            <p className="text-[10px] text-slate-400 uppercase tracking-widest">
+            <p className="hidden sm:block text-[10px] text-slate-400 uppercase tracking-widest">
               Pravna Inteligencija
             </p>
           </div>
@@ -155,7 +168,7 @@ function AppHeaderInner({ extraStart }: AppHeaderProps) {
               <Link
                 key={href}
                 href={href}
-                className={`relative text-xs transition flex items-center gap-1 p-1.5 sm:p-0 rounded ${
+                className={`relative text-xs transition flex items-center justify-center gap-1 p-1.5 sm:p-0 max-sm:min-h-12 max-sm:min-w-12 max-sm:-m-2.5 rounded ${
                   isActive
                     ? "text-white font-semibold"
                     : "text-slate-400 hover:text-white"
@@ -174,7 +187,7 @@ function AppHeaderInner({ extraStart }: AppHeaderProps) {
           {isAdmin && (
             <Link
               href="/admin"
-              className={`relative text-xs transition flex items-center gap-1 p-1.5 sm:p-0 rounded ${
+              className={`relative text-xs transition flex items-center justify-center gap-1 p-1.5 sm:p-0 max-sm:min-h-12 max-sm:min-w-12 max-sm:-m-2.5 rounded ${
                 pathname === "/admin"
                   ? "text-amber-400 font-semibold"
                   : "text-amber-500/70 hover:text-amber-400"
@@ -222,7 +235,7 @@ function AppHeaderInner({ extraStart }: AppHeaderProps) {
               router.push("/auth/login");
               router.refresh();
             }}
-            className="text-xs text-slate-500 hover:text-red-400 transition flex items-center gap-1 p-1.5 sm:p-0"
+            className="text-xs text-slate-500 hover:text-red-400 transition flex items-center justify-center gap-1 p-1.5 sm:p-0 max-sm:min-h-12 max-sm:min-w-12 max-sm:-m-2.5"
             title="Odjavi se"
           >
             <LogOut className="h-4 w-4 sm:h-3.5 sm:w-3.5" />

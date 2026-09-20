@@ -85,25 +85,116 @@ describe("TroskovnikIspis", () => {
     expect(thead).not.toBeNull();
     expect(within(thead as HTMLElement).getByText("Radnja")).toBeInTheDocument();
     expect(within(thead as HTMLElement).getByText("Tar. br.")).toBeInTheDocument();
-    expect(within(thead as HTMLElement).getByText("Napomena")).toBeInTheDocument();
+    expect(within(thead as HTMLElement).getByText("Datum")).toBeInTheDocument();
   });
 
-  it("bez PDV-a nema redaka osnovice ni PDV-a", () => {
+  it("stupac Datum se ne prikazuje kad nijedan redak nema datum", () => {
+    const { container } = render(
+      <TroskovnikIspis
+        model={model({
+          radnje: [
+            { opis: "Sastav tužbe", tarifniBroj: "Tbr. 7.1", datum: null, kolicina: 1, bodovaPoJedinici: 100, ukupnoBodova: 100, iznos: 200 },
+          ],
+        })}
+      />,
+    );
+    expect(screen.queryByText("Datum")).not.toBeInTheDocument();
+    expect(container.querySelector("table")).toHaveClass("bez-datuma");
+  });
+
+  it("stupac Napomena se ne ispisuje — nijedan izvor podataka ga danas ne puni", () => {
+    render(<TroskovnikIspis model={model()} />);
+    expect(screen.queryByText("Napomena")).not.toBeInTheDocument();
+  });
+
+  it("bez PDV-a obračun nema PDV redaka, ni redak Osnovica ne postoji nigdje", () => {
     render(<TroskovnikIspis model={model({ pdv: null })} />);
     expect(screen.queryByText(/Osnovica/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/PDV \(25%\)/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^PDV/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Nagrada s PDV-om")).not.toBeInTheDocument();
   });
 
-  it("s PDV-om se osnovica, PDV i ukupno pojave", () => {
+  it("s PDV-om se prikazuju PDV i Nagrada s PDV-om, s pravim postotkom", () => {
     render(
-      <TroskovnikIspis model={model({ pdv: { osnovica: 200, iznos: 50, ukupno: 250 } })} />,
+      <TroskovnikIspis
+        model={model({ pdv: { osnovica: 200, iznos: 44, ukupno: 244, stopa: 22 } })}
+      />,
     );
-    expect(screen.getByText("Osnovica (bez PDV):")).toBeInTheDocument();
-    expect(screen.getByText("PDV (25%):")).toBeInTheDocument();
-    expect(screen.getByText("250,00 €")).toBeInTheDocument();
+    expect(screen.getByText("PDV (22 %)")).toBeInTheDocument();
+    expect(screen.getByText("Nagrada s PDV-om")).toBeInTheDocument();
+    expect(screen.getByText("244,00 €")).toBeInTheDocument();
+    // "Osnovica" više ne postoji nigdje — bio je isti broj kao "Nagrada (zbroj radnji)".
+    expect(screen.queryByText(/Osnovica/)).not.toBeInTheDocument();
   });
 
-  it("bez pristojbi i predujmova nema ni razdjelnog praznog retka", () => {
+  it("obračun: Nagrada (zbroj radnji) je čisti zbroj radnji, bez naknade troškova", () => {
+    render(
+      <TroskovnikIspis
+        model={model({ naknadaTroskova: 30, sveukupno: 230 })}
+      />,
+    );
+    // Radnja u fixtureu iznosi 200,00 € — naknada (30) se NE smije uračunati ovdje,
+    // inače bi se udvostručila uz zaseban redak "Naknada troškova".
+    expect(screen.getByText("Nagrada (zbroj radnji)")).toBeInTheDocument();
+    expect(screen.getAllByText("200,00 €").length).toBeGreaterThan(0);
+    expect(screen.getByText("Naknada troškova (Tbr. 48.-51.)")).toBeInTheDocument();
+    expect(screen.getByText("30,00 €")).toBeInTheDocument();
+  });
+
+  it("naknada troškova se ne ispisuje kad je nula", () => {
+    render(<TroskovnikIspis model={model({ naknadaTroskova: 0 })} />);
+    expect(screen.queryByText(/Naknada troškova/)).not.toBeInTheDocument();
+  });
+
+  it("sudske pristojbe i izdaci se ne ispisuju u obračunu kad su nula, čak i s praznim popisom", () => {
+    render(
+      <TroskovnikIspis
+        model={model({ pristojbe: [], ukupnoPristojbe: 0, predujmovi: [], ukupnoPredujmovi: 0 })}
+      />,
+    );
+    expect(screen.queryByText("Sudske pristojbe")).not.toBeInTheDocument();
+    expect(screen.queryByText("Izdaci i predujmovi")).not.toBeInTheDocument();
+  });
+
+  it("sudske pristojbe i izdaci u obračunu, uz pojedinačne stavke koje ostaju u tablici", () => {
+    const { container } = render(
+      <TroskovnikIspis
+        model={model({
+          pristojbe: [{ opis: "Sudska pristojba — Tar. br. 1 st. 2", datum: null, iznos: 50 }],
+          ukupnoPristojbe: 50,
+          predujmovi: [{ opis: "Predujam za vještačenje", datum: null, iznos: 100 }],
+          ukupnoPredujmovi: 100,
+          sveukupno: 350,
+        })}
+      />,
+    );
+    // Pojedinačna stavka i dalje redak u tablici.
+    expect(screen.getByText("Sudska pristojba — Tar. br. 1 st. 2")).toBeInTheDocument();
+    expect(screen.getByText("Predujam za vještačenje")).toBeInTheDocument();
+    // Zbroj po kategoriji je u obračunu, izvan tablice.
+    const obracun = container.querySelector(".obracun");
+    expect(obracun!.textContent).toContain("Sudske pristojbe");
+    expect(obracun!.textContent).toContain("Izdaci i predujmovi");
+    // Stari zbrojni retci unutar tablice više ne postoje.
+    expect(screen.queryByText("Ukupno pristojbe:")).not.toBeInTheDocument();
+    expect(screen.queryByText("Ukupno predujmovi:")).not.toBeInTheDocument();
+  });
+
+  it("jedino SVEUKUPNO je podebljano i vidljivo veće u obračunu", () => {
+    const { container } = render(
+      <TroskovnikIspis model={model({ pdv: { osnovica: 200, iznos: 50, ukupno: 250, stopa: 25 } })} />,
+    );
+    const veliki = container.querySelectorAll(".obracun-redak.veliko");
+    expect(veliki).toHaveLength(1);
+    expect(veliki[0].textContent).toContain("SVEUKUPNO");
+  });
+
+  it("obračun se ne prelama (break-inside: avoid je stvar CSS-a, ovdje se provjerava da je jedan blok)", () => {
+    const { container } = render(<TroskovnikIspis model={model()} />);
+    expect(container.querySelectorAll(".obracun")).toHaveLength(1);
+  });
+
+  it("bez pristojbi i predujmova nema ni razdjelnog praznog retka u tablici", () => {
     const { container } = render(<TroskovnikIspis model={model()} />);
     expect(container.querySelector(".razmak")).toBeNull();
   });
@@ -164,5 +255,57 @@ describe("TroskovnikIspis", () => {
     expect(potpis).not.toBeNull();
     expect(potpis!.textContent).toContain("Ana Anić");
     expect(potpis!.textContent).not.toMatch(/Odvjetnic?[ai]/);
+  });
+
+  it("potpis ima mjesto i datum uz crtu za potpis", () => {
+    const { container } = render(<TroskovnikIspis model={model()} />);
+    const potpis = container.querySelector(".potpis");
+    expect(potpis!.textContent).toContain("Mjesto: Daruvar");
+    expect(potpis!.textContent).toContain("Datum: 23.08.2026");
+    expect(container.querySelector(".potpis-crta .crta")).not.toBeNull();
+  });
+
+  it("potpis prikazuje osobno ime odvjetnika ispod naziva ureda, kad postoji", () => {
+    const { container } = render(
+      <TroskovnikIspis
+        model={model({
+          odvjetnik: { ime: "Odvjetnički ured Anić", grad: "Daruvar", osobnoIme: "Ana Anić" },
+        })}
+      />,
+    );
+    const potpis = container.querySelector(".potpis");
+    expect(potpis!.textContent).toContain("Odvjetnički ured Anić");
+    expect(potpis!.textContent).toContain("Ana Anić");
+    expect(container.querySelector(".osobno-ime")).not.toBeNull();
+  });
+
+  it("bez osobnog imena potpis izostavlja taj redak", () => {
+    const { container } = render(<TroskovnikIspis model={model()} />);
+    expect(container.querySelector(".osobno-ime")).toBeNull();
+  });
+
+  it("zaglavlje prikazuje telefon i e-mail ureda kad postoje, ne korisnički mail", () => {
+    const { container } = render(
+      <TroskovnikIspis
+        model={model({
+          odvjetnik: { ime: "Ana Anić", telefon: "01 234 5678", email: "ured@primjer.hr" },
+        })}
+      />,
+    );
+    const zaglavlje = container.querySelector(".zaglavlje");
+    expect(zaglavlje!.textContent).toContain("01 234 5678");
+    expect(zaglavlje!.textContent).toContain("ured@primjer.hr");
+  });
+
+  it("predmet blok prikazuje VPS i vrstu postupka kad postoje", () => {
+    render(
+      <TroskovnikIspis
+        model={model({ vrijednostSpora: 15000, vrstaPostupkaNaziv: "Nenovčani zahtjev" })}
+      />,
+    );
+    expect(screen.getByText("VPS:")).toBeInTheDocument();
+    expect(screen.getByText("15.000,00 €")).toBeInTheDocument();
+    expect(screen.getByText("Vrsta postupka:")).toBeInTheDocument();
+    expect(screen.getByText("Nenovčani zahtjev")).toBeInTheDocument();
   });
 });

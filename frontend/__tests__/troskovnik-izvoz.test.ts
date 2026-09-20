@@ -18,6 +18,9 @@ const PRAZNA_POLJA: IzvozUlaz["polja"] = {
   odvjetnikAdresa: "",
   odvjetnikGrad: "",
   odvjetnikIban: "",
+  odvjetnikTelefon: "",
+  odvjetnikEmail: "",
+  odvjetnikOsobnoIme: "",
   klijentIme: "",
   zastupanaPolozaj: "",
   protustrankaIme: "",
@@ -96,7 +99,7 @@ describe("buildIzvozModel", () => {
         liveCalc: { ...PRAZAN_LIVECALC, lines: [linija()], osnovicaSaNaknadom: 200, pdv: 50, ukupnoSPdv: 250 },
       }),
     );
-    expect(m.pdv).toEqual({ osnovica: 200, iznos: 50, ukupno: 250 });
+    expect(m.pdv).toEqual({ osnovica: 200, iznos: 50, ukupno: 250, stopa: 25 });
   });
 
   it("pribraja Tbr. 41 bodove retku, kao i prikaz na ekranu", () => {
@@ -118,7 +121,41 @@ describe("buildIzvozModel", () => {
     expect(m.radnje[1].datum).toBeNull();
   });
 
-  it("radnje slaže kronološki, neovisno o redoslijedu unosa", () => {
+  it("skida tarifni broj iz naziva radnje — stupac Tar. br. ga već prikazuje", () => {
+    const m = buildIzvozModel(
+      sLinijom({
+        liveCalc: {
+          ...PRAZAN_LIVECALC,
+          lines: [linija({ opis: "Tužba / protutužba / prijedlog (Tbr. 7.1)" })],
+        },
+      }),
+    );
+    expect(m.radnje[0].opis).toBe("Tužba / protutužba / prijedlog");
+    expect(m.radnje[0].tarifniBroj).toBe("Tbr. 7.1");
+  });
+
+  it("skida samo zagradu s tarifnim brojem, ostatak teksta (npr. formulu izračuna) ostavlja", () => {
+    const m = buildIzvozModel(
+      sLinijom({
+        liveCalc: {
+          ...PRAZAN_LIVECALC,
+          lines: [
+            linija({
+              opis: "Rasprava pred sudom drugog stupnja (Tbr. 4.2) – Tbr. 4.1 + 25%, a kod dugotrajnog zatvora + 50%",
+            }),
+          ],
+        },
+      }),
+    );
+    expect(m.radnje[0].opis).toBe(
+      "Rasprava pred sudom drugog stupnja – Tbr. 4.1 + 25%, a kod dugotrajnog zatvora + 50%",
+    );
+  });
+
+  it("radnje zadržavaju redoslijed u kojem stižu, bez presortiravanja po datumu", () => {
+    // Kronološko slaganje sad se radi ranije (`redciPoredani` za prikaz na
+    // ekranu, ništa za slanje na backend) — ovdje se retci više ne diraju,
+    // jer troškovnik ide sudu u redoslijedu kakav je odvjetnik sam složio.
     const m = buildIzvozModel(
       sLinijom({
         liveCalc: {
@@ -131,27 +168,7 @@ describe("buildIzvozModel", () => {
         },
       }),
     );
-    expect(m.radnje.map((r) => r.opis)).toEqual(["Tužba", "Ročište", "Žalba"]);
-  });
-
-  it("radnja bez datuma ide na kraj, ostale zadrže redoslijed unosa", () => {
-    const m = buildIzvozModel(
-      sLinijom({
-        liveCalc: {
-          ...PRAZAN_LIVECALC,
-          lines: [
-            linija({ opis: "Bez datuma A", datum: null }),
-            linija({ opis: "S datumom", datum: "2025-03-01" }),
-            linija({ opis: "Bez datuma B", datum: null }),
-          ],
-        },
-      }),
-    );
-    expect(m.radnje.map((r) => r.opis)).toEqual([
-      "S datumom",
-      "Bez datuma A",
-      "Bez datuma B",
-    ]);
+    expect(m.radnje.map((r) => r.opis)).toEqual(["Žalba", "Tužba", "Ročište"]);
   });
 
   it("uzima uloge stranaka iz lokalnih polja, prije spremanja", () => {
@@ -183,6 +200,34 @@ describe("buildIzvozModel", () => {
 
   it("prazna napomena ne postaje odjeljak", () => {
     expect(buildIzvozModel(sLinijom({ napomena: "   " })).napomena).toBeUndefined();
+  });
+
+  it("naziv ureda koji izgleda kao mail (placeholder s Google prijave) se ne ispisuje kao ime odvjetnika", () => {
+    const m = buildIzvozModel(
+      sLinijom({ polja: { ...PRAZNA_POLJA, odvjetnikIme: "ivan@gmail.com" } }),
+    );
+    expect(m.odvjetnik).toBeNull();
+  });
+
+  it("pravo ime odvjetnika (bez @) se i dalje ispisuje", () => {
+    const m = buildIzvozModel(
+      sLinijom({ polja: { ...PRAZNA_POLJA, odvjetnikIme: "Ana Anić" } }),
+    );
+    expect(m.odvjetnik?.ime).toBe("Ana Anić");
+  });
+
+  it("vrijednost predmeta spora i vrsta postupka dolaze iz obrasca kad odgovor nema svoje", () => {
+    const m = buildIzvozModel(
+      sLinijom({ vrijednostSpora: 15000, vrstaPostupka: "nenovcani_zahtjev" }),
+    );
+    expect(m.vrijednostSpora).toBe(15000);
+    expect(m.vrstaPostupkaNaziv).toMatch(/Nenovčani zahtjev/);
+  });
+
+  it("bez vrijednosti spora oba polja izostaju", () => {
+    const m = buildIzvozModel(sLinijom());
+    expect(m.vrijednostSpora).toBeUndefined();
+    expect(m.vrstaPostupkaNaziv).toBeUndefined();
   });
 });
 

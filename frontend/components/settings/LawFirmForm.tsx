@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Save, Building2, Hash, MapPin, Landmark, Receipt } from "lucide-react";
+import { Loader2, Save, Building2, Hash, MapPin, Landmark, Receipt, Phone, Mail } from "lucide-react";
 import { API_BASE } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
 
@@ -15,6 +15,8 @@ export default function LawFirmForm({ userId: _propUserId }: Props) {
   const [oib, setOib] = useState("");
   const [address, setAddress] = useState("");
   const [iban, setIban] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [pdvObveznik, setPdvObveznik] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -40,6 +42,8 @@ export default function LawFirmForm({ userId: _propUserId }: Props) {
             setOib(data.oib || "");
             setAddress(data.address || "");
             setIban(data.iban || "");
+            setPhone(data.phone || "");
+            setEmail(data.email || "");
             setPdvObveznik(Boolean(data.pdv_obveznik));
           }
           // null / empty → fields stay blank = "create" mode
@@ -83,6 +87,8 @@ export default function LawFirmForm({ userId: _propUserId }: Props) {
           oib: oib.trim() || null,
           address: address.trim() || null,
           iban: iban.trim() || null,
+          phone: phone.trim() || null,
+          email: email.trim() || null,
           pdv_obveznik: pdvObveznik,
         }),
       });
@@ -197,6 +203,40 @@ export default function LawFirmForm({ userId: _propUserId }: Props) {
             placeholder="HR12 1234 0061 1234 5678 9"
             className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-400 transition"
           />
+        </div>
+
+        {/* Telefon */}
+        <div>
+          <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 mb-1.5">
+            <Phone className="h-3.5 w-3.5 text-slate-400" />
+            Telefon ureda
+          </label>
+          <input
+            type="text"
+            inputMode="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="+385 1 234 5678"
+            className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-400 transition"
+          />
+        </div>
+
+        {/* E-mail ureda */}
+        <div>
+          <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 mb-1.5">
+            <Mail className="h-3.5 w-3.5 text-slate-400" />
+            E-mail ureda
+          </label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="ured@primjer.hr"
+            className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-400 transition"
+          />
+          <p className="text-[11px] text-slate-400 mt-1">
+            Ide na ispis i izvoz troškovnika. Nije login e-mail vašeg korisničkog računa.
+          </p>
         </div>
 
         {/* PDV obveznik */}

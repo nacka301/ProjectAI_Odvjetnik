@@ -157,6 +157,7 @@ export default function PersonalProfileForm({ userId: _propUserId, userEmail }: 
           </label>
           <input
             type="tel"
+            inputMode="tel"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             placeholder="+385 91 234 5678"

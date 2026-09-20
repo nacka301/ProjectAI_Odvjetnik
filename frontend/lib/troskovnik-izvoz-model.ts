@@ -12,7 +12,7 @@
  * — samo izostave ono čega nema.
  */
 import { datumBezVremena, uredbeIzStavaka, type PravnaOsnova } from "@/lib/pravna-osnova";
-import { TARIFA_TRENUTNA, type TarifaVerzija } from "@/lib/tarifa";
+import { PDV_RATE, TARIFA_TRENUTNA, VRSTA_POSTUPKA_PRAVILA, type TarifaVerzija, type VrstaPostupka } from "@/lib/tarifa";
 
 /** Jedna odvjetnička radnja iz odjeljka I. */
 export interface IzvozRadnja {
@@ -39,6 +39,10 @@ export interface IzvozOdvjetnik {
   adresa?: string;
   grad?: string;
   iban?: string;
+  telefon?: string;
+  email?: string;
+  /** Osobno ime prijavljenog odvjetnika (`user_profiles.full_name`) — za potpis, uz naziv ureda. */
+  osobnoIme?: string;
 }
 
 /** Stranka onako kako stoji u zaglavlju dokumenta — po procesnoj ulozi, bez adrese. */
@@ -54,6 +58,10 @@ export interface TroskovnikIzvozModel {
   brojPredmeta?: string;
   zastupana: IzvozStranka | null;
   protustranka: IzvozStranka | null;
+  /** Vrijednost predmeta spora, u EUR. Prazno kad nije poznata. */
+  vrijednostSpora?: number;
+  /** Čitljiv naziv VPS kategorije (čl. 14-25 Zakona o sudskim pristojbama), npr. "Opće pravilo". */
+  vrstaPostupkaNaziv?: string;
   datumIzrade: Date;
 
   radnje: IzvozRadnja[];
@@ -61,7 +69,7 @@ export interface TroskovnikIzvozModel {
   /** Tbr. 48.-51. — ulazi u osnovicu. `0` kad je nema. */
   naknadaTroskova: number;
   /** `null` kad odvjetnik nije u sustavu PDV-a — tada odjeljak otpada u cijelosti. */
-  pdv: { osnovica: number; iznos: number; ukupno: number } | null;
+  pdv: { osnovica: number; iznos: number; ukupno: number; stopa: number } | null;
 
   pristojbe: IzvozTrosak[];
   ukupnoPristojbe: number;
@@ -125,7 +133,15 @@ interface ResultLike {
   sud?: string | null;
   broj_predmeta?: string | null;
   klijent: { ime: string } | null;
-  odvjetnik: { ime: string; oib?: string; adresa?: string; grad?: string; iban?: string } | null;
+  odvjetnik: {
+    ime: string;
+    oib?: string;
+    adresa?: string;
+    grad?: string;
+    iban?: string;
+    telefon?: string;
+    email?: string;
+  } | null;
   protustranka?: { ime: string } | null;
   protustranka_polozaj?: string | null;
   pristojbene_stavke?: PristojbenaStavkaLike[];
@@ -135,6 +151,10 @@ interface ResultLike {
   ukupno_predujmovi?: number;
   sveukupni_trosak?: number;
   napomena?: string | null;
+  // Vrijednost predmeta spora i kategorija po kojoj je razriješena (čl. 14-25
+  // Zakona o sudskim pristojbama) — za podatke o predmetu na ispisu.
+  vrijednost_spora?: number | null;
+  vps_vrsta_postupka?: string | null;
   // Po čemu je izračunat — backend ih šalje od koraka 3 plana pravne zaštite.
   tarifa_naziv?: string;
   tarifa_vrijedi_od?: string;
@@ -157,6 +177,9 @@ export interface IzvozUlaz {
     odvjetnikAdresa: string;
     odvjetnikGrad: string;
     odvjetnikIban: string;
+    odvjetnikTelefon: string;
+    odvjetnikEmail: string;
+    odvjetnikOsobnoIme: string;
     klijentIme: string;
     zastupanaPolozaj: string;
     protustrankaIme: string;
@@ -164,6 +187,9 @@ export interface IzvozUlaz {
     predmetSud: string;
     predmetPoslovniBroj: string;
   };
+  /** Fallback kad `result` nema VPS podatke (živi pregled prije spremanja). */
+  vrijednostSpora?: number;
+  vrstaPostupka?: string;
   /**
    * Verzija Tarife razriješena na obrascu (Tbr. 52, po dospijeću). Koristi se samo
    * kad izračun s backenda ne kaže sam po kojoj je računao. Zadano: važeća.
@@ -211,6 +237,28 @@ function neprazno(s: string | null | undefined): string | undefined {
 }
 
 /**
+ * Naziv ureda zna biti korisnikov mail — Google prijava ga tako postavlja kao
+ * privremenu zamjenu dok korisnik ne upiše pravi naziv na `/dobrodosli`
+ * (vidi `frontend/lib/onboarding.ts`). Dokument koji ide sudu ne smije
+ * ispisati mail umjesto imena odvjetnika, pa se takva vrijednost ovdje
+ * tretira kao da ime uopće nije upisano.
+ */
+function izgledaKaoMail(s: string): boolean {
+  return s.includes("@");
+}
+
+/**
+ * Tarifni broj je zakucan u opis iz kataloga (npr. "Ostali podnesci (Tbr. 8.4)
+ * – 25% Tbr. 7.1, max 25"), jer isti opis služi i za prikaz u katalogu i za
+ * izvoz. Stupac "Tar. br." ga već prikazuje zasebno, pa bi u nazivu radnje bio
+ * dupliciran. Skida se samo prva zagrada koja počinje s "Tbr." — ostali tekst
+ * (npr. formula izračuna) ostaje netaknut.
+ */
+function skiniTarifniBroj(opis: string): string {
+  return opis.replace(/\s*\(Tbr\.[^()]*\)/, "").trim();
+}
+
+/**
  * Opis pristojbe onakav kakav stoji na dokumentu. Uredba naplaćuje po radnji, pa
  * svaki tarifni broj ide u svoj redak — zbroj bez razrade se ne bi dao provjeriti,
  * a troškovnik ide sudu.
@@ -228,22 +276,20 @@ export function buildIzvozModel(ulaz: IzvozUlaz): TroskovnikIzvozModel {
   // je na ekranu — isto ponašanje kao i dosad.
   const izvorLinija: LinijaLike[] = result?.stavke ?? liveCalc.lines;
 
-  const radnje: IzvozRadnja[] = izvorLinija
-    .map((l) => ({
-      opis: l.opis,
-      tarifniBroj: l.tarifni_broj,
-      datum: uDatum(l.datum),
-      kolicina: l.kolicina,
-      bodovaPoJedinici: l.bodova_po_jedinici,
-      // Tbr. 41 se na ekranu pribraja retku, pa mora i ovdje — inače zbroj
-      // pojedinačnih bodova ne bi odgovarao ukupnom.
-      ukupnoBodova: l.ukupno_bodova + (l.tbr41_bodovi ?? 0),
-      iznos: l.iznos_eur,
-    }))
-    // Kronološki — troškovnik ide sudu i predložak niže radnje po datumu, ne po
-    // redoslijedu unosa. Spremljeni stariji zapisi mogu doći nesortirani, pa se
-    // sortira i ovdje, ne samo u živoj formi. Zbroj se ne mijenja.
-    .sort((a, b) => usporediPoDatumu(a.datum, b.datum));
+  // Redoslijed dolazi već ispravan — onakav kakav je odvjetnik složio na
+  // obrascu. Backend više ne presortira kronološki (vidi `IzracunajRetke`),
+  // pa ni ovdje nema razloga da se radnje presortiraju.
+  const radnje: IzvozRadnja[] = izvorLinija.map((l) => ({
+    opis: skiniTarifniBroj(l.opis),
+    tarifniBroj: l.tarifni_broj,
+    datum: uDatum(l.datum),
+    kolicina: l.kolicina,
+    bodovaPoJedinici: l.bodova_po_jedinici,
+    // Tbr. 41 se na ekranu pribraja retku, pa mora i ovdje — inače zbroj
+    // pojedinačnih bodova ne bi odgovarao ukupnom.
+    ukupnoBodova: l.ukupno_bodova + (l.tbr41_bodovi ?? 0),
+    iznos: l.iznos_eur,
+  }));
 
   const jePdv = result
     ? (result.is_pdv_ukljucen ?? result.has_vat ?? ulaz.isPdvUkljucen)
@@ -284,9 +330,16 @@ export function buildIzvozModel(ulaz: IzvozUlaz): TroskovnikIzvozModel {
     datum: datumIzrade,
   };
 
-  const odvjetnikIme = neprazno(result?.odvjetnik?.ime ?? polja.odvjetnikIme);
+  const odvjetnikImeSirovo = neprazno(result?.odvjetnik?.ime ?? polja.odvjetnikIme);
+  const odvjetnikIme = odvjetnikImeSirovo && !izgledaKaoMail(odvjetnikImeSirovo) ? odvjetnikImeSirovo : undefined;
   const zastupanaIme = neprazno(result?.klijent?.ime ?? polja.klijentIme);
   const protustrankaIme = neprazno(result?.protustranka?.ime ?? polja.protustrankaIme);
+
+  const vrijednostSpora = result?.vrijednost_spora ?? ulaz.vrijednostSpora;
+  const vrstaPostupkaKljuc = neprazno(result?.vps_vrsta_postupka ?? ulaz.vrstaPostupka);
+  const vrstaPostupkaNaziv = vrstaPostupkaKljuc
+    ? VRSTA_POSTUPKA_PRAVILA[vrstaPostupkaKljuc as VrstaPostupka]?.naziv
+    : undefined;
 
   return {
     odvjetnik: odvjetnikIme
@@ -296,6 +349,9 @@ export function buildIzvozModel(ulaz: IzvozUlaz): TroskovnikIzvozModel {
           adresa: neprazno(result?.odvjetnik?.adresa ?? polja.odvjetnikAdresa),
           grad: neprazno(result?.odvjetnik?.grad ?? polja.odvjetnikGrad),
           iban: neprazno(result?.odvjetnik?.iban ?? polja.odvjetnikIban),
+          telefon: neprazno(result?.odvjetnik?.telefon ?? polja.odvjetnikTelefon),
+          email: neprazno(result?.odvjetnik?.email ?? polja.odvjetnikEmail),
+          osobnoIme: neprazno(polja.odvjetnikOsobnoIme),
         }
       : null,
     sud: neprazno(result?.sud ?? polja.predmetSud),
@@ -310,6 +366,8 @@ export function buildIzvozModel(ulaz: IzvozUlaz): TroskovnikIzvozModel {
           ime: protustrankaIme,
         }
       : null,
+    vrijednostSpora: vrijednostSpora && vrijednostSpora > 0 ? vrijednostSpora : undefined,
+    vrstaPostupkaNaziv,
     datumIzrade,
 
     radnje,
@@ -318,7 +376,7 @@ export function buildIzvozModel(ulaz: IzvozUlaz): TroskovnikIzvozModel {
       iznos: result ? result.ukupno_eur_bez_pdv : liveCalc.osnovicaSaNaknadom,
     },
     naknadaTroskova: result?.naknada_troskova_ukupno ?? liveCalc.naknadaTroskovaUkupno,
-    pdv: jePdv ? { osnovica, iznos: iznosPdv, ukupno: sPdv } : null,
+    pdv: jePdv ? { osnovica, iznos: iznosPdv, ukupno: sPdv, stopa: Math.round(PDV_RATE * 100) } : null,
 
     pristojbe,
     ukupnoPristojbe: result?.ukupno_pristojbe ?? liveCalc.ukupnoPristojbe,

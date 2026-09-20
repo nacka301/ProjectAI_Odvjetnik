@@ -415,6 +415,12 @@ function TroskovnikContent() {
     { vrsta: VrstaTroska; opis: string; iznos: string }[]
   >([]);
   const [odvjetnikIban, setOdvjetnikIban] = useState("");
+  const [odvjetnikTelefon, setOdvjetnikTelefon] = useState("");
+  const [odvjetnikEmail, setOdvjetnikEmail] = useState("");
+  // Osobno ime prijavljenog odvjetnika — za potpis, uz naziv ureda. Dolazi iz
+  // profila (`user_profiles.full_name`), ne iz obrasca — nije uredivo po
+  // troškovniku, isto kao ni login mail.
+  const [odvjetnikOsobnoIme, setOdvjetnikOsobnoIme] = useState("");
   const [protustrankaIme, setProtustrankaIme] = useState("");
   const [protustrankaOib, setProtustrankaOib] = useState("");
   const [protustrankaAdresa, setProtustrankaAdresa] = useState("");
@@ -540,6 +546,7 @@ function TroskovnikContent() {
     () => ({
       vrijednostSpora, redci, selectedClientId, napomena,
       odvjetnikIme, odvjetnikOib, odvjetnikAdresa, odvjetnikGrad, odvjetnikIban,
+      odvjetnikTelefon, odvjetnikEmail,
       klijentIme, klijentOib, klijentAdresa, klijentGrad, klijentTip,
       opisPredmeta, predmetSud, predmetPoslovniBroj, showParties, isPdvUkljucen,
       naknadaTroskovaStavke,
@@ -560,6 +567,7 @@ function TroskovnikContent() {
     [
       vrijednostSpora, redci, selectedClientId, napomena,
       odvjetnikIme, odvjetnikOib, odvjetnikAdresa, odvjetnikGrad, odvjetnikIban,
+      odvjetnikTelefon, odvjetnikEmail,
       klijentIme, klijentOib, klijentAdresa, klijentGrad, klijentTip,
       opisPredmeta, predmetSud, predmetPoslovniBroj, showParties, isPdvUkljucen,
       naknadaTroskovaStavke,
@@ -619,6 +627,7 @@ function TroskovnikContent() {
     setOdvjetnikIme(d.odvjetnikIme); setOdvjetnikOib(d.odvjetnikOib);
     setOdvjetnikAdresa(d.odvjetnikAdresa); setOdvjetnikGrad(d.odvjetnikGrad);
     setOdvjetnikIban(d.odvjetnikIban);
+    setOdvjetnikTelefon(d.odvjetnikTelefon); setOdvjetnikEmail(d.odvjetnikEmail);
     setKlijentIme(d.klijentIme); setKlijentOib(d.klijentOib);
     setKlijentAdresa(d.klijentAdresa); setKlijentGrad(d.klijentGrad);
     // Stariji nacrt (v2) nema tip — složi ga iz naziva. Vraćanje je izričita
@@ -852,6 +861,8 @@ function TroskovnikContent() {
     oib?: string | null;
     address?: string | null;
     iban?: string | null;
+    phone?: string | null;
+    email?: string | null;
     pdv_obveznik?: boolean;
   };
 
@@ -883,6 +894,25 @@ function TroskovnikContent() {
         setOdvjetnikOib((prev) => prev || data.oib || "");
         setOdvjetnikAdresa((prev) => prev || data.address || "");
         setOdvjetnikIban((prev) => prev || data.iban || "");
+        setOdvjetnikTelefon((prev) => prev || data.phone || "");
+        setOdvjetnikEmail((prev) => prev || data.email || "");
+      })
+      .catch(() => {});
+  }, [userId]);
+
+  // ── Osobno ime prijavljenog odvjetnika, za potpis uz naziv ureda ──
+  //
+  // Zaseban dohvat od ureda: `/api/settings/firm` vraća naziv ureda,
+  // `/api/settings/profile` vraća osobno ime prijavljenog korisnika
+  // (`user_profiles.full_name`) — dva različita podatka, dosad se na ovoj
+  // stranici dohvaćao samo prvi.
+  useEffect(() => {
+    if (!userId || demo) return;
+    fetch(`${API_BASE}/api/settings/profile`, { headers: authHeaders })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { full_name?: string | null } | null) => {
+        if (!data) return;
+        setOdvjetnikOsobnoIme(data.full_name || "");
       })
       .catch(() => {});
   }, [userId]);
@@ -1014,8 +1044,14 @@ function TroskovnikContent() {
   // Kronološki poredak radnji — datum je glavni, a redoslijed u polju (kojim
   // upravljaju strelice „Pomakni gore/dolje") razrješava jednakost, tj. radnje
   // istog datuma i radnje bez datuma. Ovaj se poredani pogled koristi za prikaz
-  // u panelu, za živi izračun i za slanje na backend; sve izmjene retka i dalje
-  // idu preko `redci` i njegovih `setRedci` rukovatelja.
+  // u panelu i za živi izračun (prije nego postoji spremljeni rezultat); sve
+  // izmjene retka i dalje idu preko `redci` i njegovih `setRedci` rukovatelja.
+  //
+  // Za slanje na backend (`stavkeZaSlanje` niže) NE koristi se ovaj poredak,
+  // nego izravno `redci` — troškovnik koji ide sudu ispisuje radnje u
+  // redoslijedu kakav je odvjetnik složio, ne nužno kronološki. Izračun time
+  // nije dirnut: bodovi/iznosi po retku ne ovise o poziciji u nizu (vidi
+  // komentar uz `IzracunajRetke` na backendu).
   const redciPoredani = useMemo(
     () => [...redci].sort((a, b) => usporediPoDatumu(a.datum, b.datum)),
     [redci],
@@ -1474,12 +1510,15 @@ function TroskovnikContent() {
   }, []);
 
   /**
-   * Redci troškovnika u obliku zahtjeva. Redoslijed je kronološki (`redciPoredani`)
-   * — server renumerira `rbr` po redoslijedu ovog polja i sam sortira obrambeno.
+   * Redci troškovnika u obliku zahtjeva. Redoslijed je onaj koji je korisnik
+   * sam složio (`redci`), ne kronološki `redciPoredani` — server ga više ne
+   * presortira (vidi `IzracunajRetke` na backendu), pa ispis dobiva radnje
+   * točno u tom redoslijedu. Redni broj (`Rbr`) izračun i dalje sam dodjeljuje
+   * po redoslijedu ovog polja; bodovi/iznosi ne ovise o poziciji u nizu.
    */
   const stavkeZaSlanje = useCallback(
     () =>
-      redciPoredani.map((r) => ({
+      redci.map((r) => ({
         item_id: r.itemId,
         kolicina: r.kolicina,
         datum: r.datum ?? null,
@@ -1487,7 +1526,7 @@ function TroskovnikContent() {
         tbr41_povisenje_postotak: r.tbr41?.povisenje ?? null,
         tbr41_snizenje_postotak: r.tbr41?.snizenje ?? null,
       })),
-    [redciPoredani],
+    [redci],
   );
 
   /**
@@ -1803,10 +1842,15 @@ function TroskovnikContent() {
         napomena,
         polja: {
           odvjetnikIme, odvjetnikOib, odvjetnikAdresa, odvjetnikGrad, odvjetnikIban,
+          odvjetnikTelefon, odvjetnikEmail, odvjetnikOsobnoIme,
           klijentIme, zastupanaPolozaj,
           protustrankaIme, protustrankaPolozaj,
           predmetSud, predmetPoslovniBroj,
         },
+        // Podaci o predmetu — spremljeni odgovor ih ima gotove; u živom pregledu
+        // dolaze izravno s obrasca (izračun sudske pristojbe već ih koristi).
+        vrijednostSpora: vrijednostNum,
+        vrstaPostupka,
         // Ista verzija po kojoj računa živi pregled (Tbr. 52, po dospijeću).
         tarifa: razrijesiTarifu(datumDospijeca || null),
       }),
@@ -1816,8 +1860,10 @@ function TroskovnikContent() {
       result, liveCalc, pristojbe, dodatnePristojbe, predujmovi, trosakZaSlanje,
       isPdvUkljucen, napomena,
       odvjetnikIme, odvjetnikOib, odvjetnikAdresa, odvjetnikGrad, odvjetnikIban,
+      odvjetnikTelefon, odvjetnikEmail, odvjetnikOsobnoIme,
       klijentIme, zastupanaPolozaj, protustrankaIme, protustrankaPolozaj,
       predmetSud, predmetPoslovniBroj, datumDospijeca,
+      vrijednostNum, vrstaPostupka,
     ],
   );
 
@@ -1886,28 +1932,29 @@ function TroskovnikContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
-      {/* ── Sticky Header ── */}
+      {/* ── Sticky Header — jedan red, ≤56px na mobitelu ── */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-40 print:hidden">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 sm:py-3 flex items-center gap-2 sm:gap-4">
           <Link
             href="/"
-            className="flex items-center gap-2 text-slate-400 hover:text-slate-700 transition text-sm"
+            className="relative flex items-center justify-center sm:justify-start gap-2 text-slate-400 hover:text-slate-700 transition text-sm max-sm:min-h-12 max-sm:min-w-12 max-sm:-ml-2"
           >
             <ArrowLeft className="h-4 w-4" />
             <span className="hidden sm:inline">Početna</span>
           </Link>
-          <div className="h-5 w-px bg-slate-200" />
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-indigo-100 flex items-center justify-center">
+          <div className="hidden sm:block h-5 w-px bg-slate-200" />
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-7 h-7 shrink-0 rounded-lg bg-indigo-100 flex items-center justify-center">
               <Calculator className="h-4 w-4 text-indigo-700" />
             </div>
-            <div>
-              <h1 className="text-sm font-bold text-slate-900">Odvjetnički Troškovnik</h1>
-              <p className="text-[10px] text-slate-400">Tarifa NN 2023 · 1 bod = 2,00 €</p>
+            <div className="min-w-0">
+              <h1 className="text-sm font-bold text-slate-900 truncate">Odvjetnički Troškovnik</h1>
+              <p className="hidden sm:block text-[10px] text-slate-400">Tarifa NN 2023 · 1 bod = 2,00 €</p>
             </div>
           </div>
-          {/* Action buttons */}
-          <div className="ml-auto flex items-center gap-2">
+          {/* Action buttons — vidljivi i na mobitelu (ikona bez naziva) jer su
+              dio obveznog toka: dodavanje radnje → spremanje → ispis. */}
+          <div className="ml-auto flex items-center gap-1 sm:gap-2 shrink-0">
             {/* Gumb „Vodič" je preselio u zaglavlje aplikacije (`AppHeader`),
                 kao stavka izbornika: vodiča je sad troje, pa jedan klik ovdje
                 više ne bi značio jednu stvar. */}
@@ -1916,20 +1963,20 @@ function TroskovnikContent() {
                 <button
                   onClick={handleExportXlsx}
                   disabled={demo}
-                  title={demo ? DEMO_ZASTO_NEAKTIVNO : undefined}
-                  className="hidden sm:flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 disabled:text-slate-300 disabled:hover:bg-transparent disabled:cursor-not-allowed transition px-2.5 py-1.5 rounded-lg hover:bg-slate-100"
+                  title={demo ? DEMO_ZASTO_NEAKTIVNO : "Izvoz u Excel"}
+                  className="flex items-center justify-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 disabled:text-slate-300 disabled:hover:bg-transparent disabled:cursor-not-allowed transition max-sm:min-h-12 max-sm:min-w-12 sm:px-2.5 sm:py-1.5 rounded-lg hover:bg-slate-100"
                 >
-                  <Download className="h-3.5 w-3.5" />
-                  Excel
+                  <Download className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
+                  <span className="hidden sm:inline">Excel</span>
                 </button>
                 <button
                   onClick={handlePrint}
                   disabled={demo}
-                  title={demo ? DEMO_ZASTO_NEAKTIVNO : undefined}
-                  className="hidden sm:flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 disabled:text-slate-300 disabled:hover:bg-transparent disabled:cursor-not-allowed transition px-2.5 py-1.5 rounded-lg hover:bg-slate-100"
+                  title={demo ? DEMO_ZASTO_NEAKTIVNO : "Ispis"}
+                  className="flex items-center justify-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 disabled:text-slate-300 disabled:hover:bg-transparent disabled:cursor-not-allowed transition max-sm:min-h-12 max-sm:min-w-12 sm:px-2.5 sm:py-1.5 rounded-lg hover:bg-slate-100"
                 >
-                  <Printer className="h-3.5 w-3.5" />
-                  Ispis
+                  <Printer className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
+                  <span className="hidden sm:inline">Ispis</span>
                 </button>
               </>
             )}
@@ -2874,10 +2921,12 @@ function TroskovnikContent() {
                         <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Odvjetnik</span>
                       </div>
                       <input type="text" value={odvjetnikIme} onChange={(e) => setOdvjetnikIme(e.target.value)} placeholder="Ime / Naziv ureda" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
-                      <input type="text" value={odvjetnikOib} onChange={(e) => setOdvjetnikOib(e.target.value)} placeholder="OIB" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                      <input type="text" inputMode="numeric" value={odvjetnikOib} onChange={(e) => setOdvjetnikOib(e.target.value)} placeholder="OIB" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
                       <input type="text" value={odvjetnikAdresa} onChange={(e) => setOdvjetnikAdresa(e.target.value)} placeholder="Adresa" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
                       <input type="text" value={odvjetnikGrad} onChange={(e) => setOdvjetnikGrad(e.target.value)} placeholder="Grad" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
                       <input type="text" value={odvjetnikIban} onChange={(e) => setOdvjetnikIban(e.target.value)} placeholder="IBAN (Broj računa)" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                      <input type="text" inputMode="tel" value={odvjetnikTelefon} onChange={(e) => setOdvjetnikTelefon(e.target.value)} placeholder="Telefon" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                      <input type="text" value={odvjetnikEmail} onChange={(e) => setOdvjetnikEmail(e.target.value)} placeholder="E-mail ureda" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
                     </div>
                   
                     {/* Protustranka */}
@@ -2901,7 +2950,7 @@ function TroskovnikContent() {
                         }}
                       />
                       <input type="text" value={protustrankaIme} onChange={(e) => setProtustrankaIme(e.target.value)} placeholder="Ime / Naziv" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
-                      <input type="text" value={protustrankaOib} onChange={(e) => setProtustrankaOib(e.target.value)} placeholder="OIB" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                      <input type="text" inputMode="numeric" value={protustrankaOib} onChange={(e) => setProtustrankaOib(e.target.value)} placeholder="OIB" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
                       <input type="text" value={protustrankaAdresa} onChange={(e) => setProtustrankaAdresa(e.target.value)} placeholder="Adresa" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
                       <input type="text" value={protustrankaGrad} onChange={(e) => setProtustrankaGrad(e.target.value)} placeholder="Grad" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
                       <label className="block text-xs font-semibold text-slate-600 mb-1 mt-2">Položaj protustranke</label>
@@ -2925,7 +2974,7 @@ function TroskovnikContent() {
                         <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">ZASTUPANA STRANKA</span>
                       </div>
                       <input type="text" value={klijentIme} onChange={(e) => handleKlijentManualEdit(setKlijentIme, e.target.value)} placeholder="Ime / Naziv" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
-                      <input type="text" value={klijentOib} onChange={(e) => handleKlijentManualEdit(setKlijentOib, e.target.value.replace(/\D/g, '').slice(0, 11))} placeholder="OIB (11 znamenki)" maxLength={11} pattern="\d{11}" className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none ${klijentOib && klijentOib.length !== 11 ? 'border-amber-400 bg-amber-50' : 'border-slate-200'}`} />
+                      <input type="text" inputMode="numeric" value={klijentOib} onChange={(e) => handleKlijentManualEdit(setKlijentOib, e.target.value.replace(/\D/g, '').slice(0, 11))} placeholder="OIB (11 znamenki)" maxLength={11} pattern="\d{11}" className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none ${klijentOib && klijentOib.length !== 11 ? 'border-amber-400 bg-amber-50' : 'border-slate-200'}`} />
                       {klijentOib && klijentOib.length > 0 && klijentOib.length !== 11 && (
                         <p className="text-xs text-amber-600">OIB mora sadržavati točno 11 znamenki ({klijentOib.length}/11)</p>
                       )}
@@ -3031,25 +3080,31 @@ function TroskovnikContent() {
 
                         return (
                           <div key={redak.uid} className="flex items-start justify-between gap-2 py-1.5 border-b border-slate-100 last:border-0">
-                            {/* ▲/▼ — premještanje; rubovi bez efekta */}
-                            <div className="flex flex-col shrink-0 mt-0.5">
+                            {/* ▲/▼ — premještanje; rubovi bez efekta.
+                                Na mobitelu su ova dva gumba jedan uz drugi i
+                                rade suprotne stvari (gore/dolje) — puna 48px
+                                dodirna meta bi se preklopila s onom pored, pa
+                                bi dodir mogao pomaknuti krivi smjer. Umjesto
+                                toga: 32px (veće od izvornih 20px) uz ≥8px
+                                razmaka, bez preklapanja. */}
+                            <div className="flex flex-col shrink-0 mt-0.5 gap-2">
                               <button
                                 type="button"
                                 onClick={() => pomakni(redak.uid, -1)}
                                 disabled={i === 0}
-                                className="w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 disabled:opacity-20 disabled:hover:bg-transparent transition"
+                                className="w-8 h-8 sm:w-5 sm:h-5 flex items-center justify-center rounded text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 disabled:opacity-20 disabled:hover:bg-transparent transition"
                                 title="Pomakni gore"
                               >
-                                <ChevronUp className="h-3.5 w-3.5" />
+                                <ChevronUp className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
                               </button>
                               <button
                                 type="button"
                                 onClick={() => pomakni(redak.uid, 1)}
                                 disabled={i === redciPoredani.length - 1}
-                                className="w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 disabled:opacity-20 disabled:hover:bg-transparent transition"
+                                className="w-8 h-8 sm:w-5 sm:h-5 flex items-center justify-center rounded text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 disabled:opacity-20 disabled:hover:bg-transparent transition"
                                 title="Pomakni dolje"
                               >
-                                <ChevronDown className="h-3.5 w-3.5" />
+                                <ChevronDown className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
                               </button>
                             </div>
 
@@ -3070,30 +3125,34 @@ function TroskovnikContent() {
                                 </p>
                               )}
 
-                              {/* Datum radnje — opcionalan */}
-                              <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                              {/* Datum radnje — opcionalan. Font polja ide na
+                                  16px ispod 768px (globals.css) da iOS ne
+                                  zumira; red se po potrebi lomi (flex-wrap),
+                                  nikad vodoravno pomiče. */}
+                              <div className="flex items-center gap-2 mt-1 flex-wrap">
                                 <input
                                   type="date"
                                   value={redak.datum ?? ""}
                                   onChange={(e) => postaviDatum(redak.uid, e.target.value)}
-                                  className="text-[10px] px-1.5 py-0.5 border border-slate-200 rounded bg-white outline-none focus:ring-1 focus:ring-indigo-500"
+                                  className="text-[10px] px-1.5 py-0.5 sm:py-0.5 max-sm:py-1.5 border border-slate-200 rounded bg-white outline-none focus:ring-1 focus:ring-indigo-500"
                                   title="Datum radnje (opcionalno)"
                                 />
                                 <input
                                   type="number"
+                                  inputMode="numeric"
                                   min={1}
                                   value={redak.kolicina}
                                   onChange={(e) => postaviKolicinu(redak.uid, parseInt(e.target.value, 10) || 0)}
-                                  className="w-14 text-[10px] px-1.5 py-0.5 border border-slate-200 rounded bg-white outline-none focus:ring-1 focus:ring-indigo-500"
+                                  className="w-14 text-[10px] px-1.5 py-0.5 max-sm:py-1.5 border border-slate-200 rounded bg-white outline-none focus:ring-1 focus:ring-indigo-500"
                                   title="Količina"
                                 />
                                 <button
                                   type="button"
                                   onClick={() => obrisiRedak(redak.uid)}
-                                  className="w-5 h-5 flex items-center justify-center rounded text-red-400 hover:text-red-600 hover:bg-red-50 transition"
+                                  className="w-8 h-8 sm:w-5 sm:h-5 flex items-center justify-center rounded text-red-400 hover:text-red-600 hover:bg-red-50 transition"
                                   title="Obriši redak"
                                 >
-                                  <Trash2 className="h-3 w-3" />
+                                  <Trash2 className="h-3.5 w-3.5 sm:h-3 sm:w-3" />
                                 </button>
                               </div>
 
@@ -3232,10 +3291,10 @@ function TroskovnikContent() {
                             <button
                               type="button"
                               onClick={() => removeNaknadaTroskova(i)}
-                              className="text-slate-400 hover:text-red-600 shrink-0"
+                              className="shrink-0 flex items-center justify-center w-8 h-8 sm:w-5 sm:h-5 text-slate-400 hover:text-red-600"
                               aria-label="Ukloni"
                             >
-                              <Trash2 className="h-3.5 w-3.5" />
+                              <Trash2 className="h-3.5 w-3.5 sm:h-3.5 sm:w-3.5" />
                             </button>
                           </div>
                         ))}
@@ -3539,33 +3598,44 @@ function TroskovnikContent() {
                             </option>
                           ))}
                         </select>
-                        {/* Ručno dodane pristojbe — ispod automatske, bez PDV-a */}
+                        {/* Ručno dodane pristojbe — ispod automatske, bez PDV-a.
+                            Datum ima fiksnu prirodnu širinu (native date
+                            picker) koja uz opis+iznos u jednom retku ne staje
+                            na 360px — zato se na mobitelu slaže u tri retka
+                            (datum / opis / iznos+briši), a od sm (640px)
+                            naviše ostaje izvorni jednoredni raspored. */}
                         {dodatnePristojbe.map((t) => (
-                          <div key={t.uid} className="flex items-center gap-1.5">
+                          <div key={t.uid} className="flex flex-col gap-1.5 sm:flex-row sm:items-center">
                             <input
                               type="date"
                               value={t.datum ?? ""}
                               onChange={(e) => azurirajTrosak(setDodatnePristojbe, t.uid, "datum", e.target.value)}
-                              className="text-[10px] px-1.5 py-0.5 border border-slate-200 rounded outline-none focus:ring-1 focus:ring-amber-500"
+                              className="w-full sm:w-auto text-[10px] px-1.5 py-1.5 sm:py-0.5 border border-slate-200 rounded outline-none focus:ring-1 focus:ring-amber-500"
                             />
                             <input
                               type="text"
                               placeholder="Opis pristojbe"
                               value={t.opis}
                               onChange={(e) => azurirajTrosak(setDodatnePristojbe, t.uid, "opis", e.target.value)}
-                              className="flex-1 min-w-0 text-[11px] px-1.5 py-0.5 border border-slate-200 rounded outline-none focus:ring-1 focus:ring-amber-500"
+                              className="w-full sm:flex-1 sm:min-w-0 text-[11px] px-1.5 py-1.5 sm:py-0.5 border border-slate-200 rounded outline-none focus:ring-1 focus:ring-amber-500"
                             />
-                            <input
-                              type="text"
-                              inputMode="decimal"
-                              placeholder="0,00"
-                              value={t.iznos}
-                              onChange={(e) => azurirajTrosak(setDodatnePristojbe, t.uid, "iznos", e.target.value)}
-                              className="w-16 text-[11px] px-1.5 py-0.5 border border-slate-200 rounded outline-none focus:ring-1 focus:ring-amber-500 text-right"
-                            />
-                            <button type="button" onClick={() => obrisiTrosak(setDodatnePristojbe, t.uid)} className="text-red-400 hover:text-red-600">
-                              <Trash2 className="h-3 w-3" />
-                            </button>
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                placeholder="0,00"
+                                value={t.iznos}
+                                onChange={(e) => azurirajTrosak(setDodatnePristojbe, t.uid, "iznos", e.target.value)}
+                                className="flex-1 sm:flex-none sm:w-16 text-[11px] px-1.5 py-1.5 sm:py-0.5 border border-slate-200 rounded outline-none focus:ring-1 focus:ring-amber-500 text-right"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => obrisiTrosak(setDodatnePristojbe, t.uid)}
+                                className="shrink-0 flex items-center justify-center w-8 h-8 sm:w-5 sm:h-5 text-red-400 hover:text-red-600"
+                              >
+                                <Trash2 className="h-3.5 w-3.5 sm:h-3 sm:w-3" />
+                              </button>
+                            </div>
                           </div>
                         ))}
                         <button
@@ -3587,31 +3657,37 @@ function TroskovnikContent() {
                       <div className="pt-2 mt-1 border-t border-dashed border-slate-200 space-y-1.5">
                         <span className="text-xs font-semibold text-slate-600">Predujmovi</span>
                         {predujmovi.map((t) => (
-                          <div key={t.uid} className="flex items-center gap-1.5">
+                          <div key={t.uid} className="flex flex-col gap-1.5 sm:flex-row sm:items-center">
                             <input
                               type="date"
                               value={t.datum ?? ""}
                               onChange={(e) => azurirajTrosak(setPredujmovi, t.uid, "datum", e.target.value)}
-                              className="text-[10px] px-1.5 py-0.5 border border-slate-200 rounded outline-none focus:ring-1 focus:ring-emerald-500"
+                              className="w-full sm:w-auto text-[10px] px-1.5 py-1.5 sm:py-0.5 border border-slate-200 rounded outline-none focus:ring-1 focus:ring-emerald-500"
                             />
                             <input
                               type="text"
                               placeholder="npr. Vještačenje"
                               value={t.opis}
                               onChange={(e) => azurirajTrosak(setPredujmovi, t.uid, "opis", e.target.value)}
-                              className="flex-1 min-w-0 text-[11px] px-1.5 py-0.5 border border-slate-200 rounded outline-none focus:ring-1 focus:ring-emerald-500"
+                              className="w-full sm:flex-1 sm:min-w-0 text-[11px] px-1.5 py-1.5 sm:py-0.5 border border-slate-200 rounded outline-none focus:ring-1 focus:ring-emerald-500"
                             />
-                            <input
-                              type="text"
-                              inputMode="decimal"
-                              placeholder="0,00"
-                              value={t.iznos}
-                              onChange={(e) => azurirajTrosak(setPredujmovi, t.uid, "iznos", e.target.value)}
-                              className="w-16 text-[11px] px-1.5 py-0.5 border border-slate-200 rounded outline-none focus:ring-1 focus:ring-emerald-500 text-right"
-                            />
-                            <button type="button" onClick={() => obrisiTrosak(setPredujmovi, t.uid)} className="text-red-400 hover:text-red-600">
-                              <Trash2 className="h-3 w-3" />
-                            </button>
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                placeholder="0,00"
+                                value={t.iznos}
+                                onChange={(e) => azurirajTrosak(setPredujmovi, t.uid, "iznos", e.target.value)}
+                                className="flex-1 sm:flex-none sm:w-16 text-[11px] px-1.5 py-1.5 sm:py-0.5 border border-slate-200 rounded outline-none focus:ring-1 focus:ring-emerald-500 text-right"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => obrisiTrosak(setPredujmovi, t.uid)}
+                                className="shrink-0 flex items-center justify-center w-8 h-8 sm:w-5 sm:h-5 text-red-400 hover:text-red-600"
+                              >
+                                <Trash2 className="h-3.5 w-3.5 sm:h-3 sm:w-3" />
+                              </button>
+                            </div>
                           </div>
                         ))}
                         <button
@@ -3741,7 +3817,7 @@ function TroskovnikContent() {
                     <button
                       onClick={handleCalculate}
                       disabled={calculating || sviNedostaci.length > 0}
-                      className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white text-sm font-semibold py-2.5 rounded-lg transition"
+                      className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white text-sm font-semibold py-3 sm:py-2.5 rounded-lg transition"
                     >
                       {calculating ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -3756,7 +3832,7 @@ function TroskovnikContent() {
                           onClick={handleSave}
                           disabled={saving || demo || sviNedostaci.length > 0}
                           title={demo ? DEMO_ZASTO_NEAKTIVNO : undefined}
-                          className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 disabled:cursor-not-allowed text-white text-sm font-semibold py-2.5 rounded-lg transition"
+                          className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 disabled:cursor-not-allowed text-white text-sm font-semibold py-3 sm:py-2.5 rounded-lg transition"
                         >
                           {saving ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
@@ -3934,8 +4010,11 @@ function TroskovnikContent() {
 
               {/* I. Odvjetničke radnje */}
               <h3 className="text-sm font-bold text-slate-800 mb-2">I. Odvjetničke radnje</h3>
-              {/* Line items table */}
-              <div className="overflow-x-auto">
+              {/* Line items table — na mobitelu (< 768px) `.troskovnik-tablica-mob`
+                  (globals.css) pretvara retke u kartice čisto CSS-om (display),
+                  bez zasebnog JSX-a: ista brojka, isti uvjeti, samo drugi raspored.
+                  Bez vodoravnog pomicanja na mobitelu jer se sadržaj slaže okomito. */}
+              <div className="overflow-x-auto troskovnik-tablica-mob">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b-2 border-indigo-200">
