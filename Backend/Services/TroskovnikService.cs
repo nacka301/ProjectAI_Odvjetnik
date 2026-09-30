@@ -378,7 +378,9 @@ public sealed class TroskovnikService : ITroskovnikService
     /// <summary>
     /// Provjerava stavke naknade troškova (Tbr. 48.-51.) i predujmove prije izračuna —
     /// nepoznata vrsta izdatka ili negativan iznos odbija se odmah, umjesto da tiho
-    /// nestane iz troškovnika ili tiho ispravi predznak.
+    /// nestane iz troškovnika ili tiho ispravi predznak. Za način "izracun" (Tbr. 50/51)
+    /// dodatno provjerava da je izdatak Prijevoz/Dnevnica i da su količina i jedinični
+    /// iznos zadani i pozitivni — bez toga se ne zna što bi se izračunalo.
     /// </summary>
     private static void ProvjeriNaknaduIPredujam(TroskovnikRequest request)
     {
@@ -388,9 +390,34 @@ public sealed class TroskovnikService : ITroskovnikService
                 throw new TroskovnikValidationException(
                     $"Nepoznata vrsta troška: \"{stavka.Vrsta}\". Dopušteno: {string.Join(", ", VrstaTroska.Sve)}.");
 
-            if (stavka.Iznos < 0)
+            var nacin = string.IsNullOrWhiteSpace(stavka.Nacin) ? NacinNaknade.Rucno : stavka.Nacin;
+            if (!NacinNaknade.Sve.Contains(nacin))
+                throw new TroskovnikValidationException(
+                    $"Nepoznat način unosa naknade: \"{stavka.Nacin}\". Dopušteno: {string.Join(", ", NacinNaknade.Sve)}.");
+
+            if (nacin == NacinNaknade.Izracun)
+            {
+                if (!VrstaTroska.DopustaIzracun.Contains(stavka.Vrsta))
+                    throw new TroskovnikValidationException(
+                        $"Izračun (količina × jedinični iznos) dostupan je samo za: " +
+                        $"{string.Join(", ", VrstaTroska.DopustaIzracun)}. Za \"{stavka.Vrsta}\" unesite iznos ručno.");
+
+                if (stavka.Kolicina is not > 0)
+                    throw new TroskovnikValidationException(
+                        "Za izračun naknade potrebna je količina veća od 0 (km za prijevoz, dani za dnevnicu).");
+
+                if (stavka.JedinicniIznos is not > 0)
+                    throw new TroskovnikValidationException(
+                        "Za izračun naknade potreban je jedinični iznos veći od 0 (€/km ili €/dan).");
+
+                if (stavka.Cestarina is < 0)
+                    throw new TroskovnikValidationException("Cestarina ne može biti negativna.");
+            }
+            else if (stavka.Iznos < 0)
+            {
                 throw new TroskovnikValidationException(
                     "Iznos naknade troškova ne može biti negativan.");
+            }
         }
 
         foreach (var predujam in request.Predujmovi ?? [])
@@ -399,6 +426,22 @@ public sealed class TroskovnikService : ITroskovnikService
                 throw new TroskovnikValidationException(
                     "Iznos predujma ne može biti negativan.");
         }
+    }
+
+    /// <summary>
+    /// Razrješava konačni iznos jedne stavke naknade troškova: "rucno" (zadano) vraća
+    /// upisani <see cref="NaknadaTroskovaStavkaRequest.Iznos"/> nepromijenjen; "izracun"
+    /// vraća količina × jedinični iznos (+ cestarina za Prijevoz), zaokruženo. Ulaz je već
+    /// validiran u <see cref="ProvjeriNaknaduIPredujam"/> — ovdje se ne baca iznimka.
+    /// </summary>
+    private static decimal IzracunajNaknaduStavku(NaknadaTroskovaStavkaRequest stavka)
+    {
+        if (stavka.Nacin != NacinNaknade.Izracun)
+            return stavka.Iznos;
+
+        var osnovni = (stavka.Kolicina ?? 0) * (stavka.JedinicniIznos ?? 0);
+        var cestarina = stavka.Vrsta == VrstaTroska.Prijevoz ? (stavka.Cestarina ?? 0) : 0;
+        return ZaokruziNovac(osnovni + cestarina);
     }
 
     /// <summary>
@@ -505,14 +548,14 @@ public sealed class TroskovnikService : ITroskovnikService
         var stavkeRetci = new List<TroskovnikLineItem>();
         var redniBroj = 0;
 
-        // Kronološki poredak — troškovnik ide sudu, a predložak niže radnje po
-        // datumu. Sučelje već šalje sortirano; ovo je zaštita za svakog drugog
-        // pozivatelja. `OrderBy` je stabilan, pa radnje istog datuma (i radnje bez
-        // datuma, koje idu na kraj) zadržavaju redoslijed unosa. Ne dira izračun
-        // ni pristojbe — samo redoslijed redaka i `Rbr`.
-        var stavkeKronoloski = request.Stavke.OrderBy(s => s.Datum ?? DateOnly.MaxValue);
-
-        foreach (var stavka in stavkeKronoloski)
+        // Redoslijed dolazi onakav kakav je odvjetnik složio strelicama
+        // „Pomakni gore/dolje" na obrascu — troškovnik ide sudu u tom
+        // redoslijedu, ne nužno kronološki. Prije se ovdje obrambeno
+        // presortiravalo po datumu; to je uklonjeno jer sučelje šalje samo
+        // stavke namijenjene ispisu u njihovom stvarnom redoslijedu (vidi
+        // `stavkeZaSlanje` u `troskovnik/page.tsx`). Ne dira izračun ni
+        // pristojbe — samo redoslijed redaka i `Rbr`.
+        foreach (var stavka in request.Stavke)
         {
             var definicija = katalogPoId[stavka.ItemId];
 
@@ -641,9 +684,11 @@ public sealed class TroskovnikService : ITroskovnikService
         var nagradaPoOsobi = ZaokruziNovac(ukupnoEur / brojOsoba);
 
         // ── Naknada troškova (Tbr. 48.-51.) — vlastiti trošak odvjetnika, ULAZI u
-        // PDV osnovicu (čl. 33. Zakona o PDV-u; čl. 78. Direktive 2006/112/EZ).
+        // PDV osnovicu (čl. 33. Zakona o PDV-u; čl. 78. Direktive 2006/112/EZ). Svaka
+        // stavka je ili ručno upisana ili izračunata (Tbr. 50/51) — vidi
+        // IzracunajNaknaduStavku; ta razlika ne mijenja da naknada ulazi u PDV osnovicu.
         var naknadaTroskovaUkupno = ZaokruziNovac(
-            (request.NaknadaTroskovaStavke ?? []).Sum(s => s.Iznos));
+            (request.NaknadaTroskovaStavke ?? []).Sum(IzracunajNaknaduStavku));
 
         var osnovicaSaNaknadom = ukupnoEur + naknadaTroskovaUkupno;
 
@@ -796,8 +841,12 @@ public sealed class TroskovnikService : ITroskovnikService
             {
                 Vrsta = s.Vrsta,
                 Opis = s.Opis,
-                Iznos = s.Iznos,
-                PravniIzvor = VrstaTroska.PravniIzvor.GetValueOrDefault(s.Vrsta, "")
+                Iznos = IzracunajNaknaduStavku(s),
+                PravniIzvor = VrstaTroska.PravniIzvor.GetValueOrDefault(s.Vrsta, ""),
+                Nacin = string.IsNullOrWhiteSpace(s.Nacin) ? NacinNaknade.Rucno : s.Nacin,
+                Kolicina = s.Nacin == NacinNaknade.Izracun ? s.Kolicina : null,
+                JedinicniIznos = s.Nacin == NacinNaknade.Izracun ? s.JedinicniIznos : null,
+                Cestarina = s.Nacin == NacinNaknade.Izracun && s.Vrsta == VrstaTroska.Prijevoz ? s.Cestarina : null
             }).ToList(),
             NaknadaTroskovaUkupno = zbrojevi.NaknadaTroskovaUkupno,
             // Predujmovi se preslikavaju niže, iz `predujmovi` — taj popis je već prošao
@@ -1031,8 +1080,11 @@ public sealed class TroskovnikService : ITroskovnikService
     /// Koristi ZaprijecenaKaznaTiers lookup i primjenjuje modifikatore:
     ///   - KazneniPovecanje (npr. +50% za žalbu)
     ///   - IsZastupnikDjeteta → 70% baze (Pravilnik NN 22/2022, čl. 2)
-    ///   - IsPoSluzbenojDuznosti / IsNaTeretProracuna → 50% baze (isti Pravilnik, čl. 1)
-    /// Te dvije stope se ne množe — primjenjuje se najviše jedna.
+    ///   - IsPoSluzbenojDuznosti, ili IsNaTeretProracuna za POSTAVLJENOG branitelja →
+    ///     50% baze (isti Pravilnik, čl. 1)
+    ///   - IsNaTeretProracuna + IsIzabraniOslobodjajuca (IZABRANI branitelj, trošak na
+    ///     proračun zbog oslobađajuće presude) → BEZ umanjenja, puna baza
+    /// Te stope se ne množe — primjenjuje se najviše jedna.
     /// </summary>
     private static decimal IzracunajKazneneBodove(TarifnaStavka definicija, int tierBodovi, TroskovnikRequest req)
     {
@@ -1060,9 +1112,16 @@ public sealed class TroskovnikService : ITroskovnikService
         // Zastavice su na API-u tri odvojena boola, pa proturječan zahtjev može doći od
         // starog klijenta ili pohranjenog retka; tada `else if` svjesno primijeni najviše
         // jednu stopu (dijete žrtve ima prednost), nikad umnožak — zato nikad 35%.
+        //
+        // "Na teret proračuna" ima dva različita značenja u praksi: POSTAVLJENI
+        // branitelj po službenoj dužnosti uvijek ide na 50% (čl. 1). IZABRANI branitelj
+        // čiji trošak padne na proračun zbog oslobađajuće presude nema umanjenje — ide
+        // po punoj Tarifi. IsIzabraniOslobodjajuca je kvalifikator koji tu drugu
+        // situaciju isključuje iz umanjenja; bez njega ponašanje ostaje kao prije
+        // (svaki IsNaTeretProracuna = 50%), pa stari zahtjevi/klijenti nisu pogođeni.
         if (req.IsZastupnikDjeteta)
             bodovi *= TarifaConstants.ZastupnikDjetetaRate;
-        else if (req.IsPoSluzbenojDuznosti || req.IsNaTeretProracuna)
+        else if (req.IsPoSluzbenojDuznosti || (req.IsNaTeretProracuna && !req.IsIzabraniOslobodjajuca))
             bodovi *= TarifaConstants.KazneniReductionRate;
 
         return ClampBodovi(bodovi, definicija);

@@ -57,6 +57,61 @@ public class TarifaUmanjenjaTests
         Assert.Equal(0.50m, TarifaConstants.KazneniReductionRate);
     }
 
+    // ── Izabrani branitelj na teret proračuna zbog oslobađajuće presude: puna tarifa ──
+    //
+    // "Na teret proračuna" ima dva značenja u praksi: POSTAVLJENI branitelj po
+    // službenoj dužnosti uvijek ide na 50% (testovi iznad). IZABRANI branitelj čiji
+    // trošak padne na proračun zbog oslobađajuće presude nema umanjenje — puna Tarifa.
+    // IsIzabraniOslobodjajuca je kvalifikator na IsNaTeretProracuna koji tu razliku
+    // izražava; bez njega ponašanje ostaje kao prije (svaki IsNaTeretProracuna = 50%).
+
+    [Fact]
+    public void IzabraniNaTeretProracuna_JePunaTarifa_Ne50Posto()
+    {
+        var rezultat = Izracunaj(z =>
+        {
+            z.IsNaTeretProracuna = true;
+            z.IsIzabraniOslobodjajuca = true;
+        });
+
+        Assert.Equal(500m, rezultat.UkupnoBodova);
+        Assert.NotEqual(250m, rezultat.UkupnoBodova);
+    }
+
+    [Fact]
+    public void PostavljeniNaTeretProracuna_OstajePola_RegresijaZaStareKlijente()
+    {
+        // IsIzabraniOslobodjajuca izostavljen (default false) — stari zahtjevi/klijenti
+        // koji ga nikad ne šalju moraju zadržati dosadašnje ponašanje.
+        Assert.Equal(250m, Izracunaj(z => z.IsNaTeretProracuna = true).UkupnoBodova);
+    }
+
+    [Fact]
+    public void IzabraniOslobodjajuca_BezNaTeretProracuna_NemaUcinka()
+    {
+        // Kvalifikator sam za sebe (bez IsNaTeretProracuna) ne umanjuje niti dodatno
+        // uvećava — ostaje na punoj tarifi, isto kao da nijedna zastavica nije postavljena.
+        Assert.Equal(500m, Izracunaj(z => z.IsIzabraniOslobodjajuca = true).UkupnoBodova);
+    }
+
+    [Fact]
+    public void IzabraniNaTeretProracuna_PdvIdeNaPunuBazu()
+    {
+        var zahtjev = new TroskovnikRequest
+        {
+            ZaprijecenaKazna = "dugotrajni",
+            IsPdvUkljucen = true,
+            IsNaTeretProracuna = true,
+            IsIzabraniOslobodjajuca = true,
+            Stavke = [new TroskovnikItemRequest { ItemId = "kaz_obrana", Kolicina = 1 }]
+        };
+        var rezultat = new TroskovnikService().Izracunaj(zahtjev);
+
+        // 500 bodova × 2,00 € (Tbr. 54) = 1.000 € puna osnovica, ne 500 € (umanjena).
+        Assert.Equal(1_000.00m, rezultat.UkupnoEurBezPdv);
+        Assert.Equal(1_250.00m, rezultat.UkupnoEurSPdv);
+    }
+
     // ── Opunomoćenik djeteta žrtve: 70%, ne 35% ──
 
     /// <summary>

@@ -71,7 +71,24 @@ public static class TarifaConstants
     /// <summary>Ponuđeni tekst napomene; korisnik ga smije izmijeniti ili obrisati.</summary>
     public const string ZadanaNapomena =
         "Na traženi iznos obračunava se zakonska zatezna kamata sukladno članku 29. " +
-        "Zakona o obveznim odnosima.";
+        "Zakona o obveznim odnosima, po kamatnoj stopi koja se određuje za svako " +
+        "polugodište uvećanjem kamatne stope koju je Europska središnja banka " +
+        "primijenila na svoje posljednje glavne operacije refinanciranja prije " +
+        "prvog kalendarskog dana tekućeg polugodišta za tri postotna poena.";
+
+    /// <summary>
+    /// Tbr. 50 — naknada za automobil: 30% cijene litre bezolovnog benzina 100 oktana
+    /// po prijeđenom kilometru (+ cestarina, zasebno). Ovo je jedini dio Tbr. 50 koji je
+    /// propisan brojkom — CIJENA goriva je tržišna, nije regulirana Uredbom o najvišim
+    /// cijenama (ta pokriva samo 95/dizel), pa NIJE konstanta ovdje nego postavka ureda
+    /// (<c>LawFirmResponse.CijenaGorivaEurL</c>) koju ured sam unosi i ažurira.
+    /// </summary>
+    public const decimal Tbr50FaktorGoriva = 0.30m;
+
+    // Tbr. 51 — dnevnica, u visini dnevnice suca Županijskog suda. Iznos NIJE ovdje:
+    // pravno je izveden, ali nepotvrđen (najbolji nađeni izvor 19,91 € iz NN 117/2012,
+    // bez potvrde postoji li noviji propis), pa ga ured potvrđuje i unosi sam u postavke
+    // ureda (LawFirmResponse.DnevnicaEur) — kod ga ne zakucava.
 }
 
 /// <summary>Zapriječena kazna → bodovi (Tbr. 4)</summary>

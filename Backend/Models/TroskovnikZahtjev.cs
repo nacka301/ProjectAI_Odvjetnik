@@ -70,9 +70,25 @@ public sealed class TroskovnikRequest
     /// <summary>
     /// Obrana na teret proračunskih sredstava – 50% nagrade za pojedinu radnju prema
     /// Tarifi (isti Pravilnik, čl. 1). Isključuje IsZastupnikDjeteta.
+    /// Vrijedi za POSTAVLJENOG branitelja. Za IZABRANOG branitelja čiji trošak padne
+    /// na proračun zbog oslobađajuće presude vidi <see cref="IsIzabraniOslobodjajuca"/> —
+    /// ta kombinacija ne umanjuje nagradu (puna Tarifa).
     /// </summary>
     [JsonPropertyName("is_na_teret_proracuna")]
     public bool IsNaTeretProracuna { get; set; }
+
+    /// <summary>
+    /// Kvalifikator na <see cref="IsNaTeretProracuna"/>: branitelj je IZABRAN (ne
+    /// postavljen po službenoj dužnosti), a trošak pada na proračunska sredstva zbog
+    /// oslobađajuće presude (ili druge odluke bez osude). Pravilnik NN 22/2022 br. 271
+    /// umanjuje nagradu na 50% samo za POSTAVLJENOG branitelja (čl. 1); izabranom
+    /// branitelju u ovom slučaju pripada PUNA Tarifa, bez umanjenja.
+    /// Bez učinka ako <see cref="IsNaTeretProracuna"/> nije postavljen. Zadano false —
+    /// stari klijenti i pohranjeni zahtjevi bez ovog polja zadržavaju dosadašnje
+    /// (postavljeni-branitelj) ponašanje.
+    /// </summary>
+    [JsonPropertyName("is_izabrani_oslobadjajuca")]
+    public bool IsIzabraniOslobodjajuca { get; set; }
 
     /// <summary>
     /// Opunomoćenik djeteta žrtve kaznenog djela – 70% nagrade za pojedinu radnju prema
@@ -477,9 +493,40 @@ public sealed class NaknadaTroskovaStavkaRequest
     [JsonPropertyName("opis")]
     public string? Opis { get; set; }
 
-    /// <summary>Stvarni iznos u EUR — Tarifa ne propisuje bodove za ove izdatke.</summary>
+    /// <summary>
+    /// Stvarni iznos u EUR — Tarifa ne propisuje bodove za ove izdatke. Kad je
+    /// <see cref="Nacin"/> = "izracun" ovo polje se IGNORIRA — konačni iznos se računa
+    /// iz <see cref="Kolicina"/> × <see cref="JedinicniIznos"/> (+ <see cref="Cestarina"/>
+    /// za prijevoz) i vraća se u odgovoru.
+    /// </summary>
     [JsonPropertyName("iznos")]
     public decimal Iznos { get; set; }
+
+    /// <summary>
+    /// "rucno" (zadano, <see cref="Iznos"/> vrijedi kao upisan) ili "izracun" (iznos se
+    /// izvodi iz količine × jediničnog iznosa). Samo za Prijevoz (Tbr. 50 — km) i
+    /// Dnevnicu (Tbr. 51); za Hotelski smještaj i Ostale izdatke izračun se odbija —
+    /// ondje nema propisane jedinične cijene.
+    /// </summary>
+    [JsonPropertyName("nacin")]
+    public string? Nacin { get; set; }
+
+    /// <summary>Količina za način "izracun" — kilometri (Prijevoz) ili dani (Dnevnica).</summary>
+    [JsonPropertyName("kolicina")]
+    public decimal? Kolicina { get; set; }
+
+    /// <summary>
+    /// Jedinični iznos za način "izracun" — €/km (Prijevoz, = cijena goriva × 0,30) ili
+    /// €/dan (Dnevnica). Snapshot u trenutku izračuna: spremljeni troškovnik zadržava
+    /// povijesnu vrijednost i kad ured kasnije promijeni postavku, isto kao naziv/verzija
+    /// Tarife i vrijednost boda.
+    /// </summary>
+    [JsonPropertyName("jedinicni_iznos")]
+    public decimal? JedinicniIznos { get; set; }
+
+    /// <summary>Tbr. 50 — cestarina, dodaje se na izračunatu naknadu za Prijevoz.</summary>
+    [JsonPropertyName("cestarina")]
+    public decimal? Cestarina { get; set; }
 }
 
 public sealed class TroskovnikParty

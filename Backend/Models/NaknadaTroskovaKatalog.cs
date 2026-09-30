@@ -37,4 +37,27 @@ public static class VrstaTroska
         [HotelskiSmjestaj]   = $"{TarifaConstants.NazivTarife}, Tbr. 51.",
         [OstaliIzdaci]       = $"{TarifaConstants.NazivTarife}, Tbr. 48.",
     };
+
+    /// <summary>
+    /// Vrste izdatka za koje je dopušten izračun (količina × jedinični iznos) umjesto
+    /// samo slobodnog unosa — Tbr. 50 (km) i Tbr. 51 (dani) imaju propisanu jediničnu
+    /// formulu. Hotelski smještaj i ostali izdaci nemaju propisanu jediničnu cijenu, pa
+    /// ostaju isključivo slobodan unos.
+    /// </summary>
+    public static readonly string[] DopustaIzracun = [Prijevoz, Dnevnica];
+}
+
+/// <summary>Način unosa iznosa naknade troškova — slobodan ili izračunat.</summary>
+public static class NacinNaknade
+{
+    /// <summary>Iznos je slobodno upisan (zadano).</summary>
+    public const string Rucno = "rucno";
+
+    /// <summary>
+    /// Iznos se izvodi iz količine × jediničnog iznosa (+ cestarina za prijevoz).
+    /// Dopušteno samo za vrste u <see cref="VrstaTroska.DopustaIzracun"/>.
+    /// </summary>
+    public const string Izracun = "izracun";
+
+    public static readonly string[] Sve = [Rucno, Izracun];
 }

@@ -5,6 +5,7 @@ import {
   tbr71Bodovi,
   zaokruziNovac,
   OSNOVICA_TBR7,
+  VRSTA_TROSKA,
   type OsnovicaRezultat,
   type TarifnaStavka,
 } from "@/lib/tarifa";
@@ -105,6 +106,7 @@ function slucaj(opts: {
     isZastupnikDjeteta: false,
     isPoSluzbenojDuznosti: false,
     isNaTeretProracuna: false,
+    isIzabraniOslobodjajuca: false,
     zaprijecenaKazna: null,
     isOduzimanjePrekrsaj: false,
     parsedVrijednostOduzimanja: 0,
@@ -114,7 +116,7 @@ function slucaj(opts: {
     pristojbe: opts.pristojbe ?? PRAZNE_PRISTOJBE,
     dodatnePristojbe: [],
     predujmovi: (opts.predujmovi ?? []).map((iznos) => ({ opis: "predujam", iznos })),
-    naknadaTroskovaStavke: (opts.naknadaTroskova ?? []).map((iznos) => ({ iznos })),
+    naknadaTroskovaStavke: (opts.naknadaTroskova ?? []).map((iznos) => ({ vrsta: VRSTA_TROSKA.OstaliIzdaci, iznos })),
     datumDospijeca: null,
     ...extra,
   });

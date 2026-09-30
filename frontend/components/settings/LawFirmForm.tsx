@@ -1,12 +1,23 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Save, Building2, Hash, MapPin, Landmark, Receipt, Phone, Mail } from "lucide-react";
+import { Loader2, Save, Building2, Hash, MapPin, Landmark, Receipt, Phone, Mail, Fuel, AlertTriangle } from "lucide-react";
 import { API_BASE } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
 
 interface Props {
   userId: string;
+}
+
+/** Hrvatski format broja ("1,529") → number|null. Prazno/nevaljano → null (isto kao neupisano). */
+function parseBroj(s: string): number | null {
+  const n = parseFloat(s.trim().replace(",", "."));
+  return Number.isFinite(n) ? n : null;
+}
+
+/** number|null → hrvatski format teksta za input. */
+function formatBroj(n: number | null | undefined): string {
+  return n == null ? "" : String(n).replace(".", ",");
 }
 
 export default function LawFirmForm({ userId: _propUserId }: Props) {
@@ -18,6 +29,11 @@ export default function LawFirmForm({ userId: _propUserId }: Props) {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [pdvObveznik, setPdvObveznik] = useState(false);
+  // Tbr. 50/51 — parametri za izračun naknade za prijevoz i dnevnicu u troškovniku.
+  // Slobodan tekst (hrvatski format broja), isto kao svugdje drugdje na ovoj stranici;
+  // parsira se tek pri spremanju. Prazno = nepostavljeno, izračun se tada ne nudi.
+  const [cijenaGoriva, setCijenaGoriva] = useState("");
+  const [dnevnica, setDnevnica] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -45,6 +61,8 @@ export default function LawFirmForm({ userId: _propUserId }: Props) {
             setPhone(data.phone || "");
             setEmail(data.email || "");
             setPdvObveznik(Boolean(data.pdv_obveznik));
+            setCijenaGoriva(formatBroj(data.cijena_goriva_eur_l));
+            setDnevnica(formatBroj(data.dnevnica_eur));
           }
           // null / empty → fields stay blank = "create" mode
         } else if (res.status !== 404) {
@@ -77,6 +95,18 @@ export default function LawFirmForm({ userId: _propUserId }: Props) {
       return;
     }
 
+    const cijenaGorivaNum = cijenaGoriva.trim() ? parseBroj(cijenaGoriva) : null;
+    if (cijenaGoriva.trim() && (cijenaGorivaNum == null || cijenaGorivaNum <= 0)) {
+      setError("Cijena goriva mora biti pozitivan broj (npr. 1,53).");
+      return;
+    }
+
+    const dnevnicaNum = dnevnica.trim() ? parseBroj(dnevnica) : null;
+    if (dnevnica.trim() && (dnevnicaNum == null || dnevnicaNum <= 0)) {
+      setError("Dnevnica mora biti pozitivan broj (npr. 19,91).");
+      return;
+    }
+
     setSaving(true);
     try {
       const res = await fetch(`${API_BASE}/api/settings/firm`, {
@@ -90,6 +120,8 @@ export default function LawFirmForm({ userId: _propUserId }: Props) {
           phone: phone.trim() || null,
           email: email.trim() || null,
           pdv_obveznik: pdvObveznik,
+          cijena_goriva_eur_l: cijenaGorivaNum,
+          dnevnica_eur: dnevnicaNum,
         }),
       });
 
@@ -259,6 +291,65 @@ export default function LawFirmForm({ userId: _propUserId }: Props) {
               </span>
             </span>
           </label>
+        </div>
+
+        {/* Naknada troškova — Tbr. 50 (km) i Tbr. 51 (dnevnica) */}
+        <div className="rounded-lg border border-slate-200 p-4 space-y-4">
+          <div>
+            <span className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+              <Fuel className="h-3.5 w-3.5 text-slate-400" />
+              Naknada za prijevoz i dnevnicu (Tbr. 50./51.)
+            </span>
+            <span className="block text-[11px] text-slate-400 mt-1">
+              Omogućuje izračun naknade po km i po danu u troškovniku, umjesto samo ručnog unosa. Prazno
+              polje ostavlja izračun isključenim — troškovnik se i dalje može popuniti ručno.
+            </span>
+          </div>
+
+          <div className="flex items-start gap-2 rounded-md bg-amber-50 border border-amber-200 p-2.5">
+            <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-0.5" />
+            <p className="text-[11px] text-amber-800">
+              Obje vrijednosti provjerite prije unosa — ovo su tržišne odn. pravno neizravno izvedene
+              vrijednosti koje aplikacija ne pretpostavlja umjesto vas: cijena goriva mijenja se s tržištem,
+              a iznos dnevnice suca županijskog suda nije potvrđen novijim propisom.
+            </p>
+          </div>
+
+          <div>
+            <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 mb-1.5">
+              Cijena goriva (€/l)
+            </label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={cijenaGoriva}
+              onChange={(e) => setCijenaGoriva(e.target.value)}
+              placeholder="npr. 1,53"
+              className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-400 transition"
+            />
+            <p className="text-[11px] text-slate-400 mt-1">
+              Bezolovni benzin 100 oktana. Naknada za prijevoz (Tbr. 50.) računa se kao 30% ove cijene po
+              kilometru — provjerite na pumpi prije unosa, cijena nije regulirana.
+            </p>
+          </div>
+
+          <div>
+            <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 mb-1.5">
+              Dnevnica (€/dan)
+            </label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={dnevnica}
+              onChange={(e) => setDnevnica(e.target.value)}
+              placeholder="npr. 19,91"
+              className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-400 transition"
+            />
+            <p className="text-[11px] text-slate-400 mt-1">
+              U visini dnevnice suca županijskog suda (Tbr. 51.) — provjerite je li propis kojim se ona
+              određuje ažuriran prije nego unesete iznos.
+            </p>
+          </div>
         </div>
 
         {/* Submit */}

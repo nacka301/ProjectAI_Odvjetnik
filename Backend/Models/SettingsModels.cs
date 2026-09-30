@@ -34,12 +34,31 @@ public class LawFirmResponse
     public string? Oib { get; set; }
     public string? Address { get; set; }
     public string? Iban { get; set; }
+    /// <summary>Telefon ureda — za zaglavlje ispisa/izvoza troškovnika, ne korisnikov broj.</summary>
+    public string? Phone { get; set; }
+    /// <summary>E-mail ureda — za zaglavlje ispisa/izvoza troškovnika, ne korisnikov login mail.</summary>
+    public string? Email { get; set; }
 
     /// <summary>
     /// Je li ured u sustavu PDV-a. Zadana vrijednost za novi troškovnik — korisnik je
     /// i dalje može ručno promijeniti po dokumentu (vidi TroskovnikRequest.IsPdvUkljucen).
     /// </summary>
     public bool PdvObveznik { get; set; }
+
+    /// <summary>
+    /// Tbr. 50 — cijena litre bezolovnog benzina 100 oktana (EUR), za izračun naknade
+    /// za automobil (30% cijene po km, vidi TarifaConstants.Tbr50FaktorGoriva). Tržišna
+    /// vrijednost, nije regulirana — ured je sam unosi i ažurira. Null = nije postavljeno;
+    /// tada se naknada za prijevoz ne može automatski izračunati, samo unijeti ručno.
+    /// </summary>
+    public decimal? CijenaGorivaEurL { get; set; }
+
+    /// <summary>
+    /// Tbr. 51 — dnevnica, u visini dnevnice suca Županijskog suda (EUR/dan). Pravno
+    /// izveden ali NEPOTVRĐEN iznos (vidi TarifaConstants) — ured ga potvrđuje i unosi
+    /// sam. Null = nije postavljeno; naknada za dnevnicu se tada unosi samo ručno.
+    /// </summary>
+    public decimal? DnevnicaEur { get; set; }
 }
 
 public class LawFirmUpdateRequest
@@ -49,7 +68,11 @@ public class LawFirmUpdateRequest
     public string? Oib { get; set; }
     public string? Address { get; set; }
     public string? Iban { get; set; }
+    public string? Phone { get; set; }
+    public string? Email { get; set; }
     public bool PdvObveznik { get; set; }
+    public decimal? CijenaGorivaEurL { get; set; }
+    public decimal? DnevnicaEur { get; set; }
 }
 
 // ── Subscription ──

@@ -7,11 +7,12 @@
 // pristojbe → sveukupno) mogla testirati bez Reacta. Sve teške tarifne odluke
 // već su čiste funkcije u `./tarifa`; ovdje je samo njihovo spajanje.
 
-import type { OsnovicaRezultat, TarifnaStavka, Tbr41Stavka } from "./tarifa";
+import type { NaknadaStavkaZaIzracun, OsnovicaRezultat, TarifnaStavka, Tbr41Stavka } from "./tarifa";
 import {
   PDV_RATE,
   izracunajBodove,
   izracunajKazneneBodove,
+  izracunajNaknaduStavku,
   podijeliPoOsobama,
   povisenjeViseOsobaPostotak,
   razrijesiTarifu,
@@ -56,6 +57,9 @@ export interface TroskovnikIzracunUlaz {
   isZastupnikDjeteta: boolean;
   isPoSluzbenojDuznosti: boolean;
   isNaTeretProracuna: boolean;
+  /** Kvalifikator na isNaTeretProracuna: izabrani (ne postavljeni) branitelj,
+   *  trošak na proračun zbog oslobađajuće presude → puna Tarifa, bez umanjenja. */
+  isIzabraniOslobodjajuca: boolean;
   zaprijecenaKazna: string | null;
 
   // Prekršaj s oduzimanjem predmeta (Tbr. 7.1 po vrijednosti oduzetog)
@@ -74,8 +78,12 @@ export interface TroskovnikIzracunUlaz {
   dodatnePristojbe: TrosakIzracunaUlaz[];
   predujmovi: TrosakIzracunaUlaz[];
 
-  /** Naknada troškova (Tbr. 48.-51.) — iznosi isparsirani; ULAZI u PDV osnovicu. */
-  naknadaTroskovaStavke: { iznos: number }[];
+  /**
+   * Naknada troškova (Tbr. 48.-51.) — iznosi/količine isparsirani; ULAZI u PDV osnovicu.
+   * Vidi `NaknadaStavkaZaIzracun` — "rucno" koristi `iznos`, "izracun" izvodi iznos iz
+   * `kolicina × jedinicniIznos` (+ `cestarina` za Prijevoz).
+   */
+  naknadaTroskovaStavke: NaknadaStavkaZaIzracun[];
 
   /** Tbr. 52 — mjerodavna verzija Tarife po dospijeću potraživanja. */
   datumDospijeca: string | null;
@@ -135,6 +143,7 @@ export function izracunajTroskovnik(u: TroskovnikIzracunUlaz) {
         u.isPoSluzbenojDuznosti,
         u.isNaTeretProracuna,
         u.zaprijecenaKazna ?? undefined,
+        u.isIzabraniOslobodjajuca,
       );
     } else if (u.osnovica) {
       bodovi = izracunajBodove(def, u.osnovica);
@@ -192,8 +201,9 @@ export function izracunajTroskovnik(u: TroskovnikIzracunUlaz) {
   const ukupnoEur = zaokruziNovac(ukupnoBodova * bodValue);
 
   // Naknada troškova (Tbr. 48.-51.) — vlastiti trošak odvjetnika, ULAZI u osnovicu.
+  // Svaka stavka je ili ručno upisana ili izračunata (Tbr. 50/51) — vidi izracunajNaknaduStavku.
   const naknadaTroskovaUkupno = zaokruziNovac(
-    u.naknadaTroskovaStavke.reduce((s, r) => s + r.iznos, 0),
+    u.naknadaTroskovaStavke.reduce((s, r) => s + izracunajNaknaduStavku(r), 0),
   );
   const osnovicaSaNaknadom = ukupnoEur + naknadaTroskovaUkupno;
 

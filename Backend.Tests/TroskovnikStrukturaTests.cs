@@ -42,8 +42,11 @@ public class TroskovnikStrukturaTests
     }
 
     [Fact]
-    public void Radnje_SlazeSePoDatumu_NeovisnoORedoslijeduUZahtjevu()
+    public void Radnje_ZadrzavajuRedoslijedIzZahtjeva_BezPresortiravanjaPoDatumu()
     {
+        // Prije se ovdje obrambeno presortiravalo kronološki; uklonjeno je jer
+        // troškovnik ide sudu u redoslijedu kakav je odvjetnik sam složio na
+        // obrascu (strelice „Pomakni gore/dolje"), ne nužno kronološki.
         var rezultat = Izracunaj(new TroskovnikRequest
         {
             VrijednostSpora = 45_300m,
@@ -56,13 +59,13 @@ public class TroskovnikStrukturaTests
         });
 
         Assert.Equal(
-            [new DateOnly(2025, 2, 12), new DateOnly(2025, 6, 3), new DateOnly(2025, 11, 14)],
+            [new DateOnly(2025, 11, 14), new DateOnly(2025, 2, 12), new DateOnly(2025, 6, 3)],
             rezultat.Stavke.Select(s => s.Datum));
         Assert.Equal([1, 2, 3], rezultat.Stavke.Select(s => s.Rbr));
     }
 
     [Fact]
-    public void Radnje_BezDatuma_IduNaKraj_OstaleZadrzeRedoslijedUnosa()
+    public void Radnje_BezDatuma_ZadrzavajuSvojePozicije_UzOstale()
     {
         var rezultat = Izracunaj(new TroskovnikRequest
         {
@@ -76,7 +79,7 @@ public class TroskovnikStrukturaTests
         });
 
         Assert.Equal(
-            ["par_tuzba", "par_rociste_glavno", "par_rociste_presuda"],
+            ["par_rociste_glavno", "par_tuzba", "par_rociste_presuda"],
             rezultat.Stavke.Select(s => s.ItemId));
     }
 

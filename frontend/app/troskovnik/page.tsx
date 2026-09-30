@@ -75,6 +75,10 @@ import {
   TBR45_NACIN_LABELE,
   VRSTA_TROSKA,
   VRSTA_TROSKA_LABELE,
+  VRSTA_TROSKA_DOPUSTA_IZRACUN,
+  NACIN_NAKNADE,
+  TBR50_FAKTOR_GORIVA,
+  izracunajNaknaduStavku,
   efektivniVps,
   izracunajOsnovicu,
   provjeriZahtjev,
@@ -97,6 +101,7 @@ import {
   type VrstaPostupka,
   type VrstaTroska,
   type ZahtjeviNacin,
+  type NacinNaknade,
 } from "@/lib/tarifa";
 import { izracunajTroskovnik } from "@/lib/troskovnik-izracun";
 
@@ -182,7 +187,10 @@ interface TroskovnikResponse {
   pdv: number;
   ukupno_eur_s_pdv: number;
   // Naknada troškova (Tbr. 48.-51.) — ulazi u osnovicu (uključena u ukupno_eur_bez_pdv)
-  naknada_troskova_stavke?: { vrsta: string; opis?: string | null; iznos: number; pravni_izvor: string }[];
+  naknada_troskova_stavke?: {
+    vrsta: string; opis?: string | null; iznos: number; pravni_izvor: string;
+    nacin?: string | null; kolicina?: number | null; jedinicni_iznos?: number | null; cestarina?: number | null;
+  }[];
   naknada_troskova_ukupno?: number;
   predujmovi_ukupno?: number;
   vrijednost_boda: number;
@@ -207,6 +215,7 @@ interface TroskovnikResponse {
   zaprijecena_kazna?: string | null;
   is_po_sluzbenoj_duznosti?: boolean;
   is_na_teret_proracuna?: boolean;
+  is_izabrani_oslobadjajuca?: boolean;
   is_zastupnik_djeteta?: boolean;
   is_stjecaj?: boolean;
   /** Obrazloženje odabranog razreda kod stjecaja (Tbr. 4. toč. 1 al. 6). */
@@ -256,15 +265,42 @@ interface TroskovnikResponse {
  *
  * Uloge se isključuju: čl. 1 je obrana okrivljenika, čl. 2 zastupanje djeteta žrtve,
  * pa je to jedan izbor, a ne tri neovisne kvačice.
+ *
+ * "Na teret proračuna" (čl. 1) dalje se grana na dvoje:
+ *   - POSTAVLJENI branitelj (po sl. dužnosti ili na teret proračuna kao takav) → 50%
+ *   - IZABRANI branitelj, trošak na proračun zbog OSLOBAĐAJUĆE presude        → puna tarifa
+ * Isti se odvjetnik ne može istovremeno smatrati postavljenim i izabranim za istu
+ * radnju, pa su "proracun" i "proracun_izabrani" dvije zasebne opcije, ne kombinacija.
  */
-type KazneniStatus = "puna" | "sluzbena" | "proracun" | "dijete";
+type KazneniStatus = "puna" | "sluzbena" | "proracun" | "proracun_izabrani" | "dijete";
 
 const KAZNENI_STATUS_OPCIJE: { value: KazneniStatus; label: string; napomena: string }[] = [
   { value: "puna", label: "Puna tarifa", napomena: "bez umanjenja" },
   { value: "sluzbena", label: "Branitelj po službenoj dužnosti", napomena: "50% — Pravilnik NN 22/2022, čl. 1" },
-  { value: "proracun", label: "Branitelj na teret proračunskih sredstava", napomena: "50% — čl. 1" },
+  { value: "proracun", label: "Postavljeni branitelj na teret proračunskih sredstava", napomena: "50% — čl. 1" },
+  {
+    value: "proracun_izabrani",
+    label: "Izabrani branitelj — oslobađajuća presuda (na teret proračuna)",
+    napomena: "puna tarifa — bez umanjenja",
+  },
   { value: "dijete", label: "Opunomoćenik djeteta žrtve kaznenog djela", napomena: "70% — čl. 2" },
 ];
+
+/**
+ * Jedan redak naknade troškova u obrascu. `iznos`/`kolicina`/`jedinicniIznos`/`cestarina`
+ * su stringovi jer dolaze iz teksta obrasca (hrvatski format, parsira se pri izračunu),
+ * isto kao svugdje drugdje u ovoj komponenti. `nacin` izostavljen (undefined) = "rucno",
+ * isto kao na backendu — stari nacrti bez tog polja ostaju ispravni.
+ */
+type NaknadaTroskovaRedak = {
+  vrsta: VrstaTroska;
+  opis: string;
+  iznos: string;
+  nacin?: NacinNaknade;
+  kolicina?: string;
+  jedinicniIznos?: string;
+  cestarina?: string;
+};
 
 // ── Format helpers ──
 
@@ -280,6 +316,31 @@ function fmtEur(n: number) {
 /** Prikaz bodova — decimalni, jer se bodovi po Tarifi ne zaokružuju. */
 function fmtNum(n: number) {
   return formatirajBodove(n);
+}
+
+/**
+ * Je li redak naknade troškova dovoljno popunjen da ga vrijedi poslati — ručni unos
+ * treba pozitivan iznos, izračun treba pozitivnu količinu i jedinični iznos (isti uvjet
+ * koji backend provjerava u ProvjeriNaknaduIPredujam, ovdje samo da se prazan redak ne
+ * šalje, ne da se odbije zahtjev).
+ */
+function naknadaStavkaPopunjena(r: NaknadaTroskovaRedak): boolean {
+  return r.nacin === NACIN_NAKNADE.Izracun
+    ? parseHrNumber(r.kolicina ?? "") > 0 && parseHrNumber(r.jedinicniIznos ?? "") > 0
+    : parseHrNumber(r.iznos) > 0;
+}
+
+/** Redak naknade troškova u obliku koji backend očekuje (snake_case, brojevi umjesto teksta). */
+function naknadaStavkaZaSlanje(r: NaknadaTroskovaRedak) {
+  return {
+    vrsta: r.vrsta,
+    opis: r.opis || undefined,
+    iznos: parseHrNumber(r.iznos),
+    nacin: r.nacin,
+    kolicina: r.kolicina != null ? parseHrNumber(r.kolicina) : undefined,
+    jedinicni_iznos: r.jedinicniIznos != null ? parseHrNumber(r.jedinicniIznos) : undefined,
+    cestarina: r.cestarina != null ? parseHrNumber(r.cestarina) : undefined,
+  };
 }
 
 /** Hrvatski unos broja ("1.234,56") → JS number. Prazno ili nevaljano → 0. */
@@ -411,9 +472,11 @@ function TroskovnikContent() {
     setIsPdvUkljucen(checked);
   }, []);
   // ── Naknada troškova (Tbr. 48.-51.) — ulazi u PDV osnovicu ──
-  const [naknadaTroskovaStavke, setNaknadaTroskovaStavke] = useState<
-    { vrsta: VrstaTroska; opis: string; iznos: string }[]
-  >([]);
+  const [naknadaTroskovaStavke, setNaknadaTroskovaStavke] = useState<NaknadaTroskovaRedak[]>([]);
+  // Cijena goriva (€/l) i dnevnica (€/dan) iz postavki ureda — za izračun Tbr. 50/51.
+  // Null dok se ne dohvati ili dok ured nije postavio vrijednost (nepotvrđeno).
+  const [cijenaGorivaEurL, setCijenaGorivaEurL] = useState<number | null>(null);
+  const [dnevnicaEur, setDnevnicaEur] = useState<number | null>(null);
   const [odvjetnikIban, setOdvjetnikIban] = useState("");
   const [odvjetnikTelefon, setOdvjetnikTelefon] = useState("");
   const [odvjetnikEmail, setOdvjetnikEmail] = useState("");
@@ -437,7 +500,11 @@ function TroskovnikContent() {
   // pa se stope ne mogu pomnožiti.
   const [kazneniStatus, setKazneniStatus] = useState<KazneniStatus>("puna");
   const isPoSluzbenojDuznosti = kazneniStatus === "sluzbena";
-  const isNaTeretProracuna = kazneniStatus === "proracun";
+  // Obje vrijednosti su "na teret proračuna" u pravnom smislu (isti čl. 1), pa se
+  // obje šalju kao is_na_teret_proracuna; isIzabraniOslobodjajuca je kvalifikator
+  // koji razdvaja postavljenog (50%) od izabranog branitelja u oslobađajućoj (puna).
+  const isNaTeretProracuna = kazneniStatus === "proracun" || kazneniStatus === "proracun_izabrani";
+  const isIzabraniOslobodjajuca = kazneniStatus === "proracun_izabrani";
   const isZastupnikDjeteta = kazneniStatus === "dijete";
   const [isStjecaj, setIsStjecaj] = useState(false);
   const [isOduzimanjePrekrsaj, setIsOduzimanjePrekrsaj] = useState(false);
@@ -728,7 +795,10 @@ function TroskovnikContent() {
         klijent?: { ime?: string; oib?: string; adresa?: string; grad?: string } | null;
         odvjetnik?: { ime?: string; oib?: string; adresa?: string; grad?: string; iban?: string } | null;
         protustranka?: { ime?: string; oib?: string; adresa?: string; grad?: string } | null;
-        naknada_troskova_stavke?: { vrsta: string; opis?: string | null; iznos: number }[];
+        naknada_troskova_stavke?: {
+          vrsta: string; opis?: string | null; iznos: number;
+          nacin?: string | null; kolicina?: number | null; jedinicni_iznos?: number | null; cestarina?: number | null;
+        }[];
         dodatne_pristojbe?: { datum?: string | null; opis: string; iznos: number }[];
         predujmovi?: { datum?: string | null; opis: string; iznos: number }[];
       };
@@ -748,10 +818,13 @@ function TroskovnikContent() {
       const jeZastupnikDjeteta = bool(out.is_zastupnik_djeteta) ?? false;
       const jeSluzbena = bool(out.is_po_sluzbenoj_duznosti) ?? false;
       const jeProracun = bool(out.is_na_teret_proracuna) ?? false;
+      const jeIzabraniOslobodjajuca = bool(out.is_izabrani_oslobadjajuca) ?? false;
       const noviKazneniStatus: KazneniStatus = jeZastupnikDjeteta
         ? "dijete"
         : jeSluzbena
         ? "sluzbena"
+        : jeProracun && jeIzabraniOslobodjajuca
+        ? "proracun_izabrani"
         : jeProracun
         ? "proracun"
         : "puna";
@@ -787,6 +860,10 @@ function TroskovnikContent() {
           vrsta: s.vrsta as VrstaTroska,
           opis: s.opis ?? "",
           iznos: formatUnosa(s.iznos),
+          nacin: (s.nacin as NacinNaknade | undefined) ?? undefined,
+          kolicina: s.kolicina != null ? formatUnosa(s.kolicina) : undefined,
+          jedinicniIznos: s.jedinicni_iznos != null ? formatUnosa(s.jedinicni_iznos) : undefined,
+          cestarina: s.cestarina != null ? formatUnosa(s.cestarina) : undefined,
         })),
         protustrankaIme: noveProtustranka?.ime ?? zapis.stranke?.protustranka?.naziv ?? "",
         protustrankaOib: noveProtustranka?.oib ?? zapis.stranke?.protustranka?.oib ?? "",
@@ -864,6 +941,8 @@ function TroskovnikContent() {
     phone?: string | null;
     email?: string | null;
     pdv_obveznik?: boolean;
+    cijena_goriva_eur_l?: number | null;
+    dnevnica_eur?: number | null;
   };
 
   // ── Podaci ureda iz postavki ──
@@ -896,6 +975,8 @@ function TroskovnikContent() {
         setOdvjetnikIban((prev) => prev || data.iban || "");
         setOdvjetnikTelefon((prev) => prev || data.phone || "");
         setOdvjetnikEmail((prev) => prev || data.email || "");
+        setCijenaGorivaEurL(data.cijena_goriva_eur_l ?? null);
+        setDnevnicaEur(data.dnevnica_eur ?? null);
       })
       .catch(() => {});
   }, [userId]);
@@ -1278,6 +1359,7 @@ function TroskovnikContent() {
         isZastupnikDjeteta,
         isPoSluzbenojDuznosti,
         isNaTeretProracuna,
+        isIzabraniOslobodjajuca,
         zaprijecenaKazna: zaprijecenaKazna || null,
         isOduzimanjePrekrsaj,
         parsedVrijednostOduzimanja,
@@ -1291,10 +1373,17 @@ function TroskovnikContent() {
         },
         dodatnePristojbe: dodatnePristojbe.map((t) => ({ opis: t.opis, iznos: parseEurInput(t.iznos) })),
         predujmovi: predujmovi.map((t) => ({ opis: t.opis, iznos: parseEurInput(t.iznos) })),
-        naknadaTroskovaStavke: naknadaTroskovaStavke.map((r) => ({ iznos: parseHrNumber(r.iznos) })),
+        naknadaTroskovaStavke: naknadaTroskovaStavke.map((r) => ({
+          vrsta: r.vrsta,
+          iznos: parseHrNumber(r.iznos),
+          nacin: r.nacin,
+          kolicina: r.kolicina != null ? parseHrNumber(r.kolicina) : null,
+          jedinicniIznos: r.jedinicniIznos != null ? parseHrNumber(r.jedinicniIznos) : null,
+          cestarina: r.cestarina != null ? parseHrNumber(r.cestarina) : null,
+        })),
         datumDospijeca: datumDospijeca || null,
       }),
-    [redciPoredani, katalog, osnovica, isPdvUkljucen, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, isOduzimanjePrekrsaj, parsedVrijednostOduzimanja, pristojbe, brojZastupanihOsoba, zaprijecenaKazna, tbr41Povisenje, tbr41Snizenje, dodatnePristojbe, predujmovi, naknadaTroskovaStavke, datumDospijeca],
+    [redciPoredani, katalog, osnovica, isPdvUkljucen, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, isIzabraniOslobodjajuca, isOduzimanjePrekrsaj, parsedVrijednostOduzimanja, pristojbe, brojZastupanihOsoba, zaprijecenaKazna, tbr41Povisenje, tbr41Snizenje, dodatnePristojbe, predujmovi, naknadaTroskovaStavke, datumDospijeca],
   );
 
   // Katalog po id, i izračunati redak po uid — za uređivanje u desnom stupcu, koje
@@ -1547,7 +1636,7 @@ function TroskovnikContent() {
   }, []);
 
   const updateNaknadaTroskova = useCallback(
-    (index: number, patch: Partial<{ vrsta: VrstaTroska; opis: string; iznos: string }>) => {
+    (index: number, patch: Partial<NaknadaTroskovaRedak>) => {
       setNaknadaTroskovaStavke((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)));
     },
     []
@@ -1598,6 +1687,7 @@ function TroskovnikContent() {
         zaprijecena_kazna: zaprijecenaKazna || undefined,
         is_po_sluzbenoj_duznosti: isPoSluzbenojDuznosti,
         is_na_teret_proracuna: isNaTeretProracuna,
+        is_izabrani_oslobadjajuca: isIzabraniOslobodjajuca,
         is_zastupnik_djeteta: isZastupnikDjeteta,
         is_stjecaj: isStjecaj,
         is_oduzimanje_prekrsaj: isOduzimanjePrekrsaj,
@@ -1638,8 +1728,8 @@ function TroskovnikContent() {
         tbr41_snizenje_postotak: tbr41Snizenje,
         // Naknada troškova (Tbr. 48.-51.) — ulazi u osnovicu
         naknada_troskova_stavke: naknadaTroskovaStavke
-          .filter((r) => parseHrNumber(r.iznos) > 0)
-          .map((r) => ({ vrsta: r.vrsta, opis: r.opis || undefined, iznos: parseHrNumber(r.iznos) })),
+          .filter(naknadaStavkaPopunjena)
+          .map(naknadaStavkaZaSlanje),
         // Predujam — prolazna stavka, ne ulazi u osnovicu
       };
 
@@ -1713,6 +1803,7 @@ function TroskovnikContent() {
         zaprijecena_kazna: zaprijecenaKazna || undefined,
         is_po_sluzbenoj_duznosti: isPoSluzbenojDuznosti,
         is_na_teret_proracuna: isNaTeretProracuna,
+        is_izabrani_oslobadjajuca: isIzabraniOslobodjajuca,
         is_zastupnik_djeteta: isZastupnikDjeteta,
         is_stjecaj: isStjecaj,
         is_oduzimanje_prekrsaj: isOduzimanjePrekrsaj,
@@ -1753,8 +1844,8 @@ function TroskovnikContent() {
         tbr41_snizenje_postotak: tbr41Snizenje,
         // Naknada troškova (Tbr. 48.-51.) — ulazi u osnovicu
         naknada_troskova_stavke: naknadaTroskovaStavke
-          .filter((r) => parseHrNumber(r.iznos) > 0)
-          .map((r) => ({ vrsta: r.vrsta, opis: r.opis || undefined, iznos: parseHrNumber(r.iznos) })),
+          .filter(naknadaStavkaPopunjena)
+          .map(naknadaStavkaZaSlanje),
         // Predujam — prolazna stavka, ne ulazi u osnovicu
         client_id: selectedClientId || undefined,
         // Signal backend to auto-create client from stranke data if no client_id
@@ -1880,6 +1971,7 @@ function TroskovnikContent() {
     zaprijecena_kazna: zaprijecenaKazna || undefined,
     is_po_sluzbenoj_duznosti: isPoSluzbenojDuznosti,
     is_na_teret_proracuna: isNaTeretProracuna,
+    is_izabrani_oslobadjajuca: isIzabraniOslobodjajuca,
     is_zastupnik_djeteta: isZastupnikDjeteta,
     is_stjecaj: isStjecaj,
     is_oduzimanje_prekrsaj: isOduzimanjePrekrsaj,
@@ -1908,7 +2000,7 @@ function TroskovnikContent() {
     renta_razdoblje: rentaRazdoblje ?? undefined,
     tbr41_povisenje_postotak: tbr41Povisenje,
     tbr41_snizenje_postotak: tbr41Snizenje,
-    naknada_troskova_stavke: naknadaTroskovaStavke.map((r) => ({ vrsta: r.vrsta, iznos: parseHrNumber(r.iznos) })),
+    naknada_troskova_stavke: naknadaTroskovaStavke.filter(naknadaStavkaPopunjena).map(naknadaStavkaZaSlanje),
   });
 
   // ── Izvoz u Excel ──
@@ -2673,7 +2765,7 @@ function TroskovnikContent() {
                               ? tbr71Bodovi(parsedVrijednostOduzimanja)
                               : 100)
                           : item.kazneni_base
-                          ? izracunajKazneneBodove(item, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, zaprijecenaKazna)
+                          ? izracunajKazneneBodove(item, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, zaprijecenaKazna, isIzabraniOslobodjajuca)
                           : osnovica
                           ? izracunajBodove(item, osnovica)
                           : null;
@@ -3262,42 +3354,144 @@ function TroskovnikContent() {
                             + Dodaj
                           </button>
                         </div>
-                        {naknadaTroskovaStavke.map((redak, i) => (
-                          <div key={i} className="flex items-center gap-1.5">
-                            <select
-                              value={redak.vrsta}
-                              onChange={(e) => updateNaknadaTroskova(i, { vrsta: e.target.value as VrstaTroska })}
-                              className="flex-1 min-w-0 rounded border border-slate-200 px-1.5 py-1 text-[11px] text-slate-700"
-                            >
-                              {Object.values(VRSTA_TROSKA).map((v) => (
-                                <option key={v} value={v}>{VRSTA_TROSKA_LABELE[v]}</option>
-                              ))}
-                            </select>
-                            <input
-                              type="text"
-                              placeholder="Opis (neobavezno)"
-                              value={redak.opis}
-                              onChange={(e) => updateNaknadaTroskova(i, { opis: e.target.value })}
-                              className="w-20 rounded border border-slate-200 px-1.5 py-1 text-[11px] text-slate-700 placeholder:text-slate-400"
-                            />
-                            <input
-                              type="text"
-                              inputMode="decimal"
-                              placeholder="0,00"
-                              value={redak.iznos}
-                              onChange={(e) => updateNaknadaTroskova(i, { iznos: e.target.value })}
-                              className="w-16 rounded border border-slate-200 px-1.5 py-1 text-[11px] text-right text-slate-700 placeholder:text-slate-400"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => removeNaknadaTroskova(i)}
-                              className="shrink-0 flex items-center justify-center w-8 h-8 sm:w-5 sm:h-5 text-slate-400 hover:text-red-600"
-                              aria-label="Ukloni"
-                            >
-                              <Trash2 className="h-3.5 w-3.5 sm:h-3.5 sm:w-3.5" />
-                            </button>
+                        {naknadaTroskovaStavke.map((redak, i) => {
+                          const dopustaIzracun = VRSTA_TROSKA_DOPUSTA_IZRACUN.includes(redak.vrsta);
+                          const jeIzracun = dopustaIzracun && redak.nacin === NACIN_NAKNADE.Izracun;
+                          // Jedinična cijena iz postavki ureda — €/km (gorivo × 30%) ili €/dan.
+                          // Null dok ured nije postavio vrijednost (nepotvrđeno, vidi Tbr. 50/51).
+                          const jedinicnaIzPostavki =
+                            redak.vrsta === VRSTA_TROSKA.Prijevoz
+                              ? (cijenaGorivaEurL != null ? cijenaGorivaEurL * TBR50_FAKTOR_GORIVA : null)
+                              : redak.vrsta === VRSTA_TROSKA.Dnevnica
+                              ? dnevnicaEur
+                              : null;
+                          const izracunatiIznos = jeIzracun
+                            ? izracunajNaknaduStavku({
+                                vrsta: redak.vrsta,
+                                iznos: 0,
+                                nacin: NACIN_NAKNADE.Izracun,
+                                kolicina: parseHrNumber(redak.kolicina ?? ""),
+                                jedinicniIznos: parseHrNumber(redak.jedinicniIznos ?? ""),
+                                cestarina: parseHrNumber(redak.cestarina ?? ""),
+                              })
+                            : null;
+
+                          return (
+                          <div key={i} className="space-y-1 rounded border border-transparent has-[:focus]:border-slate-200 pb-1">
+                            <div className="flex items-center gap-1.5">
+                              <select
+                                value={redak.vrsta}
+                                onChange={(e) => {
+                                  const vrsta = e.target.value as VrstaTroska;
+                                  // Izračun je dopušten samo za Prijevoz/Dnevnicu — promjena
+                                  // vrste na Hotel/Ostalo vraća redak na ručni unos.
+                                  updateNaknadaTroskova(i, VRSTA_TROSKA_DOPUSTA_IZRACUN.includes(vrsta)
+                                    ? { vrsta }
+                                    : { vrsta, nacin: NACIN_NAKNADE.Rucno });
+                                }}
+                                className="flex-1 min-w-0 rounded border border-slate-200 px-1.5 py-1 text-[11px] text-slate-700"
+                              >
+                                {Object.values(VRSTA_TROSKA).map((v) => (
+                                  <option key={v} value={v}>{VRSTA_TROSKA_LABELE[v]}</option>
+                                ))}
+                              </select>
+                              <input
+                                type="text"
+                                placeholder="Opis (neobavezno)"
+                                value={redak.opis}
+                                onChange={(e) => updateNaknadaTroskova(i, { opis: e.target.value })}
+                                className="w-20 rounded border border-slate-200 px-1.5 py-1 text-[11px] text-slate-700 placeholder:text-slate-400"
+                              />
+                              {jeIzracun ? (
+                                <span
+                                  className="w-16 rounded border border-slate-100 bg-slate-50 px-1.5 py-1 text-[11px] text-right text-slate-600"
+                                  title="Izračunato — količina × jedinični iznos"
+                                >
+                                  {fmtEur(izracunatiIznos ?? 0)}
+                                </span>
+                              ) : (
+                                <input
+                                  type="text"
+                                  inputMode="decimal"
+                                  placeholder="0,00"
+                                  value={redak.iznos}
+                                  onChange={(e) => updateNaknadaTroskova(i, { iznos: e.target.value })}
+                                  className="w-16 rounded border border-slate-200 px-1.5 py-1 text-[11px] text-right text-slate-700 placeholder:text-slate-400"
+                                />
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => removeNaknadaTroskova(i)}
+                                className="shrink-0 flex items-center justify-center w-8 h-8 sm:w-5 sm:h-5 text-slate-400 hover:text-red-600"
+                                aria-label="Ukloni"
+                              >
+                                <Trash2 className="h-3.5 w-3.5 sm:h-3.5 sm:w-3.5" />
+                              </button>
+                            </div>
+
+                            {dopustaIzracun && (
+                              <label className="flex items-center gap-1.5 pl-1 text-[10px] text-slate-500 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={jeIzracun}
+                                  onChange={(e) =>
+                                    updateNaknadaTroskova(i, e.target.checked
+                                      ? {
+                                          nacin: NACIN_NAKNADE.Izracun,
+                                          jedinicniIznos: redak.jedinicniIznos || (jedinicnaIzPostavki != null ? jedinicnaIzPostavki.toFixed(3) : ""),
+                                        }
+                                      : { nacin: NACIN_NAKNADE.Rucno })
+                                  }
+                                  className="h-3 w-3 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                />
+                                Izračunaj ({redak.vrsta === VRSTA_TROSKA.Prijevoz ? "km × €/km" : "dani × €/dan"} — Tbr. {redak.vrsta === VRSTA_TROSKA.Prijevoz ? "50" : "51"})
+                              </label>
+                            )}
+
+                            {jeIzracun && (
+                              <div className="flex flex-wrap items-center gap-1.5 pl-1">
+                                <input
+                                  type="text"
+                                  inputMode="decimal"
+                                  placeholder={redak.vrsta === VRSTA_TROSKA.Prijevoz ? "km" : "dani"}
+                                  value={redak.kolicina ?? ""}
+                                  onChange={(e) => updateNaknadaTroskova(i, { kolicina: e.target.value })}
+                                  className="w-14 rounded border border-slate-200 px-1.5 py-1 text-[11px] text-right text-slate-700 placeholder:text-slate-400"
+                                />
+                                <span className="text-[10px] text-slate-400">×</span>
+                                <input
+                                  type="text"
+                                  inputMode="decimal"
+                                  placeholder="€/jed."
+                                  value={redak.jedinicniIznos ?? ""}
+                                  onChange={(e) => updateNaknadaTroskova(i, { jedinicniIznos: e.target.value })}
+                                  className="w-16 rounded border border-slate-200 px-1.5 py-1 text-[11px] text-right text-slate-700 placeholder:text-slate-400"
+                                />
+                                {redak.vrsta === VRSTA_TROSKA.Prijevoz && (
+                                  <>
+                                    <span className="text-[10px] text-slate-400">+ cestarina</span>
+                                    <input
+                                      type="text"
+                                      inputMode="decimal"
+                                      placeholder="0,00"
+                                      value={redak.cestarina ?? ""}
+                                      onChange={(e) => updateNaknadaTroskova(i, { cestarina: e.target.value })}
+                                      className="w-14 rounded border border-slate-200 px-1.5 py-1 text-[11px] text-right text-slate-700 placeholder:text-slate-400"
+                                    />
+                                  </>
+                                )}
+                                {jedinicnaIzPostavki == null && (
+                                  <span className="w-full text-[10px] text-amber-600">
+                                    {redak.vrsta === VRSTA_TROSKA.Prijevoz
+                                      ? "Cijena goriva nije postavljena u Postavke → Ured — unesite €/km ručno ili je ondje postavite."
+                                      : "Dnevnica nije postavljena u Postavke → Ured — unesite €/dan ručno ili je ondje postavite."}
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
 
                       {/* Totals when PDV included */}
@@ -3882,6 +4076,18 @@ function TroskovnikContent() {
                         podaci nisu vaši.
                       </p>
                     )}
+                    {/* ZPP čl. 164 — statička obavijest, ne prati datume niti sprema stanje.
+                        Stoji ovdje jer je ovo trenutak kad odvjetnik sprema/predaje
+                        troškovnik, ne u samom obrascu gdje bi samo smetala unosu. */}
+                    <p className="flex items-start gap-1.5 text-[11px] text-slate-400 leading-snug print:hidden">
+                      <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                      <span>
+                        Rok (ZPP čl. 164.): zahtjev za naknadu troškova mora se postaviti najkasnije do
+                        zaključenja rasprave koja prethodi odluci o troškovima — najava „troškovnik
+                        naknadno" ne vrijedi. Kad rasprave nema (platni nalog, presuda zbog priznanja),
+                        rok je u tom podnesku; kod povlačenja ili odricanja — 15 dana od dostave.
+                      </span>
+                    </p>
                   </div>
                 )}
               </div>

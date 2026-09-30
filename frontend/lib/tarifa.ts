@@ -194,6 +194,56 @@ export const VRSTA_TROSKA_LABELE: Record<VrstaTroska, string> = {
   [VRSTA_TROSKA.OstaliIzdaci]: "Ostali izdaci — poštanski/telefonski/bankovni (Tbr. 48.)",
 };
 
+/**
+ * Vrste izdatka za koje je dopušten izračun (količina × jedinični iznos) umjesto samo
+ * slobodnog unosa — Tbr. 50 (km) i Tbr. 51 (dani) imaju propisanu jediničnu formulu.
+ * Zrcali backend `VrstaTroska.DopustaIzracun`.
+ */
+export const VRSTA_TROSKA_DOPUSTA_IZRACUN: readonly VrstaTroska[] = [
+  VRSTA_TROSKA.Prijevoz,
+  VRSTA_TROSKA.Dnevnica,
+];
+
+/** Način unosa iznosa naknade troškova — slobodan ili izračunat. Zrcali backend `NacinNaknade`. */
+export const NACIN_NAKNADE = {
+  Rucno: "rucno",
+  Izracun: "izracun",
+} as const;
+
+export type NacinNaknade = (typeof NACIN_NAKNADE)[keyof typeof NACIN_NAKNADE];
+
+/**
+ * Tbr. 50 — naknada za automobil: 30% cijene litre bezolovnog benzina 100 oktana po
+ * prijeđenom kilometru. Koeficijent je propisan; CIJENA goriva je tržišna (nije
+ * regulirana Uredbom o najvišim cijenama) pa dolazi iz postavki ureda, ne odavde.
+ */
+export const TBR50_FAKTOR_GORIVA = 0.3;
+
+/** Jedna stavka naknade troškova, u obliku koji `izracunajNaknaduStavku` treba. */
+export interface NaknadaStavkaZaIzracun {
+  vrsta: VrstaTroska;
+  iznos: number;
+  nacin?: NacinNaknade;
+  kolicina?: number | null;
+  jedinicniIznos?: number | null;
+  cestarina?: number | null;
+}
+
+/**
+ * Razrješava konačni iznos jedne stavke naknade troškova — zrcali backend
+ * `TroskovnikService.IzracunajNaknaduStavku`. "rucno" (zadano) vraća upisani iznos
+ * nepromijenjen; "izracun" vraća količina × jedinični iznos (+ cestarina za Prijevoz),
+ * zaokruženo. Ulaz se pretpostavlja već validiran (backend baca iznimku, ovdje se samo
+ * nedostajuće vrijednosti tretiraju kao 0 za živi pregled).
+ */
+export function izracunajNaknaduStavku(stavka: NaknadaStavkaZaIzracun): number {
+  if (stavka.nacin !== NACIN_NAKNADE.Izracun) return stavka.iznos;
+
+  const osnovni = (stavka.kolicina ?? 0) * (stavka.jedinicniIznos ?? 0);
+  const cestarina = stavka.vrsta === VRSTA_TROSKA.Prijevoz ? (stavka.cestarina ?? 0) : 0;
+  return zaokruziNovac(osnovni + cestarina);
+}
+
 // ── Osnovica: "Tbr. 7. toč. 1., 4., 7. i 8." ─────────────────────
 //
 // Tarifa na devet mjesta upućuje na "nagradu iz Tbr. 7. toč. 1., 4., 7. i 8."
@@ -582,6 +632,7 @@ export function izracunajKazneneBodove(
   isPoSluzbenojDuznosti: boolean,
   isNaTeretProracuna: boolean,
   zaprijecenaKazna?: string,
+  isIzabraniOslobodjajuca?: boolean,
 ): number {
   let bodovi = tierBodovi;
 
@@ -607,9 +658,15 @@ export function izracunajKazneneBodove(
   //   čl. 2 — opunomoćenik djeteta žrtve kaznenog djela  → 70%
   // Uloge se isključuju (obrana okrivljenika vs. zastupanje djeteta žrtve), pa se
   // primjenjuje najviše jedna stopa i kad ipak stignu obje zastavice.
+  //
+  // "Na teret proračuna" ima dva značenja: POSTAVLJENI branitelj po službenoj
+  // dužnosti uvijek ide na 50%. IZABRANI branitelj čiji trošak padne na proračun
+  // zbog oslobađajuće presude (isIzabraniOslobodjajuca) nema umanjenje — puna
+  // Tarifa. Bez te zastavice ponašanje ostaje kao prije (svaki isNaTeretProracuna
+  // = 50%), pa stari pozivi ostaju ispravni.
   if (isZastupnikDjeteta) {
     bodovi *= ZASTUPNIK_DJETETA_STOPA;
-  } else if (isPoSluzbenojDuznosti || isNaTeretProracuna) {
+  } else if (isPoSluzbenojDuznosti || (isNaTeretProracuna && !isIzabraniOslobodjajuca)) {
     bodovi *= KAZNENO_UMANJENJE_STOPA;
   }
 

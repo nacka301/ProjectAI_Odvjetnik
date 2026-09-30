@@ -108,4 +108,123 @@ public class TarifaNaknadaTroskovaTests
         Assert.Equal(bezNaknade.NagradaPoOsobi, sNaknadom.NagradaPoOsobi);
         Assert.Equal(bezNaknade.BodoviPoOsobi, sNaknadom.BodoviPoOsobi);
     }
+
+    // ── Tbr. 50/51 — izračun (količina × jedinični iznos), umjesto ručnog unosa ──
+
+    [Fact]
+    public void Prijevoz_Izracun_UlaziUOsnovicuIstoKaoRucniIznos()
+    {
+        // 340 km × 0,459 €/km (= 1,53 €/l × 0,30) + 12,50 € cestarina = 168,56 €.
+        var izracunato = Izracunaj(
+            pdvUkljucen: true,
+            naknadaTroskova: [new NaknadaTroskovaStavkaRequest
+            {
+                Vrsta = VrstaTroska.Prijevoz,
+                Nacin = NacinNaknade.Izracun,
+                Kolicina = 340m,
+                JedinicniIznos = 0.459m,
+                Cestarina = 12.50m
+            }]);
+        var rucno = Izracunaj(
+            pdvUkljucen: true,
+            naknadaTroskova: [new NaknadaTroskovaStavkaRequest { Vrsta = VrstaTroska.Prijevoz, Iznos = 168.56m }]);
+
+        Assert.Equal(168.56m, izracunato.NaknadaTroskovaUkupno);
+        Assert.Equal(rucno.UkupnoEurBezPdv, izracunato.UkupnoEurBezPdv);
+        Assert.Equal(rucno.Pdv, izracunato.Pdv);
+    }
+
+    [Fact]
+    public void Dnevnica_Izracun_KolicinaPutaJedinicniIznos()
+    {
+        var rezultat = Izracunaj(
+            pdvUkljucen: false,
+            naknadaTroskova: [new NaknadaTroskovaStavkaRequest
+            {
+                Vrsta = VrstaTroska.Dnevnica,
+                Nacin = NacinNaknade.Izracun,
+                Kolicina = 3m,
+                JedinicniIznos = 19.91m
+            }]);
+
+        Assert.Equal(59.73m, rezultat.NaknadaTroskovaUkupno);   // 3 × 19,91
+    }
+
+    [Fact]
+    public void Izracun_EchoNosiKolicinuIJedinicniIznos()
+    {
+        var rezultat = Izracunaj(
+            pdvUkljucen: false,
+            naknadaTroskova: [new NaknadaTroskovaStavkaRequest
+            {
+                Vrsta = VrstaTroska.Prijevoz,
+                Nacin = NacinNaknade.Izracun,
+                Kolicina = 100m,
+                JedinicniIznos = 0.45m,
+                Cestarina = 5m
+            }]);
+
+        var stavka = Assert.Single(rezultat.NaknadaTroskovaStavke);
+        Assert.Equal(NacinNaknade.Izracun, stavka.Nacin);
+        Assert.Equal(100m, stavka.Kolicina);
+        Assert.Equal(0.45m, stavka.JedinicniIznos);
+        Assert.Equal(5m, stavka.Cestarina);
+        Assert.Equal(50.00m, stavka.Iznos);   // 100 × 0,45 + 5
+    }
+
+    [Fact]
+    public void Izracun_BezKolicine_BacaIznimku()
+    {
+        var ex = Assert.Throws<TroskovnikValidationException>(() =>
+            Izracunaj(pdvUkljucen: true, naknadaTroskova: [new NaknadaTroskovaStavkaRequest
+            {
+                Vrsta = VrstaTroska.Prijevoz,
+                Nacin = NacinNaknade.Izracun,
+                JedinicniIznos = 0.45m
+            }]));
+
+        Assert.Contains("količina", ex.Message);
+    }
+
+    [Fact]
+    public void Izracun_BezJedinicnogIznosa_BacaIznimku()
+    {
+        var ex = Assert.Throws<TroskovnikValidationException>(() =>
+            Izracunaj(pdvUkljucen: true, naknadaTroskova: [new NaknadaTroskovaStavkaRequest
+            {
+                Vrsta = VrstaTroska.Dnevnica,
+                Nacin = NacinNaknade.Izracun,
+                Kolicina = 2m
+            }]));
+
+        Assert.Contains("jedinični iznos", ex.Message);
+    }
+
+    [Theory]
+    [InlineData(VrstaTroska.HotelskiSmjestaj)]
+    [InlineData(VrstaTroska.OstaliIzdaci)]
+    public void Izracun_OdbijenZaVrsteBezPropisaneJedinicneCijene(string vrsta)
+    {
+        var ex = Assert.Throws<TroskovnikValidationException>(() =>
+            Izracunaj(pdvUkljucen: true, naknadaTroskova: [new NaknadaTroskovaStavkaRequest
+            {
+                Vrsta = vrsta,
+                Nacin = NacinNaknade.Izracun,
+                Kolicina = 1m,
+                JedinicniIznos = 10m
+            }]));
+
+        Assert.Contains("samo za", ex.Message);
+    }
+
+    [Fact]
+    public void RucniNacinBezZastavice_IPakRadiKaoPrije_Regresija()
+    {
+        // Nacin izostavljen (stari klijent) → ponaša se kao "rucno", Iznos vrijedi.
+        var rezultat = Izracunaj(
+            pdvUkljucen: false,
+            naknadaTroskova: [new NaknadaTroskovaStavkaRequest { Vrsta = VrstaTroska.OstaliIzdaci, Iznos = 42m }]);
+
+        Assert.Equal(42m, rezultat.NaknadaTroskovaUkupno);
+    }
 }

@@ -478,11 +478,28 @@ public sealed class NaknadaTroskovaStavkaResponse
     [JsonPropertyName("opis")]
     public string? Opis { get; set; }
 
+    /// <summary>Razriješeni (konačni) iznos — ručno upisan, ili izračunat kad je Nacin = "izracun".</summary>
     [JsonPropertyName("iznos")]
     public decimal Iznos { get; set; }
 
     /// <summary>Odredba Tarife uz vrstu izdatka — vidi <see cref="VrstaTroska.PravniIzvor"/>.</summary>
     [JsonPropertyName("pravni_izvor")]
     public string PravniIzvor { get; set; } = "";
+
+    /// <summary>"rucno" ili "izracun" — vidi <see cref="NaknadaTroskovaStavkaRequest.Nacin"/>.</summary>
+    [JsonPropertyName("nacin")]
+    public string? Nacin { get; set; }
+
+    /// <summary>Echo — km (Prijevoz) ili dani (Dnevnica), samo kad je Nacin = "izracun".</summary>
+    [JsonPropertyName("kolicina")]
+    public decimal? Kolicina { get; set; }
+
+    /// <summary>Echo — €/km ili €/dan, snapshot u trenutku izračuna.</summary>
+    [JsonPropertyName("jedinicni_iznos")]
+    public decimal? JedinicniIznos { get; set; }
+
+    /// <summary>Echo — Tbr. 50 cestarina, dodana na izračun za Prijevoz.</summary>
+    [JsonPropertyName("cestarina")]
+    public decimal? Cestarina { get; set; }
 }
 

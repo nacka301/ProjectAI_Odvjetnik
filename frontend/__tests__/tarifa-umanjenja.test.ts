@@ -33,7 +33,7 @@ const obrana: TarifnaStavka = {
 
 function bodovi(
   kazna: string,
-  opts: { dijete?: boolean; sluzbena?: boolean; proracun?: boolean } = {},
+  opts: { dijete?: boolean; sluzbena?: boolean; proracun?: boolean; izabraniOslobodjajuca?: boolean } = {},
 ) {
   return izracunajKazneneBodove(
     obrana,
@@ -42,6 +42,7 @@ function bodovi(
     opts.sluzbena ?? false,
     opts.proracun ?? false,
     kazna,
+    opts.izabraniOslobodjajuca ?? false,
   );
 }
 
@@ -53,6 +54,20 @@ describe("branitelj po službenoj dužnosti / na teret proračuna", () => {
   it("dugotrajni zatvor: 500 → 250 bodova", () => {
     expect(bodovi("dugotrajni", { sluzbena: true })).toBe(250);
     expect(bodovi("dugotrajni", { proracun: true })).toBe(250);
+  });
+});
+
+describe("izabrani branitelj na teret proračuna zbog oslobađajuće presude", () => {
+  it("puna tarifa — bez umanjenja (500, ne 250)", () => {
+    expect(bodovi("dugotrajni", { proracun: true, izabraniOslobodjajuca: true })).toBe(500);
+  });
+
+  it("postavljeni (bez kvalifikatora) i dalje ide na 50% — regresija", () => {
+    expect(bodovi("dugotrajni", { proracun: true, izabraniOslobodjajuca: false })).toBe(250);
+  });
+
+  it("kvalifikator bez proracun/sluzbena zastavice nema učinka", () => {
+    expect(bodovi("dugotrajni", { izabraniOslobodjajuca: true })).toBe(500);
   });
 });
 
