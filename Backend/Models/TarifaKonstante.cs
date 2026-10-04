@@ -68,6 +68,17 @@ public static class TarifaConstants
     /// </summary>
     public const decimal ZastupnikDjetetaRate = 0.70m;
 
+    /// <summary>
+    /// Punomoćnik oštećenika / žrtve (progon vodi državno odvjetništvo) — 50% nagrade
+    /// iz Tbr. 3 i Tbr. 4.
+    ///
+    /// Izvor: Tarifa NN 138/2023, Tbr. 3. toč. 3 (postupak pred policijom, DORH-om,
+    /// EPPO-om i sucem istrage) i Tbr. 4. toč. 8 (rasprava pred sudom, uključujući
+    /// suglasnost za uvjetni odustanak od progona). Tbr. 5 (žalbe) NE navodi umanjenje.
+    /// Umanjuje se nagrada radnje, ne naknada troškova (Tbr. 46–51).
+    /// </summary>
+    public const decimal UlogaOstecenikRate = 0.50m;
+
     /// <summary>Ponuđeni tekst napomene; korisnik ga smije izmijeniti ili obrisati.</summary>
     public const string ZadanaNapomena =
         "Na traženi iznos obračunava se zakonska zatezna kamata sukladno članku 29. " +

@@ -330,6 +330,7 @@ public sealed class TroskovnikService : ITroskovnikService
     {
         var katalogPoId = TarifaKatalog.Sve.ToDictionary(s => s.Id);
         var odabraneDefinicije = ProvjeriIRazrijesiDefinicije(request, katalogPoId);
+        ProvjeriUlogu(request, odabraneDefinicije);
         var kontekst = RazrijesiKontekst(request, odabraneDefinicije);
         ProvjeriNaknaduIPredujam(request);
 
@@ -539,6 +540,49 @@ public sealed class TroskovnikService : ITroskovnikService
         return razredBodovi;
     }
 
+    /// <summary>
+    /// Provjere uloge zastupanja u kaznenom i prekršajnom postupku.
+    ///
+    /// Servis bez uloge računa kao BRANITELJ (stari pohranjeni zahtjevi); obvezu da je
+    /// novi zahtjev pošalje provjerava kontroler.
+    /// </summary>
+    private static void ProvjeriUlogu(TroskovnikRequest request, List<TarifnaStavka> odabraneDefinicije)
+    {
+        if (request.UlogaZastupanja is not null && !UlogaZastupanja.JePoznata(request.UlogaZastupanja))
+            throw new TroskovnikValidationException(
+                $"Nepoznata uloga zastupanja: \"{request.UlogaZastupanja}\". " +
+                $"Dopuštene vrijednosti: {string.Join(", ", UlogaZastupanja.Sve)}.");
+
+        var uloga = request.UlogaZastupanja ?? UlogaZastupanja.Branitelj;
+
+        // Službena dužnost je postavljanje BRANITELJA (Zakon o odvjetništvu / Pravilnik čl. 1);
+        // punomoćnika oštećenika ili tužitelja sud ne postavlja po službenoj dužnosti.
+        if (request.IsPoSluzbenojDuznosti && uloga != UlogaZastupanja.Branitelj)
+            throw new TroskovnikValidationException(
+                "Postavljanje po službenoj dužnosti moguće je samo za branitelja okrivljenika.");
+
+        // Otvoreno pravno pitanje: zbraja li se umanjenje Tbr. 4 t. 8 (50%) s Pravilnikom za
+        // opunomoćenika žrtve (postotak), ili Pravilnik zamjenjuje Tarifni obračun? Dok odvjetnik
+        // ne potvrdi, ne nudimo iznos — nagađanje bi završilo na papiru pred sudom.
+        if (uloga == UlogaZastupanja.PunomocnikOstecenika && request.JeOpunomocenikZrtve
+            && odabraneDefinicije.Any(d => UlogaZastupanja.UmanjujeUloga(uloga, d.TarifniBroj)))
+            throw new TroskovnikValidationException(
+                "Za punomoćnika oštećenika koji je i opunomoćenik žrtve alat ne nudi automatski iznos: " +
+                "još nije potvrđeno zbraja li se umanjenje od 50% (Tbr. 3 t. 3 / Tbr. 4 t. 8 Tarife) " +
+                "s umanjenjem po Pravilniku (NN 22/22) ili Pravilnik zamjenjuje Tarifni obračun. " +
+                "Iznos obračunajte ručno.");
+    }
+
+    /// <summary>
+    /// Umanjenje po ulozi zastupanja (Tbr. 3. toč. 3 i Tbr. 4. toč. 8: 50% za punomoćnika
+    /// oštećenika). Primjenjuje se na nagradu retka, uključujući fiksne stavke Tbr. 3/4
+    /// (npr. 50 bodova za svaki sljedeći sat → 25). Stavke koje to umanjenje već nose u
+    /// katalogu (Tbr. 3.3 i Tbr. 4.8) ne umanjuju se drugi put.
+    /// </summary>
+    private static bool PrimijeniUmanjenjeUloge(TarifnaStavka definicija, TroskovnikRequest request) =>
+        !definicija.UmanjenjeUlogeUgradjeno
+        && UlogaZastupanja.UmanjujeUloga(request.UlogaZastupanja, definicija.TarifniBroj);
+
     /// <summary>Sastavlja retke troškovnika, jedan po odabranoj stavci.</summary>
     private static List<TroskovnikLineItem> IzracunajRetke(
         TroskovnikRequest request,
@@ -560,6 +604,12 @@ public sealed class TroskovnikService : ITroskovnikService
             var definicija = katalogPoId[stavka.ItemId];
 
             var bodovi = BodoviZaStavku(definicija, request, kontekst);
+
+            // Redoslijed: bodovi po tieru → (Pravilnik unutar kaznenih bodova) → umanjenje po
+            // ulozi. Tbr. 40/41 su linearni dodaci na zbroj, pa im redoslijed ne mijenja iznos.
+            var umanjenoUlogom = PrimijeniUmanjenjeUloge(definicija, request);
+            if (umanjenoUlogom)
+                bodovi *= TarifaConstants.UlogaOstecenikRate;
 
             // Zaštitna mreža: nijedna stavka ne smije završiti na nula bodova.
             // Nula je u troškovniku neupotrebljiva — izgleda kao valjan iznos, a nije.
@@ -597,7 +647,10 @@ public sealed class TroskovnikService : ITroskovnikService
                 Tbr41PovisenjePostotak = tbr41Povisenje,
                 Tbr41SnizenjePostotak = tbr41Snizenje,
                 Tbr41Bodovi = tbr41BodoviStavke,
-                Tbr41PravniIzvor = Tbr41Izvor(tbr41Povisenje, tbr41Snizenje)
+                Tbr41PravniIzvor = Tbr41Izvor(tbr41Povisenje, tbr41Snizenje),
+                UmanjenjeUloge = umanjenoUlogom
+                    ? $"umanjeno 50% ({UlogaZastupanja.IzvorUmanjenja(definicija.TarifniBroj)})"
+                    : ""
             });
         }
 
@@ -888,6 +941,9 @@ public sealed class TroskovnikService : ITroskovnikService
             IsPoSluzbenojDuznosti = request.IsPoSluzbenojDuznosti,
             IsNaTeretProracuna = request.IsNaTeretProracuna,
             IsZastupnikDjeteta = request.IsZastupnikDjeteta,
+            IsOpunomocenikZrtve = request.JeOpunomocenikZrtve,
+            IsIzabraniOslobodjajuca = request.IsIzabraniOslobodjajuca,
+            UlogaZastupanja = request.UlogaZastupanja,
             IsStjecaj = request.IsStjecaj,
             NapomenaStjecaj = request.IsStjecaj ? NapomenaZaStjecaj : null,
             IsOduzimanjePrekrsaj = request.IsOduzimanjePrekrsaj,
@@ -1119,7 +1175,7 @@ public sealed class TroskovnikService : ITroskovnikService
         // po punoj Tarifi. IsIzabraniOslobodjajuca je kvalifikator koji tu drugu
         // situaciju isključuje iz umanjenja; bez njega ponašanje ostaje kao prije
         // (svaki IsNaTeretProracuna = 50%), pa stari zahtjevi/klijenti nisu pogođeni.
-        if (req.IsZastupnikDjeteta)
+        if (req.JeOpunomocenikZrtve)
             bodovi *= TarifaConstants.ZastupnikDjetetaRate;
         else if (req.IsPoSluzbenojDuznosti || (req.IsNaTeretProracuna && !req.IsIzabraniOslobodjajuca))
             bodovi *= TarifaConstants.KazneniReductionRate;

@@ -82,6 +82,14 @@ public sealed class TarifnaStavka
     [JsonPropertyName("kazneni_povecanje_dugotrajni")]
     public decimal? KazneniPovecanjeDugotrajni { get; set; }
 
+    /// <summary>
+    /// True = stavka u katalogu već nosi umanjenje oštećenika (Tbr. 3 t. 3 / Tbr. 4 t. 8),
+    /// pa umanjenje po ulozi zastupanja ne smije ići preko njega. Stavke ostaju u katalogu
+    /// radi starih spremljenih troškovnika.
+    /// </summary>
+    [JsonPropertyName("umanjenje_uloge_ugradjeno")]
+    public bool UmanjenjeUlogeUgradjeno { get; set; }
+
     /// <summary>True = prekršajni stavka s mogućnošću oduzimanja; kad je oduzimanje aktivno, koristi Tbr. 7.1 po vrijednosti.</summary>
     [JsonPropertyName("prekrsaj_oduzimanje")]
     public bool PrekrsajOduzimanje { get; set; }

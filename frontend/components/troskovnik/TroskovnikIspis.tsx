@@ -62,12 +62,13 @@ function RedakObracuna({
 }
 
 /** Prolazna stavka (pristojba ili predujam) kao redak glavne tablice. */
-function RedakTroska({ t, imaDatum }: { t: IzvozTrosak; imaDatum: boolean }) {
+function RedakTroska({ t, imaDatum, imaNapomenu }: { t: IzvozTrosak; imaDatum: boolean; imaNapomenu: boolean }) {
   return (
     <tr>
       <td>{t.opis}</td>
       <td />
       {imaDatum && <td className="datum">{t.datum ? formatDatumIspis(t.datum) : ""}</td>}
+      {imaNapomenu && <td />}
       <Iznos value={t.iznos} />
     </tr>
   );
@@ -94,8 +95,12 @@ export default function TroskovnikIspis({ model }: { model: TroskovnikIzvozModel
     model.pristojbe.some((t) => t.datum) ||
     model.predujmovi.some((t) => t.datum);
 
+  // Stupac „Napomena" samo kad ga neki redak treba (npr. umanjenje po ulozi zastupanja).
+  const imaNapomenu = model.radnje.some((r) => r.napomena);
+
   const predmet: { oznaka: string; vrijednost: string }[] = [];
   if (model.sud) predmet.push({ oznaka: "Sud:", vrijednost: model.sud });
+  if (model.zastupanje) predmet.push({ oznaka: "Zastupanje:", vrijednost: model.zastupanje });
   if (model.zastupana) {
     predmet.push({
       oznaka: `${model.zastupana.polozaj || "Zastupana stranka"}:`,
@@ -151,6 +156,7 @@ export default function TroskovnikIspis({ model }: { model: TroskovnikIzvozModel
             <th className="st-radnja">Radnja</th>
             <th className="st-tarifa">Tar. br.</th>
             {imaDatum && <th className="st-datum">Datum</th>}
+            {imaNapomenu && <th className="st-napomena">Napomena</th>}
             <th className="st-iznos">Iznos</th>
           </tr>
         </thead>
@@ -164,6 +170,7 @@ export default function TroskovnikIspis({ model }: { model: TroskovnikIzvozModel
                 <td>{isti ? "" : r.opis}</td>
                 <td className="tarifa">{isti ? "" : r.tarifniBroj}</td>
                 {imaDatum && <td className="datum">{r.datum ? formatDatumIspis(r.datum) : ""}</td>}
+                {imaNapomenu && <td className="napomena-retka">{r.napomena ?? ""}</td>}
                 <Iznos value={r.iznos} />
               </tr>
             );
@@ -176,6 +183,7 @@ export default function TroskovnikIspis({ model }: { model: TroskovnikIzvozModel
               <td />
               <td />
               {imaDatum && <td />}
+              {imaNapomenu && <td />}
               <td />
             </tr>
           )}
@@ -186,10 +194,10 @@ export default function TroskovnikIspis({ model }: { model: TroskovnikIzvozModel
               pa bi bez razrade troškovnik koji ide sudu bio računski
               neprovjerljiv. */}
           {imaPristojbe && model.pristojbe.map((p, i) => (
-            <RedakTroska key={`pristojba-${i}`} t={p} imaDatum={imaDatum} />
+            <RedakTroska key={`pristojba-${i}`} t={p} imaDatum={imaDatum} imaNapomenu={imaNapomenu} />
           ))}
           {imaPredujmove && model.predujmovi.map((p, i) => (
-            <RedakTroska key={`predujam-${i}`} t={p} imaDatum={imaDatum} />
+            <RedakTroska key={`predujam-${i}`} t={p} imaDatum={imaDatum} imaNapomenu={imaNapomenu} />
           ))}
         </tbody>
       </table>
@@ -321,6 +329,8 @@ export default function TroskovnikIspis({ model }: { model: TroskovnikIzvozModel
           #troskovnik-ispis .st-radnja { width: 52%; }
           #troskovnik-ispis .st-tarifa { width: 16%; }
           #troskovnik-ispis .st-datum { width: 16%; }
+          #troskovnik-ispis .st-napomena { width: 24%; }
+          #troskovnik-ispis td.napomena-retka { font-size: 0.85em; }
           #troskovnik-ispis .st-iznos { width: 16%; }
           /* Bez stupca Datum (nijedan redak nema datum) preostala tri stupca
              preuzimaju njegovih 16%. */

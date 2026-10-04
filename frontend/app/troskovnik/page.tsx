@@ -82,6 +82,11 @@ import {
   efektivniVps,
   izracunajOsnovicu,
   provjeriZahtjev,
+  provjeriUlogu,
+  umanjujeUloga,
+  tarifniBrojStavke,
+  ULOGE_ZASTUPANJA,
+  ULOGA_OSTECENIK_STOPA,
   razrijesiTarifu,
   provjeriTbr41Stavku,
   razrijesiTbr41,
@@ -95,6 +100,7 @@ import {
   type RazinaSuda,
   type RentaRazdoblje,
   type TarifnaStavka,
+  type UlogaZastupanja,
   type Tbr41Stavka,
   type Tbr45Nacin,
   type VpsZahtjev,
@@ -217,6 +223,8 @@ interface TroskovnikResponse {
   is_na_teret_proracuna?: boolean;
   is_izabrani_oslobadjajuca?: boolean;
   is_zastupnik_djeteta?: boolean;
+  is_opunomocenik_zrtve?: boolean;
+  uloga_zastupanja?: UlogaZastupanja | null;
   is_stjecaj?: boolean;
   /** Obrazloženje odabranog razreda kod stjecaja (Tbr. 4. toč. 1 al. 6). */
   napomena_stjecaj?: string | null;
@@ -283,8 +291,26 @@ const KAZNENI_STATUS_OPCIJE: { value: KazneniStatus; label: string; napomena: st
     label: "Izabrani branitelj — oslobađajuća presuda (na teret proračuna)",
     napomena: "puna tarifa — bez umanjenja",
   },
-  { value: "dijete", label: "Opunomoćenik djeteta žrtve kaznenog djela", napomena: "70% — čl. 2" },
+  { value: "dijete", label: "Opunomoćenik žrtve kaznenog djela", napomena: "Pravilnik čl. 2 — iznos se ne nudi automatski" },
 ];
+
+/**
+ * Koje Pravilnik opcije ima smisla ponuditi uz pojedinu ulogu zastupanja.
+ *   - branitelj: sve osim „opunomoćenik žrtve" (to je druga uloga)
+ *   - punomoćnik oštećenika: puna ili opunomoćenik žrtve (tada alat ne nudi iznos)
+ *   - tužitelji: samo puna nagrada
+ * „Po službenoj dužnosti" je moguće samo za branitelja.
+ */
+function statusOpcijeZaUlogu(uloga: UlogaZastupanja | null): KazneniStatus[] {
+  switch (uloga) {
+    case "BRANITELJ":
+      return ["puna", "sluzbena", "proracun", "proracun_izabrani"];
+    case "PUNOMOCNIK_OSTECENIKA":
+      return ["puna", "dijete"];
+    default:
+      return ["puna"];
+  }
+}
 
 /**
  * Jedan redak naknade troškova u obrascu. `iznos`/`kolicina`/`jedinicniIznos`/`cestarina`
@@ -499,6 +525,14 @@ function TroskovnikContent() {
   // Jedno stanje umjesto tri boolean-a čini proturječan odabir nereprezentabilnim,
   // pa se stope ne mogu pomnožiti.
   const [kazneniStatus, setKazneniStatus] = useState<KazneniStatus>("puna");
+  // Koga odvjetnik zastupa — osnovni parametar kaznenog/prekršajnog troškovnika; bira se
+  // prije radnji. Bez uloge nema izračuna (backend vraća 400).
+  const [ulogaZastupanja, setUlogaZastupanjaRaw] = useState<UlogaZastupanja | null>(null);
+  const setUlogaZastupanja = (uloga: UlogaZastupanja) => {
+    setUlogaZastupanjaRaw(uloga);
+    // Pravilnik opcije koje nisu dopuštene uz novu ulogu vraćaju se na punu tarifu.
+    setKazneniStatus((s) => (statusOpcijeZaUlogu(uloga).includes(s) ? s : "puna"));
+  };
   const isPoSluzbenojDuznosti = kazneniStatus === "sluzbena";
   // Obje vrijednosti su "na teret proračuna" u pravnom smislu (isti čl. 1), pa se
   // obje šalju kao is_na_teret_proracuna; isIzabraniOslobodjajuca je kvalifikator
@@ -619,7 +653,7 @@ function TroskovnikContent() {
       naknadaTroskovaStavke,
       protustrankaIme, protustrankaOib, protustrankaAdresa, protustrankaGrad,
       protustrankaPolozaj, zastupanaPolozaj,
-      zaprijecenaKazna, kazneniStatus, isStjecaj, isOduzimanjePrekrsaj,
+      zaprijecenaKazna, kazneniStatus, ulogaZastupanja, isStjecaj, isOduzimanjePrekrsaj,
       vrijednostOduzimanja,
       isOslobodjenPristojbi, datumDospijeca, datumOdgovoraNaTuzbu, datumPokretanjaUpravnogSpora,
       pristojbeDodane, pristojbeIskljucene,
@@ -640,7 +674,7 @@ function TroskovnikContent() {
       naknadaTroskovaStavke,
       protustrankaIme, protustrankaOib, protustrankaAdresa, protustrankaGrad,
       protustrankaPolozaj, zastupanaPolozaj,
-      zaprijecenaKazna, kazneniStatus, isStjecaj, isOduzimanjePrekrsaj,
+      zaprijecenaKazna, kazneniStatus, ulogaZastupanja, isStjecaj, isOduzimanjePrekrsaj,
       vrijednostOduzimanja,
       isOslobodjenPristojbi, datumDospijeca, datumOdgovoraNaTuzbu, datumPokretanjaUpravnogSpora,
       pristojbeDodane, pristojbeIskljucene,
@@ -712,7 +746,7 @@ function TroskovnikContent() {
     setProtustrankaIme(d.protustrankaIme); setProtustrankaOib(d.protustrankaOib);
     setProtustrankaAdresa(d.protustrankaAdresa); setProtustrankaGrad(d.protustrankaGrad);
     setProtustrankaPolozaj(d.protustrankaPolozaj); setZastupanaPolozaj(d.zastupanaPolozaj);
-    setZaprijecenaKazna(d.zaprijecenaKazna); setKazneniStatus(d.kazneniStatus);
+    setZaprijecenaKazna(d.zaprijecenaKazna); setKazneniStatus(d.kazneniStatus); setUlogaZastupanjaRaw(d.ulogaZastupanja ?? null);
     setIsStjecaj(d.isStjecaj); setIsOduzimanjePrekrsaj(d.isOduzimanjePrekrsaj);
     setVrijednostOduzimanja(d.vrijednostOduzimanja);
     setIsOslobodjenPristojbi(d.isOslobodjenPristojbi);
@@ -815,7 +849,8 @@ function TroskovnikContent() {
         };
       });
 
-      const jeZastupnikDjeteta = bool(out.is_zastupnik_djeteta) ?? false;
+      const jeZastupnikDjeteta =
+        (bool(out.is_opunomocenik_zrtve) ?? false) || (bool(out.is_zastupnik_djeteta) ?? false);
       const jeSluzbena = bool(out.is_po_sluzbenoj_duznosti) ?? false;
       const jeProracun = bool(out.is_na_teret_proracuna) ?? false;
       const jeIzabraniOslobodjajuca = bool(out.is_izabrani_oslobadjajuca) ?? false;
@@ -828,6 +863,12 @@ function TroskovnikContent() {
         : jeProracun
         ? "proracun"
         : "puna";
+
+      // Stariji zapisi nemaju ulogu: kazneni zapis bez nje računao se kao branitelj
+      // (a dijete žrtva kao oštećenik).
+      const novaUloga: UlogaZastupanja | null =
+        (out.uloga_zastupanja as UlogaZastupanja | null | undefined) ??
+        (str(out.zaprijecena_kazna) ? (jeZastupnikDjeteta ? "PUNOMOCNIK_OSTECENIKA" : "BRANITELJ") : null);
 
       const noveProtustranka = izOut.protustranka ?? null;
       const noviPolozajProtustranke = str(out.protustranka_polozaj)
@@ -873,6 +914,7 @@ function TroskovnikContent() {
         zastupanaPolozaj: zapis.stranke?.zastupana_stranka?.polozaj ?? "",
         zaprijecenaKazna: str(out.zaprijecena_kazna) ?? "",
         kazneniStatus: noviKazneniStatus,
+        ulogaZastupanja: novaUloga,
         isStjecaj: bool(out.is_stjecaj) ?? false,
         isOduzimanjePrekrsaj: bool(out.is_oduzimanje_prekrsaj) ?? false,
         vrijednostOduzimanja: formatUnosa(num(out.vrijednost_oduzimanja)),
@@ -1267,9 +1309,13 @@ function TroskovnikContent() {
 
   // Što nedostaje da se troškovnik može valjano izračunati — zrcali backend provjere.
   const nedostaci = useMemo(
-    () =>
-      provjeriZahtjev(odabraneDefinicije, {
+    () => [
+      ...provjeriUlogu(odabraneDefinicije, ulogaZastupanja),
+      ...provjeriZahtjev(odabraneDefinicije, {
         zaprijecenaKazna: zaprijecenaKazna || undefined,
+        ulogaZastupanja,
+        isPoSluzbenojDuznosti,
+        isOpunomocenikZrtve: isZastupnikDjeteta,
         isOduzimanjePrekrsaj,
         vrijednostOduzimanja: parseFloat(vrijednostOduzimanja.replace(/\./g, "").replace(",", ".")) || 0,
         osnovicaTbr7,
@@ -1279,7 +1325,8 @@ function TroskovnikContent() {
         vps: isOnlyKazneni ? undefined : vpsUlaz,
         oslobodjenje: oslobodjenjeUlaz,
       }),
-    [odabraneDefinicije, zaprijecenaKazna, isOduzimanjePrekrsaj, vrijednostOduzimanja, osnovicaTbr7, razinaSuda, tbr45Nacin, isOnlyKazneni, vpsUlaz, oslobodjenjeUlaz],
+    ],
+    [odabraneDefinicije, zaprijecenaKazna, ulogaZastupanja, isPoSluzbenojDuznosti, isZastupnikDjeteta, isOduzimanjePrekrsaj, vrijednostOduzimanja, osnovicaTbr7, razinaSuda, tbr45Nacin, isOnlyKazneni, vpsUlaz, oslobodjenjeUlaz],
   );
 
   // Tbr. 41 — povišenje i sniženje ne mogu stajati na istoj stavci. Po retku, ne po
@@ -1323,6 +1370,9 @@ function TroskovnikContent() {
   const categories = useMemo(() => {
     const map = new Map<string, TarifnaStavka[]>();
     for (const s of katalog) {
+      // Stavke koje umanjenje oštećenika nose ugrađeno (Tbr. 3.3, 4.8) zamijenila je uloga
+      // zastupanja; ostaju u katalogu samo da stari troškovnici ostanu razrješivi.
+      if (s.umanjenje_uloge_ugradjeno) continue;
       const arr = map.get(s.kategorija) || [];
       arr.push(s);
       map.set(s.kategorija, arr);
@@ -1360,6 +1410,7 @@ function TroskovnikContent() {
         isPoSluzbenojDuznosti,
         isNaTeretProracuna,
         isIzabraniOslobodjajuca,
+        ulogaZastupanja,
         zaprijecenaKazna: zaprijecenaKazna || null,
         isOduzimanjePrekrsaj,
         parsedVrijednostOduzimanja,
@@ -1383,7 +1434,7 @@ function TroskovnikContent() {
         })),
         datumDospijeca: datumDospijeca || null,
       }),
-    [redciPoredani, katalog, osnovica, isPdvUkljucen, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, isIzabraniOslobodjajuca, isOduzimanjePrekrsaj, parsedVrijednostOduzimanja, pristojbe, brojZastupanihOsoba, zaprijecenaKazna, tbr41Povisenje, tbr41Snizenje, dodatnePristojbe, predujmovi, naknadaTroskovaStavke, datumDospijeca],
+    [redciPoredani, katalog, osnovica, isPdvUkljucen, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, isIzabraniOslobodjajuca, ulogaZastupanja, isOduzimanjePrekrsaj, parsedVrijednostOduzimanja, pristojbe, brojZastupanihOsoba, zaprijecenaKazna, tbr41Povisenje, tbr41Snizenje, dodatnePristojbe, predujmovi, naknadaTroskovaStavke, datumDospijeca],
   );
 
   // Katalog po id, i izračunati redak po uid — za uređivanje u desnom stupcu, koje
@@ -1689,6 +1740,8 @@ function TroskovnikContent() {
         is_na_teret_proracuna: isNaTeretProracuna,
         is_izabrani_oslobadjajuca: isIzabraniOslobodjajuca,
         is_zastupnik_djeteta: isZastupnikDjeteta,
+        is_opunomocenik_zrtve: isZastupnikDjeteta,
+        uloga_zastupanja: ulogaZastupanja ?? undefined,
         is_stjecaj: isStjecaj,
         is_oduzimanje_prekrsaj: isOduzimanjePrekrsaj,
         vrijednost_oduzimanja: parsedVrijednostOduzimanja,
@@ -1805,6 +1858,8 @@ function TroskovnikContent() {
         is_na_teret_proracuna: isNaTeretProracuna,
         is_izabrani_oslobadjajuca: isIzabraniOslobodjajuca,
         is_zastupnik_djeteta: isZastupnikDjeteta,
+        is_opunomocenik_zrtve: isZastupnikDjeteta,
+        uloga_zastupanja: ulogaZastupanja ?? undefined,
         is_stjecaj: isStjecaj,
         is_oduzimanje_prekrsaj: isOduzimanjePrekrsaj,
         vrijednost_oduzimanja: parsedVrijednostOduzimanja,
@@ -1973,6 +2028,8 @@ function TroskovnikContent() {
     is_na_teret_proracuna: isNaTeretProracuna,
     is_izabrani_oslobadjajuca: isIzabraniOslobodjajuca,
     is_zastupnik_djeteta: isZastupnikDjeteta,
+    is_opunomocenik_zrtve: isZastupnikDjeteta,
+    uloga_zastupanja: ulogaZastupanja ?? undefined,
     is_stjecaj: isStjecaj,
     is_oduzimanje_prekrsaj: isOduzimanjePrekrsaj,
     vrijednost_oduzimanja: parsedVrijednostOduzimanja,
@@ -2593,6 +2650,38 @@ function TroskovnikContent() {
               </div>
             </div>
 
+            {/* ── Koga zastupate? — prije odabira radnji kaznenog/prekršajnog postupka ── */}
+            {(isKazneniMode || expandedCategories.has(KATEGORIJA_KAZNENI)) && (
+            <div className="bg-white rounded-xl border border-red-200 p-4 shadow-sm space-y-2" data-testid="uloga-zastupanja">
+              <div className="flex items-center gap-2 mb-1">
+                <Scale className="h-4 w-4 text-red-600" />
+                <span className="text-xs font-semibold text-red-700 uppercase tracking-wider">Koga zastupate?</span>
+              </div>
+              <fieldset className="space-y-2">
+                <legend className="sr-only">Uloga zastupanja u kaznenom ili prekršajnom postupku</legend>
+                {ULOGE_ZASTUPANJA.map((uloga) => (
+                  <label key={uloga.value} className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="ulogaZastupanja"
+                      value={uloga.value}
+                      checked={ulogaZastupanja === uloga.value}
+                      onChange={() => setUlogaZastupanja(uloga.value)}
+                      className="mt-0.5 h-4 w-4 border-slate-300 text-red-600 focus:ring-red-500"
+                    />
+                    <span className="text-xs text-slate-700">
+                      <span className="font-medium">{uloga.label}</span>
+                      <span className="block text-[10px] text-slate-400">{uloga.opis}</span>
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
+              {isKazneniMode && !ulogaZastupanja && (
+                <p className="text-[10px] text-red-600">Odaberite ulogu — bez nje se troškovnik ne može izračunati.</p>
+              )}
+            </div>
+            )}
+
             {/* ── Kazneni postupak panel ── */}
             {isKazneniMode && (
             <div className="bg-white rounded-xl border border-red-200 p-4 shadow-sm space-y-3">
@@ -2626,9 +2715,12 @@ function TroskovnikContent() {
               {/* Boolean modifiers */}
               <div className="space-y-2">
                 {/* Uloga odvjetnika — isključive mogućnosti, vidi KAZNENI_STATUS_OPCIJE */}
+                {ulogaZastupanja && statusOpcijeZaUlogu(ulogaZastupanja).length > 1 && (
                 <fieldset className="space-y-2">
-                  <legend className="text-xs font-semibold text-slate-600 mb-1">Uloga odvjetnika</legend>
-                  {KAZNENI_STATUS_OPCIJE.map((opcija) => (
+                  <legend className="text-xs font-semibold text-slate-600 mb-1">
+                    {ulogaZastupanja === "BRANITELJ" ? "Način postavljanja branitelja" : "Pravilnik (NN 22/22)"}
+                  </legend>
+                  {KAZNENI_STATUS_OPCIJE.filter((o) => statusOpcijeZaUlogu(ulogaZastupanja).includes(o.value)).map((opcija) => (
                     <label key={opcija.value} className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="radio"
@@ -2644,6 +2736,14 @@ function TroskovnikContent() {
                     </label>
                   ))}
                 </fieldset>
+                )}
+                {ulogaZastupanja === "PUNOMOCNIK_OSTECENIKA" && isZastupnikDjeteta && (
+                  <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 leading-relaxed">
+                    Za punomoćnika oštećenika koji je i opunomoćenik žrtve iznos se ne nudi automatski: još nije potvrđeno
+                    zbraja li se umanjenje od 50% (Tbr. 3 t. 3 / Tbr. 4 t. 8) s Pravilnikom ili ga Pravilnik zamjenjuje.
+                    Iznos obračunajte ručno.
+                  </p>
+                )}
 
                 {/* Stjecaj / produljeno kazneno djelo */}
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -2769,7 +2869,8 @@ function TroskovnikContent() {
                           : osnovica
                           ? izracunajBodove(item, osnovica)
                           : null;
-                        const iznosPerUnit = bodovi === null ? 0 : bodovi * BOD_VALUE;
+                        const umanjenoUlogom = umanjujeUloga(ulogaZastupanja, item);
+                        const iznosPerUnit = bodovi === null ? 0 : bodovi * (umanjenoUlogom ? ULOGA_OSTECENIK_STOPA : 1) * BOD_VALUE;
 
                         return (
                           <div
@@ -2786,6 +2887,11 @@ function TroskovnikContent() {
                                 {item.kazneni_base && (
                                   <span className="text-[10px] font-semibold text-red-500 bg-red-50 px-1.5 py-0.5 rounded">
                                     ↔ po Tbr. 4.1
+                                  </span>
+                                )}
+                                {umanjenoUlogom && (
+                                  <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">
+                                    50% — {tarifniBrojStavke(item.tarifni_broj) === 3 ? "Tbr. 3 t. 3" : "Tbr. 4 t. 8"}
                                   </span>
                                 )}
                                 {item.prekrsaj_oduzimanje && (

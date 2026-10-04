@@ -12,7 +12,7 @@
  * — samo izostave ono čega nema.
  */
 import { datumBezVremena, uredbeIzStavaka, type PravnaOsnova } from "@/lib/pravna-osnova";
-import { PDV_RATE, TARIFA_TRENUTNA, VRSTA_POSTUPKA_PRAVILA, type TarifaVerzija, type VrstaPostupka } from "@/lib/tarifa";
+import { PDV_RATE, TARIFA_TRENUTNA, ULOGE_ZASTUPANJA, VRSTA_POSTUPKA_PRAVILA, type TarifaVerzija, type UlogaZastupanja, type VrstaPostupka } from "@/lib/tarifa";
 
 /** Jedna odvjetnička radnja iz odjeljka I. */
 export interface IzvozRadnja {
@@ -24,6 +24,8 @@ export interface IzvozRadnja {
   bodovaPoJedinici: number;
   ukupnoBodova: number;
   iznos: number;
+  /** Npr. „umanjeno 50% (Tbr. 4 t. 8 Tarife)" — prazno kad nagrada nije umanjena ulogom. */
+  napomena?: string;
 }
 
 /** Prolazna stavka — sudska pristojba ili predujam. Ne ulazi u osnovicu za PDV. */
@@ -62,6 +64,8 @@ export interface TroskovnikIzvozModel {
   vrijednostSpora?: number;
   /** Čitljiv naziv VPS kategorije (čl. 14-25 Zakona o sudskim pristojbama), npr. "Opće pravilo". */
   vrstaPostupkaNaziv?: string;
+  /** „Zastupanje: punomoćnik oštećenika [ime]" — samo kazneni/prekršajni troškovnik. */
+  zastupanje?: string;
   datumIzrade: Date;
 
   radnje: IzvozRadnja[];
@@ -93,6 +97,7 @@ interface LinijaLike {
   ukupno_bodova: number;
   iznos_eur: number;
   tbr41_bodovi?: number;
+  umanjenje_uloge?: string;
 }
 
 interface TrosakLike {
@@ -132,6 +137,7 @@ interface ResultLike {
   datum_izrade: string;
   sud?: string | null;
   broj_predmeta?: string | null;
+  uloga_zastupanja?: string | null;
   klijent: { ime: string } | null;
   odvjetnik: {
     ime: string;
@@ -182,6 +188,8 @@ export interface IzvozUlaz {
     odvjetnikOsobnoIme: string;
     klijentIme: string;
     zastupanaPolozaj: string;
+    /** Koga odvjetnik zastupa u kaznenom/prekršajnom postupku; izostavljeno u ostalim. */
+    ulogaZastupanja?: string | null;
     protustrankaIme: string;
     protustrankaPolozaj: string;
     predmetSud: string;
@@ -269,6 +277,14 @@ function opisPristojbe(s: PristojbenaStavkaLike): string {
   return `Sudska pristojba — ${s.tarifni_broj}${kolicina}${stara}`;
 }
 
+/** Kako se uloga piše u zaglavlju troškovnika: „Zastupanje: punomoćnik oštećenika [ime]". */
+const NAZIV_ULOGE_ISPIS: Record<UlogaZastupanja, string> = {
+  BRANITELJ: "branitelj",
+  PRIVATNI_TUZITELJ: "punomoćnik privatnog tužitelja",
+  OSTECENIK_KAO_TUZITELJ: "punomoćnik oštećenika kao tužitelja",
+  PUNOMOCNIK_OSTECENIKA: "punomoćnik oštećenika",
+};
+
 export function buildIzvozModel(ulaz: IzvozUlaz): TroskovnikIzvozModel {
   const { result, liveCalc, polja } = ulaz;
 
@@ -289,7 +305,9 @@ export function buildIzvozModel(ulaz: IzvozUlaz): TroskovnikIzvozModel {
     // pojedinačnih bodova ne bi odgovarao ukupnom.
     ukupnoBodova: l.ukupno_bodova + (l.tbr41_bodovi ?? 0),
     iznos: l.iznos_eur,
+    napomena: neprazno(l.umanjenje_uloge),
   }));
+
 
   const jePdv = result
     ? (result.is_pdv_ukljucen ?? result.has_vat ?? ulaz.isPdvUkljucen)
@@ -333,6 +351,10 @@ export function buildIzvozModel(ulaz: IzvozUlaz): TroskovnikIzvozModel {
   const odvjetnikImeSirovo = neprazno(result?.odvjetnik?.ime ?? polja.odvjetnikIme);
   const odvjetnikIme = odvjetnikImeSirovo && !izgledaKaoMail(odvjetnikImeSirovo) ? odvjetnikImeSirovo : undefined;
   const zastupanaIme = neprazno(result?.klijent?.ime ?? polja.klijentIme);
+  const uloga = ULOGE_ZASTUPANJA.find((u) => u.value === (result?.uloga_zastupanja ?? polja.ulogaZastupanja));
+  const zastupanje = uloga
+    ? `${NAZIV_ULOGE_ISPIS[uloga.value]}${zastupanaIme ? ` ${zastupanaIme}` : ""}`
+    : undefined;
   const protustrankaIme = neprazno(result?.protustranka?.ime ?? polja.protustrankaIme);
 
   const vrijednostSpora = result?.vrijednost_spora ?? ulaz.vrijednostSpora;
@@ -368,6 +390,7 @@ export function buildIzvozModel(ulaz: IzvozUlaz): TroskovnikIzvozModel {
       : null,
     vrijednostSpora: vrijednostSpora && vrijednostSpora > 0 ? vrijednostSpora : undefined,
     vrstaPostupkaNaziv,
+    zastupanje,
     datumIzrade,
 
     radnje,

@@ -140,6 +140,31 @@ public class TroskovnikControllerKarakterizacijaTests
     }
 
     [Fact]
+    public async Task Izracunaj_KaznenaStavkaBezUlogeZastupanja_Vraca400()
+    {
+        var kontroler = StvoriKontroler(new FakeClientCaseService());
+        var zahtjev = ValjanZahtjev();
+        zahtjev.ZaprijecenaKazna = "do_5";
+        zahtjev.Stavke = [new TroskovnikItemRequest { ItemId = "kaz_obrana", Kolicina = 1 }];
+
+        var odgovor = Assert.IsType<BadRequestObjectResult>(await kontroler.Izracunaj(zahtjev));
+
+        Assert.Contains("koga zastupate", Assert.IsType<string>(Svojstvo(odgovor.Value, "error")));
+    }
+
+    [Fact]
+    public async Task Izracunaj_KaznenaStavkaSUlogom_Prolazi()
+    {
+        var kontroler = StvoriKontroler(new FakeClientCaseService());
+        var zahtjev = ValjanZahtjev();
+        zahtjev.ZaprijecenaKazna = "do_5";
+        zahtjev.UlogaZastupanja = UlogaZastupanja.PunomocnikOstecenika;
+        zahtjev.Stavke = [new TroskovnikItemRequest { ItemId = "kaz_obrana", Kolicina = 1 }];
+
+        Assert.IsType<OkObjectResult>(await kontroler.Izracunaj(zahtjev));
+    }
+
+    [Fact]
     public async Task Izracunaj_SamoJednaUloga_Prolazi()
     {
         var kontroler = StvoriKontroler(new FakeClientCaseService());

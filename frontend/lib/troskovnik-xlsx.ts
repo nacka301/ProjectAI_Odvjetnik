@@ -128,6 +128,7 @@ export function buildTroskovnikSheet(m: TroskovnikIzvozModel): Row[] {
     if (m.odvjetnik.iban) redci.push(podatak("IBAN", m.odvjetnik.iban));
   }
   if (m.sud) redci.push(podatak("Sud", m.sud));
+  if (m.zastupanje) redci.push(podatak("Zastupanje", m.zastupanje));
   // Poslovni broj je tekst: "P-007/24" bi kao broj bio uništen.
   if (m.brojPredmeta) redci.push(podatak("Poslovni broj", m.brojPredmeta));
   if (m.zastupana) redci.push(podatak(m.zastupana.polozaj || "Zastupana stranka", m.zastupana.ime));
@@ -153,7 +154,7 @@ export function buildTroskovnikSheet(m: TroskovnikIzvozModel): Row[] {
       r.datum
         ? { value: uSerijskiDatum(r.datum), type: Date, format: DATUM, align: "center", ...OKVIR }
         : { value: "", type: String, ...OKVIR },
-      { value: r.opis, type: String, wrap: true, ...OKVIR },
+      { value: r.napomena ? `${r.opis} — ${r.napomena}` : r.opis, type: String, wrap: true, ...OKVIR },
       { value: r.tarifniBroj, type: String, ...OKVIR },
       { value: r.kolicina, type: Number, format: BODOVI, align: "right", ...OKVIR },
       { value: r.ukupnoBodova, type: Number, format: BODOVI, align: "right", ...OKVIR },

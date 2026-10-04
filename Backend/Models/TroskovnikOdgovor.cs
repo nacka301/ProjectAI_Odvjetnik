@@ -178,6 +178,16 @@ public sealed class TroskovnikResponse
     [JsonPropertyName("is_zastupnik_djeteta")]
     public bool IsZastupnikDjeteta { get; set; }
 
+    [JsonPropertyName("is_opunomocenik_zrtve")]
+    public bool IsOpunomocenikZrtve { get; set; }
+
+    [JsonPropertyName("is_izabrani_oslobadjajuca")]
+    public bool IsIzabraniOslobodjajuca { get; set; }
+
+    /// <summary>Koga odvjetnik zastupa — vidi <see cref="Backend.Models.UlogaZastupanja"/>.</summary>
+    [JsonPropertyName("uloga_zastupanja")]
+    public string? UlogaZastupanja { get; set; }
+
     [JsonPropertyName("is_stjecaj")]
     public bool IsStjecaj { get; set; }
 
@@ -467,6 +477,13 @@ public sealed class TroskovnikLineItem
     /// </summary>
     [JsonPropertyName("tbr41_pravni_izvor")]
     public string Tbr41PravniIzvor { get; set; } = "";
+
+    /// <summary>
+    /// Napomena uz redak kad je nagrada umanjena zbog uloge zastupanja, npr.
+    /// „umanjeno 50% (Tbr. 4 t. 8 Tarife)". Prazno kad umanjenja nema. Ide na ispis.
+    /// </summary>
+    [JsonPropertyName("umanjenje_uloge")]
+    public string UmanjenjeUloge { get; set; } = "";
 }
 
 /// <summary>Echo jedne stavke naknade troškova, s razriješenim pravnim izvorom.</summary>

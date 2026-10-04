@@ -115,6 +115,9 @@ public sealed class TroskovnikRecord : IFirmScoped
     public bool IsPoSluzbenojDuznosti { get; set; }
     public bool IsNaTeretProracuna { get; set; }
     public bool IsZastupnikDjeteta { get; set; }
+    public bool IsOpunomocenikZrtve { get; set; }
+    public bool IsIzabraniOslobadjajuca { get; set; }
+    public string? UlogaZastupanja { get; set; }
     public bool IsStjecaj { get; set; }
     public bool IsOduzimanjePrekrsaj { get; set; }
     public decimal VrijednostOduzimanja { get; set; }
@@ -157,6 +160,9 @@ public sealed class TroskovnikReadRecord
     public bool IsPoSluzbenojDuznosti { get; set; }
     public bool IsNaTeretProracuna { get; set; }
     public bool IsZastupnikDjeteta { get; set; }
+    public bool IsOpunomocenikZrtve { get; set; }
+    public bool IsIzabraniOslobadjajuca { get; set; }
+    public string? UlogaZastupanja { get; set; }
     public bool IsStjecaj { get; set; }
     public bool IsOduzimanjePrekrsaj { get; set; }
     public decimal VrijednostOduzimanja { get; set; }

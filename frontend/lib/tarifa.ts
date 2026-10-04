@@ -44,6 +44,51 @@ export const KAZNENO_UMANJENJE_STOPA = 0.5;
  */
 export const ZASTUPNIK_DJETETA_STOPA = 0.7;
 
+/**
+ * Punomoćnik oštećenika / žrtve (DORH progoni) — 50% nagrade iz Tbr. 3 (toč. 3) i
+ * Tbr. 4 (toč. 8). Tbr. 5 (žalbe) ne navodi umanjenje. Zrcali `TarifaConstants.UlogaOstecenikRate`.
+ */
+export const ULOGA_OSTECENIK_STOPA = 0.5;
+
+/** Koga odvjetnik zastupa u kaznenom/prekršajnom postupku. Zrcali `UlogaZastupanja.cs`. */
+export type UlogaZastupanja =
+  | "BRANITELJ"
+  | "PRIVATNI_TUZITELJ"
+  | "OSTECENIK_KAO_TUZITELJ"
+  | "PUNOMOCNIK_OSTECENIKA";
+
+export const ULOGE_ZASTUPANJA: { value: UlogaZastupanja; label: string; opis: string }[] = [
+  { value: "BRANITELJ", label: "Branitelj okrivljenika", opis: "Branim okrivljenika, optuženika ili okrivljenu pravnu osobu — puna nagrada." },
+  { value: "PRIVATNI_TUZITELJ", label: "Punomoćnik privatnog tužitelja", opis: "Zastupam privatnog tužitelja — puna nagrada (Tbr. 4 t. 1)." },
+  { value: "OSTECENIK_KAO_TUZITELJ", label: "Punomoćnik oštećenika kao tužitelja", opis: "Oštećenik preuzeo ili vodi progon kao (supsidijarni) tužitelj — puna nagrada (Tbr. 4 t. 1)." },
+  { value: "PUNOMOCNIK_OSTECENIKA", label: "Punomoćnik oštećenika / žrtve", opis: "Progon vodi državno odvjetništvo — 50% nagrade iz Tbr. 3 i Tbr. 4 (Tbr. 3 t. 3, Tbr. 4 t. 8)." },
+];
+
+/** Tarifni broj stavke kataloga ("Tbr. 4.1" → 4); 0 kad se ne može pročitati. */
+export function tarifniBrojStavke(tarifniBroj: string | null | undefined): number {
+  const m = /^\s*Tbr\.?\s*(\d+)/i.exec(tarifniBroj ?? "");
+  return m ? parseInt(m[1], 10) : 0;
+}
+
+/**
+ * Umanjuje li uloga zastupanja nagradu ove stavke: punomoćnik oštećenika na Tbr. 3 i 4
+ * (ne i na stavke koje umanjenje već nose u katalogu — Tbr. 3.3 i 4.8).
+ */
+export function umanjujeUloga(
+  uloga: UlogaZastupanja | null | undefined,
+  def: Pick<TarifnaStavka, "tarifni_broj" | "umanjenje_uloge_ugradjeno">,
+): boolean {
+  if (uloga !== "PUNOMOCNIK_OSTECENIKA" || def.umanjenje_uloge_ugradjeno) return false;
+  const tbr = tarifniBrojStavke(def.tarifni_broj);
+  return tbr === 3 || tbr === 4;
+}
+
+/** Napomena uz umanjenu stavku: "umanjeno 50% (Tbr. 4 t. 8 Tarife)". */
+export function napomenaUmanjenjaUloge(tarifniBroj: string): string {
+  const izvor = tarifniBrojStavke(tarifniBroj) === 3 ? "Tbr. 3 t. 3 Tarife" : "Tbr. 4 t. 8 Tarife";
+  return `umanjeno 50% (${izvor})`;
+}
+
 // ── Tipovi (zrcale backend modele) ───────────────────────────────
 
 export interface TarifnaStavka {
@@ -64,6 +109,8 @@ export interface TarifnaStavka {
   kazneni_povecanje: number | null;
   /** Tbr. 4. toč. 2 al. 3 — povišenje koje vrijedi umjesto redovnog kod dugotrajnog zatvora. */
   kazneni_povecanje_dugotrajni?: number | null;
+  /** Stavka već nosi umanjenje oštećenika (Tbr. 3.3 / 4.8) — uloga je ne umanjuje drugi put. */
+  umanjenje_uloge_ugradjeno?: boolean;
   prekrsaj_oduzimanje: boolean;
   /** Tbr. 7. toč. 2 i 3, Tbr. 8. toč. 1 — jedna nagrada za cijeli postupak. */
   jednokratna_nagrada?: boolean;
@@ -675,8 +722,26 @@ export function izracunajKazneneBodove(
 
 // ── Provjera zahtjeva ────────────────────────────────────────────
 
+/**
+ * Obveza odabira uloge zastupanja u kaznenom/prekršajnom troškovniku. Zrcali provjeru u
+ * `TroskovnikController.ProvjeriZahtjev`; servis (i `provjeriZahtjev`) bez uloge računa
+ * kao branitelj radi starih pohranjenih zahtjeva.
+ */
+export function provjeriUlogu(
+  odabraneStavke: TarifnaStavka[],
+  uloga: UlogaZastupanja | null | undefined,
+): string[] {
+  const jeKazneni = odabraneStavke.some((s) => s.kategorija === KATEGORIJA_KAZNENI);
+  return jeKazneni && !uloga
+    ? ["Odaberite koga zastupate (branitelj, privatni tužitelj, oštećenik kao tužitelj ili punomoćnik oštećenika)."]
+    : [];
+}
+
 export interface ProvjeraUlaza {
   zaprijecenaKazna?: string;
+  ulogaZastupanja?: UlogaZastupanja | null;
+  isPoSluzbenojDuznosti?: boolean;
+  isOpunomocenikZrtve?: boolean;
   isOduzimanjePrekrsaj: boolean;
   vrijednostOduzimanja: number;
   osnovicaTbr7?: OsnovicaTbr7;
@@ -709,6 +774,23 @@ export function provjeriZahtjev(
     } else if (!(ulaz.zaprijecenaKazna in ZAPRIJECENA_KAZNA_TIERS)) {
       greske.push(`Nepoznata zapriječena kazna: "${ulaz.zaprijecenaKazna}".`);
     }
+  }
+
+  // Uloga zastupanja — konzistentnost s odabranom ulogom. Sama obveza da se uloga odabere
+  // je u `provjeriUlogu` (kontroler je traži, servis ne — vidi `TroskovnikController`).
+  if (ulaz.isPoSluzbenojDuznosti && ulaz.ulogaZastupanja && ulaz.ulogaZastupanja !== "BRANITELJ") {
+    greske.push("Postavljanje po službenoj dužnosti moguće je samo za branitelja okrivljenika.");
+  }
+  if (
+    ulaz.ulogaZastupanja === "PUNOMOCNIK_OSTECENIKA" &&
+    ulaz.isOpunomocenikZrtve &&
+    odabraneStavke.some((s) => umanjujeUloga(ulaz.ulogaZastupanja, s))
+  ) {
+    greske.push(
+      "Za punomoćnika oštećenika koji je i opunomoćenik žrtve alat ne nudi automatski iznos: još nije " +
+        "potvrđeno zbraja li se umanjenje od 50% (Tbr. 3 t. 3 / Tbr. 4 t. 8) s umanjenjem po Pravilniku " +
+        "(NN 22/22) ili Pravilnik zamjenjuje Tarifni obračun. Iznos obračunajte ručno.",
+    );
   }
 
   const imaOduzimanje = odabraneStavke.some((s) => s.prekrsaj_oduzimanje);

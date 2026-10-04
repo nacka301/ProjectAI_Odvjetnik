@@ -98,6 +98,25 @@ public sealed class TroskovnikRequest
     [JsonPropertyName("is_zastupnik_djeteta")]
     public bool IsZastupnikDjeteta { get; set; }
 
+    /// <summary>
+    /// Opunomoćenik žrtve (bilo kojeg uzrasta) — NN 119/25 brisao je riječ „djeteta".
+    /// Zamjenjuje <see cref="IsZastupnikDjeteta"/>, koji se zadržava dok klijenti ne prijeđu;
+    /// vrijedi ako je postavljen bilo koji od njih (<see cref="JeOpunomocenikZrtve"/>).
+    /// </summary>
+    [JsonPropertyName("is_opunomocenik_zrtve")]
+    public bool IsOpunomocenikZrtve { get; set; }
+
+    [JsonIgnore]
+    public bool JeOpunomocenikZrtve => IsOpunomocenikZrtve || IsZastupnikDjeteta;
+
+    /// <summary>
+    /// Koga odvjetnik zastupa (vidi <see cref="UlogaZastupanja"/>). Obavezno za kazneni
+    /// i prekršajni troškovnik; kontroler odbija zahtjev bez nje. Servis bez nje računa
+    /// kao BRANITELJ (stari pohranjeni zahtjevi).
+    /// </summary>
+    [JsonPropertyName("uloga_zastupanja")]
+    public string? UlogaZastupanja { get; set; }
+
     /// <summary>Stjecaj / produljeno KD – korisnik bira tier prema najtežoj kazni.</summary>
     [JsonPropertyName("is_stjecaj")]
     public bool IsStjecaj { get; set; }

@@ -40,9 +40,17 @@ public class TroskovnikController : ControllerBase
         // Pravilnik NN 22/2022 br. 271: čl. 1 je obrana okrivljenika, čl. 2 zastupanje
         // djeteta žrtve. Isti odvjetnik ne može u istom postupku biti oboje — sukob
         // interesa — pa se ni stope ne zbrajaju ni ne množe.
-        if (zahtjev.IsZastupnikDjeteta && (zahtjev.IsPoSluzbenojDuznosti || zahtjev.IsNaTeretProracuna))
+        if (zahtjev.JeOpunomocenikZrtve && (zahtjev.IsPoSluzbenojDuznosti || zahtjev.IsNaTeretProracuna))
             throw new TroskovnikValidationException(
                 "Odvjetnik ne može u istom postupku biti branitelj okrivljenika i opunomoćenik djeteta žrtve — te se uloge isključuju.");
+
+        // Kazneni i prekršajni troškovnik traži ulogu zastupanja — bez nje alat ne zna koji
+        // postotak Tarife primijeniti (Tbr. 3 t. 3 / Tbr. 4 t. 8).
+        var kazneniKatalog = zahtjev.Stavke.Any(s =>
+            TarifaKatalog.Sve.Any(k => k.Id == s.ItemId && k.Kategorija == TarifaKatalog.KategorijaKazneni));
+        if (kazneniKatalog && string.IsNullOrWhiteSpace(zahtjev.UlogaZastupanja))
+            throw new TroskovnikValidationException(
+                "Odaberite koga zastupate (branitelj, privatni tužitelj, oštećenik kao tužitelj ili punomoćnik oštećenika).");
     }
 
     /// <summary>
@@ -266,6 +274,9 @@ public class TroskovnikController : ControllerBase
         IsPoSluzbenojDuznosti = zahtjev.IsPoSluzbenojDuznosti,
         IsNaTeretProracuna = zahtjev.IsNaTeretProracuna,
         IsZastupnikDjeteta = zahtjev.IsZastupnikDjeteta,
+        IsOpunomocenikZrtve = zahtjev.JeOpunomocenikZrtve,
+        IsIzabraniOslobadjajuca = zahtjev.IsIzabraniOslobodjajuca,
+        UlogaZastupanja = zahtjev.UlogaZastupanja,
         IsStjecaj = zahtjev.IsStjecaj,
         IsOduzimanjePrekrsaj = zahtjev.IsOduzimanjePrekrsaj,
         VrijednostOduzimanja = zahtjev.VrijednostOduzimanja,

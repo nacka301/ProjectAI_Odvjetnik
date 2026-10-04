@@ -7,9 +7,12 @@
 // pristojbe → sveukupno) mogla testirati bez Reacta. Sve teške tarifne odluke
 // već su čiste funkcije u `./tarifa`; ovdje je samo njihovo spajanje.
 
-import type { NaknadaStavkaZaIzracun, OsnovicaRezultat, TarifnaStavka, Tbr41Stavka } from "./tarifa";
+import type { NaknadaStavkaZaIzracun, OsnovicaRezultat, TarifnaStavka, Tbr41Stavka, UlogaZastupanja } from "./tarifa";
 import {
   PDV_RATE,
+  ULOGA_OSTECENIK_STOPA,
+  napomenaUmanjenjaUloge,
+  umanjujeUloga,
   izracunajBodove,
   izracunajKazneneBodove,
   izracunajNaknaduStavku,
@@ -60,6 +63,8 @@ export interface TroskovnikIzracunUlaz {
   /** Kvalifikator na isNaTeretProracuna: izabrani (ne postavljeni) branitelj,
    *  trošak na proračun zbog oslobađajuće presude → puna Tarifa, bez umanjenja. */
   isIzabraniOslobodjajuca: boolean;
+  /** Koga odvjetnik zastupa; null/izostavljeno = puna nagrada (stari pozivi). */
+  ulogaZastupanja?: UlogaZastupanja | null;
   zaprijecenaKazna: string | null;
 
   // Prekršaj s oduzimanjem predmeta (Tbr. 7.1 po vrijednosti oduzetog)
@@ -106,6 +111,8 @@ export interface TroskovnikIzracunRedak {
   tbr41_snizenje: number;
   tbr41_bodovi: number;
   tbr41_pravni_izvor: string;
+  /** „umanjeno 50% (Tbr. 4 t. 8 Tarife)" kad je nagrada umanjena ulogom; inače prazno. */
+  umanjenje_uloge: string;
 }
 
 export type TroskovnikIzracunRezultat = ReturnType<typeof izracunajTroskovnik>;
@@ -152,6 +159,10 @@ export function izracunajTroskovnik(u: TroskovnikIzracunUlaz) {
       continue;
     }
 
+    // Umanjenje po ulozi zastupanja (Tbr. 3 t. 3 / Tbr. 4 t. 8) — nakon Pravilnika, na nagradu retka.
+    const umanjenoUlogom = umanjujeUloga(u.ulogaZastupanja, def);
+    if (umanjenoUlogom) bodovi *= ULOGA_OSTECENIK_STOPA;
+
     // Redak s 0 bodova izgleda kao valjan iznos, a nije — ne prikazuje se.
     if (bodovi <= 0) continue;
 
@@ -182,6 +193,7 @@ export function izracunajTroskovnik(u: TroskovnikIzracunUlaz) {
       tbr41_snizenje: snizenje,
       tbr41_bodovi: tbr41BodoviStavke,
       tbr41_pravni_izvor: tbr41Izvor(povisenje, snizenje),
+      umanjenje_uloge: umanjenoUlogom ? napomenaUmanjenjaUloge(def.tarifni_broj) : "",
     });
   }
 
