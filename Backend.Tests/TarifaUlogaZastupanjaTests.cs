@@ -187,4 +187,41 @@ public class TarifaUlogaZastupanjaTests
         });
         Assert.Equal("", r.Stavke[0].UmanjenjeUloge);
     }
+
+    // ── Pravilnik NN 22/22 vrijedi na SVAKU radnju, i fiksnu (Miladinović) ──
+
+    [Theory]
+    [InlineData("kaz_istraga_dodatni_sat", 25)]
+    [InlineData("kaz_dodatni_sat", 25)]
+    [InlineData("kaz_razgovor_pritvor", 25)]
+    [InlineData("kaz_obrana_prekrsaj", 50)]
+    [InlineData("kaz_zalba_troskovi", 25)]
+    public void SluzbenaDuznost_Umanjuje_I_FiksneStavke(string itemId, decimal ocekivaniBodovi)
+    {
+        var r = Izracunaj(UlogaZastupanja.Branitelj, itemId, podesi: z => z.IsPoSluzbenojDuznosti = true);
+        Assert.Equal(ocekivaniBodovi, r.UkupnoBodova);
+        Assert.Equal("umanjeno 50% (Pravilnik NN 22/22, čl. 1)", r.Stavke[0].UmanjenjeUloge);
+    }
+
+    [Fact]
+    public void IzabraniBranitelj_NaTeretProracuna_FiksnaStavkaOstajePuna()
+    {
+        var r = Izracunaj(UlogaZastupanja.Branitelj, "kaz_dodatni_sat", podesi: z =>
+        {
+            z.IsNaTeretProracuna = true;
+            z.IsIzabraniOslobodjajuca = true;
+        });
+        Assert.Equal(50m, r.UkupnoBodova);
+    }
+
+    [Fact]
+    public void SluzbenaDuznost_ParnicnaStavka_NeDiraSe()
+    {
+        var r = new TroskovnikService().Izracunaj(new TroskovnikRequest
+        {
+            VrijednostSpora = 1000m, IsPoSluzbenojDuznosti = true, IsPdvUkljucen = false,
+            Stavke = [new TroskovnikItemRequest { ItemId = "par_tuzba", Kolicina = 1 }]
+        });
+        Assert.Equal("", r.Stavke[0].UmanjenjeUloge);
+    }
 }

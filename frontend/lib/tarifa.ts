@@ -689,6 +689,22 @@ export function izracunajBodove(def: TarifnaStavka, osnovica: OsnovicaRezultat):
   return clampBodovi(bodovi, def);
 }
 
+/**
+ * Pravilnik NN 22/2022 br. 271 — čl. 1 (50%) i čl. 2 (70%) vrijede za SVAKU radnju
+ * kaznenog/prekršajnog postupka, pa i za one s fiksnim bodovima. Zrcali
+ * `TroskovnikService.PravilnikFaktor`.
+ */
+export function pravilnikFaktor(u: {
+  isZastupnikDjeteta: boolean;
+  isPoSluzbenojDuznosti: boolean;
+  isNaTeretProracuna: boolean;
+  isIzabraniOslobodjajuca?: boolean;
+}): number {
+  if (u.isZastupnikDjeteta) return ZASTUPNIK_DJETETA_STOPA;
+  if (u.isPoSluzbenojDuznosti || (u.isNaTeretProracuna && !u.isIzabraniOslobodjajuca)) return KAZNENO_UMANJENJE_STOPA;
+  return 1;
+}
+
 export function izracunajKazneneBodove(
   def: TarifnaStavka,
   tierBodovi: number,

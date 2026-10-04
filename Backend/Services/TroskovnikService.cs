@@ -601,11 +601,12 @@ public sealed class TroskovnikService : ITroskovnikService
         if (umanjenoUlogom)
             dijelovi.Add($"umanjeno 50% ({UlogaZastupanja.IzvorUmanjenja(definicija.TarifniBroj)})");
 
-        if (definicija.KazneniBase && !definicija.PrekrsajOduzimanje)
+        if (definicija.Kategorija == TarifaKatalog.KategorijaKazneni)
         {
-            if (request.JeOpunomocenikZrtve)
+            var faktor = PravilnikFaktor(request);
+            if (faktor == TarifaConstants.ZastupnikDjetetaRate)
                 dijelovi.Add("70% nagrade (Pravilnik NN 22/22, čl. 2)");
-            else if (request.IsPoSluzbenojDuznosti || (request.IsNaTeretProracuna && !request.IsIzabraniOslobodjajuca))
+            else if (faktor == TarifaConstants.KazneniReductionRate)
                 dijelovi.Add("umanjeno 50% (Pravilnik NN 22/22, čl. 1)");
         }
 
@@ -697,7 +698,7 @@ public sealed class TroskovnikService : ITroskovnikService
         {
             if (!request.IsOduzimanjePrekrsaj)
                 // Tbr. 4. toč. 1 al. 7 — "za obranu u prekršajnom postupku 100 bodova".
-                return PrekrsajBezOduzimanjaBodovi;
+                return PrekrsajBezOduzimanjaBodovi * PravilnikFaktor(request);
 
             // Tbr. 4. toč. 1 al. 8 — prekršaj s oduzimanjem ide po Tbr. 7. toč. 1
             // prema vrijednosti oduzetog predmeta odnosno imovinske koristi.
@@ -707,13 +708,30 @@ public sealed class TroskovnikService : ITroskovnikService
                     "predmeta odnosno imovinske koristi. Tbr. 4. toč. 1 al. 8 nagradu veže " +
                     "uz tu vrijednost po Tbr. 7. toč. 1.");
 
-            return Tbr71Bodovi(request.VrijednostOduzimanja);
+            return Tbr71Bodovi(request.VrijednostOduzimanja) * PravilnikFaktor(request);
         }
 
         if (definicija.KazneniBase)
             return IzracunajKazneneBodove(definicija, kontekst.KazneniRazredBodovi, request);
 
-        return IzracunajBodove(definicija, kontekst.Osnovica);
+        var bodovi = IzracunajBodove(definicija, kontekst.Osnovica);
+        return definicija.Kategorija == TarifaKatalog.KategorijaKazneni
+            ? bodovi * PravilnikFaktor(request)
+            : bodovi;
+    }
+
+    /// <summary>
+    /// Pravilnik NN 22/2022 br. 271 — čl. 1 (50%) i čl. 2 (70%) određuju nagradu „koja bi
+    /// odvjetniku pripadala za pojedine radnje u postupku prema Tarifi": vrijedi za SVAKU
+    /// radnju, pa i za one s fiksnim bodovima (dodatni sat, razgovor u pritvoru, prekršajna
+    /// obrana...), ne samo za one vezane uz zapriječenu kaznu. Vidi i <see cref="IzracunajKazneneBodove"/>.
+    /// </summary>
+    private static decimal PravilnikFaktor(TroskovnikRequest req)
+    {
+        if (req.JeOpunomocenikZrtve) return TarifaConstants.ZastupnikDjetetaRate;
+        if (req.IsPoSluzbenojDuznosti || (req.IsNaTeretProracuna && !req.IsIzabraniOslobodjajuca))
+            return TarifaConstants.KazneniReductionRate;
+        return 1m;
     }
 
     /// <summary>Tbr. 4. toč. 1 al. 7 — "za obranu u prekršajnom postupku 100 bodova".</summary>

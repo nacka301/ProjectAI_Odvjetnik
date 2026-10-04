@@ -85,6 +85,7 @@ import {
   provjeriUlogu,
   umanjujeUloga,
   opisZaUlogu,
+  pravilnikFaktor,
   tarifniBrojStavke,
   ULOGE_ZASTUPANJA,
   ULOGA_OSTECENIK_STOPA,
@@ -2861,7 +2862,7 @@ function TroskovnikContent() {
                         // Klik na "Dodaj" uvijek dodaje NOVI redak; ista stavka smije
                         // se ponoviti (svaki put s vlastitim datumom i količinom).
                         const brojRedaka = redci.filter((r) => r.itemId === item.id).length;
-                        const bodovi = item.prekrsaj_oduzimanje
+                        const bodoviOsnova = item.prekrsaj_oduzimanje
                           ? (isOduzimanjePrekrsaj && parsedVrijednostOduzimanja > 0
                               ? tbr71Bodovi(parsedVrijednostOduzimanja)
                               : 100)
@@ -2870,6 +2871,11 @@ function TroskovnikContent() {
                           : osnovica
                           ? izracunajBodove(item, osnovica)
                           : null;
+                        // Pravilnik vrijedi i za fiksne stavke kaznenog postupka.
+                        const bodovi =
+                          bodoviOsnova !== null && item.kategorija === KATEGORIJA_KAZNENI && !item.kazneni_base
+                            ? bodoviOsnova * pravilnikFaktor({ isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, isIzabraniOslobodjajuca })
+                            : bodoviOsnova;
                         const umanjenoUlogom = umanjujeUloga(ulogaZastupanja, item);
                         const iznosPerUnit = bodovi === null ? 0 : bodovi * (umanjenoUlogom ? ULOGA_OSTECENIK_STOPA : 1) * BOD_VALUE;
 

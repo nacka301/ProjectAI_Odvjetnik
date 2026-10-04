@@ -163,3 +163,15 @@ describe("uloga zastupanja — nazivi i napomene", () => {
     expect(g.join(" ")).toContain("samo uz ulogu punomoćnika oštećenika");
   });
 });
+
+describe("Pravilnik na fiksne stavke (Miladinović)", () => {
+  it("službena dužnost umanjuje i fiksnih 50 bodova → 25", () => {
+    const r = racun("BRANITELJ", "kaz_istraga_dodatni_sat", { isPoSluzbenojDuznosti: true });
+    expect(r.ukupnoBodova).toBe(25);
+    expect(r.lines[0].umanjenje_uloge).toBe("umanjeno 50% (Pravilnik NN 22/22, čl. 1)");
+  });
+  it("izabrani branitelj na teret proračuna: fiksna stavka puna", () => {
+    const r = racun("BRANITELJ", "kaz_istraga_dodatni_sat", { isNaTeretProracuna: true, isIzabraniOslobodjajuca: true });
+    expect(r.ukupnoBodova).toBe(50);
+  });
+});

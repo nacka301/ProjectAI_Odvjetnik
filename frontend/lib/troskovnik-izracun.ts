@@ -11,8 +11,11 @@ import type { NaknadaStavkaZaIzracun, OsnovicaRezultat, TarifnaStavka, Tbr41Stav
 import {
   PDV_RATE,
   ULOGA_OSTECENIK_STOPA,
+  ZASTUPNIK_DJETETA_STOPA,
   napomenaUmanjenjaUloge,
   opisZaUlogu,
+  pravilnikFaktor,
+  KATEGORIJA_KAZNENI,
   umanjujeUloga,
   izracunajBodove,
   izracunajKazneneBodove,
@@ -124,10 +127,10 @@ export interface TroskovnikIzracunRedak {
 function napomenaUmanjenja(def: TarifnaStavka, u: TroskovnikIzracunUlaz, umanjenoUlogom: boolean): string {
   const dijelovi: string[] = [];
   if (umanjenoUlogom) dijelovi.push(napomenaUmanjenjaUloge(def.tarifni_broj));
-  if (def.kazneni_base && !def.prekrsaj_oduzimanje) {
-    if (u.isZastupnikDjeteta) dijelovi.push("70% nagrade (Pravilnik NN 22/22, čl. 2)");
-    else if (u.isPoSluzbenojDuznosti || (u.isNaTeretProracuna && !u.isIzabraniOslobodjajuca))
-      dijelovi.push("umanjeno 50% (Pravilnik NN 22/22, čl. 1)");
+  if (def.kategorija === KATEGORIJA_KAZNENI) {
+    const faktor = pravilnikFaktor(u);
+    if (faktor === ZASTUPNIK_DJETETA_STOPA) dijelovi.push("70% nagrade (Pravilnik NN 22/22, čl. 2)");
+    else if (faktor !== 1) dijelovi.push("umanjeno 50% (Pravilnik NN 22/22, čl. 1)");
   }
   return dijelovi.join("; ");
 }
@@ -159,6 +162,7 @@ export function izracunajTroskovnik(u: TroskovnikIzracunUlaz) {
       } else {
         bodovi = 100; // fallback: standard prekršaj 100 bodova
       }
+      bodovi *= pravilnikFaktor(u);
     } else if (def.kazneni_base) {
       bodovi = izracunajKazneneBodove(
         def,
@@ -171,6 +175,8 @@ export function izracunajTroskovnik(u: TroskovnikIzracunUlaz) {
       );
     } else if (u.osnovica) {
       bodovi = izracunajBodove(def, u.osnovica);
+      // Pravilnik vrijedi i za fiksne stavke kaznenog postupka (dodatni sat, pritvor...).
+      if (def.kategorija === KATEGORIJA_KAZNENI) bodovi *= pravilnikFaktor(u);
     } else {
       // Osnovica nije razriješena (Tbr. 45 bez razine suda ili načina).
       continue;
