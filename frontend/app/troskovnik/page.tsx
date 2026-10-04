@@ -3314,8 +3314,8 @@ function TroskovnikContent() {
                             </div>
 
                             <div className="min-w-0 flex-1">
-                              <p className="text-xs text-slate-700 leading-snug truncate" title={def?.opis}>
-                                {def?.opis ?? redak.itemId}
+                              <p className="text-xs text-slate-700 leading-snug truncate" title={def ? opisZaUlogu(def.opis, ulogaZastupanja) : undefined}>
+                                {def ? opisZaUlogu(def.opis, ulogaZastupanja) : redak.itemId}
                               </p>
                               <p className="text-[10px] text-slate-400 mt-0.5">
                                 {line
