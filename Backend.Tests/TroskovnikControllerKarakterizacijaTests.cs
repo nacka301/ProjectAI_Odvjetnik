@@ -414,6 +414,7 @@ public class TroskovnikControllerKarakterizacijaTests
         var kontroler = StvoriKontroler(klijenti);
         var zahtjev = ValjanZahtjev();
         zahtjev.Stavke = [new TroskovnikItemRequest { ItemId = "kaz_dodatni_sat", Kolicina = 1 }];
+        zahtjev.UlogaZastupanja = UlogaZastupanja.Branitelj;   // kontroler traži ulogu za kaznene stavke
 
         Assert.IsType<OkObjectResult>(await kontroler.Spremi(zahtjev));
 

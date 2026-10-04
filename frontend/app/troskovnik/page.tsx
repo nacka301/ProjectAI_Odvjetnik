@@ -84,6 +84,7 @@ import {
   provjeriZahtjev,
   provjeriUlogu,
   umanjujeUloga,
+  opisZaUlogu,
   tarifniBrojStavke,
   ULOGE_ZASTUPANJA,
   ULOGA_OSTECENIK_STOPA,
@@ -2881,7 +2882,7 @@ function TroskovnikContent() {
                           >
                             {/* Info */}
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm text-slate-800 leading-snug">{item.opis}</p>
+                              <p className="text-sm text-slate-800 leading-snug">{opisZaUlogu(item.opis, ulogaZastupanja)}</p>
                               <div className="flex items-center gap-3 mt-1 flex-wrap">
                                 <span className="text-[10px] font-mono text-slate-400">{item.tarifni_broj}</span>
                                 {item.kazneni_base && (

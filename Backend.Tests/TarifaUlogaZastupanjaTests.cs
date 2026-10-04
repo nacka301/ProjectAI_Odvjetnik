@@ -140,4 +140,51 @@ public class TarifaUlogaZastupanjaTests
         });
         Assert.Equal(200m, r.UkupnoBodova);
     }
+
+    // ── Naziv radnje po ulozi i napomene na retku ──
+
+    [Theory]
+    [InlineData(UlogaZastupanja.PunomocnikOstecenika, "Zastupanje oštećenika na raspravi")]
+    [InlineData(UlogaZastupanja.OstecenikKaoTuzitelj, "Zastupanje oštećenika kao tužitelja na raspravi")]
+    [InlineData(UlogaZastupanja.PrivatniTuzitelj, "Zastupanje privatnog tužitelja na raspravi")]
+    public void NazivRadnje_ZaOstecenikaITuzitelja_NijeObrana(string uloga, string pocetak)
+    {
+        var opis = Izracunaj(uloga).Stavke[0].Opis;
+        Assert.StartsWith(pocetak, opis);
+        Assert.DoesNotContain("Obrana", opis);
+    }
+
+    [Fact]
+    public void NazivRadnje_ZaBranitelja_OstajeObrana()
+    {
+        Assert.StartsWith("Obrana okrivljenika na raspravi", Izracunaj(UlogaZastupanja.Branitelj).Stavke[0].Opis);
+    }
+
+    [Theory]
+    [InlineData(UlogaZastupanja.Branitelj)]
+    [InlineData(UlogaZastupanja.PrivatniTuzitelj)]
+    [InlineData(UlogaZastupanja.OstecenikKaoTuzitelj)]
+    public void OpunomocenikZrtve_UzDrugeUlogeOdOstecenika_JeValidacijskaGreska(string uloga)
+    {
+        Assert.Throws<TroskovnikValidationException>(
+            () => Izracunaj(uloga, podesi: z => z.IsOpunomocenikZrtve = true));
+    }
+
+    [Fact]
+    public void NapomenaNaRetku_Pravilnik_ZaSluzbenuDuznost()
+    {
+        var r = Izracunaj(UlogaZastupanja.Branitelj, podesi: z => z.IsPoSluzbenojDuznosti = true);
+        Assert.Equal("umanjeno 50% (Pravilnik NN 22/22, čl. 1)", r.Stavke[0].UmanjenjeUloge);
+    }
+
+    [Fact]
+    public void NapomenaNaRetku_IzabraniBranitelj_NemaNapomene()
+    {
+        var r = Izracunaj(UlogaZastupanja.Branitelj, podesi: z =>
+        {
+            z.IsNaTeretProracuna = true;
+            z.IsIzabraniOslobodjajuca = true;
+        });
+        Assert.Equal("", r.Stavke[0].UmanjenjeUloge);
+    }
 }

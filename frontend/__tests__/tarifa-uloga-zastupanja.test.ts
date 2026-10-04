@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { izracunajTroskovnik } from "@/lib/troskovnik-izracun";
 import {
   napomenaUmanjenjaUloge,
+  opisZaUlogu,
   provjeriUlogu,
   provjeriZahtjev,
   tarifniBrojStavke,
@@ -29,7 +30,7 @@ function stavka(p: Partial<TarifnaStavka> & Pick<TarifnaStavka, "id" | "tarifni_
 }
 
 const KATALOG = [
-  stavka({ id: "kaz_obrana", tarifni_broj: "Tbr. 4.1", kazneni_base: true }),
+  stavka({ id: "kaz_obrana", opis: "Obrana okrivljenika na raspravi – prvi sat (Tbr. 4.1)", tarifni_broj: "Tbr. 4.1", kazneni_base: true }),
   stavka({ id: "kaz_zalba_presuda", tarifni_broj: "Tbr. 5.1", kazneni_base: true, kazneni_povecanje: 0.5 }),
   stavka({ id: "kaz_istraga_dodatni_sat", tarifni_broj: "Tbr. 3.1", fiksni_body: 50 }),
   stavka({ id: "kaz_zastupanje_ostecenika", tarifni_broj: "Tbr. 4.8", kazneni_base: true, kazneni_povecanje: -0.5, umanjenje_uloge_ugradjeno: true }),
@@ -132,5 +133,33 @@ describe("uloga zastupanja — provjere", () => {
     expect(tarifniBrojStavke("Tbr. 4.1")).toBe(4);
     expect(tarifniBrojStavke("Tbr. 3.3")).toBe(3);
     expect(napomenaUmanjenjaUloge("Tbr. 3.1")).toBe("umanjeno 50% (Tbr. 3 t. 3 Tarife)");
+  });
+});
+
+describe("uloga zastupanja — nazivi i napomene", () => {
+  it("oštećenik i tužitelji ne 'brane'", () => {
+    expect(opisZaUlogu("Obrana okrivljenika na raspravi – prvi sat (Tbr. 4.1)", "PUNOMOCNIK_OSTECENIKA")).toBe(
+      "Zastupanje oštećenika na raspravi – prvi sat (Tbr. 4.1)",
+    );
+    expect(opisZaUlogu("Obrana okrivljenika na raspravi", "OSTECENIK_KAO_TUZITELJ")).toBe("Zastupanje oštećenika kao tužitelja na raspravi");
+    expect(opisZaUlogu("Obrana okrivljenika na raspravi", "PRIVATNI_TUZITELJ")).toBe("Zastupanje privatnog tužitelja na raspravi");
+    expect(opisZaUlogu("Obrana okrivljenika na raspravi", "BRANITELJ")).toBe("Obrana okrivljenika na raspravi");
+  });
+
+  it("redak nosi naziv po ulozi", () => {
+    expect(racun("PUNOMOCNIK_OSTECENIKA").lines[0].opis).toMatch(/^Zastupanje oštećenika/);
+  });
+
+  it("napomena Pravilnika za službenu dužnost", () => {
+    const r = racun("BRANITELJ", "kaz_obrana", { isPoSluzbenojDuznosti: true });
+    expect(r.lines[0].umanjenje_uloge).toBe("umanjeno 50% (Pravilnik NN 22/22, čl. 1)");
+  });
+
+  it("opunomoćenik žrtve uz branitelja je greška", () => {
+    const g = provjeriZahtjev([KATALOG[0]], {
+      isOduzimanjePrekrsaj: false, vrijednostOduzimanja: 0, zaprijecenaKazna: "do_5",
+      ulogaZastupanja: "BRANITELJ", isOpunomocenikZrtve: true,
+    });
+    expect(g.join(" ")).toContain("samo uz ulogu punomoćnika oštećenika");
   });
 });

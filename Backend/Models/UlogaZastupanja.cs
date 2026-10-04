@@ -40,6 +40,29 @@ public static class UlogaZastupanja
     public static bool UmanjujeUloga(string? uloga, string? tarifniBroj) =>
         uloga == PunomocnikOstecenika && TarifniBrojStavke(tarifniBroj) is 3 or 4;
 
+    /// <summary>
+    /// Naziv radnje prilagođen ulozi: oštećenik ili tužitelj ne „brani", nego „zastupa".
+    /// „Obrana okrivljenika na raspravi" → „Zastupanje oštećenika na raspravi". Branitelj
+    /// i nepoznata uloga dobivaju naziv iz kataloga.
+    /// </summary>
+    public static string OpisZaUlogu(string opis, string? uloga)
+    {
+        if (uloga is null or Branitelj || !JePoznata(uloga)) return opis;
+
+        var subjekt = uloga switch
+        {
+            PrivatniTuzitelj => "privatnog tužitelja",
+            OstecenikKaoTuzitelj => "oštećenika kao tužitelja",
+            _ => "oštećenika",
+        };
+
+        if (opis.StartsWith("Obrana okrivljenika", StringComparison.Ordinal))
+            return "Zastupanje " + subjekt + opis["Obrana okrivljenika".Length..];
+        if (opis.StartsWith("Obrana ", StringComparison.Ordinal))
+            return "Zastupanje " + opis["Obrana ".Length..];
+        return opis;
+    }
+
     /// <summary>Točka Tarife uz koju stoji umanjenje — za napomenu na ispisu.</summary>
     public static string IzvorUmanjenja(string? tarifniBroj) =>
         TarifniBrojStavke(tarifniBroj) == 3 ? "Tbr. 3 t. 3 Tarife" : "Tbr. 4 t. 8 Tarife";

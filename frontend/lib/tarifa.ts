@@ -83,6 +83,23 @@ export function umanjujeUloga(
   return tbr === 3 || tbr === 4;
 }
 
+/**
+ * Naziv radnje prilagođen ulozi: oštećenik ili tužitelj ne „brani", nego „zastupa".
+ * Zrcali `UlogaZastupanja.OpisZaUlogu` u backendu (isti tekst ide na ispis).
+ */
+export function opisZaUlogu(opis: string, uloga: UlogaZastupanja | null | undefined): string {
+  if (!uloga || uloga === "BRANITELJ") return opis;
+  const subjekt =
+    uloga === "PRIVATNI_TUZITELJ"
+      ? "privatnog tužitelja"
+      : uloga === "OSTECENIK_KAO_TUZITELJ"
+      ? "oštećenika kao tužitelja"
+      : "oštećenika";
+  if (opis.startsWith("Obrana okrivljenika")) return `Zastupanje ${subjekt}${opis.slice("Obrana okrivljenika".length)}`;
+  if (opis.startsWith("Obrana ")) return `Zastupanje ${opis.slice("Obrana ".length)}`;
+  return opis;
+}
+
 /** Napomena uz umanjenu stavku: "umanjeno 50% (Tbr. 4 t. 8 Tarife)". */
 export function napomenaUmanjenjaUloge(tarifniBroj: string): string {
   const izvor = tarifniBrojStavke(tarifniBroj) === 3 ? "Tbr. 3 t. 3 Tarife" : "Tbr. 4 t. 8 Tarife";
@@ -780,6 +797,9 @@ export function provjeriZahtjev(
   // je u `provjeriUlogu` (kontroler je traži, servis ne — vidi `TroskovnikController`).
   if (ulaz.isPoSluzbenojDuznosti && ulaz.ulogaZastupanja && ulaz.ulogaZastupanja !== "BRANITELJ") {
     greske.push("Postavljanje po službenoj dužnosti moguće je samo za branitelja okrivljenika.");
+  }
+  if (ulaz.ulogaZastupanja && ulaz.isOpunomocenikZrtve && ulaz.ulogaZastupanja !== "PUNOMOCNIK_OSTECENIKA") {
+    greske.push("Opunomoćenik žrtve moguć je samo uz ulogu punomoćnika oštećenika.");
   }
   if (
     ulaz.ulogaZastupanja === "PUNOMOCNIK_OSTECENIKA" &&

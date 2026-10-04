@@ -12,6 +12,7 @@ import {
   PDV_RATE,
   ULOGA_OSTECENIK_STOPA,
   napomenaUmanjenjaUloge,
+  opisZaUlogu,
   umanjujeUloga,
   izracunajBodove,
   izracunajKazneneBodove,
@@ -115,6 +116,22 @@ export interface TroskovnikIzracunRedak {
   umanjenje_uloge: string;
 }
 
+/**
+ * Napomena uz redak za ispis: umanjenje po ulozi (Tarifa) i/ili po Pravilniku NN 22/22.
+ * Pravilnik se bilježi samo na retcima na koje je stvarno primijenjen. Zrcali
+ * `TroskovnikService.NapomenaUmanjenja`.
+ */
+function napomenaUmanjenja(def: TarifnaStavka, u: TroskovnikIzracunUlaz, umanjenoUlogom: boolean): string {
+  const dijelovi: string[] = [];
+  if (umanjenoUlogom) dijelovi.push(napomenaUmanjenjaUloge(def.tarifni_broj));
+  if (def.kazneni_base && !def.prekrsaj_oduzimanje) {
+    if (u.isZastupnikDjeteta) dijelovi.push("70% nagrade (Pravilnik NN 22/22, čl. 2)");
+    else if (u.isPoSluzbenojDuznosti || (u.isNaTeretProracuna && !u.isIzabraniOslobodjajuca))
+      dijelovi.push("umanjeno 50% (Pravilnik NN 22/22, čl. 1)");
+  }
+  return dijelovi.join("; ");
+}
+
 export type TroskovnikIzracunRezultat = ReturnType<typeof izracunajTroskovnik>;
 
 /**
@@ -178,7 +195,7 @@ export function izracunajTroskovnik(u: TroskovnikIzracunUlaz) {
 
     lines.push({
       uid: redak.uid,
-      opis: def.opis,
+      opis: opisZaUlogu(def.opis, u.ulogaZastupanja),
       tarifni_broj: def.tarifni_broj,
       kolicina: redak.kolicina,
       datum: redak.datum,
@@ -193,7 +210,7 @@ export function izracunajTroskovnik(u: TroskovnikIzracunUlaz) {
       tbr41_snizenje: snizenje,
       tbr41_bodovi: tbr41BodoviStavke,
       tbr41_pravni_izvor: tbr41Izvor(povisenje, snizenje),
-      umanjenje_uloge: umanjenoUlogom ? napomenaUmanjenjaUloge(def.tarifni_broj) : "",
+      umanjenje_uloge: napomenaUmanjenja(def, u, umanjenoUlogom),
     });
   }
 

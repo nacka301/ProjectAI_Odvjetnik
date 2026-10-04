@@ -44,6 +44,11 @@ public class TroskovnikController : ControllerBase
             throw new TroskovnikValidationException(
                 "Odvjetnik ne može u istom postupku biti branitelj okrivljenika i opunomoćenik djeteta žrtve — te se uloge isključuju.");
 
+        if (zahtjev.UlogaZastupanja is not null && zahtjev.JeOpunomocenikZrtve
+            && zahtjev.UlogaZastupanja != UlogaZastupanja.PunomocnikOstecenika)
+            throw new TroskovnikValidationException(
+                "Opunomoćenik žrtve moguć je samo uz ulogu punomoćnika oštećenika.");
+
         // Kazneni i prekršajni troškovnik traži ulogu zastupanja — bez nje alat ne zna koji
         // postotak Tarife primijeniti (Tbr. 3 t. 3 / Tbr. 4 t. 8).
         var kazneniKatalog = zahtjev.Stavke.Any(s =>

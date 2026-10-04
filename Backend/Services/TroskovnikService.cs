@@ -555,6 +555,13 @@ public sealed class TroskovnikService : ITroskovnikService
 
         var uloga = request.UlogaZastupanja ?? UlogaZastupanja.Branitelj;
 
+        // Opunomoćenik žrtve (Pravilnik čl. 2) je oblik zastupanja oštećenika; uz branitelja ili
+        // tužitelja ta zastavica nema smisla i tiho bi dala 70% pogrešnoj ulozi.
+        if (request.UlogaZastupanja is not null && request.JeOpunomocenikZrtve
+            && uloga != UlogaZastupanja.PunomocnikOstecenika)
+            throw new TroskovnikValidationException(
+                "Opunomoćenik žrtve moguć je samo uz ulogu punomoćnika oštećenika.");
+
         // Službena dužnost je postavljanje BRANITELJA (Zakon o odvjetništvu / Pravilnik čl. 1);
         // punomoćnika oštećenika ili tužitelja sud ne postavlja po službenoj dužnosti.
         if (request.IsPoSluzbenojDuznosti && uloga != UlogaZastupanja.Branitelj)
@@ -582,6 +589,28 @@ public sealed class TroskovnikService : ITroskovnikService
     private static bool PrimijeniUmanjenjeUloge(TarifnaStavka definicija, TroskovnikRequest request) =>
         !definicija.UmanjenjeUlogeUgradjeno
         && UlogaZastupanja.UmanjujeUloga(request.UlogaZastupanja, definicija.TarifniBroj);
+
+    /// <summary>
+    /// Napomena uz redak za ispis: što je točno umanjilo nagradu — uloga zastupanja (Tarifa)
+    /// i/ili Pravilnik NN 22/22. Pravilnik se bilježi samo na retcima na koje je stvarno
+    /// primijenjen (stavke vezane uz zapriječenu kaznu), jednako kao u izračunu bodova.
+    /// </summary>
+    private static string NapomenaUmanjenja(TarifnaStavka definicija, TroskovnikRequest request, bool umanjenoUlogom)
+    {
+        var dijelovi = new List<string>();
+        if (umanjenoUlogom)
+            dijelovi.Add($"umanjeno 50% ({UlogaZastupanja.IzvorUmanjenja(definicija.TarifniBroj)})");
+
+        if (definicija.KazneniBase && !definicija.PrekrsajOduzimanje)
+        {
+            if (request.JeOpunomocenikZrtve)
+                dijelovi.Add("70% nagrade (Pravilnik NN 22/22, čl. 2)");
+            else if (request.IsPoSluzbenojDuznosti || (request.IsNaTeretProracuna && !request.IsIzabraniOslobodjajuca))
+                dijelovi.Add("umanjeno 50% (Pravilnik NN 22/22, čl. 1)");
+        }
+
+        return string.Join("; ", dijelovi);
+    }
 
     /// <summary>Sastavlja retke troškovnika, jedan po odabranoj stavci.</summary>
     private static List<TroskovnikLineItem> IzracunajRetke(
@@ -633,7 +662,7 @@ public sealed class TroskovnikService : ITroskovnikService
                 Rbr = redniBroj,
                 ItemId = definicija.Id,
                 Datum = stavka.Datum,
-                Opis = definicija.Opis,
+                Opis = UlogaZastupanja.OpisZaUlogu(definicija.Opis, request.UlogaZastupanja),
                 TarifniBroj = definicija.TarifniBroj,
                 Kategorija = definicija.Kategorija,
                 PravniIzvor = definicija.PravniIzvor,
@@ -648,9 +677,7 @@ public sealed class TroskovnikService : ITroskovnikService
                 Tbr41SnizenjePostotak = tbr41Snizenje,
                 Tbr41Bodovi = tbr41BodoviStavke,
                 Tbr41PravniIzvor = Tbr41Izvor(tbr41Povisenje, tbr41Snizenje),
-                UmanjenjeUloge = umanjenoUlogom
-                    ? $"umanjeno 50% ({UlogaZastupanja.IzvorUmanjenja(definicija.TarifniBroj)})"
-                    : ""
+                UmanjenjeUloge = NapomenaUmanjenja(definicija, request, umanjenoUlogom)
             });
         }
 
