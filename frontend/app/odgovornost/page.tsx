@@ -81,8 +81,8 @@ export default function OdgovornostPage() {
           <h2>U kojoj je fazi alat</h2>
           <p>
             PravoTek je u ranoj fazi razvoja. Razvija ga jedna osoba. Izračuni su provjereni na
-            primjerima iz prakse, ali nisu neovisno stručno revidirani. Tijekom probnog razdoblja
-            alat se koristi bez naknade.
+            primjerima iz prakse, ali nisu neovisno stručno revidirani. Alat se koristi
+            bez naknade.
           </p>
 
           <h2>Odgovornost</h2>

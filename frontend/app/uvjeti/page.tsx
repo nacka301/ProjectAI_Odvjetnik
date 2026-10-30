@@ -93,27 +93,8 @@ export default function UvjetiPage() {
           {/* §4 */}
           <h2>4. Naknada</h2>
           <p>
-            4.1. <strong>Probno razdoblje.</strong> PravoTek je u ranoj fazi razvoja i nalazi se u
-            probnom razdoblju. Dok traje probno razdoblje, usluga se koristi <strong>bez naknade</strong>.
-            Ovi Uvjeti ne sadrže cijenu jer naplata nije uključena.
-          </p>
-          <p>
-            4.2. <strong>Pristup.</strong> Pristup aplikaciji otvara se na <strong>7 (sedam) dana</strong>{" "}
-            od registracije. Nakon toga Pružatelj usluge pristup produljuje bez naknade, na zahtjev
-            Korisnika poslan e-poštom na{" "}
-            <a href="mailto:vackadavid@gmail.com">vackadavid@gmail.com</a>. Aplikacija ne traži i ne
-            pohranjuje podatke o karticama ni druge podatke o plaćanju.
-          </p>
-          <p>
-            4.3. <strong>Istek pristupa.</strong> Ako pristup nije produljen, Korisniku se zatvaraju
-            moduli aplikacije. Podaci Korisnika (stranke, predmeti, troškovnici i ostali sadržaj){" "}
-            <strong>ostaju sačuvani</strong> i ponovno su dostupni čim se pristup produlji. Brisanje
-            podataka provodi se isključivo na zahtjev Korisnika, sukladno članku 8. ovih Uvjeta.
-          </p>
-          <p>
-            4.4. <strong>Uvođenje naplate.</strong> Prije uvođenja naplate Pružatelj usluge obavijestit
-            će Korisnika e-poštom najmanje <strong>30 (trideset) dana</strong> unaprijed. Naplata se na
-            Korisnika primjenjuje tek kad pristane na nove uvjete.
+            4.1. Usluga se koristi <strong>bez naknade</strong>. Aplikacija ne traži i ne pohranjuje
+            podatke o karticama ni druge podatke o plaćanju.
           </p>
 
           {/* §5 — tekst o odgovornosti živi samo u Izjavi, da se dva teksta ne raziđu. */}
@@ -162,7 +143,7 @@ export default function UvjetiPage() {
           </p>
           <p>
             7.2. Korisnik stječe neisključivu, neprenosivu i opozivu licenciju za korištenje aplikacije
-            dok mu je pristup otvoren, isključivo za vlastite poslovne potrebe odvjetničkog ureda.
+            dok koristi aplikaciju, isključivo za vlastite poslovne potrebe odvjetničkog ureda.
           </p>
           <p>
             7.3. Sadržaj (podaci o strankama, predmetima, dokumentima) koji Korisnik unese u aplikaciju
@@ -211,8 +192,7 @@ export default function UvjetiPage() {
           </p>
           <p>
             10.2. Izmijenjene Uvjete Korisnik potvrđuje pri sljedećem ulasku u aplikaciju. Izmjene
-            kojima se Korisniku nameću nove obveze, uključujući uvođenje naplate, primjenjuju se na
-            Korisnika tek kad ih prihvati. Korisnik koji izmjene ne prihvati može zatražiti
+            kojima se Korisniku nameću nove obveze primjenjuju se na Korisnika tek kad ih prihvati. Korisnik koji izmjene ne prihvati može zatražiti
             zatvaranje računa prema članku 8.
           </p>
           <p>
