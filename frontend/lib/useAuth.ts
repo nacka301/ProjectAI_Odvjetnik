@@ -18,9 +18,8 @@ import { createSupabaseBrowser } from "@/lib/supabase/client";
  * `TOKEN_REFRESHED` roughly hourly. When this hook kept `authHeaders` in state
  * and rebuilt the object on every one of those, its identity changed each time
  * even though the token had not — and every `useEffect([authHeaders])` in the
- * app (there are ~20) re-ran. In Troškovnik that meant `useSubscription`
- * flipped `loading` back to true, `PretplataGate` swapped the page for a
- * spinner, and the whole form unmounted mid-edit.
+ * app (there are ~20) re-ran, and any hook that reset `loading` on a refetch
+ * swapped the page for a spinner and unmounted the form mid-edit.
  *
  * Storing the raw token string and deriving the header through `useMemo` fixes
  * it at the source: `setToken(sameString)` is a no-op React bails out of, so a

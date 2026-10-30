@@ -1,6 +1,5 @@
 import "./landing/landing-tokens.css";
 import Nav from "./landing/Nav";
-import AnnouncementBar from "./landing/AnnouncementBar";
 import Hero from "./landing/Hero";
 import Demo from "./landing/Demo";
 import SourceMarquee from "./landing/SourceMarquee";
@@ -8,7 +7,6 @@ import HowItWorks from "./landing/HowItWorks";
 import Modules from "./landing/Modules";
 import Comparison from "./landing/Comparison";
 import Security from "./landing/Security";
-import Pricing from "./landing/Pricing";
 import Faq from "./landing/Faq";
 import PosterCta from "./landing/PosterCta";
 import Footer from "./landing/Footer";
@@ -35,7 +33,6 @@ export default function LandingPage() {
   return (
     <div className="ptk-landing">
       <Nav />
-      <AnnouncementBar />
       <Hero />
       <Demo />
       <SourceMarquee />
@@ -43,7 +40,6 @@ export default function LandingPage() {
       <Modules />
       <Comparison />
       <Security />
-      <Pricing />
       <Faq />
       <PosterCta />
       <Footer />

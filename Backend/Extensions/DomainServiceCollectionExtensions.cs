@@ -137,12 +137,9 @@ public static class DomainServiceCollectionExtensions
         services.AddHttpClient<UsageService>();
         services.AddScoped<IUsageService>(sp => sp.GetRequiredService<UsageService>());
 
-        // Trial / subscription gate. Singleton AdminIdentity because it only
-        // reads configuration once, and both middlewares resolve it from the
-        // root container.
+        // Singleton AdminIdentity because it only reads configuration once,
+        // and the middlewares resolve it from the root container.
         services.AddSingleton<Backend.Middleware.AdminIdentity>();
-        services.AddHttpClient<SubscriptionGate>();
-        services.AddScoped<ISubscriptionGate>(sp => sp.GetRequiredService<SubscriptionGate>());
 
         services.AddHttpClient<ClientCaseService>();
         services.AddScoped<IClientCaseService>(sp => sp.GetRequiredService<ClientCaseService>());

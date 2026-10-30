@@ -22,7 +22,6 @@ public sealed class AccountService : IAccountService
     private readonly ISupabaseRequestContext _supabase;
     private readonly IAuditLogService _auditLog;
     private readonly ITenantResolver _tenantResolver;
-    private readonly ISubscriptionGate _subscriptionGate;
     private readonly IUsageService _usage;
     private readonly ILogger<AccountService> _logger;
 
@@ -48,7 +47,6 @@ public sealed class AccountService : IAccountService
         ISupabaseRequestContext supabase,
         IAuditLogService auditLog,
         ITenantResolver tenantResolver,
-        ISubscriptionGate subscriptionGate,
         IUsageService usage,
         ILogger<AccountService> logger)
     {
@@ -56,7 +54,6 @@ public sealed class AccountService : IAccountService
         _supabase = supabase;
         _auditLog = auditLog;
         _tenantResolver = tenantResolver;
-        _subscriptionGate = subscriptionGate;
         _usage = usage;
         _logger = logger;
     }
@@ -316,7 +313,6 @@ public sealed class AccountService : IAccountService
         await DeleteWaitlistByEmailAsync(email!);
 
         _tenantResolver.InvalidateCache(targetUserId);
-        _subscriptionGate.InvalidateCache(firmId);
         _usage.InvalidateCache(firmId);
 
         _logger.LogInformation("Admin je obrisao korisnika {UserId}; ured {FirmId} zadrzava podatke.",
@@ -381,7 +377,6 @@ public sealed class AccountService : IAccountService
         // 7. Invalidacija procesnih cacheva, inače stara mapiranja žive do 5 min.
         foreach (var id in memberIds)
             _tenantResolver.InvalidateCache(id);
-        _subscriptionGate.InvalidateCache(firmId);
         _usage.InvalidateCache(firmId);
     }
 

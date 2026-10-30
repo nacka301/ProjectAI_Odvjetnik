@@ -8,9 +8,9 @@ namespace Backend.Middleware;
 /// about itself — an address configured on the host.
 ///
 /// This used to live inside AdminGuardMiddleware. It moved out when a second
-/// middleware (SubscriptionGateMiddleware) needed the same answer: two copies of
-/// "am I talking to the admin" is exactly the kind of pair that drifts, and the
-/// half that drifts silently is the one that stops letting the admin in.
+/// consumer needed the same answer: two copies of "am I talking to the admin"
+/// is exactly the kind of pair that drifts, and the half that drifts silently
+/// is the one that stops letting the admin in.
 ///
 /// FAIL CLOSED: with no ADMIN_EMAIL configured, nobody is the admin. That shuts
 /// admin tooling and in-development modules for everyone, which is the safe

@@ -205,13 +205,6 @@ app.UseMiddleware<SupabaseJwtMiddleware>();
 // and before MapControllers, so a refused call never spends a credit.
 app.UseMiddleware<AdminGuardMiddleware>();
 
-// ── Subscription Gate Middleware ──
-// Refuses the finished modules (Troskovnik, Stranke) once an office's trial or
-// subscription has run out. MUST run after AdminGuardMiddleware so a module that
-// is merely unfinished still answers MODULE_IN_DEVELOPMENT rather than a demand
-// for payment, and before MapControllers so a refused call costs nothing.
-app.UseMiddleware<SubscriptionGateMiddleware>();
-
 // ── Audit Logging Middleware ──
 // Logs: userId, tenantId, endpoint, HTTP method, status code, duration.
 // NEVER logs request/response bodies (GDPR + attorney-client privilege).

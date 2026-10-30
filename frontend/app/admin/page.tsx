@@ -3,18 +3,14 @@
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/useAuth";
 import { API_BASE } from "@/lib/api";
-import SubscriptionEditor from "@/components/admin/SubscriptionEditor";
 import DeleteUserDialog from "@/components/admin/DeleteUserDialog";
 import PrijaveGresakaPanel from "@/components/admin/PrijaveGresakaPanel";
 import {
   ShieldCheck,
   Users,
-  CreditCard,
   RefreshCw,
   AlertTriangle,
   CheckCircle2,
-  XCircle,
-  Clock,
   Search,
   FlaskConical,
   Loader2,
@@ -44,9 +40,6 @@ interface AdminUser {
   firm_name: string | null;
   firm_oib: string | null;
   law_firm_id: string | null;
-  sub_status: string | null;
-  valid_from: string | null;
-  valid_until: string | null;
   used_credits: number;
   max_credits: number;
 }
@@ -108,74 +101,6 @@ function timeAgo(iso: string | null): string {
 // ═══════════════════════════════════════════════════════════
 //  Badge components
 // ═══════════════════════════════════════════════════════════
-
-/**
- * One badge for the whole subscription, replacing the pair that used to sit
- * here.
- *
- * The old PlanBadge named a tier (and still listed "Premium" and "Enterprise",
- * which existed in no other file); SubStatusBadge named a status beside it, in
- * a different Croatian gender. With one plan there is one thing to say: is this
- * office on trial, paying, or shut out.
- *
- * The trial's end is derived here the same way the backend derives it —
- * valid_from + TRIAL_DAYS — rather than from valid_until, which for a trial row
- * is written for readability and is not what the gate consults.
- */
-const TRIAL_DAYS = 7;
-
-type OfficeState = "proba" | "pretplata" | "isteklo" | "bez";
-
-function officeState(u: {
-  sub_status: string | null;
-  valid_from: string | null;
-  valid_until: string | null;
-}): OfficeState {
-  if (!u.sub_status) return "bez";
-
-  const now = Date.now();
-
-  if (u.sub_status === "trial") {
-    const start = u.valid_from ? new Date(u.valid_from).getTime() : now;
-    return start + TRIAL_DAYS * 86_400_000 > now ? "proba" : "isteklo";
-  }
-
-  if (u.sub_status === "active" || u.sub_status === "canceled") {
-    if (!u.valid_until) return "pretplata";
-    return new Date(u.valid_until).getTime() > now ? "pretplata" : "isteklo";
-  }
-
-  return "isteklo";
-}
-
-function StateBadge({ state }: { state: OfficeState }) {
-  if (state === "bez")
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2.5 py-0.5 text-xs font-medium text-slate-500 ring-1 ring-inset ring-slate-200">
-        Bez pretplate
-      </span>
-    );
-
-  if (state === "pretplata")
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200">
-        <CheckCircle2 className="h-3 w-3" /> Pretplata
-      </span>
-    );
-
-  if (state === "proba")
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-200">
-        <Clock className="h-3 w-3" /> Proba
-      </span>
-    );
-
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-200">
-      <XCircle className="h-3 w-3" /> Isteklo
-    </span>
-  );
-}
 
 function RoleBadge({ role }: { role: string }) {
   // Firm roles, per migration 015. The legacy "admin"/"member" pair is gone.
@@ -294,17 +219,13 @@ export default function AdminDashboard() {
         (u) =>
           u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
           u.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (u.firm_name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (u.sub_status || "").toLowerCase().includes(searchQuery.toLowerCase())
+          (u.firm_name || "").toLowerCase().includes(searchQuery.toLowerCase())
       )
     : users;
 
   // Summary stats
   const totalUsers = users.length;
   const usersWithFirm = users.filter((u) => u.firm_name).length;
-  // Counted through officeState so the tile agrees with the badge beside it —
-  // it used to run its own date comparison and ignore trials entirely.
-  const activeSubs = users.filter((u) => officeState(u) === "pretplata").length;
   const profileComplete = users.filter((u) => u.full_name && u.firm_name).length;
 
   return (
@@ -338,7 +259,7 @@ export default function AdminDashboard() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         {/* ── Summary cards ── */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
             <div className="flex items-center gap-3">
               <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-blue-50">
@@ -349,20 +270,6 @@ export default function AdminDashboard() {
                   {loadingUsers ? "…" : totalUsers}
                 </p>
                 <p className="text-xs text-slate-500">Ukupno korisnika</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-emerald-50">
-                <CreditCard className="h-5 w-5 text-emerald-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-slate-900">
-                  {loadingUsers ? "…" : activeSubs}
-                </p>
-                <p className="text-xs text-slate-500">Aktivne pretplate</p>
               </div>
             </div>
           </div>
@@ -402,7 +309,7 @@ export default function AdminDashboard() {
             <div className="flex items-center gap-2">
               <Users className="h-4 w-4 text-slate-600" />
               <h2 className="text-sm font-bold text-slate-900">
-                Korisnici i pretplate
+                Korisnici
               </h2>
               {!loadingUsers && (
                 <span className="text-xs text-slate-400 ml-1">
@@ -442,9 +349,6 @@ export default function AdminDashboard() {
                     Ured
                   </th>
                   <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    Pretplata
-                  </th>
-                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                     Krediti
                   </th>
                   <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
@@ -458,7 +362,7 @@ export default function AdminDashboard() {
               <tbody className="divide-y divide-slate-100">
                 {loadingUsers ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-12 text-center">
+                    <td colSpan={5} className="px-4 py-12 text-center">
                       <RefreshCw className="h-5 w-5 text-slate-400 animate-spin mx-auto mb-2" />
                       <p className="text-xs text-slate-500">
                         Učitavanje korisnika...
@@ -468,7 +372,7 @@ export default function AdminDashboard() {
                 ) : filtered.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={5}
                       className="px-4 py-12 text-center text-sm text-slate-400"
                     >
                       {searchQuery
@@ -526,9 +430,6 @@ export default function AdminDashboard() {
                         ) : (
                           <span className="text-xs text-slate-400">—</span>
                         )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <StateBadge state={officeState(user)} />
                       </td>
                       <td className="px-4 py-3">
                         <CreditBar
@@ -589,9 +490,6 @@ export default function AdminDashboard() {
                           <p className="text-sm font-medium text-slate-900 truncate">
                             {user.full_name || user.email || "—"}
                           </p>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <StateBadge state={officeState(user)} />
-                          </div>
                         </div>
                       </div>
                       {isOpen ? (
@@ -629,25 +527,6 @@ export default function AdminDashboard() {
                           <span className="font-medium text-slate-500">2FA:</span>{" "}
                           {user.totp_enabled ? "Uključena" : "Isključena"}
                         </p>
-                        {user.valid_until && (
-                          <p>
-                            <span className="font-medium text-slate-500">Pretplata do:</span>{" "}
-                            {formatDateOnly(user.valid_until)}
-                          </p>
-                        )}
-
-                        <div className="pt-3 mt-2 border-t border-slate-200">
-                          <p className="font-semibold text-slate-500 uppercase tracking-wider mb-2 text-[10px]">
-                            Uredi pretplatu
-                          </p>
-                          <SubscriptionEditor
-                            lawFirmId={user.law_firm_id}
-                            currentStatus={user.sub_status}
-                            currentValidUntil={user.valid_until}
-                            authHeaders={authHeaders}
-                            onSaved={loadUsers}
-                          />
-                        </div>
 
                         <div className="pt-3 mt-2 border-t border-slate-200">
                           <p className="font-semibold text-red-500 uppercase tracking-wider mb-2 text-[10px]">
@@ -706,31 +585,6 @@ export default function AdminDashboard() {
                         {user.phone_number || "—"}
                       </p>
                     </div>
-                    {user.valid_until && (
-                      <div>
-                        <p className="font-semibold text-slate-500 uppercase tracking-wider mb-1">
-                          Pretplata do
-                        </p>
-                        <p className="text-slate-700">
-                          {formatDateOnly(user.valid_until)}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* This is where an e-mail saying "I paid" becomes access. */}
-                    <div className="col-span-2 md:col-span-4 pt-3 border-t border-slate-200">
-                      <p className="font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                        Uredi pretplatu
-                      </p>
-                      <SubscriptionEditor
-                        lawFirmId={user.law_firm_id}
-                        currentStatus={user.sub_status}
-                        currentValidUntil={user.valid_until}
-                        authHeaders={authHeaders}
-                        onSaved={loadUsers}
-                      />
-                    </div>
-
                     {/* Opasna zona — potpuno brisanje korisnika/ureda */}
                     <div className="col-span-2 md:col-span-4 pt-3 border-t border-slate-200">
                       <p className="font-semibold text-red-500 uppercase tracking-wider mb-2">

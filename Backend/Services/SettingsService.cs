@@ -307,52 +307,6 @@ public sealed class SettingsService
     }
 
     // ═══════════════════════════════════════════════════════════
-    //  Subscription — GET
-    // ═══════════════════════════════════════════════════════════
-
-    /// <summary>Fetch the subscription for a user's law firm.</summary>
-    public async Task<SubscriptionResponse?> GetSubscriptionAsync(string userId)
-    {
-        if (!_isConfigured || !IsValidUuid(userId)) return null;
-
-        try
-        {
-            var profile = await GetProfileAsync(userId);
-            if (profile == null || string.IsNullOrWhiteSpace(profile.LawFirmId))
-                return null;
-
-            var safeId = Uri.EscapeDataString(profile.LawFirmId);
-
-            // No status filter, on purpose. It used to read
-            // "&status=in.(active,trial)", which meant an expired row matched
-            // nothing, this method returned null, and the controller answered
-            // with its own free/active fallback — so the one user whose access
-            // had just been closed was the one told everything was fine.
-            // Take the newest row whatever its status and let SubscriptionGate
-            // judge it.
-            var url = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/tenant_subscriptions?law_firm_id=eq.{safeId}&select=id,plan_id,status,valid_from,valid_until,price_eur,max_cases,max_invoices,ai_credits_limit,law_firm_id&order=created_at.desc&limit=1";
-            var request = CreateRequest(HttpMethod.Get, url);
-
-            var response = await _httpClient.SendAsync(request);
-            var body = await response.Content.ReadAsStringAsync();
-
-            if (!response.IsSuccessStatusCode)
-            {
-                _logger.LogError("GetSubscription failed ({Status}): {Body}", response.StatusCode, body);
-                return null;
-            }
-
-            var rows = JsonSerializer.Deserialize<List<SubscriptionResponse>>(body, JsonOpts);
-            return rows?.FirstOrDefault();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error fetching subscription for user {UserId}", userId);
-            return null;
-        }
-    }
-
-    // ═══════════════════════════════════════════════════════════
     //  Registration — Create firm + profile in one go
     // ═══════════════════════════════════════════════════════════
 
@@ -378,7 +332,7 @@ public sealed class SettingsService
                 FullName = req.FullName
             });
 
-            // 3. Make sure the office has its trial row
+            // 3. Make sure the office has its usage-limits row
             await CreateDefaultSubscriptionAsync(firm.Id);
 
             return firm;
@@ -462,23 +416,24 @@ public sealed class SettingsService
     {
         try
         {
-            // The DB trigger auto_provision_trial already creates the trial row
-            // on law_firms INSERT.  This method is kept as a safety net — if the
-            // trigger row is missing we upsert the same thing.
+            // The DB trigger auto_provision_trial already creates this row on
+            // law_firms INSERT.  This method is kept as a safety net — if the
+            // trigger row is missing we upsert one.
             //
-            // valid_until is written for the benefit of anyone reading the row
-            // straight out of Supabase; the backend derives a trial's expiry
-            // from valid_from + SubscriptionPlans.TrialDays and ignores it.
+            // PravoTek is free and nothing reads status or valid_until to decide
+            // who may work. The row exists because tenant_usage_stats and the
+            // credit limits hang off it; valid_until is NOT NULL, so it is set
+            // far enough out that it can never be mistaken for an expiry.
             var url = $"{_supabaseUrl!.TrimEnd('/')}/rest/v1/tenant_subscriptions";
             var now = DateTimeOffset.UtcNow;
             var payload = JsonSerializer.Serialize(new
             {
                 law_firm_id = firmId,
                 plan_id     = SubscriptionPlans.PlanId,
-                status      = "trial",
+                status      = "active",
                 valid_from  = now,
-                valid_until = now.AddDays(SubscriptionPlans.TrialDays),
-                price_eur   = SubscriptionPlans.MonthlyPriceEur,
+                valid_until = now.AddYears(100),
+                price_eur   = 0m,
                 max_cases   = SubscriptionPlans.Unlimited,
                 max_invoices    = SubscriptionPlans.Unlimited,
                 ai_credits_limit = 0
@@ -499,7 +454,7 @@ public sealed class SettingsService
             }
             else
             {
-                _logger.LogInformation("Ensured trial subscription for firm {FirmId}", firmId);
+                _logger.LogInformation("Ensured usage-limits row for firm {FirmId}", firmId);
             }
         }
         catch (Exception ex)

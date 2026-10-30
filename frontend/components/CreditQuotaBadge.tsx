@@ -45,7 +45,6 @@ export const CreditQuotaBadge = React.memo(function CreditQuotaBadge({ quota, lo
         </span>
         <p className="text-xs text-slate-500 leading-relaxed">
           Vaš mjesečni paket ({quota.used}/{quota.max}) je iskorišten.
-          Za dodatne analize, nadogradite uredski plan.
         </p>
       </div>
     );
@@ -76,7 +75,7 @@ export const CreditExhaustedWarning = React.memo(function CreditExhaustedWarning
         Dosegli ste mjesečni limit od {quota.max} korištenja.
       </p>
       <p className="mt-1 text-xs text-amber-600">
-        Za nastavak korištenja, nadogradite uredski plan ili pričekajte sljedeći mjesec.
+        Pričekajte sljedeći mjesec ili se javite podršci.
       </p>
     </div>
   );

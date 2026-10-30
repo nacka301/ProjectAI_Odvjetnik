@@ -23,7 +23,6 @@ public interface ISettingsService
     Task<LawFirmResponse?> UpdateFirmAsync(LawFirmUpdateRequest req) ;
 
 /// <summary>Fetch the subscription for a user's law firm.</summary>
-    Task<SubscriptionResponse?> GetSubscriptionAsync(string userId) ;
 
 /// <summary>
     /// Called after Supabase Auth signup: creates a law firm, links profile, and creates a default subscription.

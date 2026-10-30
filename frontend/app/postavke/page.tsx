@@ -20,7 +20,6 @@ import {
   User,
   Building2,
   Users,
-  KeyRound,
   Clock,
   Database,
 } from "lucide-react";
@@ -29,7 +28,6 @@ import { createSupabaseBrowser } from "@/lib/supabase/client";
 import { API_BASE } from "@/lib/api";
 import PersonalProfileForm from "@/components/settings/PersonalProfileForm";
 import LawFirmForm from "@/components/settings/LawFirmForm";
-import SubscriptionView from "@/components/settings/SubscriptionView";
 import AppHeader from "@/components/AppHeader";
 import ActivityLog from "@/components/settings/ActivityLog";
 import PrivacyPanel from "@/components/settings/PrivacyPanel";
@@ -51,14 +49,13 @@ interface StatusResponse {
 }
 
 // ── Sidebar Tabs ──
-type SettingsTab = "profil" | "sigurnost" | "ured" | "tim" | "pretplata" | "dnevnik" | "privatnost";
+type SettingsTab = "profil" | "sigurnost" | "ured" | "tim" | "dnevnik" | "privatnost";
 
 const SIDEBAR_ITEMS: { id: SettingsTab; label: string; icon: React.ElementType }[] = [
   { id: "profil",    label: "Osobni profil",      icon: User },
   { id: "sigurnost", label: "Sigurnost",           icon: Shield },
   { id: "ured",      label: "Odvjetnički ured",    icon: Building2 },
   { id: "tim",       label: "Upravljanje timom",   icon: Users },
-  { id: "pretplata", label: "Pristup",              icon: KeyRound },
   { id: "dnevnik",   label: "Dnevnik aktivnosti",  icon: Clock },
   { id: "privatnost",label: "Privatnost i podaci", icon: Database },
 ];
@@ -682,11 +679,6 @@ export default function PostavkePage() {
 
               {/* ═══ TAB: Upravljanje timom ═══ */}
               {activeTab === "tim" && renderPlaceholder("Upravljanje timom", "Pozovite kolege, dodijelite uloge i upravljajte pristupom.")}
-
-              {/* ═══ TAB: Pretplata ═══ */}
-              {activeTab === "pretplata" && userId && (
-                <SubscriptionView userId={userId} />
-              )}
 
               {/* ═══ TAB: Dnevnik aktivnosti ═══ */}
               {activeTab === "dnevnik" && userId && (

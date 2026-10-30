@@ -15,7 +15,6 @@ import {
   X,
   Info,
 
-  Sparkles,
   CircleHelp,
   Send,
   Landmark,
@@ -23,8 +22,6 @@ import {
   Calculator,
   Users,
   Languages,
-  Lock,
-  Scale,
 } from "lucide-react";
 import { getRecentActivity, type ActivityItem, type ActivityType } from "@/lib/supabase";
 import { loadOnboardingState } from "@/lib/onboarding";
@@ -32,7 +29,6 @@ import { useVodic } from "@/contexts/VodicContext";
 import AppHeader from "@/components/AppHeader";
 import { Obavijest } from "@/components/Obavijest";
 import { SecurityFooter } from "@/components/TrustComponents";
-import { useSubscription } from "@/lib/useSubscription";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import { isModuleLocked, moduleTitle } from "@/lib/modules";
 
@@ -48,19 +44,6 @@ function timeAgo(iso: string) {
   const days = Math.floor(hrs / 24);
   if (days < 7) return `prije ${days}d`;
   return new Date(iso).toLocaleDateString("hr-HR");
-}
-
-/** A plain Croatian date, for "vrijedi do". */
-function formatDatum(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString("hr-HR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
-  } catch {
-    return iso;
-  }
 }
 
 const ACTIVITY_ICONS: Record<ActivityType, React.ReactNode> = {
@@ -227,7 +210,6 @@ const FEATURE_CARDS: FeatureCard[] = [
 
 export default function Dashboard() {
   const router = useRouter();
-  const subscription = useSubscription();
   const isAdmin = useIsAdmin();
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -583,65 +565,6 @@ export default function Dashboard() {
 
           {/* ── RIGHT: Stats ── */}
           <div className="space-y-4">
-            {/* ── Subscription Card ── */}
-            {/* One plan, so there is nothing to name here — what the user needs
-                to know is which state they are in and until when. */}
-            {!subscription.loading && (
-              <Link href="/postavke" className="block">
-                <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3 hover:border-slate-300 hover:shadow-sm transition">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-[11px] text-slate-400 uppercase tracking-wider font-medium">
-                      Pristup
-                    </h3>
-                    <span
-                      className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
-                        subscription.state === "isteklo"
-                          ? "bg-red-50 text-red-700 border-red-200"
-                          : subscription.state === "proba"
-                            ? "bg-amber-50 text-amber-700 border-amber-200"
-                            : "bg-emerald-50 text-emerald-700 border-emerald-200"
-                      }`}
-                    >
-                      {subscription.state === "pretplata" && <Sparkles className="h-2.5 w-2.5" />}
-                      {subscription.state === "isteklo" ? "Zatvoreno" : "Aktivno"}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
-                      style={{ background: "#1B2A4A" }}
-                    >
-                      {subscription.state === "isteklo" ? (
-                        <Lock className="h-4 w-4" style={{ color: "#C9A84C" }} />
-                      ) : (
-                        <Scale className="h-4 w-4" style={{ color: "#C9A84C" }} />
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-base font-bold text-slate-900">
-                        {subscription.badgeLabel}
-                      </p>
-                      <p className="text-[11px] text-slate-400">
-                        {subscription.state === "isteklo"
-                          ? "Troškovnik i Stranke su zatvoreni"
-                          : subscription.accessUntil
-                            ? `Vrijedi do ${formatDatum(subscription.accessUntil)}`
-                            : "Pristup je otvoren"}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </Link>
-            )}
-            {subscription.loading && (
-              <div className="bg-white rounded-xl border border-slate-200 p-4">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-slate-300 animate-pulse" />
-                  <span className="text-xs text-slate-400">Učitavanje pristupa…</span>
-                </div>
-              </div>
-            )}
             {/* Quick Stats */}
             {!loading && activity.length > 0 && (
               <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">

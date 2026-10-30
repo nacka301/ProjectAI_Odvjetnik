@@ -8,47 +8,13 @@ namespace Backend.Tests;
 /// no database.
 ///
 /// This file used to assert a three-tier table (free / starter / pro) with its
-/// own limits, labels and prices. All of that is gone: there is one plan, and
-/// the only number that still decides anything is TrialDays.
+/// own limits, labels and prices. All of that is gone: there is one free plan.
 /// </summary>
 public class UsageLimitTests
 {
     // ═══════════════════════════════════════════════════════════
-    //  The trial
+    //  Identity
     // ═══════════════════════════════════════════════════════════
-
-    /// <summary>
-    /// The whole point of the constant. If someone moves the trial length into
-    /// a second place — a migration, an env var, a hard-coded 7 in a view — this
-    /// test keeps passing while the promise "one file, one value" quietly stops
-    /// being true, so the guard against that is the comment above the constant
-    /// plus SubscriptionGateTests, which drives every boundary through it.
-    /// </summary>
-    [Fact]
-    public void TrialDays_IsSeven()
-    {
-        Assert.Equal(7, SubscriptionPlans.TrialDays);
-    }
-
-    [Fact]
-    public void TrialDays_IsPositive()
-    {
-        // A zero or negative trial would expire every new office the moment it
-        // signed up, and the failure would look like a broken gate rather than
-        // a bad constant.
-        Assert.True(SubscriptionPlans.TrialDays > 0);
-    }
-
-    // ═══════════════════════════════════════════════════════════
-    //  Price and identity
-    // ═══════════════════════════════════════════════════════════
-
-    [Fact]
-    public void Price_Is19PerMonthAnd190PerYear()
-    {
-        Assert.Equal(19m, SubscriptionPlans.MonthlyPriceEur);
-        Assert.Equal(190m, SubscriptionPlans.YearlyPriceEur);
-    }
 
     [Fact]
     public void PlanId_IsTheSingleCanonicalValue()

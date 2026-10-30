@@ -4,21 +4,10 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Scale, Clock, ShieldCheck, Shield, LogOut, Compass } from "lucide-react";
 import { signOutCompletely } from "@/lib/sign-out";
-import { useSubscription } from "@/lib/useSubscription";
 import { useIsAdmin } from "@/lib/useIsAdmin";
 import { isPathLocked } from "@/lib/modules";
 import { VODIC_NAZIVI, useVodic, type VodicId } from "@/contexts/VodicContext";
 import React from "react";
-
-// ── Subscription badge styling ──
-// Three states, not three plans. Amber while the trial runs down, green once
-// it is paid for, red when access has closed — the colour carries the urgency
-// so the wording does not have to shout.
-const STATE_BADGE_STYLES: Record<string, { bg: string; text: string; border: string }> = {
-  proba:     { bg: "bg-amber-500/10",   text: "text-amber-400",   border: "border-amber-500/30" },
-  pretplata: { bg: "bg-emerald-500/10", text: "text-emerald-400", border: "border-emerald-500/30" },
-  isteklo:   { bg: "bg-red-500/10",     text: "text-red-400",     border: "border-red-500/30" },
-};
 
 interface NavItem {
   href: string;
@@ -121,7 +110,6 @@ interface AppHeaderProps {
 function AppHeaderInner({ extraStart }: AppHeaderProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const subscription = useSubscription();
 
   // ── Admin detection (cookie set by middleware) ──
   const isAdmin = useIsAdmin();
@@ -203,29 +191,6 @@ function AppHeaderInner({ extraStart }: AppHeaderProps) {
           )}
 
           <div className="h-4 w-px bg-slate-700 hidden sm:block" />
-
-          {/* Subscription badge */}
-          {!subscription.loading && (
-            <Link
-              href="/postavke"
-              className={`hidden sm:inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold uppercase tracking-wider transition hover:opacity-90 ${
-                STATE_BADGE_STYLES[subscription.state]?.bg ?? STATE_BADGE_STYLES.pretplata.bg
-              } ${
-                STATE_BADGE_STYLES[subscription.state]?.text ?? STATE_BADGE_STYLES.pretplata.text
-              } ${
-                STATE_BADGE_STYLES[subscription.state]?.border ?? STATE_BADGE_STYLES.pretplata.border
-              }`}
-              title="Pristup — otvori postavke"
-            >
-              {subscription.badgeLabel}
-            </Link>
-          )}
-          {subscription.loading && (
-            <span className="hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1 text-xs text-slate-500">
-              <span className="h-1.5 w-1.5 rounded-full bg-slate-500 animate-pulse" />
-              Pristup…
-            </span>
-          )}
 
           <div className="h-4 w-px bg-slate-700 hidden sm:block" />
 

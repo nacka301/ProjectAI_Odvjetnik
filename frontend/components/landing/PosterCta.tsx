@@ -1,7 +1,6 @@
 import CtaLink from "./CtaLink";
 
-// Isti kontakt kao u pravnim tekstovima i unutar aplikacije (lib/useSubscription.ts).
-// Ne uvozi se odande: taj modul je "use client", a ova stranica je server komponenta.
+// Isti kontakt kao u pravnim tekstovima.
 const KONTAKT_EMAIL = "vackadavid@gmail.com";
 
 export default function PosterCta() {
@@ -27,8 +26,7 @@ export default function PosterCta() {
             Pošaljite upit
           </CtaLink>
           <span className="max-w-[40ch] text-[13px] opacity-85">
-            Besplatno tijekom probnog razdoblja. Izračun je pomoćno sredstvo i ne zamjenjuje prosudbu
-            odvjetnika.
+            Izračun je pomoćno sredstvo i ne zamjenjuje prosudbu odvjetnika.
           </span>
         </div>
       </div>

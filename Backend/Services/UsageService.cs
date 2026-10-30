@@ -189,8 +189,7 @@ public sealed class UsageService
 
             // One plan, and it does not cap cases or invoices. These defaults
             // apply when the office has no subscription row at all; they are
-            // deliberately open, because the thing that closes access now is
-            // SubscriptionGate, not a per-tier ceiling.
+            // deliberately open: PravoTek is free and caps neither.
             string planId = SubscriptionPlans.PlanId;
             int maxCases = SubscriptionPlans.Unlimited;
             int maxInvoices = SubscriptionPlans.Unlimited;

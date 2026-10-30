@@ -5,14 +5,13 @@ using Microsoft.AspNetCore.Mvc;
 namespace Backend.Controllers;
 
 /// <summary>
-/// Enterprise Settings Controller — Profile, Law Firm, Subscription management.
+/// Enterprise Settings Controller — Profile, Law Firm management.
 /// 
 /// Endpoints:
 ///   GET  /api/settings/profile         → Fetch user profile
 ///   PUT  /api/settings/profile         → Update user profile
 ///   GET  /api/settings/firm            → Fetch user's law firm
 ///   PUT  /api/settings/firm            → Update/create law firm
-///   GET  /api/settings/subscription    → Fetch subscription status
 ///   POST /api/settings/register-firm   → Register firm during signup
 ///   GET  /api/settings/credits?userId= → Fetch beta credit usage
 ///   POST /api/settings/consume-credit  → Consume 1 credit (used by AI controllers)
@@ -23,18 +22,15 @@ public class SettingsController : ControllerBase
 {
     private readonly ISettingsService _service;
     private readonly ICreditService _creditService;
-    private readonly ISubscriptionGate _gate;
     private readonly ILogger<SettingsController> _logger;
 
     public SettingsController(
         ISettingsService service,
         ICreditService creditService,
-        ISubscriptionGate gate,
         ILogger<SettingsController> logger)
     {
         _service = service;
         _creditService = creditService;
-        _gate = gate;
         _logger = logger;
     }
 
@@ -164,44 +160,6 @@ public class SettingsController : ControllerBase
         {
             _logger.LogError(ex, "Error updating firm");
             return StatusCode(500, new { error = "Greška pri ažuriranju podataka o uredu." });
-        }
-    }
-
-    // ─────────────────────────────────────────────────────────
-    //  GET /api/settings/subscription
-    //  userId derived from JWT — query param ignored.
-    // ─────────────────────────────────────────────────────────
-    [HttpGet("subscription")]
-    public async Task<IActionResult> GetSubscription()
-    {
-        var userId = GetUserId();
-        if (string.IsNullOrWhiteSpace(userId))
-            return Unauthorized(new { error = "Neautorizirani pristup." });
-
-        try
-        {
-            var sub = await _service.GetSubscriptionAsync(userId)
-                      ?? new SubscriptionResponse { Status = "active" };
-
-            // The state the user is shown comes from the same service the API
-            // guard consults, not from a second reading of the same columns.
-            // Two independent computations of "is this office still allowed to
-            // work" is how an interface ends up saying one thing while the API
-            // does another.
-            var access = await _gate.EvaluateAsync(
-                HttpContext.Items["AuthTenantId"] as string,
-                HttpContext.RequestAborted);
-
-            sub.State = access.State;
-            sub.DaysRemaining = access.DaysRemaining;
-            sub.AccessUntil = access.AccessUntil;
-
-            return Ok(sub);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error fetching subscription");
-            return StatusCode(500, new { error = "Greška pri dohvaćanju stanja pristupa." });
         }
     }
 

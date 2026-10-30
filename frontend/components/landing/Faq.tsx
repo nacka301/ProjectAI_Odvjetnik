@@ -15,7 +15,7 @@ const PITANJA = [
   },
   {
     q: "Koliko košta?",
-    a: "Dok traje probno razdoblje, ništa. Pristup se otvara na sedam dana odmah nakon registracije, bez unosa kartice, a nakon toga se na zahtjev produljuje bez naknade. Prije uvođenja naplate svaki korisnik dobiva obavijest najmanje 30 dana unaprijed.",
+    a: "Ništa. PravoTek je besplatan: registrirate se i odmah ga koristite, bez unosa kartice.",
   },
   {
     q: "Radi li na mobitelu?",
@@ -25,7 +25,7 @@ const PITANJA = [
 
 export default function Faq() {
   return (
-    <SectionGrid left={<SectionNumber n="06" />}>
+    <SectionGrid left={<SectionNumber n="05" />}>
       <h2 className="text-[54px] leading-[1] tracking-[-0.03em] m-0">Česta pitanja</h2>
       <div className="mt-10 border-t-2 border-[var(--ptk-divider)] max-w-[90ch]">
         {PITANJA.map((p, i) => (
