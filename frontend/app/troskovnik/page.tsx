@@ -86,6 +86,8 @@ import {
   umanjujeUloga,
   opisZaUlogu,
   pravilnikFaktor,
+  pravilnikPrimjenjiv,
+  kazneniRazredBodovi,
   tarifniBrojStavke,
   ULOGE_ZASTUPANJA,
   ULOGA_OSTECENIK_STOPA,
@@ -231,6 +233,8 @@ interface TroskovnikResponse {
   /** Obrazloženje odabranog razreda kod stjecaja (Tbr. 4. toč. 1 al. 6). */
   napomena_stjecaj?: string | null;
   is_oduzimanje_prekrsaj?: boolean;
+  is_prekrsajni_postupak?: boolean;
+  is_prekrsaj_pravna_osoba?: boolean;
   vrijednost_oduzimanja?: number;
   // Sudske pristojbe — lista, jer Uredba naplaćuje po radnji
   pristojbene_stavke?: PristojbenaStavka[];
@@ -545,6 +549,11 @@ function TroskovnikContent() {
   const [isStjecaj, setIsStjecaj] = useState(false);
   const [isOduzimanjePrekrsaj, setIsOduzimanjePrekrsaj] = useState(false);
   const [vrijednostOduzimanja, setVrijednostOduzimanja] = useState("");
+  // Prekršajni postupak: obrana je fiksnih 100 bodova (Tbr. 4 t. 1 al. 7) i NE traži
+  // zapriječenu kaznu. Iznimke su dvije neobavezne opcije: oduzimanje imovinske koristi
+  // (isOduzimanjePrekrsaj + vrijednost) i obrana pravne osobe (kazna za odgovornu osobu).
+  const [isPrekrsajniPostupak, setIsPrekrsajniPostupak] = useState(false);
+  const [isPrekrsajPravnaOsoba, setIsPrekrsajPravnaOsoba] = useState(false);
 
   // ── Sudske pristojbe state ──
   const [isOslobodjenPristojbi, setIsOslobodjenPristojbi] = useState(false);
@@ -656,7 +665,7 @@ function TroskovnikContent() {
       protustrankaIme, protustrankaOib, protustrankaAdresa, protustrankaGrad,
       protustrankaPolozaj, zastupanaPolozaj,
       zaprijecenaKazna, kazneniStatus, ulogaZastupanja, isStjecaj, isOduzimanjePrekrsaj,
-      vrijednostOduzimanja,
+      vrijednostOduzimanja, isPrekrsajniPostupak, isPrekrsajPravnaOsoba,
       isOslobodjenPristojbi, datumDospijeca, datumOdgovoraNaTuzbu, datumPokretanjaUpravnogSpora,
       pristojbeDodane, pristojbeIskljucene,
       podnesciElektronicki, zkUpisElektronicki, odlukeElektronicki,
@@ -677,7 +686,7 @@ function TroskovnikContent() {
       protustrankaIme, protustrankaOib, protustrankaAdresa, protustrankaGrad,
       protustrankaPolozaj, zastupanaPolozaj,
       zaprijecenaKazna, kazneniStatus, ulogaZastupanja, isStjecaj, isOduzimanjePrekrsaj,
-      vrijednostOduzimanja,
+      vrijednostOduzimanja, isPrekrsajniPostupak, isPrekrsajPravnaOsoba,
       isOslobodjenPristojbi, datumDospijeca, datumOdgovoraNaTuzbu, datumPokretanjaUpravnogSpora,
       pristojbeDodane, pristojbeIskljucene,
       podnesciElektronicki, zkUpisElektronicki, odlukeElektronicki,
@@ -751,6 +760,9 @@ function TroskovnikContent() {
     setZaprijecenaKazna(d.zaprijecenaKazna); setKazneniStatus(d.kazneniStatus); setUlogaZastupanjaRaw(d.ulogaZastupanja ?? null);
     setIsStjecaj(d.isStjecaj); setIsOduzimanjePrekrsaj(d.isOduzimanjePrekrsaj);
     setVrijednostOduzimanja(d.vrijednostOduzimanja);
+    // Stariji nacrti nemaju ova polja — bez njih je postupak kazneni, kao do sada.
+    setIsPrekrsajniPostupak(d.isPrekrsajniPostupak ?? false);
+    setIsPrekrsajPravnaOsoba(d.isPrekrsajPravnaOsoba ?? false);
     setIsOslobodjenPristojbi(d.isOslobodjenPristojbi);
     setDatumDospijeca(d.datumDospijeca);
     setDatumOdgovoraNaTuzbu(d.datumOdgovoraNaTuzbu);
@@ -920,6 +932,8 @@ function TroskovnikContent() {
         isStjecaj: bool(out.is_stjecaj) ?? false,
         isOduzimanjePrekrsaj: bool(out.is_oduzimanje_prekrsaj) ?? false,
         vrijednostOduzimanja: formatUnosa(num(out.vrijednost_oduzimanja)),
+        isPrekrsajniPostupak: bool(out.is_prekrsajni_postupak) ?? false,
+        isPrekrsajPravnaOsoba: bool(out.is_prekrsaj_pravna_osoba) ?? false,
         isOslobodjenPristojbi: bool(out.is_oslobodjen_pristojbi) ?? false,
         oslobodjenjeKategorija: str(out.oslobodjenje_kategorija) ?? "",
         brojOslobodjenihOsoba: num(out.broj_oslobodjenih_osoba) ?? 0,
@@ -1320,6 +1334,8 @@ function TroskovnikContent() {
         isOpunomocenikZrtve: isZastupnikDjeteta,
         isOduzimanjePrekrsaj,
         vrijednostOduzimanja: parseFloat(vrijednostOduzimanja.replace(/\./g, "").replace(",", ".")) || 0,
+        isPrekrsajniPostupak,
+        isPrekrsajPravnaOsoba,
         osnovicaTbr7,
         razinaSuda,
         tbr45Nacin,
@@ -1328,7 +1344,7 @@ function TroskovnikContent() {
         oslobodjenje: oslobodjenjeUlaz,
       }),
     ],
-    [odabraneDefinicije, zaprijecenaKazna, ulogaZastupanja, isPoSluzbenojDuznosti, isZastupnikDjeteta, isOduzimanjePrekrsaj, vrijednostOduzimanja, osnovicaTbr7, razinaSuda, tbr45Nacin, isOnlyKazneni, vpsUlaz, oslobodjenjeUlaz],
+    [odabraneDefinicije, zaprijecenaKazna, ulogaZastupanja, isPoSluzbenojDuznosti, isZastupnikDjeteta, isOduzimanjePrekrsaj, vrijednostOduzimanja, isPrekrsajniPostupak, isPrekrsajPravnaOsoba, osnovicaTbr7, razinaSuda, tbr45Nacin, isOnlyKazneni, vpsUlaz, oslobodjenjeUlaz],
   );
 
   // Tbr. 41 — povišenje i sniženje ne mogu stajati na istoj stavci. Po retku, ne po
@@ -1361,12 +1377,18 @@ function TroskovnikContent() {
   );
 
   // Resolved kazneni tier points
-  const kazneniTierBodovi = zaprijecenaKazna
-    ? (ZAPRIJECENA_KAZNA_TIERS[zaprijecenaKazna]?.bodovi ?? 0)
-    : 0;
-
   // Parsed vrijednost oduzimanja for prekršaj oduzimanje calc
   const parsedVrijednostOduzimanja = parseFloat(vrijednostOduzimanja.replace(/\./g, "").replace(",", ".")) || 0;
+
+  // Osnovica kaznenih stavaka: razred po zapriječenoj kazni, a u prekršajnom postupku
+  // fiksnih 100 bodova bez kazne (osim neobaveznih iznimki — oduzimanje, pravna osoba).
+  const kazneniTierBodovi = kazneniRazredBodovi({
+    zaprijecenaKazna,
+    isPrekrsajniPostupak,
+    isPrekrsajPravnaOsoba,
+    isOduzimanjePrekrsaj,
+    vrijednostOduzimanja: parsedVrijednostOduzimanja,
+  });
 
   // Group catalog by category
   const categories = useMemo(() => {
@@ -1416,6 +1438,7 @@ function TroskovnikContent() {
         zaprijecenaKazna: zaprijecenaKazna || null,
         isOduzimanjePrekrsaj,
         parsedVrijednostOduzimanja,
+        isPrekrsajniPostupak,
         brojZastupanihOsoba,
         tbr41Povisenje,
         tbr41Snizenje,
@@ -1436,7 +1459,7 @@ function TroskovnikContent() {
         })),
         datumDospijeca: datumDospijeca || null,
       }),
-    [redciPoredani, katalog, osnovica, isPdvUkljucen, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, isIzabraniOslobodjajuca, ulogaZastupanja, isOduzimanjePrekrsaj, parsedVrijednostOduzimanja, pristojbe, brojZastupanihOsoba, zaprijecenaKazna, tbr41Povisenje, tbr41Snizenje, dodatnePristojbe, predujmovi, naknadaTroskovaStavke, datumDospijeca],
+    [redciPoredani, katalog, osnovica, isPdvUkljucen, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, isIzabraniOslobodjajuca, ulogaZastupanja, isOduzimanjePrekrsaj, parsedVrijednostOduzimanja, isPrekrsajniPostupak, pristojbe, brojZastupanihOsoba, zaprijecenaKazna, tbr41Povisenje, tbr41Snizenje, dodatnePristojbe, predujmovi, naknadaTroskovaStavke, datumDospijeca],
   );
 
   // Katalog po id, i izračunati redak po uid — za uređivanje u desnom stupcu, koje
@@ -1746,6 +1769,8 @@ function TroskovnikContent() {
         uloga_zastupanja: ulogaZastupanja ?? undefined,
         is_stjecaj: isStjecaj,
         is_oduzimanje_prekrsaj: isOduzimanjePrekrsaj,
+        is_prekrsajni_postupak: isPrekrsajniPostupak,
+        is_prekrsaj_pravna_osoba: isPrekrsajPravnaOsoba,
         vrijednost_oduzimanja: parsedVrijednostOduzimanja,
         is_oslobodjen_pristojbi: isOslobodjenPristojbi,
         // Čl. 2 Uredbe NN 50/2026 — prazan datum znači "nije prijelazni slučaj".
@@ -1864,6 +1889,8 @@ function TroskovnikContent() {
         uloga_zastupanja: ulogaZastupanja ?? undefined,
         is_stjecaj: isStjecaj,
         is_oduzimanje_prekrsaj: isOduzimanjePrekrsaj,
+        is_prekrsajni_postupak: isPrekrsajniPostupak,
+        is_prekrsaj_pravna_osoba: isPrekrsajPravnaOsoba,
         vrijednost_oduzimanja: parsedVrijednostOduzimanja,
         is_oslobodjen_pristojbi: isOslobodjenPristojbi,
         // Čl. 2 Uredbe NN 50/2026 — prazan datum znači "nije prijelazni slučaj".
@@ -2034,6 +2061,8 @@ function TroskovnikContent() {
     uloga_zastupanja: ulogaZastupanja ?? undefined,
     is_stjecaj: isStjecaj,
     is_oduzimanje_prekrsaj: isOduzimanjePrekrsaj,
+    is_prekrsajni_postupak: isPrekrsajniPostupak,
+    is_prekrsaj_pravna_osoba: isPrekrsajPravnaOsoba,
     vrijednost_oduzimanja: parsedVrijednostOduzimanja,
     is_oslobodjen_pristojbi: isOslobodjenPristojbi,
     datum_dospijeca: datumDospijeca || null,
@@ -2681,20 +2710,62 @@ function TroskovnikContent() {
               {isKazneniMode && !ulogaZastupanja && (
                 <p className="text-[10px] text-red-600">Odaberite ulogu — bez nje se troškovnik ne može izračunati.</p>
               )}
+
+              {/* Vrsta postupka — prekršajni NE traži zapriječenu kaznu (Tbr. 4 t. 1 al. 7). */}
+              <fieldset className="space-y-2 border-t border-red-100 pt-2" data-testid="vrsta-postupka">
+                <legend className="text-xs font-semibold text-red-700 uppercase tracking-wider pt-2">Vrsta postupka</legend>
+                {[
+                  { prekrsajni: false, label: "Kazneni postupak", opis: "nagrada ovisi o zapriječenoj kazni (Tbr. 4 t. 1)" },
+                  { prekrsajni: true, label: "Prekršajni postupak", opis: "obrana 100 bodova, bez odabira kazne (Tbr. 4 t. 1 al. 7)" },
+                ].map((o) => (
+                  <label key={o.label} className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="vrstaKaznenogPostupka"
+                      checked={isPrekrsajniPostupak === o.prekrsajni}
+                      onChange={() => {
+                        setIsPrekrsajniPostupak(o.prekrsajni);
+                        // Opcije iznimki vrijede samo u prekršajnom; nova vrsta kreće bez njih.
+                        setIsPrekrsajPravnaOsoba(false);
+                        setIsOduzimanjePrekrsaj(false);
+                        if (o.prekrsajni) setIsStjecaj(false);
+                      }}
+                      className="mt-0.5 h-4 w-4 border-slate-300 text-red-600 focus:ring-red-500"
+                    />
+                    <span className="text-xs text-slate-700">
+                      <span className="font-medium">{o.label}</span>
+                      <span className="block text-[10px] text-slate-400">{o.opis}</span>
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
             </div>
             )}
 
             {/* ── Kazneni postupak panel ── */}
-            {isKazneniMode && (
-            <div className="bg-white rounded-xl border border-red-200 p-4 shadow-sm space-y-3">
+            {(isKazneniMode || expandedCategories.has(KATEGORIJA_KAZNENI)) && (
+            <div className="bg-white rounded-xl border border-red-200 p-4 shadow-sm space-y-3" data-testid="kazneni-parametri">
               <div className="flex items-center gap-2 mb-1">
                 <Scale className="h-4 w-4 text-red-600" />
-                <span className="text-xs font-semibold text-red-700 uppercase tracking-wider">Kazneni postupak — parametri</span>
+                <span className="text-xs font-semibold text-red-700 uppercase tracking-wider">
+                  {isPrekrsajniPostupak ? "Prekršajni postupak — parametri" : "Kazneni postupak — parametri"}
+                </span>
               </div>
 
-              {/* Zapriječena kazna dropdown */}
+              {isPrekrsajniPostupak && !isPrekrsajPravnaOsoba && (
+                <p className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-2 leading-relaxed" data-testid="prekrsaj-bez-kazne">
+                  Zapriječena kazna se u prekršajnom postupku ne bira: obrana je <strong>100 bodova</strong>, a svaki
+                  sljedeći započeti sat <strong>50 bodova</strong> (Tbr. 4 t. 1 al. 7). Isto vrijedi za optužni prijedlog,
+                  pisanu obranu i prigovor protiv prekršajnog naloga.
+                </p>
+              )}
+
+              {/* Zapriječena kazna dropdown — u prekršajnom samo za obranu pravne osobe */}
+              {(!isPrekrsajniPostupak || isPrekrsajPravnaOsoba) && (
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Zapriječena kazna</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  {isPrekrsajniPostupak ? "Kazna za odgovornu osobu" : "Zapriječena kazna"}
+                </label>
                 <select
                   value={zaprijecenaKazna}
                   onChange={(e) => setZaprijecenaKazna(e.target.value)}
@@ -2713,6 +2784,7 @@ function TroskovnikContent() {
                   </p>
                 )}
               </div>
+              )}
 
               {/* Boolean modifiers */}
               <div className="space-y-2">
@@ -2747,7 +2819,9 @@ function TroskovnikContent() {
                   </p>
                 )}
 
-                {/* Stjecaj / produljeno kazneno djelo */}
+                {/* Stjecaj / produljeno kazneno djelo — samo u kaznenom postupku */}
+                {!isPrekrsajniPostupak && (
+                <>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
@@ -2762,16 +2836,27 @@ function TroskovnikContent() {
                     Za kaznena djela u stjecaju i produljena kaznena djela, odaberite tier prema <strong>najtežoj kazni</strong> koja se u postupku može izreći (Tbr. 4.1).
                   </p>
                 )}
+                </>
+                )}
 
-                {/* Prekršaj s oduzimanjem predmeta */}
+                {/* Prekršaj s oduzimanjem predmeta / imovinske koristi (neobavezno) */}
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={isOduzimanjePrekrsaj}
-                    onChange={(e) => setIsOduzimanjePrekrsaj(e.target.checked)}
+                    onChange={(e) => {
+                      setIsOduzimanjePrekrsaj(e.target.checked);
+                      // Tarifa ne kaže što vrijedi kad se primjenjuju obje iznimke — ne nudimo ih zajedno.
+                      if (e.target.checked && isPrekrsajniPostupak) setIsPrekrsajPravnaOsoba(false);
+                    }}
                     className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
                   />
-                  <span className="text-xs text-slate-700">Prekršaj s oduzimanjem predmeta / imovinske koristi <span className="text-slate-400">(Tbr. 7.1 po vrijednosti)</span></span>
+                  <span className="text-xs text-slate-700">
+                    {isPrekrsajniPostupak
+                      ? "Može se izreći oduzimanje imovinske koristi"
+                      : "Prekršaj s oduzimanjem predmeta / imovinske koristi"}{" "}
+                    <span className="text-slate-400">(Tbr. 7.1 po vrijednosti)</span>
+                  </span>
                 </label>
                 {isOduzimanjePrekrsaj && (
                   <div className="ml-6 space-y-1">
@@ -2790,6 +2875,24 @@ function TroskovnikContent() {
                       </p>
                     )}
                   </div>
+                )}
+
+                {/* Obrana pravne osobe (Tbr. 4 t. 1 al. 9) — samo prekršajni, neobavezno */}
+                {isPrekrsajniPostupak && (
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isPrekrsajPravnaOsoba}
+                    onChange={(e) => {
+                      setIsPrekrsajPravnaOsoba(e.target.checked);
+                      if (e.target.checked) setIsOduzimanjePrekrsaj(false);
+                    }}
+                    className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
+                  />
+                  <span className="text-xs text-slate-700">
+                    Brani se pravna osoba <span className="text-slate-400">(nagrada prema kazni za odgovornu osobu)</span>
+                  </span>
+                </label>
                 )}
               </div>
             </div>
@@ -2867,13 +2970,13 @@ function TroskovnikContent() {
                               ? tbr71Bodovi(parsedVrijednostOduzimanja)
                               : 100)
                           : item.kazneni_base
-                          ? izracunajKazneneBodove(item, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, zaprijecenaKazna, isIzabraniOslobodjajuca)
+                          ? izracunajKazneneBodove(item, kazneniTierBodovi, isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, isPrekrsajniPostupak ? undefined : zaprijecenaKazna, isIzabraniOslobodjajuca)
                           : osnovica
                           ? izracunajBodove(item, osnovica)
                           : null;
-                        // Pravilnik vrijedi i za fiksne stavke kaznenog postupka.
+                        // Pravilnik vrijedi na SVE stavke kaznenog postupka, i fiksne (i „Razno", Tbr. 36).
                         const bodovi =
-                          bodoviOsnova !== null && item.kategorija === KATEGORIJA_KAZNENI && !item.kazneni_base
+                          bodoviOsnova !== null && pravilnikPrimjenjiv(item, isKazneniMode) && !item.kazneni_base
                             ? bodoviOsnova * pravilnikFaktor({ isZastupnikDjeteta, isPoSluzbenojDuznosti, isNaTeretProracuna, isIzabraniOslobodjajuca })
                             : bodoviOsnova;
                         const umanjenoUlogom = umanjujeUloga(ulogaZastupanja, item);
@@ -2914,8 +3017,10 @@ function TroskovnikContent() {
                                   </span>
                                 )}
                                 <span className="text-[10px] text-indigo-600 font-semibold">
-                                  {item.kazneni_base && !zaprijecenaKazna
-                                    ? "— odaberi kaznu —"
+                                  {item.kazneni_base && kazneniTierBodovi <= 0
+                                    ? (isPrekrsajniPostupak && !isPrekrsajPravnaOsoba
+                                        ? "— unesi vrijednost oduzimanja —"
+                                        : "— odaberi kaznu —")
                                     : item.prekrsaj_oduzimanje && isOduzimanjePrekrsaj && parsedVrijednostOduzimanja <= 0
                                     ? "— unesi vrijednost oduzimanja —"
                                     : bodovi === null

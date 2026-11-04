@@ -705,6 +705,52 @@ export function pravilnikFaktor(u: {
   return 1;
 }
 
+/** Tbr. 4. toč. 1 al. 7 — „za obranu u prekršajnom postupku 100 bodova". */
+export const PREKRSAJ_BODOVI = 100;
+
+/** Ulaz za razrješavanje osnovice kaznenih stavaka (kazneni ILI prekršajni postupak). */
+export interface KazneniRazredUlaz {
+  zaprijecenaKazna?: string | null;
+  isPrekrsajniPostupak?: boolean;
+  /** Obrana pravne osobe (Tbr. 4. toč. 1 al. 9) — kazna za odgovornu osobu. */
+  isPrekrsajPravnaOsoba?: boolean;
+  /** Može se izreći oduzimanje imovinske koristi (al. 8) — Tbr. 7. toč. 1. */
+  isOduzimanjePrekrsaj?: boolean;
+  vrijednostOduzimanja?: number;
+}
+
+/**
+ * Bodovi osnovice za stavke vezane uz Tbr. 4. toč. 1. Zrcali
+ * `TroskovnikService.RazrijesiKazneniRazred` / `RazrijesiPrekrsajniRazred`.
+ *
+ * Kazneni: razred prema zapriječenoj kazni. Prekršajni: fiksnih 100 i kazna se NE traži,
+ * osim u dvije neobavezne iznimke (oduzimanje → Tbr. 7 t. 1; pravna osoba → kazna za
+ * odgovornu osobu). Vraća 0 kad nešto nedostaje ili je proturječno (greška se javlja kroz
+ * `provjeriZahtjev`).
+ */
+export function kazneniRazredBodovi(u: KazneniRazredUlaz): number {
+  const tier = u.zaprijecenaKazna ? (ZAPRIJECENA_KAZNA_TIERS[u.zaprijecenaKazna]?.bodovi ?? 0) : 0;
+  if (!u.isPrekrsajniPostupak) return tier;
+
+  if (u.isPrekrsajPravnaOsoba && u.isOduzimanjePrekrsaj) return 0;
+  if (u.isPrekrsajPravnaOsoba) return tier;
+  if (u.isOduzimanjePrekrsaj) {
+    return (u.vrijednostOduzimanja ?? 0) > 0 ? tbr71Bodovi(u.vrijednostOduzimanja ?? 0) : 0;
+  }
+  return PREKRSAJ_BODOVI;
+}
+
+/**
+ * Pravilnik NN 22/22 umanjuje nagradu za SVE radnje u kaznenom postupku, i one koje u
+ * katalogu nisu u kategoriji „Kazneni postupak" (rješenje suda: razmatranje spisa, Tbr. 36,
+ * 25 → 12,5 b). „Razno" ulazi samo kad troškovnik ima barem jednu kaznenu stavku, da
+ * zaostala zastavica ne prepolovi nagradu u parničnom ili ovršnom predmetu. Zrcali
+ * `TroskovnikService.PrimjenjujePravilnik`.
+ */
+export function pravilnikPrimjenjiv(def: Pick<TarifnaStavka, "kategorija">, imaKaznene: boolean): boolean {
+  return def.kategorija === KATEGORIJA_KAZNENI || (def.kategorija === "Razno" && imaKaznene);
+}
+
 export function izracunajKazneneBodove(
   def: TarifnaStavka,
   tierBodovi: number,
@@ -777,6 +823,10 @@ export interface ProvjeraUlaza {
   isOpunomocenikZrtve?: boolean;
   isOduzimanjePrekrsaj: boolean;
   vrijednostOduzimanja: number;
+  /** Prekršajni postupak: kazna se ne traži (Tbr. 4. toč. 1 al. 7 — fiksnih 100 bodova). */
+  isPrekrsajniPostupak?: boolean;
+  /** Obrana pravne osobe u prekršajnom postupku — traži kaznu za odgovornu osobu. */
+  isPrekrsajPravnaOsoba?: boolean;
   osnovicaTbr7?: OsnovicaTbr7;
   razinaSuda?: RazinaSuda | null;
   tbr45Nacin?: Tbr45Nacin | null;
@@ -797,8 +847,31 @@ export function provjeriZahtjev(
 ): string[] {
   const greske: string[] = [];
 
-  const trebaKazneniTier = odabraneStavke.some((s) => s.kazneni_base);
-  if (trebaKazneniTier) {
+  const imaKazneniBase = odabraneStavke.some((s) => s.kazneni_base);
+  if (imaKazneniBase && ulaz.isPrekrsajniPostupak) {
+    // Prekršajni: fiksnih 100 bodova, kazna se NE traži — osim u dvije neobavezne iznimke.
+    if (ulaz.isPrekrsajPravnaOsoba && ulaz.isOduzimanjePrekrsaj) {
+      greske.push(
+        "Obrana pravne osobe (Tbr. 4. toč. 1 al. 9) i oduzimanje imovinske koristi (al. 8) zajedno: " +
+          "Tarifa ne određuje koja nagrada ima prednost, pa alat ne nudi automatski iznos. " +
+          "Odaberite samo jednu mogućnost ili obračunajte ručno.",
+      );
+    } else if (ulaz.isPrekrsajPravnaOsoba) {
+      if (!ulaz.zaprijecenaKazna) {
+        greske.push(
+          "Brani se pravna osoba, a nije odabrana kazna za odgovornu osobu. " +
+            "Tbr. 4. toč. 1 al. 9 nagradu veže uz tu kaznu.",
+        );
+      } else if (!(ulaz.zaprijecenaKazna in ZAPRIJECENA_KAZNA_TIERS)) {
+        greske.push(`Nepoznata kazna za odgovornu osobu: "${ulaz.zaprijecenaKazna}".`);
+      }
+    } else if (ulaz.isOduzimanjePrekrsaj && ulaz.vrijednostOduzimanja <= 0) {
+      greske.push(
+        "Može se izreći oduzimanje imovinske koristi, a nije unesena njezina vrijednost. " +
+          "Tbr. 4. toč. 1 al. 8 nagradu veže uz tu vrijednost po Tbr. 7. toč. 1.",
+      );
+    }
+  } else if (imaKazneniBase) {
     if (!ulaz.zaprijecenaKazna) {
       greske.push(
         "Odabrane su stavke iz kaznenog postupka, a nije odabrana zapriječena kazna. " +

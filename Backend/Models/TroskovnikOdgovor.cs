@@ -204,6 +204,13 @@ public sealed class TroskovnikResponse
     [JsonPropertyName("vrijednost_oduzimanja")]
     public decimal VrijednostOduzimanja { get; set; }
 
+    /// <summary>Prekršajni (ne kazneni) postupak — vidi <see cref="TroskovnikRequest.IsPrekrsajniPostupak"/>.</summary>
+    [JsonPropertyName("is_prekrsajni_postupak")]
+    public bool IsPrekrsajniPostupak { get; set; }
+
+    [JsonPropertyName("is_prekrsaj_pravna_osoba")]
+    public bool IsPrekrsajPravnaOsoba { get; set; }
+
     // ── Sudske pristojbe (Uredba NN 50/2026) ──────────────────────
 
     /// <summary>

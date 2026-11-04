@@ -129,6 +129,23 @@ public sealed class TroskovnikRequest
     [JsonPropertyName("vrijednost_oduzimanja")]
     public decimal VrijednostOduzimanja { get; set; }
 
+    /// <summary>
+    /// Prekršajni postupak (ne kazneni). Tbr. 4. toč. 1 al. 7: obrana u prekršajnom postupku
+    /// je FIKSNIH 100 bodova i ne ovisi o propisanoj kazni, pa se zapriječena kazna ne traži.
+    /// Sve stavke koje upućuju na Tbr. 4. toč. 1 (Tbr. 1 t. 1 i 2, Tbr. 5 t. 3...) tada
+    /// polaze od 100 bodova. Iznimke: <see cref="IsOduzimanjePrekrsaj"/> (Tbr. 7 t. 1 prema
+    /// vrijednosti) i <see cref="IsPrekrsajPravnaOsoba"/> (prema kazni za odgovornu osobu).
+    /// </summary>
+    [JsonPropertyName("is_prekrsajni_postupak")]
+    public bool IsPrekrsajniPostupak { get; set; }
+
+    /// <summary>
+    /// Prekršajni postupak se vodi protiv pravne osobe — nagrada ide prema kazni za
+    /// odgovornu osobu (Tbr. 4. toč. 1 al. 9), koja se tada šalje u <see cref="ZaprijecenaKazna"/>.
+    /// </summary>
+    [JsonPropertyName("is_prekrsaj_pravna_osoba")]
+    public bool IsPrekrsajPravnaOsoba { get; set; }
+
     /// <summary>Opis predmeta / napomena.</summary>
     [JsonPropertyName("opis_predmeta")]
     public string? OpisPredmeta { get; set; }

@@ -15,6 +15,7 @@ import {
   napomenaUmanjenjaUloge,
   opisZaUlogu,
   pravilnikFaktor,
+  pravilnikPrimjenjiv,
   KATEGORIJA_KAZNENI,
   umanjujeUloga,
   izracunajBodove,
@@ -75,6 +76,12 @@ export interface TroskovnikIzracunUlaz {
   isOduzimanjePrekrsaj: boolean;
   parsedVrijednostOduzimanja: number;
 
+  /**
+   * Prekršajni postupak: `kazneniTierBodovi` je već razriješen (100 / Tbr. 7 t. 1 / kazna
+   * za odgovornu osobu — vidi `kazneniRazredBodovi`), a dugotrajnog zatvora nema.
+   */
+  isPrekrsajniPostupak?: boolean;
+
   // Tbr. 40 / Tbr. 41 (prečac „primijeni na sve")
   brojZastupanihOsoba: number;
   tbr41Povisenje: number;
@@ -124,10 +131,15 @@ export interface TroskovnikIzracunRedak {
  * Pravilnik se bilježi samo na retcima na koje je stvarno primijenjen. Zrcali
  * `TroskovnikService.NapomenaUmanjenja`.
  */
-function napomenaUmanjenja(def: TarifnaStavka, u: TroskovnikIzracunUlaz, umanjenoUlogom: boolean): string {
+function napomenaUmanjenja(
+  def: TarifnaStavka,
+  u: TroskovnikIzracunUlaz,
+  umanjenoUlogom: boolean,
+  imaKaznene: boolean,
+): string {
   const dijelovi: string[] = [];
   if (umanjenoUlogom) dijelovi.push(napomenaUmanjenjaUloge(def.tarifni_broj));
-  if (def.kategorija === KATEGORIJA_KAZNENI) {
+  if (pravilnikPrimjenjiv(def, imaKaznene)) {
     const faktor = pravilnikFaktor(u);
     if (faktor === ZASTUPNIK_DJETETA_STOPA) dijelovi.push("70% nagrade (Pravilnik NN 22/22, čl. 2)");
     else if (faktor !== 1) dijelovi.push("umanjeno 50% (Pravilnik NN 22/22, čl. 1)");
@@ -150,6 +162,11 @@ export function izracunajTroskovnik(u: TroskovnikIzracunUlaz) {
   // postoji jedna verzija, pa je jednaka BOD_VALUE; backend razrješava istu logiku.
   const bodValue = razrijesiTarifu(u.datumDospijeca || null).bodValue;
 
+  // Pravilnik NN 22/22 pokriva i „Razno" (Tbr. 36...) kad troškovnik ima kaznenu stavku.
+  const imaKaznene = u.redciPoredani.some(
+    (r) => catalogMap.get(r.itemId)?.kategorija === KATEGORIJA_KAZNENI,
+  );
+
   for (const redak of u.redciPoredani) {
     const def = catalogMap.get(redak.itemId);
     if (!def || redak.kolicina <= 0) continue;
@@ -170,13 +187,15 @@ export function izracunajTroskovnik(u: TroskovnikIzracunUlaz) {
         u.isZastupnikDjeteta,
         u.isPoSluzbenojDuznosti,
         u.isNaTeretProracuna,
-        u.zaprijecenaKazna ?? undefined,
+        // U prekršajnom postupku dugotrajnog zatvora nema (kazna ne mijenja povišenja).
+        u.isPrekrsajniPostupak ? undefined : (u.zaprijecenaKazna ?? undefined),
         u.isIzabraniOslobodjajuca,
       );
     } else if (u.osnovica) {
       bodovi = izracunajBodove(def, u.osnovica);
-      // Pravilnik vrijedi i za fiksne stavke kaznenog postupka (dodatni sat, pritvor...).
-      if (def.kategorija === KATEGORIJA_KAZNENI) bodovi *= pravilnikFaktor(u);
+      // Pravilnik vrijedi na SVE radnje kaznenog postupka, i fiksne (dodatni sat,
+      // pritvor, razmatranje spisa Tbr. 36...).
+      if (pravilnikPrimjenjiv(def, imaKaznene)) bodovi *= pravilnikFaktor(u);
     } else {
       // Osnovica nije razriješena (Tbr. 45 bez razine suda ili načina).
       continue;
@@ -216,7 +235,7 @@ export function izracunajTroskovnik(u: TroskovnikIzracunUlaz) {
       tbr41_snizenje: snizenje,
       tbr41_bodovi: tbr41BodoviStavke,
       tbr41_pravni_izvor: tbr41Izvor(povisenje, snizenje),
-      umanjenje_uloge: napomenaUmanjenja(def, u, umanjenoUlogom),
+      umanjenje_uloge: napomenaUmanjenja(def, u, umanjenoUlogom, imaKaznene),
     });
   }
 

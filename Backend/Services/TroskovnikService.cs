@@ -512,8 +512,24 @@ public sealed class TroskovnikService : ITroskovnikService
 
         return new KontekstIzracuna(
             osnovica, vrijednostSpora, vps, jeSamoKazneni,
-            RazrijesiKazneniRazred(request, odabraneDefinicije), tarifa);
+            RazrijesiKazneniRazred(request, odabraneDefinicije), tarifa,
+            odabraneDefinicije.Exists(d => d.Kategorija == TarifaKatalog.KategorijaKazneni));
     }
+
+    /// <summary>
+    /// Pravilnik NN 22/22 umanjuje nagradu za SVE radnje u kaznenom postupku — i one koje
+    /// u katalogu nisu u kategoriji „Kazneni postupak". Stvarno rješenje suda umanjilo je za
+    /// 50 % i razmatranje spisa (Tbr. 36, kategorija „Razno"): 25 → 12,5 b.
+    ///
+    /// Obuhvaćeno je: kaznene stavke, te stavke „Razno" (Tbr. 33–37) ALI SAMO kad troškovnik
+    /// sadrži barem jednu kaznenu stavku. Tako zaostala zastavica „po službenoj dužnosti" u
+    /// čisto parničnom ili ovršnom troškovniku ne može tiho prepoloviti tuđu nagradu.
+    /// </summary>
+    private static bool PrimjenjujePravilnik(TarifnaStavka definicija, KontekstIzracuna kontekst) =>
+        definicija.Kategorija == TarifaKatalog.KategorijaKazneni
+        || (definicija.Kategorija == KategorijaRazno && kontekst.ImaKaznene);
+
+    private const string KategorijaRazno = "Razno";
 
     /// <summary>
     /// Tbr. 4. toč. 1 — bodovi razreda prema zapriječenoj kazni.
@@ -521,11 +537,14 @@ public sealed class TroskovnikService : ITroskovnikService
     /// Kaznene stavke bez toga nemaju osnovicu, pa se kazna traži samo kad je stvarno treba.
     /// Vraća 0 kad nijedna odabrana stavka ne ovisi o zapriječenoj kazni.
     /// </summary>
-    private static int RazrijesiKazneniRazred(
+    private static decimal RazrijesiKazneniRazred(
         TroskovnikRequest request, List<TarifnaStavka> odabraneDefinicije)
     {
         if (!odabraneDefinicije.Exists(d => d.KazneniBase))
             return 0;
+
+        if (request.IsPrekrsajniPostupak)
+            return RazrijesiPrekrsajniRazred(request);
 
         if (string.IsNullOrWhiteSpace(request.ZaprijecenaKazna))
             throw new TroskovnikValidationException(
@@ -538,6 +557,54 @@ public sealed class TroskovnikService : ITroskovnikService
                 $"Dopuštene vrijednosti: {string.Join(", ", ZaprijecenaKaznaTiers.Bodovi.Keys)}.");
 
         return razredBodovi;
+    }
+
+    /// <summary>
+    /// Bodovi osnovice u PREKRŠAJNOM postupku — zamjenjuje razred po zapriječenoj kazni.
+    ///
+    /// Tbr. 4. toč. 1 al. 7: obrana u prekršajnom postupku je fiksnih 100 bodova, bez obzira
+    /// na propisanu kaznu, pa se kazna NE traži. Tbr. 1 t. 1 i 2 te Tbr. 5 t. 3 (prigovor
+    /// protiv prekršajnog naloga) upućuju na Tbr. 4. toč. 1 — dakle isto 100.
+    ///
+    /// Dvije iznimke, obje neobavezne:
+    ///   • može se izreći oduzimanje imovinske koristi (al. 8) → Tbr. 7. toč. 1 prema vrijednosti;
+    ///   • brani se pravna osoba (al. 9) → prema kazni za odgovornu osobu.
+    /// Kad se primjenjuju obje, Tarifa ne kaže koja ima prednost — alat ne nagađa.
+    /// </summary>
+    private static decimal RazrijesiPrekrsajniRazred(TroskovnikRequest request)
+    {
+        if (request.IsPrekrsajPravnaOsoba && request.IsOduzimanjePrekrsaj)
+            throw new TroskovnikValidationException(
+                "Obrana pravne osobe (Tbr. 4. toč. 1 al. 9) i oduzimanje imovinske koristi " +
+                "(al. 8) zajedno: Tarifa ne određuje koja nagrada ima prednost, pa alat ne nudi " +
+                "automatski iznos. Odaberite samo jednu mogućnost ili obračunajte ručno.");
+
+        if (request.IsPrekrsajPravnaOsoba)
+        {
+            if (string.IsNullOrWhiteSpace(request.ZaprijecenaKazna))
+                throw new TroskovnikValidationException(
+                    "Brani se pravna osoba, a nije odabrana kazna za odgovornu osobu. " +
+                    "Tbr. 4. toč. 1 al. 9 nagradu veže uz tu kaznu.");
+
+            if (!ZaprijecenaKaznaTiers.Bodovi.TryGetValue(request.ZaprijecenaKazna, out var razred))
+                throw new TroskovnikValidationException(
+                    $"Nepoznata kazna za odgovornu osobu: \"{request.ZaprijecenaKazna}\". " +
+                    $"Dopuštene vrijednosti: {string.Join(", ", ZaprijecenaKaznaTiers.Bodovi.Keys)}.");
+
+            return razred;
+        }
+
+        if (request.IsOduzimanjePrekrsaj)
+        {
+            if (request.VrijednostOduzimanja <= 0)
+                throw new TroskovnikValidationException(
+                    "Može se izreći oduzimanje imovinske koristi, a nije unesena njezina vrijednost. " +
+                    "Tbr. 4. toč. 1 al. 8 nagradu veže uz tu vrijednost po Tbr. 7. toč. 1.");
+
+            return Tbr71Bodovi(request.VrijednostOduzimanja);
+        }
+
+        return PrekrsajBezOduzimanjaBodovi;
     }
 
     /// <summary>
@@ -595,13 +662,14 @@ public sealed class TroskovnikService : ITroskovnikService
     /// i/ili Pravilnik NN 22/22. Pravilnik se bilježi samo na retcima na koje je stvarno
     /// primijenjen (stavke vezane uz zapriječenu kaznu), jednako kao u izračunu bodova.
     /// </summary>
-    private static string NapomenaUmanjenja(TarifnaStavka definicija, TroskovnikRequest request, bool umanjenoUlogom)
+    private static string NapomenaUmanjenja(
+        TarifnaStavka definicija, TroskovnikRequest request, KontekstIzracuna kontekst, bool umanjenoUlogom)
     {
         var dijelovi = new List<string>();
         if (umanjenoUlogom)
             dijelovi.Add($"umanjeno 50% ({UlogaZastupanja.IzvorUmanjenja(definicija.TarifniBroj)})");
 
-        if (definicija.Kategorija == TarifaKatalog.KategorijaKazneni)
+        if (PrimjenjujePravilnik(definicija, kontekst))
         {
             var faktor = PravilnikFaktor(request);
             if (faktor == TarifaConstants.ZastupnikDjetetaRate)
@@ -678,7 +746,7 @@ public sealed class TroskovnikService : ITroskovnikService
                 Tbr41SnizenjePostotak = tbr41Snizenje,
                 Tbr41Bodovi = tbr41BodoviStavke,
                 Tbr41PravniIzvor = Tbr41Izvor(tbr41Povisenje, tbr41Snizenje),
-                UmanjenjeUloge = NapomenaUmanjenja(definicija, request, umanjenoUlogom)
+                UmanjenjeUloge = NapomenaUmanjenja(definicija, request, kontekst, umanjenoUlogom)
             });
         }
 
@@ -715,7 +783,7 @@ public sealed class TroskovnikService : ITroskovnikService
             return IzracunajKazneneBodove(definicija, kontekst.KazneniRazredBodovi, request);
 
         var bodovi = IzracunajBodove(definicija, kontekst.Osnovica);
-        return definicija.Kategorija == TarifaKatalog.KategorijaKazneni
+        return PrimjenjujePravilnik(definicija, kontekst)
             ? bodovi * PravilnikFaktor(request)
             : bodovi;
     }
@@ -990,9 +1058,11 @@ public sealed class TroskovnikService : ITroskovnikService
             IsIzabraniOslobodjajuca = request.IsIzabraniOslobodjajuca,
             UlogaZastupanja = request.UlogaZastupanja,
             IsStjecaj = request.IsStjecaj,
-            NapomenaStjecaj = request.IsStjecaj ? NapomenaZaStjecaj : null,
+            NapomenaStjecaj = request.IsStjecaj && !request.IsPrekrsajniPostupak ? NapomenaZaStjecaj : null,
             IsOduzimanjePrekrsaj = request.IsOduzimanjePrekrsaj,
             VrijednostOduzimanja = request.VrijednostOduzimanja,
+            IsPrekrsajniPostupak = request.IsPrekrsajniPostupak,
+            IsPrekrsajPravnaOsoba = request.IsPrekrsajPravnaOsoba,
             // Sudske pristojbe
             PristojbeneStavke = [.. zbrojevi.Pristojbe.Stavke.Select(PristojbenaStavkaUOdgovor)],
             UredbePristojbe = UredbaNazivi.Primijenjene(zbrojevi.Pristojbe.Stavke.Select(s => s.Verzija)),
@@ -1032,8 +1102,9 @@ public sealed class TroskovnikService : ITroskovnikService
         decimal VrijednostSpora,
         VpsRezultat Vps,
         bool JeSamoKazneni,
-        int KazneniRazredBodovi,
-        TarifaVerzija Tarifa);
+        decimal KazneniRazredBodovi,
+        TarifaVerzija Tarifa,
+        bool ImaKaznene);
 
     /// <summary>Izvedene ukupne vrijednosti troškovnika, izračunate iz gotovih redaka.</summary>
     private sealed record Zbrojevi(
@@ -1187,7 +1258,7 @@ public sealed class TroskovnikService : ITroskovnikService
     ///     proračun zbog oslobađajuće presude) → BEZ umanjenja, puna baza
     /// Te stope se ne množe — primjenjuje se najviše jedna.
     /// </summary>
-    private static decimal IzracunajKazneneBodove(TarifnaStavka definicija, int tierBodovi, TroskovnikRequest req)
+    private static decimal IzracunajKazneneBodove(TarifnaStavka definicija, decimal tierBodovi, TroskovnikRequest req)
     {
         decimal bodovi = tierBodovi;
 
@@ -1196,7 +1267,10 @@ public sealed class TroskovnikService : ITroskovnikService
         // Tbr. 4. toč. 2 al. 3 propisuje drukčiji postotak za raspravu pred drugim i
         // trećim stupnjem kad je zapriječena kazna dugotrajni zatvor — tada se koristi
         // KazneniPovecanjeDugotrajni umjesto redovnog povišenja.
-        var jeDugotrajni = req.ZaprijecenaKazna == ZaprijecenaKaznaTiers.DugotrajniZatvor;
+        // U prekršajnom postupku dugotrajnog zatvora nema; kazna za odgovornu osobu (pravna
+        // osoba) samo određuje osnovicu i ne mijenja povišenja iz Tbr. 4. toč. 2 al. 3.
+        var jeDugotrajni = !req.IsPrekrsajniPostupak
+            && req.ZaprijecenaKazna == ZaprijecenaKaznaTiers.DugotrajniZatvor;
         var povecanje = jeDugotrajni && definicija.KazneniPovecanjeDugotrajni.HasValue
             ? definicija.KazneniPovecanjeDugotrajni
             : definicija.KazneniPovecanje;
